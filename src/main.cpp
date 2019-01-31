@@ -92,6 +92,7 @@ void loop() {
   WiFiClient client = wifiServer.available();
  
   if (client) {
+    client.setNoDelay(true);
  
     while (client.connected()) {
  
