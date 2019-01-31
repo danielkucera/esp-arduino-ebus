@@ -1,4 +1,7 @@
 #include "ESP8266WiFi.h"
+#include <ESP8266mDNS.h>
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
  
 const char* ssid = "yourNetworkName";
 const char* password =  "yourNetworkPass";
@@ -22,6 +25,8 @@ void setup() {
   //Serial.println(WiFi.localIP());
  
   wifiServer.begin();
+
+  ArduinoOTA.begin();
 }
 
 int echo_read_byte(WiFiClient client){
@@ -79,9 +84,10 @@ void processRequest(WiFiClient client){
 
 }
 
-void loop() {
+int B;
 
-  int B;
+void loop() {
+  ArduinoOTA.handle();
  
   WiFiClient client = wifiServer.available();
  
