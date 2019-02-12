@@ -2,7 +2,7 @@
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-#include "config.h"
+#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 
 #define MAX_SRV_CLIENTS 4
 #define RXBUFFERSIZE 1024
@@ -12,17 +12,14 @@ WiFiServer wifiServer(3333);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
  
 void setup() {
- 
+  WiFiManager wifiManager;
+
+  //wifiManager.resetSettings();
+
+  wifiManager.autoConnect("esp-eBus");
+
   Serial.begin(2400);
   Serial.setRxBufferSize(RXBUFFERSIZE);
- 
-  delay(1000);
- 
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
- 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-  }
  
   wifiServer.begin();
 
