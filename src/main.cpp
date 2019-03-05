@@ -24,10 +24,15 @@ void setup() {
   wifiServer.begin();
 
   ArduinoOTA.begin();
+
+  ESP.wdtDisable();
 }
 
 void loop() {
   ArduinoOTA.handle();
+
+  ESP.wdtFeed();
+
   if (WiFi.status() != WL_CONNECTED) {
     ESP.reset();
   }
