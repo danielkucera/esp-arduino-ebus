@@ -16,6 +16,7 @@ void setup() {
 
   //wifiManager.resetSettings();
 
+  wifiManager.setConfigPortalTimeout(120);
   wifiManager.autoConnect("esp-eBus");
 
   Serial.begin(2400);
