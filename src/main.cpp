@@ -7,6 +7,7 @@
 #define MAX_SRV_CLIENTS 4
 #define RXBUFFERSIZE 1024
 #define STACK_PROTECTOR  512 // bytes
+#define HOSTNAME "esp-eBus"
  
 WiFiServer wifiServer(3333);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
@@ -17,7 +18,7 @@ void setup() {
   //wifiManager.resetSettings();
 
   wifiManager.setConfigPortalTimeout(120);
-  wifiManager.autoConnect("esp-eBus");
+  wifiManager.autoConnect(HOSTNAME);
 
   Serial.begin(2400);
   Serial.setRxBufferSize(RXBUFFERSIZE);
@@ -25,6 +26,9 @@ void setup() {
   wifiServer.begin();
 
   ArduinoOTA.begin();
+
+  //MDNS.begin(HOSTNAME);  // this doesn't work, wifiManager starts mDNS
+  MDNS.setHostname(HOSTNAME);
 
   ESP.wdtDisable();
 }
