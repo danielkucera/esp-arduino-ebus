@@ -11,6 +11,8 @@
  
 WiFiServer wifiServer(3333);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
+
+unsigned long last_comms;
  
 void setup() {
   WiFiManager wifiManager;
@@ -31,6 +33,8 @@ void setup() {
   MDNS.setHostname(HOSTNAME);
 
   ESP.wdtDisable();
+
+  last_comms = millis();
 }
 
 void loop() {
@@ -39,6 +43,10 @@ void loop() {
   ESP.wdtFeed();
 
   if (WiFi.status() != WL_CONNECTED) {
+    ESP.reset();
+  }
+
+  if (millis() > last_comms + 200*1000 ) {
     ESP.reset();
   }
 
@@ -81,6 +89,7 @@ void loop() {
       // ensure write space is sufficient:
       if (serverClients[i].availableForWrite() >= 1) {
         serverClients[i].write(B);
+        last_comms = millis();
       }
     }
   }
