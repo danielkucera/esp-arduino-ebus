@@ -1,8 +1,10 @@
-#include "ESP8266WiFi.h"
-#include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+
+#ifdef ESP32
+#include <esp_task_wdt.h>
+#endif
 
 #define MAX_SRV_CLIENTS 4
 #define RXBUFFERSIZE 1024
@@ -10,15 +12,35 @@
 #define HOSTNAME "esp-eBus"
  
 WiFiServer wifiServer(3333);
+WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 
 unsigned long last_comms;
+
+void wdt_start() {
+#ifdef ESP32
+  esp_task_wdt_init(6, true);
+#elif defined(ESP8266)
+  ESP.wdtDisable();
+#endif
+}
+
+void wdt_feed() {
+#ifdef ESP32
+  esp_task_wdt_reset();
+#elif defined(ESP8266)
+  ESP.wdtFeed();
+#else
+#error UNKNOWN PLATFORM
+#endif
+}
  
 void setup() {
   WiFiManager wifiManager;
 
   //wifiManager.resetSettings();
 
+  wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
   wifiManager.autoConnect(HOSTNAME);
 
@@ -26,13 +48,11 @@ void setup() {
   Serial.setRxBufferSize(RXBUFFERSIZE);
  
   wifiServer.begin();
+  statusServer.begin();
 
   ArduinoOTA.begin();
 
-  //MDNS.begin(HOSTNAME);  // this doesn't work, wifiManager starts mDNS
-  MDNS.setHostname(HOSTNAME);
-
-  ESP.wdtDisable();
+  wdt_start();
 
   last_comms = millis();
 }
@@ -40,14 +60,23 @@ void setup() {
 void loop() {
   ArduinoOTA.handle();
 
-  ESP.wdtFeed();
+  wdt_feed();
 
   if (WiFi.status() != WL_CONNECTED) {
-    ESP.reset();
+    ESP.restart();
   }
 
   if (millis() > last_comms + 200*1000 ) {
-    ESP.reset();
+    ESP.restart();
+  }
+
+  if (statusServer.hasClient()) {
+    WiFiClient client = statusServer.available();
+    if (client.availableForWrite() >= 1){
+      client.write(String(millis()).c_str());
+      client.flush();
+      client.stop();
+    }
   }
 
   //check if there are any new clients
@@ -57,6 +86,7 @@ void loop() {
     for (i = 0; i < MAX_SRV_CLIENTS; i++)
       if (!serverClients[i]) { // equivalent to !serverClients[i].connected()
         serverClients[i] = wifiServer.available();
+        serverClients[i].setNoDelay(true);
         break;
       }
 
