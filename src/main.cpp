@@ -3,7 +3,10 @@
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 
 #ifdef ESP32
-#include <esp_task_wdt.h>
+  #include <esp_task_wdt.h>
+  #include <ESPmDNS.h>
+#else
+  #include <ESP8266mDNS.h>
 #endif
 
 #define MAX_SRV_CLIENTS 4
@@ -52,6 +55,9 @@ void setup() {
 
   ArduinoOTA.begin();
 
+  MDNS.end();
+  MDNS.begin(HOSTNAME);
+
   wdt_start();
 
   last_comms = millis();
@@ -59,6 +65,10 @@ void setup() {
 
 void loop() {
   ArduinoOTA.handle();
+
+#ifdef ESP8266
+  MDNS.update();
+#endif
 
   wdt_feed();
 
