@@ -47,8 +47,8 @@ void setup() {
   wifiManager.setConfigPortalTimeout(120);
   wifiManager.autoConnect(HOSTNAME);
 
-  Serial.begin(2400);
   Serial.setRxBufferSize(RXBUFFERSIZE);
+  Serial.begin(2400);
  
   wifiServer.begin();
   statusServer.begin();
