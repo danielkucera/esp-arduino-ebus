@@ -13,6 +13,8 @@
 #define RXBUFFERSIZE 1024
 #define STACK_PROTECTOR  512 // bytes
 #define HOSTNAME "esp-eBus"
+#define RESET_PIN 0
+#define RESET_MS 3000
  
 WiFiServer wifiServer(3333);
 WiFiServer statusServer(5555);
@@ -37,11 +39,25 @@ void wdt_feed() {
 #error UNKNOWN PLATFORM
 #endif
 }
+
+ICACHE_RAM_ATTR void reset_config() {
+  static unsigned long reset_activated = 0;
+  if (digitalRead(RESET_PIN) == LOW) {
+    reset_activated = millis();
+  } else {
+    if (millis() > reset_activated + RESET_MS) {
+      WiFiManager wifiManager;
+      wifiManager.resetSettings();
+      ESP.restart();
+    }
+  }
+}
  
 void setup() {
   WiFiManager wifiManager;
 
-  //wifiManager.resetSettings();
+  pinMode(RESET_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(RESET_PIN), reset_config, CHANGE); 
 
   wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
