@@ -54,6 +54,9 @@ ICACHE_RAM_ATTR void reset_config() {
 }
  
 void setup() {
+  Serial.setRxBufferSize(RXBUFFERSIZE);
+  Serial.begin(2400);
+
   WiFiManager wifiManager;
 
   pinMode(RESET_PIN, INPUT_PULLUP);
@@ -62,9 +65,6 @@ void setup() {
   wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
   wifiManager.autoConnect(HOSTNAME);
-
-  Serial.setRxBufferSize(RXBUFFERSIZE);
-  Serial.begin(2400);
  
   wifiServer.begin();
   statusServer.begin();
