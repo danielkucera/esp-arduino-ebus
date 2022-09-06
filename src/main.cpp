@@ -14,6 +14,7 @@
 #define STACK_PROTECTOR  512 // bytes
 #define HOSTNAME "esp-eBus"
 #define RESET_PIN 0
+#define TX_DISABLE_PIN 2
 #define RESET_MS 3000
  
 WiFiServer wifiServer(3333);
@@ -64,6 +65,9 @@ void setup() {
   pinMode(RESET_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(RESET_PIN), reset_config, CHANGE); 
 
+  digitalWrite(TX_DISABLE_PIN, 1);
+  pinMode(TX_DISABLE_PIN, OUTPUT);
+
   wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
   wifiManager.autoConnect(HOSTNAME);
@@ -109,6 +113,9 @@ void loop() {
 
   //check if there are any new clients
   if (wifiServer.hasClient()) {
+    // enable TX
+    digitalWrite(TX_DISABLE_PIN, 0);
+
     //find free/disconnected spot
     int i;
     for (i = 0; i < MAX_SRV_CLIENTS; i++)
