@@ -57,6 +57,8 @@ void setup() {
   Serial.setRxBufferSize(RXBUFFERSIZE);
   Serial.begin(2400);
 
+  WiFi.enableAP(false);
+
   WiFiManager wifiManager;
 
   pinMode(RESET_PIN, INPUT_PULLUP);
