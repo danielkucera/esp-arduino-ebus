@@ -18,8 +18,10 @@
 #define RESET_MS 3000
  
 WiFiServer wifiServer(3333);
+WiFiServer wifiServerRO(3334);
 WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
+WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 
 unsigned long last_comms;
 
@@ -73,6 +75,7 @@ void setup() {
   wifiManager.autoConnect(HOSTNAME);
  
   wifiServer.begin();
+  wifiServerRO.begin();
   statusServer.begin();
 
   ArduinoOTA.begin();
@@ -135,6 +138,28 @@ void loop() {
     }
   }
 
+  //check if there are any new clients for readonly server
+  if (wifiServerRO.hasClient()) {
+
+    //find free/disconnected spot
+    int i;
+    for (i = 0; i < MAX_SRV_CLIENTS; i++)
+      if (!serverClientsRO[i]) { // equivalent to !serverClients[i].connected()
+        serverClientsRO[i] = wifiServerRO.available();
+        serverClientsRO[i].setNoDelay(true);
+        break;
+      }
+
+    //no free/disconnected spot so reject
+    if (i == MAX_SRV_CLIENTS) {
+      wifiServerRO.available().println("busy");
+      // hints: server.available() is a WiFiClient with short-term scope
+      // when out of scope, a WiFiClient will
+      // - flush() - all data will be sent
+      // - stop() - automatically too
+    }
+  }
+
   //check TCP clients for data
   for (int i = 0; i < MAX_SRV_CLIENTS; i++){
     while (serverClients[i].available() && Serial.availableForWrite() > 0) {
@@ -154,6 +179,16 @@ void loop() {
       // ensure write space is sufficient:
       if (serverClients[i].availableForWrite() >= 1) {
         serverClients[i].write(B);
+        last_comms = millis();
+      }
+    }
+    // push UART data to all connected readonly clients
+    for (int i = 0; i < MAX_SRV_CLIENTS; i++){
+      // if client.availableForWrite() was 0 (congested)
+      // and increased since then,
+      // ensure write space is sufficient:
+      if (serverClientsRO[i].availableForWrite() >= 1) {
+        serverClientsRO[i].write(B);
         last_comms = millis();
       }
     }
