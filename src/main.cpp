@@ -43,6 +43,12 @@ void wdt_feed() {
 #endif
 }
 
+void reset(){
+  digitalWrite(TX_DISABLE_PIN, 1);
+  pinMode(TX_DISABLE_PIN, INPUT_PULLUP);
+  ESP.restart();
+}
+
 ICACHE_RAM_ATTR void reset_config() {
   static unsigned long reset_activated = 0;
   if (digitalRead(RESET_PIN) == LOW) {
@@ -51,7 +57,7 @@ ICACHE_RAM_ATTR void reset_config() {
     if (millis() > reset_activated + RESET_MS) {
       WiFiManager wifiManager;
       wifiManager.resetSettings();
-      ESP.restart();
+      reset();
     }
   }
 }
@@ -98,11 +104,11 @@ void loop() {
   wdt_feed();
 
   if (WiFi.status() != WL_CONNECTED) {
-    ESP.restart();
+    reset();
   }
 
   if (millis() > last_comms + 200*1000 ) {
-    ESP.restart();
+    reset();
   }
 
   if (statusServer.hasClient()) {
