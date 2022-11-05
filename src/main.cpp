@@ -49,7 +49,7 @@ void reset(){
   ESP.restart();
 }
 
-ICACHE_RAM_ATTR void reset_config() {
+IRAM_ATTR void reset_config() {
   static unsigned long reset_activated = 0;
   if (digitalRead(RESET_PIN) == LOW) {
     reset_activated = millis();
