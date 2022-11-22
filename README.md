@@ -36,6 +36,7 @@ pio run -e esp12e-ota -t upload
 - you need python installed in your computer
 - download [espota.py script](https://github.com/esp8266/Arduino/blob/master/tools/espota.py)
   - for Windows, you can download espota.exe from [esp32-xx.zip](https://github.com/espressif/arduino-esp32/releases) - it is located in `tools` folder
+- download firmware(-v3.0).bin from https://github.com/danielkucera/esp8266-arduino-ebus/releases
 - to upgrade, run:
 ```
 $ python3 espota.py -i esp-ebus.local -f firmware.bin -r -d
