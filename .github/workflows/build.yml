@@ -37,4 +37,4 @@ jobs:
     - name: Create release
       uses: ncipollo/release-action@v1
       with:
-        artifacts: ".pio/build/*/firmware.bin"
+        artifacts: ".pio/build/esp12e/firmware.bin,.pio/build/esp12e-v3.0/firmware.bin"
