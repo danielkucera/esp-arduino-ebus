@@ -14,9 +14,12 @@
 #define STACK_PROTECTOR  512 // bytes
 #define HOSTNAME "esp-eBus"
 #define RESET_PIN 0
-#define TX_DISABLE_PIN 2
 #define RESET_MS 3000
- 
+
+#ifndef TX_DISABLE_PIN
+#define TX_DISABLE_PIN 5
+#endif
+
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
 WiFiServer statusServer(5555);
