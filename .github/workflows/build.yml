@@ -1,6 +1,9 @@
 name: PlatformIO CI
 
-on: [push]
+on:
+  push:
+    tags:
+      - '*'
 
 jobs:
   build:
@@ -31,4 +34,7 @@ jobs:
       run: pio run -e esp12e-v3.0
     - name: Build v4.0+
       run: pio run -e esp12e
-
+    - name: Create release
+      uses: ncipollo/release-action@v1
+      with:
+        artifacts: ".pio/build/*/firmware.bin"
