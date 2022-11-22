@@ -30,11 +30,14 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install --upgrade platformio
-    - name: Build v3.0
-      run: pio run -e esp12e-v3.0
+    - name: Prepare release dir
+      run: mkdir release
     - name: Build v4.0+
-      run: pio run -e esp12e
+      run: pio run -e esp12e ; mv .pio/build/esp12e/firmware.bin release/firmware.bin
+    - name: Build v3.0
+      run: pio run -e esp12e-v3.0 ; mv .pio/build/esp12e-v3.0/firmware.bin release/firmware-v3.0.bin
     - name: Create release
       uses: ncipollo/release-action@v1
       with:
-        artifacts: ".pio/build/esp12e/firmware.bin,.pio/build/esp12e-v3.0/firmware.bin"
+        artifacts: "release/*"
+
