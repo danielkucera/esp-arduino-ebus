@@ -17,12 +17,29 @@
 - if you are using [ebusd](https://github.com/john30/ebusd), you can configure it use adapter by following parameters: `-d esp-ebus.local:3333`
 - if you are going to transmit to ebus, I also recommend to increase latency limit to, e.g.: `--latency=200000`
 
+## Config reset
+- disconnect device from bus
+- short ESP-RX and GND pins using a wire
+- connect device to bus
+- wait 5 seconds
+- disconnect the wire
+
 ## Upgrading
-There are two options:
+There are following options:
+- using web interface
+  - easiest
 - using platform.io
   - heavier option - it will compile the firmware from source code and upload using internall tooling
 - using espota.py
   - lightweight - just needs OTA script and precompiled firmware file
+
+### web interface
+- [reset device](#config-reset) to access config portal
+- connect to the esp-eBus WiFi network
+- click blue `Update` button
+- upload `firmware.bin` file
+- click red `Update` button
+- wait for restart, reconnect to adapter and configure WiFi
 
 ### platform.io
 - clone this repository using git
