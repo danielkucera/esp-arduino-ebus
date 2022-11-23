@@ -13,8 +13,8 @@
 #define RXBUFFERSIZE 1024
 #define STACK_PROTECTOR  512 // bytes
 #define HOSTNAME "esp-eBus"
-#define RESET_PIN 0
-#define RESET_MS 3000
+#define RESET_PIN 3
+#define RESET_MS 1000
 
 #ifndef TX_DISABLE_PIN
 #define TX_DISABLE_PIN 5
@@ -52,32 +52,35 @@ void reset(){
   ESP.restart();
 }
 
-IRAM_ATTR void reset_config() {
-  static unsigned long reset_activated = 0;
-  if (digitalRead(RESET_PIN) == LOW) {
-    reset_activated = millis();
-  } else {
-    if (millis() > reset_activated + RESET_MS) {
-      WiFiManager wifiManager;
-      wifiManager.resetSettings();
-      reset();
-    }
-  }
+void reset_config() {
+  printf("resetting config...\n");
+  WiFiManager wifiManager;
+  wifiManager.resetSettings();
+  reset();
 }
  
 void setup() {
-  Serial.setRxBufferSize(RXBUFFERSIZE);
-  Serial.begin(2400);
-
-  WiFi.enableAP(false);
-
-  WiFiManager wifiManager;
-
-  pinMode(RESET_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(RESET_PIN), reset_config, CHANGE); 
+  Serial1.begin(115200);
+  Serial1.setDebugOutput(true);
 
   digitalWrite(TX_DISABLE_PIN, 1);
   pinMode(TX_DISABLE_PIN, OUTPUT);
+
+  WiFi.enableAP(false);
+
+  WiFiManager wifiManager(Serial1);
+
+  // check if RX being hold low and reset
+  pinMode(RESET_PIN, INPUT_PULLUP);
+  long resetStart = millis();
+  while(digitalRead(RESET_PIN) == 0){
+    if (millis() > resetStart + RESET_MS){
+      reset_config();
+    }
+  }
+
+  Serial.setRxBufferSize(RXBUFFERSIZE);
+  Serial.begin(2400);
 
   wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
