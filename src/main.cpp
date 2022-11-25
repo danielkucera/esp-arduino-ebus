@@ -72,7 +72,7 @@ void setup() {
 
   // check if RX being hold low and reset
   pinMode(RESET_PIN, INPUT_PULLUP);
-  long resetStart = millis();
+  unsigned long resetStart = millis();
   while(digitalRead(RESET_PIN) == 0){
     if (millis() > resetStart + RESET_MS){
       reset_config();
