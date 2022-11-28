@@ -26,12 +26,14 @@
 
 ## Upgrading
 There are following options:
-- using web interface
-  - easiest
-- using platform.io
-  - heavier option - it will compile the firmware from source code and upload using internall tooling
-- using espota.py
-  - lightweight - just needs OTA script and precompiled firmware file
+- over the network (OTA)
+  - [using web interface](#web-interface)
+    - easiest
+  - [using platform.io](#platformio)
+    - heavier option - it will compile the firmware from source code and upload using internall tooling
+  - [using espota.py](#espotapy)
+    - lightweight - just needs OTA script and precompiled firmware file
+- physically using a USB-TTL adaptor
 
 ### web interface
 - [reset device](#config-reset) to access config portal
@@ -68,5 +70,19 @@ Uploading: [============================================================] 100% D
 16:33:31 [INFO]: Result: OK
 ```
 
+### upgrading using USB-TTL adaptor
+You will need an USB-TTL adaptor (dongle) which suports 3V3 voltage levels and has 3V3 voltage output pin
+- download firmware bin file from https://github.com/danielkucera/esp8266-arduino-ebus/releases
+- download NodeMCU Flasher from https://github.com/nodemcu/nodemcu-flasher/raw/master/Win64/Release/ESP8266Flasher.exe
+- using a wire short pins `PROG` and `TP3`(or any other GND)
+- connect your adaptor in a following way (dongle - module):
+  - 3V3 <-> 3V3
+  - TX  <-> ESP-RX
+  - RX  <-> ESP-TX
+  - GND <-> GND
+- now connect the dongle to your PC
+- open NodeMCU Flasher and on the Config page select your firmware file and address `0x0000`
+- go back to Operation page and click `Flash(F)`
+- when the operation completes, you are done
 
 
