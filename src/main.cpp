@@ -69,7 +69,11 @@ void reset_config() {
 }
  
 void setup() {
+#ifdef ESP32
+  Serial1.begin(115200, SERIAL_8N1, 8, 10);
+#elif defined(ESP8266)
   Serial1.begin(115200);
+#endif
   Serial1.setDebugOutput(true);
 
   digitalWrite(TX_DISABLE_PIN, 1);
