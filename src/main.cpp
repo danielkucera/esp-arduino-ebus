@@ -7,6 +7,7 @@
   #include <ESPmDNS.h>
 #else
   #include <ESP8266mDNS.h>
+  #include <ESP8266TrueRandom.h>
 #endif
 
 #define MAX_SRV_CLIENTS 4
@@ -27,6 +28,14 @@ WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 
 unsigned long last_comms;
+
+int random_ch(){
+#ifdef ESP32
+  return 6;
+#elif defined(ESP8266)
+  return ESP8266TrueRandom.random(1, 13);
+#endif
+}
 
 void wdt_start() {
 #ifdef ESP32
@@ -84,6 +93,7 @@ void setup() {
 
   wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
+  wifiManager.setWiFiAPChannel(random_ch());
   wifiManager.autoConnect(HOSTNAME);
  
   wifiServer.begin();
