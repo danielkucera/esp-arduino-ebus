@@ -29,6 +29,8 @@ WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 
 unsigned long last_comms;
 
+unsigned char rxBuf[RXBUFFERSIZE];
+
 int random_ch(){
 #ifdef ESP32
   return 6;
@@ -114,6 +116,22 @@ void setup() {
   last_comms = millis();
 }
 
+
+void pushDataToClients(WiFiClient clients[], size_t &data_length) {
+
+  // push UART data to all clients
+  for (int i = 0; i < MAX_SRV_CLIENTS; i++){
+    // if client.availableForWrite() was 0 (congested)
+    // and increased since then,
+    // ensure write space is sufficient:
+    if (clients[i].availableForWrite() >= 1) {
+      clients[i].write(rxBuf, data_length);
+      last_comms = millis();
+    }
+  }
+}
+
+
 void loop() {
   ArduinoOTA.handle();
 
@@ -194,30 +212,18 @@ void loop() {
     }
   }
 
-  //check UART for data
+  // Check the bus UART for data and send it to the clients
   size_t len = Serial.available();
   if (len) {
-    byte B = Serial.read();
-    // push UART data to all connected telnet clients
-    for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-      // if client.availableForWrite() was 0 (congested)
-      // and increased since then,
-      // ensure write space is sufficient:
-      if (serverClients[i].availableForWrite() >= 1) {
-        serverClients[i].write(B);
-        last_comms = millis();
-      }
-    }
-    // push UART data to all connected readonly clients
-    for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-      // if client.availableForWrite() was 0 (congested)
-      // and increased since then,
-      // ensure write space is sufficient:
-      if (serverClientsRO[i].availableForWrite() >= 1) {
-        serverClientsRO[i].write(B);
-        last_comms = millis();
-      }
-    }
-  }
+    size_t authorized_len = (len > RXBUFFERSIZE) ? RXBUFFERSIZE : len;
+    size_t ret = Serial.readBytes(rxBuf, authorized_len);
 
+    if (ret < authorized_len)
+        // Error
+        return;
+
+    pushDataToClients(serverClients, authorized_len);
+    pushDataToClients(serverClientsRO, authorized_len);
+
+  }
 }
