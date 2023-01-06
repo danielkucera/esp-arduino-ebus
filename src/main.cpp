@@ -114,6 +114,22 @@ void setup() {
   last_comms = millis();
 }
 
+
+bool handleStatusServerRequests() {
+  if (!statusServer.hasClient())
+      return false;
+
+  WiFiClient client = statusServer.available();
+
+  if (client.availableForWrite() >= 1){
+      client.println(millis());
+      client.flush();
+      client.stop();
+  }
+  return true;
+}
+
+
 void loop() {
   ArduinoOTA.handle();
 
@@ -131,14 +147,8 @@ void loop() {
     reset();
   }
 
-  if (statusServer.hasClient()) {
-    WiFiClient client = statusServer.available();
-    if (client.availableForWrite() >= 1){
-      client.write(String(millis()).c_str());
-      client.flush();
-      client.stop();
-    }
-  }
+  // Check if new client on the status server
+  handleStatusServerRequests();
 
   //check if there are any new clients
   if (wifiServer.hasClient()) {
