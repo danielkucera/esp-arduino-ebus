@@ -62,8 +62,7 @@ void reset(){
 }
 
 void reset_config() {
-  printf("resetting config...\n");
-  WiFiManager wifiManager;
+  WiFiManager wifiManager(Serial1);  // Send debug on Serial1
   wifiManager.resetSettings();
   reset();
 }
