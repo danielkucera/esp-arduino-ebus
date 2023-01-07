@@ -134,7 +134,7 @@ void loop() {
   if (statusServer.hasClient()) {
     WiFiClient client = statusServer.available();
     if (client.availableForWrite() >= 1){
-      client.write(String(millis()).c_str());
+      client.println(millis());
       client.flush();
       client.stop();
     }
