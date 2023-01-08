@@ -55,8 +55,16 @@ void wdt_feed() {
 #endif
 }
 
+inline void disableTX() {
+    digitalWrite(TX_DISABLE_PIN, HIGH);
+}
+
+inline void enableTX() {
+    digitalWrite(TX_DISABLE_PIN, LOW);
+}
+
 void reset(){
-  digitalWrite(TX_DISABLE_PIN, 1);
+  disableTX();
   pinMode(TX_DISABLE_PIN, INPUT_PULLUP);
   ESP.restart();
 }
@@ -75,7 +83,7 @@ void setup() {
 #endif
   Serial1.setDebugOutput(true);
 
-  digitalWrite(TX_DISABLE_PIN, 1);
+  disableTX();
   pinMode(TX_DISABLE_PIN, OUTPUT);
 
   WiFi.enableAP(false);
@@ -116,15 +124,42 @@ void setup() {
 
 bool handleStatusServerRequests() {
   if (!statusServer.hasClient())
-      return false;
+    return false;
 
   WiFiClient client = statusServer.available();
 
-  if (client.availableForWrite() >= 1){
-      client.println(millis());
-      client.flush();
-      client.stop();
+  if (client.availableForWrite() >= 1) {
+    client.println(millis());
+    client.flush();
+    client.stop();
   }
+  return true;
+}
+
+
+bool handleNewClient(WiFiServer &server, WiFiClient clients[]) {
+  if (!server.hasClient())
+    return false;
+
+  // Find free/disconnected slot
+  int i;
+  for (i = 0; i < MAX_SRV_CLIENTS; i++) {
+    if (!clients[i]) { // equivalent to !serverClients[i].connected()
+      clients[i] = server.available();
+      clients[i].setNoDelay(true);
+      break;
+    }
+  }
+
+  // No free/disconnected slot so reject
+  if (i == MAX_SRV_CLIENTS) {
+    server.available().println("busy");
+    // hints: server.available() is a WiFiClient with short-term scope
+    // when out of scope, a WiFiClient will
+    // - flush() - all data will be sent
+    // - stop() - automatically too
+  }
+
   return true;
 }
 
@@ -149,51 +184,10 @@ void loop() {
   // Check if new client on the status server
   handleStatusServerRequests();
 
-  //check if there are any new clients
-  if (wifiServer.hasClient()) {
-    // enable TX
-    digitalWrite(TX_DISABLE_PIN, 0);
-
-    //find free/disconnected spot
-    int i;
-    for (i = 0; i < MAX_SRV_CLIENTS; i++)
-      if (!serverClients[i]) { // equivalent to !serverClients[i].connected()
-        serverClients[i] = wifiServer.available();
-        serverClients[i].setNoDelay(true);
-        break;
-      }
-
-    //no free/disconnected spot so reject
-    if (i == MAX_SRV_CLIENTS) {
-      wifiServer.available().println("busy");
-      // hints: server.available() is a WiFiClient with short-term scope
-      // when out of scope, a WiFiClient will
-      // - flush() - all data will be sent
-      // - stop() - automatically too
-    }
-  }
-
-  //check if there are any new clients for readonly server
-  if (wifiServerRO.hasClient()) {
-
-    //find free/disconnected spot
-    int i;
-    for (i = 0; i < MAX_SRV_CLIENTS; i++)
-      if (!serverClientsRO[i]) { // equivalent to !serverClients[i].connected()
-        serverClientsRO[i] = wifiServerRO.available();
-        serverClientsRO[i].setNoDelay(true);
-        break;
-      }
-
-    //no free/disconnected spot so reject
-    if (i == MAX_SRV_CLIENTS) {
-      wifiServerRO.available().println("busy");
-      // hints: server.available() is a WiFiClient with short-term scope
-      // when out of scope, a WiFiClient will
-      // - flush() - all data will be sent
-      // - stop() - automatically too
-    }
-  }
+  // Check if there are any new clients on the eBUS servers
+  if (handleNewClient(wifiServer, serverClients))
+    enableTX();
+  handleNewClient(wifiServerRO, serverClientsRO);
 
   //check TCP clients for data
   for (int i = 0; i < MAX_SRV_CLIENTS; i++){
