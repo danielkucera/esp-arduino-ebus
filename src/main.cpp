@@ -64,7 +64,7 @@ inline void enableTX() {
 }
 
 void reset(){
-  digitalWrite(TX_DISABLE_PIN, 1);
+  disableTX();
   pinMode(TX_DISABLE_PIN, INPUT_PULLUP);
   ESP.restart();
 }
@@ -83,7 +83,7 @@ void setup() {
 #endif
   Serial1.setDebugOutput(true);
 
-  digitalWrite(TX_DISABLE_PIN, 1);
+  disableTX();
   pinMode(TX_DISABLE_PIN, OUTPUT);
 
   WiFi.enableAP(false);
