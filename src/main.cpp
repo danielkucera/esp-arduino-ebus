@@ -70,8 +70,7 @@ void reset(){
 }
 
 void reset_config() {
-  printf("resetting config...\n");
-  WiFiManager wifiManager;
+  WiFiManager wifiManager(Serial1);  // Send debug on Serial1
   wifiManager.resetSettings();
   reset();
 }
@@ -123,28 +122,42 @@ void setup() {
 }
 
 
-bool handleNewClient(WiFiServer &server, WiFiClient clients[]) {
-  if (!server.hasClient()) {
-      return false;
-  }
+bool handleStatusServerRequests() {
+  if (!statusServer.hasClient())
+    return false;
 
-  //find free/disconnected spot
+  WiFiClient client = statusServer.available();
+
+  if (client.availableForWrite() >= 1) {
+    client.println(millis());
+    client.flush();
+    client.stop();
+  }
+  return true;
+}
+
+
+bool handleNewClient(WiFiServer &server, WiFiClient clients[]) {
+  if (!server.hasClient())
+    return false;
+
+  // Find free/disconnected slot
   int i;
   for (i = 0; i < MAX_SRV_CLIENTS; i++) {
-      if (!clients[i]) { // equivalent to !serverClients[i].connected()
-        clients[i] = server.available();
-        clients[i].setNoDelay(true);
-        break;
-      }
+    if (!clients[i]) { // equivalent to !serverClients[i].connected()
+      clients[i] = server.available();
+      clients[i].setNoDelay(true);
+      break;
+    }
   }
 
-  //no free/disconnected spot so reject
+  // No free/disconnected slot so reject
   if (i == MAX_SRV_CLIENTS) {
-      server.available().println("busy");
-      // hints: server.available() is a WiFiClient with short-term scope
-      // when out of scope, a WiFiClient will
-      // - flush() - all data will be sent
-      // - stop() - automatically too
+    server.available().println("busy");
+    // hints: server.available() is a WiFiClient with short-term scope
+    // when out of scope, a WiFiClient will
+    // - flush() - all data will be sent
+    // - stop() - automatically too
   }
 
   return true;
@@ -168,18 +181,12 @@ void loop() {
     reset();
   }
 
-  if (statusServer.hasClient()) {
-    WiFiClient client = statusServer.available();
-    if (client.availableForWrite() >= 1){
-      client.write(String(millis()).c_str());
-      client.flush();
-      client.stop();
-    }
-  }
+  // Check if new client on the status server
+  handleStatusServerRequests();
 
   // Check if there are any new clients on the eBUS servers
   if (handleNewClient(wifiServer, serverClients))
-      enableTX();
+    enableTX();
   handleNewClient(wifiServerRO, serverClientsRO);
 
   //check TCP clients for data
