@@ -16,7 +16,7 @@
 - the adapter listens on two TCP ports (from HW rev v3.0):
   - 3333 - on this port you can both read and write to the eBus - the blue led will shine when TX pin is enabled
   - 3334 - listen only port - everything sent to this port will be ignored and the adapters TX pin is physically isolated (TX-DISABLE)
-- to verify there are bytes being received by the adapter connect to esp-ebus.local TCP port using telnet - you should see unreadable binary data
+- to verify there are bytes being received by the adapter connect to `esp-ebus.local` port `3334` using telnet - you should see unreadable binary data
 - if you are using [ebusd](https://github.com/john30/ebusd), you can configure it use adapter by following parameters: `-d esp-ebus.local:3333`
 - if you are going to transmit to ebus, I also recommend to increase latency limit to, e.g.: `--latency=200000`
 
