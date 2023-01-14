@@ -1,7 +1,10 @@
 # esp8266-arduino-ebus
 
+**Warning: Do not power your adapter from a power supply on eBus terminals - you will burn the transmit circuit (receive may still work)!**
+
 ## Quickstart
 - connect adapter to ebus
+- you should see at least one LED on the adapter shining (v4.0+) - if not, switch eBus wires
 - search for WiFi networks, you should see network with name "esp-eBus"
 - connect to the network - a configuration page should open automatically
 - configure your WiFi network settings (SSID, password)
@@ -13,7 +16,7 @@
 - the adapter listens on two TCP ports (from HW rev v3.0):
   - 3333 - on this port you can both read and write to the eBus - the blue led will shine when TX pin is enabled
   - 3334 - listen only port - everything sent to this port will be ignored and the adapters TX pin is physically isolated (TX-DISABLE)
-- to verify there are bytes being received by the adapter connect to esp-ebus.local TCP port using telnet
+- to verify there are bytes being received by the adapter connect to `esp-ebus.local` port `3334` using telnet - you should see unreadable binary data
 - if you are using [ebusd](https://github.com/john30/ebusd), you can configure it use adapter by following parameters: `-d esp-ebus.local:3333`
 - if you are going to transmit to ebus, I also recommend to increase latency limit to, e.g.: `--latency=200000`
 
