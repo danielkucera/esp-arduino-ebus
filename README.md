@@ -33,6 +33,9 @@ It's possible that the adapter has a poor WiFi reception so it has to resend mes
 #### The adapter is loosing connectivity, breaking other ebus components communication, D7 is blinking, WiFi is disappearing after connecting, devices on the bus show error status or other intermittent failures.
 It's possible that ebus doesn't have enough power to supply the adapter together with all other connected devices. You can try powering the adapter from an external power supply through pins TP2 (+) and TP3 (-). Use adapter with 24V DC output. If you cut JP1 (v4.1+), you can use any adapter with voltage from 5V to 24V.
 
+#### Nothing helps. I need support.
+Run ebusd with `--lograwdata=data --latency=2000 --log=all:debug`. Then save the log, open an issue here, describe the problem and attach the log. I'll try to help you.
+
 ## Config reset
 - disconnect device from bus
 - short ESP-RX and GND pins using a wire
