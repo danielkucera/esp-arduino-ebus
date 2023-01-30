@@ -20,6 +20,22 @@
 - if you are using [ebusd](https://github.com/john30/ebusd), you can configure it use adapter by following parameters: `-d esp-ebus.local:3333`
 - if you are going to transmit to ebus, I also recommend to increase latency limit to, e.g.: `--latency=200000`
 
+## Troubleshooting
+#### The adapter seems dead, no LED shines or blinks.
+The ebus wires are reversed, try switching the wires. Don't worry, it has a protection against reversing.
+
+#### The ebus logs shows `[bus error] device status: unexpected enhanced byte 2`
+You have set protocol to enhanced by specifying the device as `-d enh:IP/name:port`. You need to remove the `enh:` portion and set it to `-d IP/name:port`
+
+#### I often see messages like: `ERR: arbitration lost`, `signal lost`, `signal acquired`
+It's possible that the adapter has a poor WiFi reception so it has to resend messages and the latency increases. Try to improve the signal by moving the adapter closer to the WiFi AP. You can also try to increase the ebusd latency parameter to e.g. `--latency=200000`.
+
+#### The adapter is loosing connectivity, breaking other ebus components communication, D7 is blinking, WiFi is disappearing after connecting, devices on the bus show error status or other intermittent failures.
+It's possible that ebus doesn't have enough power to supply the adapter together with all other connected devices. You can try powering the adapter from an external power supply through pins TP2 (+) and TP3 (-). Use adapter with 24V DC output. If you cut JP1 (v4.1+), you can use any adapter with voltage from 5V to 24V.
+
+#### Nothing helps. I need support.
+Run ebusd with `--lograwdata=data --latency=2000 --log=all:debug`. Then save the log, open an issue here, describe the problem and attach the log. I'll try to help you.
+
 ## Config reset
 - disconnect device from bus
 - short ESP-RX and GND pins using a wire
