@@ -14,7 +14,7 @@
 #define RXBUFFERSIZE 1024
 #define STACK_PROTECTOR  512 // bytes
 #define HOSTNAME "esp-eBus"
-#define RESET_PIN 3
+#define RESET_PIN 5
 #define RESET_MS 1000
 
 #ifndef TX_DISABLE_PIN
@@ -81,16 +81,10 @@ void setup() {
 #elif defined(ESP8266)
   Serial1.begin(115200);
 #endif
+
   Serial1.setDebugOutput(true);
 
-  disableTX();
-  pinMode(TX_DISABLE_PIN, OUTPUT);
-
-  WiFi.enableAP(false);
-
-  WiFiManager wifiManager(Serial1);
-
-  // check if RX being hold low and reset
+  // check if RESET_PIN being hold low and reset
   pinMode(RESET_PIN, INPUT_PULLUP);
   unsigned long resetStart = millis();
   while(digitalRead(RESET_PIN) == 0){
@@ -98,6 +92,13 @@ void setup() {
       reset_config();
     }
   }
+
+  disableTX();
+  pinMode(TX_DISABLE_PIN, OUTPUT);
+
+  WiFi.enableAP(false);
+
+  WiFiManager wifiManager(Serial1);
 
   Serial.setRxBufferSize(RXBUFFERSIZE);
   Serial.begin(2400);

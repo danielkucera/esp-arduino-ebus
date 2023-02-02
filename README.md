@@ -35,7 +35,7 @@ It's possible that ebus doesn't have enough power to supply the adapter together
 
 ## Config reset
 - disconnect device from bus
-- short ESP-RX and GND pins using a wire
+- connect TX-DISABLE (previously ESP-RX) and GND pins using a wire
 - connect device to bus
 - wait 5 seconds
 - disconnect the wire
