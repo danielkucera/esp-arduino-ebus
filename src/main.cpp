@@ -129,7 +129,8 @@ bool handleStatusServerRequests() {
   WiFiClient client = statusServer.available();
 
   if (client.availableForWrite() >= 1) {
-    client.println(millis());
+    client.printf("uptime: %ld ms\n", millis());
+    client.printf("rssi: %d dBm\n", WiFi.RSSI());
     client.flush();
     client.stop();
   }
