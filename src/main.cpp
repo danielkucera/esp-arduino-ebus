@@ -1,7 +1,7 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
-#include <Telegram.h>
+#include <Ebus.h>
 
 #ifdef ESP32
   #include <esp_task_wdt.h>
@@ -32,7 +32,7 @@ WiFiClient serverClientsMSG[MAX_SRV_CLIENTS];
 
 unsigned long last_comms;
 
-ebus::Sequence m_sequence;
+ebus::Ebus bus;
 
 int random_ch(){
 #ifdef ESP32
@@ -193,29 +193,11 @@ void loop() {
   // Check if there are any new clients on the eBUS servers
   if (handleNewClient(wifiServer, serverClients))
     enableTX();
+  
   handleNewClient(wifiServerRO, serverClientsRO);
 
-  //check if there are any new clients for message server
-  if (wifiServerMSG.hasClient()) {
-
-    //find free/disconnected spot
-    int i;
-    for (i = 0; i < MAX_SRV_CLIENTS; i++)
-      if (!serverClientsMSG[i]) { // equivalent to !serverClients[i].connected()
-        serverClientsMSG[i] = wifiServerMSG.available();
-        serverClientsMSG[i].setNoDelay(true);
-        break;
-      }
-
-    //no free/disconnected spot so reject
-    if (i == MAX_SRV_CLIENTS) {
-      wifiServerMSG.available().println("busy");
-      // hints: server.available() is a WiFiClient with short-term scope
-      // when out of scope, a WiFiClient will
-      // - flush() - all data will be sent
-      // - stop() - automatically too
-    }
-  }
+  if (handleNewClient(wifiServerMSG, serverClientsMSG))
+    enableTX();
 
   //check TCP clients for data
   for (int i = 0; i < MAX_SRV_CLIENTS; i++){
@@ -229,34 +211,6 @@ void loop() {
   size_t len = Serial.available();
   if (len) {
     byte B = Serial.read();
-
-    // push UART data to global sequence
-    if (B != ebus::seq_syn)
-    {
-      m_sequence.push_back(B);
-    }
-    else
-    {
-      if (m_sequence.size() > 0)
-      {
-        ebus::Telegram telegram = ebus::Telegram(m_sequence);
-
-        for (int i = 0; i < MAX_SRV_CLIENTS; i++)
-        {
-          if (serverClientsMSG[i].availableForWrite() >= 1)
-          {
-            if (telegram.isValid())
-              serverClientsMSG[i].write(m_sequence.get_sequence().data(), m_sequence.size());
-              //serverClientsMSG[i].write(telegram.to_string().c_str() + '\n');
-            else
-              serverClientsMSG[i].write(ebus::seq_exp);
-            last_comms = millis();
-          }
-        }
-
-        m_sequence.clear();
-      }
-    }
 
     // push UART data to all connected telnet clients
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
@@ -279,6 +233,20 @@ void loop() {
         last_comms = millis();
       }
     }
+
+    const std::vector<uint8_t> sequence = bus.push(B);
+
+    // push UART data to all connected readonly clients
+    for (int i = 0; i < MAX_SRV_CLIENTS; i++){
+      // if client.availableForWrite() was 0 (congested)
+      // and increased since then,
+      // ensure write space is sufficient:
+      if (serverClientsMSG[i].availableForWrite() >= 1) {
+        serverClientsMSG[i].write(sequence.data(), sequence.size());
+        last_comms = millis();
+      }
+    }
+
   }
 
 }
