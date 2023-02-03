@@ -2,8 +2,6 @@
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 
-#include <lwip/sockets.h>
-
 #ifdef ESP32
   #include <esp_task_wdt.h>
   #include <ESPmDNS.h>
@@ -21,6 +19,13 @@
 
 #ifndef TX_DISABLE_PIN
 #define TX_DISABLE_PIN 5
+#endif
+
+#ifdef ESP32
+// https://esp32.com/viewtopic.php?t=19788
+#define AVAILABLE_THRESHOLD 0
+#else
+#define AVAILABLE_THRESHOLD 1
 #endif
 
 WiFiServer wifiServer(3333);
@@ -99,6 +104,7 @@ void setup() {
   pinMode(TX_DISABLE_PIN, OUTPUT);
 
   WiFi.enableAP(false);
+  WiFi.begin();
 
   WiFiManager wifiManager(Serial1);
 
@@ -131,13 +137,12 @@ bool handleStatusServerRequests() {
 
   WiFiClient client = statusServer.available();
 
-  //if (client.availableForWrite() >= 1) {
+  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
-    client.printf("client afw: %d dBm\n", client.availableForWrite());
     client.flush();
     client.stop();
-  //}
+  }
   return true;
 }
 
@@ -152,9 +157,6 @@ bool handleNewClient(WiFiServer &server, WiFiClient clients[]) {
     if (!clients[i]) { // equivalent to !serverClients[i].connected()
       clients[i] = server.available();
       clients[i].setNoDelay(true);
-      int value = 1;
-      clients[i].setOption(SO_SNDLOWAT, &value);
-      clients[i].setOption(SO_RCVLOWAT, &value);
       break;
     }
   }
@@ -199,7 +201,7 @@ void loop() {
 
   //check TCP clients for data
   for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-    while (serverClients[i].available()) {
+    while (serverClients[i].available() && Serial.availableForWrite() > 0) {
       // working char by char is not very efficient
       Serial.write(serverClients[i].read());
     }
@@ -214,7 +216,7 @@ void loop() {
       // if client.availableForWrite() was 0 (congested)
       // and increased since then,
       // ensure write space is sufficient:
-      if (1) {
+      if (serverClients[i].availableForWrite() >= AVAILABLE_THRESHOLD) {
         serverClients[i].write(B);
         last_comms = millis();
       }
@@ -224,7 +226,7 @@ void loop() {
       // if client.availableForWrite() was 0 (congested)
       // and increased since then,
       // ensure write space is sufficient:
-      if (1) {
+      if (serverClientsRO[i].availableForWrite() >= AVAILABLE_THRESHOLD) {
         serverClientsRO[i].write(B);
         last_comms = millis();
       }
