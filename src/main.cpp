@@ -83,10 +83,15 @@ void reset_config() {
 }
  
 void setup() {
+
+  Serial.setRxBufferSize(RXBUFFERSIZE);
+
 #ifdef ESP32
   Serial1.begin(115200, SERIAL_8N1, 8, 10);
+  Serial.begin(2400, SERIAL_8N1, 21, 20);
 #elif defined(ESP8266)
   Serial1.begin(115200);
+  Serial.begin(2400);
 #endif
 
   Serial1.setDebugOutput(true);
@@ -107,9 +112,6 @@ void setup() {
   WiFi.begin();
 
   WiFiManager wifiManager(Serial1);
-
-  Serial.setRxBufferSize(RXBUFFERSIZE);
-  Serial.begin(2400);
 
   wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
