@@ -69,6 +69,7 @@ uint8_t* read_cmd(WiFiClient* client){
     }
 
     if (b<0b11000000){
+        client->write("first command signature error");
         // first command signature error
         client->stop();
         return NULL;
@@ -78,12 +79,14 @@ uint8_t* read_cmd(WiFiClient* client){
 
     if (b2<0) {
         // second command missing
+        client->write("second command missing");
         client->stop();
         return NULL;
     }
 
-    if (b2 & 0b11000000 != 0b01000000){
+    if ((b2 & 0b11000000) != 0b10000000){
         // second command signature error
+        client->write("second command signature error");
         client->stop();
         return NULL;
     }
@@ -120,7 +123,9 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
                 }
 
                 if (Serial.available()) {
-                    if (int s = Serial.read() >= 0) {
+                    int s = Serial.read();
+                    if (s >= 0) {
+                        //pushEnhClient(client, s);
                         if (qq_sent){
                             if (s == d){
                                 // arbitration success
@@ -128,11 +133,12 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
                                 return;
                             } else {
                                 // arbitration fail: QQ sent, received other
-                                qq_sent = 0;
+                                send_res(client, FAILED, s);
+                                return;
                             }
                         }
                         if (s == SYN) {
-                            delay(d*10); //TODO: verify wait master address * 10
+                            //delay(d*10); //TODO: verify wait master address * 10
 
                             Serial.write(d);
                             qq_sent = 1;
@@ -140,7 +146,8 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
                     }
                 }
             }
-            // arbitration timeout, TODO: response
+            // arbitration timeout
+            send_res(client, FAILED, 0x3f);
             return;
         }
     }
@@ -165,10 +172,10 @@ void handleEnhClient(WiFiClient* client){
 int pushEnhClient(WiFiClient* client, uint8_t B){
     if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
 
-        if (B & 0x1000000){
-            send_res(client, RECEIVED, B);
-        } else {
+        if (B < 0x80){
             client->write(B);
+        } else {
+            send_res(client, RECEIVED, B);
         }
         return 1;
     }

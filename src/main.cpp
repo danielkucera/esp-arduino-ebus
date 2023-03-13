@@ -104,6 +104,7 @@ void setup() {
  
   wifiServer.begin();
   wifiServerRO.begin();
+  wifiServerEnh.begin();
   statusServer.begin();
 
   ArduinoOTA.begin();
