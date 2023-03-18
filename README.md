@@ -9,16 +9,17 @@
 - connect to the network - a configuration page should open automatically
 - configure your WiFi network settings (SSID, password)
 - after reboot, you should be able to run `ping esp-ebus.local` successfully from a computer in your network (if your network is correctly configured for mDNS)
-- LED D1 blinking indicates activity on the bus. If it is still on or off, you need to adjust ebus level using trimer RV1:
+- LED D1 blinking indicates activity on the bus. The adapter comes pre-adjusted but if D1 is still on or off, you need to re-adjust it using trimer RV1:
   - turn the trimmer counterclockwise until you find the position between D1 blinking and still on
   - turn the trimmer clockwise until you find the position between D1 blinking and still off
   - count the turns between these positions and set the trimmer in the middle position with D1 blinking
-- the adapter listens on two TCP ports (from HW rev v3.0):
-  - 3333 - on this port you can both read and write to the eBus - the blue led will shine when TX pin is enabled
+- the adapter listens on following TCP ports (from HW rev v3.0):
+  - 3333 - on this port you can both read and write to the eBus - ebusd config: `-d esp-ebus.local:3333`
   - 3334 - listen only port - everything sent to this port will be ignored and the adapters TX pin is physically isolated (TX-DISABLE)
+  - 3335 - port with enhanced protocol, ebusd config: `-d enh:esp-ebus.local:3335`
+  - 5555 - you can telnet to this port to see some basic status info
 - to verify there are bytes being received by the adapter connect to `esp-ebus.local` port `3334` using telnet - you should see unreadable binary data
-- if you are using [ebusd](https://github.com/john30/ebusd), you can configure it use adapter by following parameters: `-d esp-ebus.local:3333`
-- if you are going to transmit to ebus, I also recommend to increase latency limit to, e.g.: `--latency=200000`
+- you can use [ebusd](https://github.com/john30/ebusd) to decode bus messages, see ports section for device option configuration
 
 ## Troubleshooting
 #### The adapter seems dead, no LED shines or blinks.
@@ -74,7 +75,7 @@ pio run -e esp12e-ota -t upload
 - you need python installed in your computer
 - download [espota.py script](https://github.com/esp8266/Arduino/blob/master/tools/espota.py)
   - for Windows, you can download espota.exe from [esp32-xx.zip](https://github.com/espressif/arduino-esp32/releases) - it is located in `tools` folder
-- download firmware(-v3.0).bin from https://github.com/danielkucera/esp8266-arduino-ebus/releases
+- download firmware.bin according to your hardware version from https://github.com/danielkucera/esp8266-arduino-ebus/releases
 - to upgrade, run:
 ```
 $ python3 espota.py -i esp-ebus.local -f firmware.bin -r -d
