@@ -25,3 +25,6 @@ void handleClient(WiFiClient* client);
 
 int pushEnhClient(WiFiClient* client, uint8_t B);
 void handleEnhClient(WiFiClient* client);
+
+int pushMsgClient(WiFiClient* client, uint8_t B);
+void handleMsgClient(WiFiClient* client);

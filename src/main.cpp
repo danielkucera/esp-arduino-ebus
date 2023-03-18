@@ -1,7 +1,6 @@
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 #include "main.hpp"
-#include <Ebus.h>
 
 #ifdef ESP32
   #include <esp_task_wdt.h>
@@ -19,11 +18,9 @@ WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
-WiFiClient serverClientsMSG[MAX_SRV_CLIENTS];
+WiFiClient msgClients[MAX_SRV_CLIENTS];
 
 unsigned long last_comms;
-
-ebus::Ebus bus;
 
 int random_ch(){
 #ifdef ESP32
@@ -166,11 +163,13 @@ void loop() {
   }
   handleNewClient(wifiServerRO, serverClientsRO);
   handleNewClient(wifiServerEnh, enhClients);
+  handleNewClient(wifiServerMSG, msgClients);
 
   //check clients for data
   for (int i = 0; i < MAX_SRV_CLIENTS; i++){
     handleClient(&serverClients[i]);
     handleEnhClient(&enhClients[i]);
+    handleMsgClient(&msgClients[i]);
   }
 
   //check UART for data
@@ -188,19 +187,9 @@ void loop() {
       if (pushEnhClient(&enhClients[i], B)){
         last_comms = millis();
       }
-    }
-
-    const std::vector<uint8_t> sequence = bus.push(B);
-
-    // push UART data to all connected readonly clients
-    for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-      // if client.availableForWrite() was 0 (congested)
-      // and increased since then,
-      // ensure write space is sufficient:
-      if (serverClientsMSG[i].availableForWrite() >= 1) {
-        serverClientsMSG[i].write(sequence.data(), sequence.size());
+      if (pushMsgClient(&msgClients[i], B)){
         last_comms = millis();
-      }
+      }      
     }
 
   }
