@@ -124,6 +124,11 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
 
                 if (Serial.available()) {
                     int s = Serial.read();
+
+                    if (Serial.available()){ // is there still data in buffer after reading?
+                        continue;
+                    }
+
                     if (s >= 0) {
                         //pushEnhClient(client, s);
                         if (qq_sent){
@@ -133,8 +138,9 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
                                 return;
                             } else {
                                 // arbitration fail: QQ sent, received other
-                                send_res(client, FAILED, s);
-                                return;
+                                //send_res(client, FAILED, s);
+                                //return;
+                                qq_sent = 0;
                             }
                         }
                         if (s == SYN) {
