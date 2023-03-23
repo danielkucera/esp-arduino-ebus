@@ -5,6 +5,7 @@
 #ifdef ESP32
   #include <esp_task_wdt.h>
   #include <ESPmDNS.h>
+  #include "esp32c3/rom/rtc.h"
 #else
   #include <ESP8266mDNS.h>
   #include <ESP8266TrueRandom.h>
@@ -19,6 +20,7 @@ WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 
 unsigned long last_comms;
+int last_reset_code = -1;
 
 int random_ch(){
 #ifdef ESP32
@@ -44,6 +46,14 @@ void wdt_feed() {
 #else
 #error UNKNOWN PLATFORM
 #endif
+}
+
+int get_reset_code() {
+  #ifdef ESP32
+    return rtc_get_reset_reason(0);
+  #elif defined(ESP8266)
+    return (int) ESP.getResetInfoPtr();
+  #endif
 }
 
 inline void disableTX() {
@@ -125,8 +135,14 @@ bool handleStatusServerRequests() {
   WiFiClient client = statusServer.available();
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.printf("uptime: %ld ms\n", millis());
-    client.printf("rssi: %d dBm\n", WiFi.RSSI());
+    if (last_reset_code == -1) {
+      last_reset_code = get_reset_code();
+    }
+
+    client.printf("%d;", ESP.getFreeHeap());
+    client.printf("%ld;", millis());
+    client.printf("%d;", WiFi.RSSI());
+    client.printf("%d", last_reset_code);
     client.flush();
     client.stop();
   }
