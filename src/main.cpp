@@ -48,14 +48,6 @@ void wdt_feed() {
 #endif
 }
 
-int get_reset_code() {
-  #ifdef ESP32
-    return rtc_get_reset_reason(0);
-  #elif defined(ESP8266)
-    return (int) ESP.getResetInfoPtr();
-  #endif
-}
-
 inline void disableTX() {
     digitalWrite(TX_DISABLE_PIN, HIGH);
 }
@@ -83,9 +75,11 @@ void setup() {
 #ifdef ESP32
   Serial1.begin(115200, SERIAL_8N1, 8, 10);
   Serial.begin(2400, SERIAL_8N1, 21, 20);
+  last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
   Serial1.begin(115200);
   Serial.begin(2400);
+  last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
 
   Serial1.setDebugOutput(true);
@@ -135,14 +129,10 @@ bool handleStatusServerRequests() {
   WiFiClient client = statusServer.available();
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    if (last_reset_code == -1) {
-      last_reset_code = get_reset_code();
-    }
-
-    client.printf("%d;", ESP.getFreeHeap());
-    client.printf("%ld;", millis());
-    client.printf("%d;", WiFi.RSSI());
-    client.printf("%d", last_reset_code);
+    client.printf("uptime: %ld ms\n", millis());
+    client.printf("rssi: %d dBm\n", WiFi.RSSI());
+    client.printf("free_heap: %d\n", ESP.getFreeHeap());
+    client.printf("reset_code: %d\n", last_reset_code);
     client.flush();
     client.stop();
   }
