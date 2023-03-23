@@ -5,6 +5,7 @@
 #ifdef ESP32
   #include <esp_task_wdt.h>
   #include <ESPmDNS.h>
+  #include "esp32c3/rom/rtc.h"
 #else
   #include <ESP8266mDNS.h>
   #include <ESP8266TrueRandom.h>
@@ -19,6 +20,7 @@ WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 
 unsigned long last_comms;
+int last_reset_code = -1;
 
 int random_ch(){
 #ifdef ESP32
@@ -73,9 +75,11 @@ void setup() {
 #ifdef ESP32
   Serial1.begin(115200, SERIAL_8N1, 8, 10);
   Serial.begin(2400, SERIAL_8N1, 21, 20);
+  last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
   Serial1.begin(115200);
   Serial.begin(2400);
+  last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
 
   Serial1.setDebugOutput(true);
@@ -127,6 +131,8 @@ bool handleStatusServerRequests() {
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
+    client.printf("free_heap: %d\n", ESP.getFreeHeap());
+    client.printf("reset_code: %d\n", last_reset_code);
     client.flush();
     client.stop();
   }
