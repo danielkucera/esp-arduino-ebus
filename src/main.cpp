@@ -136,7 +136,7 @@ bool handleStatusServerRequests() {
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
-    client.printf("free_heap: %d b\n", ESP.getFreeHeap());
+    client.printf("free_heap: %d B\n", ESP.getFreeHeap());
     client.printf("reset_code: %d\n", last_reset_code);
     client.printf("loop_duration: %ld us\r\n", loopDuration);
     client.flush();
