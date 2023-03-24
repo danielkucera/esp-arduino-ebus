@@ -24,7 +24,6 @@ WiFiClient enhClients[MAX_SRV_CLIENTS];
 unsigned long last_comms;
 int last_reset_code = -1;
 
-unsigned long lastTime = 0;
 unsigned long loopDuration = 0;
 
 int random_ch(){
