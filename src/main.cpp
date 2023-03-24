@@ -26,7 +26,6 @@ int last_reset_code = -1;
 
 unsigned long lastTime = 0;
 unsigned long loopDuration = 0;
-unsigned long loopCount = 0;
 
 int random_ch(){
 #ifdef ESP32
