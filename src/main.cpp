@@ -11,6 +11,8 @@
   #include <ESP8266TrueRandom.h>
 #endif
 
+#define ALPHA 0.3
+
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
 WiFiServer wifiServerEnh(3335);
@@ -21,6 +23,8 @@ WiFiClient enhClients[MAX_SRV_CLIENTS];
 
 unsigned long last_comms;
 int last_reset_code = -1;
+
+unsigned long loopDuration = 0;
 
 int random_ch(){
 #ifdef ESP32
@@ -131,14 +135,24 @@ bool handleStatusServerRequests() {
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
-    client.printf("free_heap: %d\n", ESP.getFreeHeap());
+    client.printf("free_heap: %d B\n", ESP.getFreeHeap());
     client.printf("reset_code: %d\n", last_reset_code);
+    client.printf("loop_duration: %ld us\r\n", loopDuration);
     client.flush();
     client.stop();
   }
   return true;
 }
 
+void loop_duration() {
+  static unsigned long lastTime = 0;
+  unsigned long now = micros();
+  unsigned long delta = now - lastTime;
+  
+  lastTime = now;
+
+  loopDuration = ((1 - ALPHA) * loopDuration + (ALPHA * delta));
+}
 
 void loop() {
   ArduinoOTA.handle();
@@ -192,4 +206,5 @@ void loop() {
 
   }
 
+  loop_duration();
 }
