@@ -145,9 +145,9 @@ bool handleStatusServerRequests() {
 }
 
 void loop_duration() {
+  static unsigned long lastTime = 0;
   unsigned long now = micros();
   unsigned long delta = now - lastTime;
-  static unsigned long lastTime = 0;
   
   lastTime = now;
 
