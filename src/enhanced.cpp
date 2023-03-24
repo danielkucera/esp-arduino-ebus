@@ -149,13 +149,19 @@ int pushEnhClient(WiFiClient* client, uint8_t B){
             if (arbitration_client == client) {
                 Serial.write(arbitration_address);
 
-                while (Serial.available() == 0);
+                while (Serial.available() == 0) {
+                    if (millis() > arbitration_start + ARBITRATION_TIMEOUT_MS) {
+                        send_res(client, FAILED, 0x3f);
+                        arbitration_client = NULL;
+                        return 1;
+                    }
+                }
 
                 if (Serial.read() == arbitration_address){ // arbitration success
                     send_res(client, STARTED, arbitration_address);
                     arbitration_client = NULL;
                 } else { // arbitration fail
-
+                    // do nothing, arbitration will retry on next SYN until timeout or cancel
                 }
                 return 1;
             }
