@@ -4,7 +4,7 @@
 
 ## Quickstart
 - connect adapter to ebus
-- you should see at least one LED on the adapter shining (v3.0+) - if not, switch eBus wires
+- you should see at least one LED on the adapter shining (HW v3.0+) - if not, switch eBus wires
 - search for WiFi networks, you should see network with name "esp-eBus"
 - connect to the network - a configuration page should open automatically
 - configure your WiFi network settings (SSID, password)
@@ -13,11 +13,11 @@
   - turn the trimmer counterclockwise until you find the position between D1 blinking and still on
   - turn the trimmer clockwise until you find the position between D1 blinking and still off
   - count the turns between these positions and set the trimmer in the middle position with D1 blinking
-- the adapter listens on following TCP ports (from HW rev v3.0):
-  - 3333 - on this port you can both read and write to the eBus - ebusd config: `-d esp-ebus.local:3333`
-  - 3334 - listen only port - everything sent to this port will be ignored and the adapters TX pin is physically isolated (TX-DISABLE)
-  - 3335 - port with enhanced protocol, ebusd config: `-d enh:esp-ebus.local:3335`
-  - 5555 - you can telnet to this port to see some basic status info
+- the adapter listens on following TCP ports (latest SW):
+  - 3333 - raw - on this port you can both read and write to the eBus - ebusd config: `-d esp-ebus.local:3333`
+  - 3334 - listen only port - everything sent to this port will be discarded and not sent to bus
+  - 3335 - [enhanced protocol](https://github.com/john30/ebusd/blob/b5d6a49/docs/enhanced_proto.md) - ebusd config: `-d enh:esp-ebus.local:3335`
+  - 5555 - status server - you can telnet to this port (or http://esp-ebus.local:5555) to see some basic status info
 - to verify there are bytes being received by the adapter connect to `esp-ebus.local` port `3334` using telnet - you should see unreadable binary data
 - you can use [ebusd](https://github.com/john30/ebusd) to decode bus messages, see ports section for device option configuration
 
