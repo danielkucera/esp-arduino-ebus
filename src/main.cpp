@@ -179,8 +179,11 @@ void loop() {
   if (handleNewClient(wifiServer, serverClients)){
     enableTX();
   }
+  if (handleNewClient(wifiServerEnh, enhClients)){
+    enableTX();
+  }
+
   handleNewClient(wifiServerRO, serverClientsRO);
-  handleNewClient(wifiServerEnh, enhClients);
 
   //check clients for data
   for (int i = 0; i < MAX_SRV_CLIENTS; i++){
