@@ -52,50 +52,8 @@ uint8_t* encode(uint8_t c, uint8_t d){
 void send_res(WiFiClient* client, uint8_t c, uint8_t d){
     uint8_t* dat = encode(c, d);
 
-    client->write(dat[0]);
-    client->write(dat[1]);
+    client->write(dat, 2);
 
-}
-
-uint8_t* read_cmd(WiFiClient* client){
-    int b, b2;
-
-    b = client->read();
-
-    if (b<0){
-        // available and read -1 ???
-        return NULL;
-    }
-
-    if (b<0b10000000){
-        Serial.write(b);
-        return NULL;
-    }
-
-    if (b<0b11000000){
-        client->write("first command signature error");
-        // first command signature error
-        client->stop();
-        return NULL;
-    }
-
-    b2 = client->read();
-
-    if (b2<0) {
-        // second command missing
-        client->write("second command missing");
-        client->stop();
-        return NULL;
-    }
-
-    if ((b2 & 0b11000000) != 0b10000000){
-        // second command signature error
-        client->write("second command signature error");
-        client->stop();
-        return NULL;
-    }
-
-    return decode(b, b2);
 }
 
 void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
@@ -128,6 +86,47 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
         Serial.write(d);
         return;
     }
+}
+
+uint8_t* read_cmd(WiFiClient* client){
+    int b, b2;
+
+    b = client->read();
+
+    if (b<0){
+        // available and read -1 ???
+        return NULL;
+    }
+
+    if (b<0b10000000){
+        process_cmd(client, CMD_SEND, b);
+        return NULL;
+    }
+
+    if (b<0b11000000){
+        client->write("first command signature error");
+        // first command signature error
+        client->stop();
+        return NULL;
+    }
+
+    b2 = client->read();
+
+    if (b2<0) {
+        // second command missing
+        client->write("second command missing");
+        client->stop();
+        return NULL;
+    }
+
+    if ((b2 & 0b11000000) != 0b10000000){
+        // second command signature error
+        client->write("second command signature error");
+        client->stop();
+        return NULL;
+    }
+
+    return decode(b, b2);
 }
 
 void handleEnhClient(WiFiClient* client){
