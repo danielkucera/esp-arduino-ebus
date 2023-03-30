@@ -25,6 +25,7 @@ unsigned long last_comms;
 int last_reset_code = -1;
 
 unsigned long loopDuration = 0;
+unsigned long maxLoopDuration = 0;
 
 int random_ch(){
 #ifdef ESP32
@@ -138,9 +139,11 @@ bool handleStatusServerRequests() {
     client.printf("free_heap: %d B\n", ESP.getFreeHeap());
     client.printf("reset_code: %d\n", last_reset_code);
     client.printf("loop_duration: %ld us\r\n", loopDuration);
+    client.printf("max_loop_duration: %ld us\r\n", maxLoopDuration);
     client.printf("version: %s\r\n", AUTO_VERSION);
     client.flush();
     client.stop();
+    maxLoopDuration = 0;
   }
   return true;
 }
@@ -153,6 +156,10 @@ void loop_duration() {
   lastTime = now;
 
   loopDuration = ((1 - ALPHA) * loopDuration + (ALPHA * delta));
+
+  if (delta > maxLoopDuration) {
+    maxLoopDuration = delta;
+  }
 }
 
 void loop() {
