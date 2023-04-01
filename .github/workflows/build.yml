@@ -1,7 +1,7 @@
 name: PlatformIO CI
 
-#on:
-#  push:
+on:
+  push:
 #    tags:
 #      - '*'
 
