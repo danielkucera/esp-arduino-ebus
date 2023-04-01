@@ -41,7 +41,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
-        name: *
+        name: "*"
         path: release
   release:
     only:
@@ -51,7 +51,7 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v3
       with:
-        name: *
+        name: "*"
         path: release
     - name: Create release
       uses: ncipollo/release-action@v1
