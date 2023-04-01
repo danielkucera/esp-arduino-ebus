@@ -38,10 +38,21 @@ jobs:
       run: pio run -e esp12e ; mv .pio/build/esp12e/firmware.bin release/firmware-HW_v4.x.bin
     - name: Build v3.0
       run: pio run -e esp12e-v3.0 ; mv .pio/build/esp12e-v3.0/firmware.bin release/firmware-HW_v3.x.bin
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: *
+        path: release
   release:
     only:
       - tags
+    runs-on: ubuntu-latest
     steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: *
+        path: release
     - name: Create release
       uses: ncipollo/release-action@v1
       with:
