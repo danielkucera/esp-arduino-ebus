@@ -2,8 +2,6 @@ name: PlatformIO CI
 
 on:
   push:
-    tags:
-      - '*'
 
 jobs:
   build:
@@ -32,12 +30,26 @@ jobs:
         pip install --upgrade platformio
     - name: Prepare release dir
       run: mkdir release
-    - name: Build v4.x
+    - name: Build v5.x
       run: pio run -e esp32-c3 ; mv .pio/build/esp32-c3/firmware.bin release/firmware-HW_v5.x.bin
     - name: Build v4.x
       run: pio run -e esp12e ; mv .pio/build/esp12e/firmware.bin release/firmware-HW_v4.x.bin
     - name: Build v3.0
       run: pio run -e esp12e-v3.0 ; mv .pio/build/esp12e-v3.0/firmware.bin release/firmware-HW_v3.x.bin
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        path: release
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: release
     - name: Create release
       uses: ncipollo/release-action@v1
       with:

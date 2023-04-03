@@ -4,7 +4,7 @@
 #define M1 0b11000000
 #define M2 0b10000000
 
-#define ARBITRATION_TIMEOUT_MS 200
+#define ARBITRATION_TIMEOUT_MS 2000
 
 enum symbols {
     SYN = 0xAA
@@ -27,6 +27,10 @@ enum responses {
     ERROR_HOST = 0xc
 };
 
+WiFiClient* arbitration_client;
+unsigned long arbitration_start;
+int arbitration_address;
+
 uint8_t* decode(int b1, int b2){
     static uint8_t ret[2];
 
@@ -48,9 +52,40 @@ uint8_t* encode(uint8_t c, uint8_t d){
 void send_res(WiFiClient* client, uint8_t c, uint8_t d){
     uint8_t* dat = encode(c, d);
 
-    client->write(dat[0]);
-    client->write(dat[1]);
+    client->write(dat, 2);
 
+}
+
+void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
+    if (c == CMD_INIT){
+        send_res(client, RESETTED, 0x0);
+        return;
+    }
+    if (c == CMD_START){
+        if (d == SYN){
+            arbitration_client = NULL;
+            send_res(client, FAILED, 0x3f);
+            return;
+        } else {
+            // start arbitration
+
+            if (arbitration_client) {
+                // only one client can be in arbitration
+                send_res(client, FAILED, 0x3f);
+                return;
+            }
+
+            arbitration_client = client;
+            arbitration_start = millis();
+            arbitration_address = d;
+
+            return;
+        }
+    }
+    if (c == CMD_SEND){
+        Serial.write(d);
+        return;
+    }
 }
 
 uint8_t* read_cmd(WiFiClient* client){
@@ -64,7 +99,7 @@ uint8_t* read_cmd(WiFiClient* client){
     }
 
     if (b<0b10000000){
-        Serial.write(b);
+        process_cmd(client, CMD_SEND, b);
         return NULL;
     }
 
@@ -94,69 +129,6 @@ uint8_t* read_cmd(WiFiClient* client){
     return decode(b, b2);
 }
 
-void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
-    if (c == CMD_INIT){
-        send_res(client, RESETTED, 0x0);
-        return;
-    }
-    if (c == CMD_START){
-        int qq_sent = 0;
-
-        if (d == SYN){
-            // abort arbitration... ?
-            return;
-        } else {
-            // start arbitration
-            unsigned long start = millis();
-
-            while (millis() < start + ARBITRATION_TIMEOUT_MS){
-                if (client->available()){
-                    if (uint8_t* cmd = read_cmd(client)){
-                        if ((cmd[0] == CMD_START) && (cmd[1] == SYN)){
-                            // abort arbitration, TODO: response
-                            return;
-                        } else {
-                            // TODO: should we process client data during arbitration?
-                            //process_cmd(client, cmd[0], cmd[1]);
-                        }
-                    }
-                }
-
-                if (Serial.available()) {
-                    int s = Serial.read();
-                    if (s >= 0) {
-                        //pushEnhClient(client, s);
-                        if (qq_sent){
-                            if (s == d){
-                                // arbitration success
-                                send_res(client, STARTED, d);
-                                return;
-                            } else {
-                                // arbitration fail: QQ sent, received other
-                                send_res(client, FAILED, s);
-                                return;
-                            }
-                        }
-                        if (s == SYN) {
-                            //delay(d*10); //TODO: verify wait master address * 10
-
-                            Serial.write(d);
-                            qq_sent = 1;
-                        }
-                    }
-                }
-            }
-            // arbitration timeout
-            send_res(client, FAILED, 0x3f);
-            return;
-        }
-    }
-    if (c == CMD_SEND){
-        Serial.write(d);
-        return;
-    }
-}
-
 void handleEnhClient(WiFiClient* client){
 
     while (client->available()) {
@@ -171,6 +143,33 @@ void handleEnhClient(WiFiClient* client){
 
 int pushEnhClient(WiFiClient* client, uint8_t B){
     if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
+
+        if ((B == SYN) && (Serial.available() == 0)){
+            if (arbitration_client == client) {
+                Serial.write(arbitration_address);
+
+                while (Serial.available() == 0) {
+                    if (millis() > arbitration_start + ARBITRATION_TIMEOUT_MS) {
+                        send_res(client, FAILED, 0x3f);
+                        arbitration_client = NULL;
+                        return 1;
+                    }
+                }
+
+                if (Serial.read() == arbitration_address){ // arbitration success
+                    send_res(client, STARTED, arbitration_address);
+                    arbitration_client = NULL;
+                } else { // arbitration fail
+                    // do nothing, arbitration will retry on next SYN until timeout or cancel
+                }
+                return 1;
+            }
+        }
+
+        if (arbitration_client && (millis() > arbitration_start + ARBITRATION_TIMEOUT_MS)){
+            send_res(arbitration_client, FAILED, 0x3f);
+            arbitration_client = NULL;
+        }
 
         if (B < 0x80){
             client->write(B);
