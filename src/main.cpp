@@ -21,7 +21,7 @@ WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 
-unsigned long last_comms;
+unsigned long last_comms = 0;
 int last_reset_code = -1;
 
 unsigned long loopDuration = 0;
