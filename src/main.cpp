@@ -1,6 +1,7 @@
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 #include "main.hpp"
+#include "ebusstate.hpp"
 
 #ifdef ESP32
   #include <esp_task_wdt.h>
@@ -20,6 +21,7 @@ WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
+EBusState  busState;
 
 unsigned long last_comms = 0;
 int last_reset_code = -1;
@@ -200,21 +202,42 @@ void loop() {
 
   //check UART for data
   if (size_t len = Serial.available()) {
-    byte B = Serial.read();
+    uint8_t bytes[ARBITRATION_BUFFER_SIZE+1];
+    bytes[0]= Serial.read();
+    busState.data(bytes[0]);
 
-    // push data to clients
+    // handle enhanced client that is in arbitration mode
+    // as a side effect, additional data can be read from the bus, which needs to
+    // send to the other clients. this data will be returned in the bytes argument
+    size_t bytesread = 0;
+    int arbitrated_client = -1;
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-      if (pushClient(&serverClients[i], B)){
+      bytesread = arbitrateEnhClient(&enhClients[i], busState, &bytes[1]);
+      if (bytesread>0){
         last_comms = millis();
-      }
-      if (pushClient(&serverClientsRO[i], B)){
-        last_comms = millis();
-      }
-      if (pushEnhClient(&enhClients[i], B)){
-        last_comms = millis();
+        arbitrated_client = i;
+        break;
       }
     }
+    bytesread++; // for byte at position bytes[0]
 
+    // push data to clients, including bytes[0] and all bytes
+    // returned by arbitrateEnhClient, that start at bytes[1]
+    for (int i = 0; i < bytesread; i++) {
+      for (int j = 0; j < MAX_SRV_CLIENTS; j++){
+        if (pushClient(&serverClients[j], bytes[i])){
+          last_comms = millis();
+        }
+        if (pushClient(&serverClientsRO[j], bytes[i])){
+          last_comms = millis();
+        }
+        if (j != arbitrated_client) {
+          if (pushEnhClient(&enhClients[j], bytes[i])){
+            last_comms = millis();
+          }
+        }
+      }
+    }
   }
 
   loop_duration();
