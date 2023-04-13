@@ -1,6 +1,7 @@
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 #include "main.hpp"
+#include "ebusstate.hpp"
 
 #ifdef ESP32
   #include <esp_task_wdt.h>
@@ -20,8 +21,9 @@ WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
+EBusState  busState;
 
-unsigned long last_comms;
+unsigned long last_comms = 0;
 int last_reset_code = -1;
 
 unsigned long loopDuration = 0;
@@ -80,6 +82,7 @@ void setup() {
 #ifdef ESP32
   Serial1.begin(115200, SERIAL_8N1, 8, 10);
   Serial.begin(2400, SERIAL_8N1, 21, 20);
+  Serial.setTimeout(1);
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
   Serial1.begin(115200);
@@ -127,6 +130,26 @@ void setup() {
 }
 
 
+static char   message_buffer[2000] = {0};
+static size_t message_buffer_position = 0;
+
+int logmessage(const char *format, ...)
+{
+   va_list aptr;
+   int ret;
+
+   va_start(aptr, format);
+   ret = vsnprintf(&message_buffer[message_buffer_position], 2000-message_buffer_position, format, aptr);
+   va_end(aptr);
+   message_buffer_position+=ret;
+   if (message_buffer_position >= 2000) {
+     message_buffer_position=2000;
+   }
+   message_buffer[2000-1]=0;
+
+   return ret;
+}
+
 bool handleStatusServerRequests() {
   if (!statusServer.hasClient())
     return false;
@@ -134,6 +157,7 @@ bool handleStatusServerRequests() {
   WiFiClient client = statusServer.available();
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.printf("HTTP/1.1 200 OK\r\n\r\n");
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
     client.printf("free_heap: %d B\n", ESP.getFreeHeap());
@@ -141,6 +165,12 @@ bool handleStatusServerRequests() {
     client.printf("loop_duration: %ld us\r\n", loopDuration);
     client.printf("max_loop_duration: %ld us\r\n", maxLoopDuration);
     client.printf("version: %s\r\n", AUTO_VERSION);
+    if (message_buffer_position>0)
+    {
+      client.printf("lastmessages:\r\n%s\r\n", message_buffer);
+      message_buffer[0]=0;
+      message_buffer_position=0;
+    }
     client.flush();
     client.stop();
     maxLoopDuration = 0;
@@ -200,21 +230,42 @@ void loop() {
 
   //check UART for data
   if (size_t len = Serial.available()) {
-    byte B = Serial.read();
+    uint8_t bytes[ARB_CLIENT_BUFFER_SIZE+1];
+    bytes[0]= Serial.read();
+    busState.data(bytes[0]);
 
-    // push data to clients
+    // handle enhanced client that is in arbitration mode
+    // as a side effect, additional data can be read from the bus, which needs to
+    // send to the other clients. this data will be returned in the bytes argument
+    size_t bytesread = 0;
+    int arbitrated_client = -1;
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-      if (pushClient(&serverClients[i], B)){
+      bytesread = arbitrateEnhClient(&enhClients[i], busState, &bytes[1]);
+      if (bytesread>0){
         last_comms = millis();
-      }
-      if (pushClient(&serverClientsRO[i], B)){
-        last_comms = millis();
-      }
-      if (pushEnhClient(&enhClients[i], B)){
-        last_comms = millis();
+        arbitrated_client = i;
+        break;
       }
     }
+    bytesread++; // for byte at position bytes[0]
 
+    // push data to clients, including bytes[0] and all bytes
+    // returned by arbitrateEnhClient, that start at bytes[1]
+    for (int i = 0; i < bytesread; i++) {
+      for (int j = 0; j < MAX_SRV_CLIENTS; j++){
+        if (pushClient(&serverClients[j], bytes[i])){
+          last_comms = millis();
+        }
+        if (pushClient(&serverClientsRO[j], bytes[i])){
+          last_comms = millis();
+        }
+        if (j != arbitrated_client) {
+          if (pushEnhClient(&enhClients[j], bytes[i])){
+            last_comms = millis();
+          }
+        }
+      }
+    }
   }
 
   loop_duration();
