@@ -148,6 +148,10 @@ size_t arbitrateEnhClient(WiFiClient* client, EBusState& busstate, uint8_t* byte
                 Serial.available() == 0 && 
                 arbitration_client == client) 
             { 
+
+            // ebusd expects the starting SYN
+            send_res(client, RECEIVED, SYN); 
+
             // start of arbitration
             bool participateSecond = false;
             bool won = false;
