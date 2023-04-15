@@ -10,6 +10,9 @@ class EBusState {
 public:
     enum eState {
         eStartup,                      // In startup mode to analyze bus state
+        eStartupFirstSyn,              // Either the bus is busy, it is arbitrating, or it is free to start an arbitration
+        eStartupSymbolAfterFirstSyn,   
+        eStartupSecondSyn,
         eReceivedFirstSYN,             // Received SYN
         eReceivedAddressAfterFirstSYN, // Received SYN ADDRESS
         eReceivedSecondSYN,            // Received SYN ADDRESS SYN
@@ -20,6 +23,9 @@ public:
     {
         const char* values[]  = {
           "eStartup",
+          "eStartupFirstSyn",
+          "eStartupSymbolAfterFirstSyn",
+          "eStartupSecondSyn",
           "eReceivedFirstSYN",
           "eReceivedAddressAfterFirstSYN",
           "eReceivedSecondSYN",
@@ -37,8 +43,17 @@ public:
         switch (_state)
         {
         case eStartup:
-            _state = symbol == SYN ? syn(eReceivedFirstSYN) : eStartup;
+            _state = symbol == SYN ? syn(eStartupFirstSyn) : eStartup;
             break;
+        case eStartupFirstSyn:
+            _state = symbol == SYN ? syn(eReceivedFirstSYN) : eStartupSymbolAfterFirstSyn;
+            break;
+        case eStartupSymbolAfterFirstSyn:
+            _state = symbol == SYN ? syn(eStartupSecondSyn) : eBusy;
+            break;       
+        case eStartupSecondSyn:
+            _state = symbol == SYN ? syn(eReceivedFirstSYN) : eBusy;
+            break;          
         case eReceivedFirstSYN:
             _state = symbol == SYN ? syn(eReceivedFirstSYN) : eReceivedAddressAfterFirstSYN;
             _master = symbol;
