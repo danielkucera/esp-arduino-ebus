@@ -31,29 +31,28 @@ WiFiClient* arbitration_client;
 unsigned long arbitration_start;
 int arbitration_address;
 
-uint8_t* decode(int b1, int b2){
-    static uint8_t ret[2];
-
-    ret[0] = (b1 >> 2) & 0b1111;
-    ret[1] = ((b1 & 0b11) << 6) | (b2 & 0b00111111);
-
-    return ret;
+void decode(int b1, int b2, uint8_t (&data)[2]){
+    data[0] = (b1 >> 2) & 0b1111;
+    data[1] = ((b1 & 0b11) << 6) | (b2 & 0b00111111);
 }
 
-uint8_t* encode(uint8_t c, uint8_t d){
-    static uint8_t ret[2];
-
-    ret[0] = M1 | c << 2 | d >> 6;
-    ret[1] = M2 | (d & 0b00111111);
-
-    return ret;
+void encode(uint8_t c, uint8_t d, uint8_t (&data)[2]){
+    data[0] = M1 | c << 2 | d >> 6;
+    data[1] = M2 | (d & 0b00111111);
 }
 
 void send_res(WiFiClient* client, uint8_t c, uint8_t d){
-    uint8_t* dat = encode(c, d);
+    uint8_t data[2];
+    encode(c, d, data);
+    client->write(data, 2);
+}
 
-    client->write(dat, 2);
-
+void send_received(WiFiClient* client, uint8_t byte){
+    if (byte< 0x80){
+        client->write(byte);
+    } else {
+        send_res(client, RECEIVED, byte);
+    }
 }
 
 void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
@@ -86,28 +85,33 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
         Serial.write(d);
         return;
     }
+    if (c == CMD_INFO){
+        // if needed, set bit 0 as reply to INIT command
+        return;
+    }
 }
 
-uint8_t* read_cmd(WiFiClient* client){
+bool read_cmd(WiFiClient* client, uint8_t (&data)[2]){
     int b, b2;
 
     b = client->read();
 
     if (b<0){
         // available and read -1 ???
-        return NULL;
+        return false;
     }
 
     if (b<0b10000000){
-        process_cmd(client, CMD_SEND, b);
-        return NULL;
+        data[0] = CMD_SEND;
+        data[1] = b;
+        return true;
     }
 
     if (b<0b11000000){
         client->write("first command signature error");
         // first command signature error
         client->stop();
-        return NULL;
+        return false;
     }
 
     b2 = client->read();
@@ -116,29 +120,27 @@ uint8_t* read_cmd(WiFiClient* client){
         // second command missing
         client->write("second command missing");
         client->stop();
-        return NULL;
+        return false;
     }
 
     if ((b2 & 0b11000000) != 0b10000000){
         // second command signature error
         client->write("second command signature error");
         client->stop();
-        return NULL;
+        return false;
     }
 
-    return decode(b, b2);
+    decode(b, b2, data);
+    return true;
 }
 
 void handleEnhClient(WiFiClient* client){
-
     while (client->available()) {
-        uint8_t* dat = read_cmd(client);
-
-        if (dat) {
-            process_cmd(client, dat[0], dat[1]);
+        uint8_t data[2];
+        if (read_cmd(client, data)) {
+            process_cmd(client, data[0], data[1]);
         }
     }
-
 }
 
 int pushEnhClient(WiFiClient* client, uint8_t B){
@@ -171,11 +173,7 @@ int pushEnhClient(WiFiClient* client, uint8_t B){
             arbitration_client = NULL;
         }
 
-        if (B < 0x80){
-            client->write(B);
-        } else {
-            send_res(client, RECEIVED, B);
-        }
+        send_received(client, B);
         return 1;
     }
     return 0;
