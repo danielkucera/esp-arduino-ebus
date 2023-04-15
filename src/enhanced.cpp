@@ -201,7 +201,7 @@ size_t arbitrateEnhClient(WiFiClient* client, EBusState& busstate, uint8_t* byte
                         DEBUG_LOG("ARB WON1       0x%02x %ld us\n", symbol, busstate.passedsincesyn());
                         won = true; // we won; nobody else will write to the bus
                     } else if ((symbol & 0b00001111) == (arbitration_address & 0b00001111)) { 
-                        DEBUG_LOG("ARB PARTICIPATE SECOND 0x%02x 0x%02x\n", arbitration_address, symbol);
+                        DEBUG_LOG("ARB PART SECND 0x%02x 0x%02x\n", arbitration_address, symbol);
                         participateSecond = true; // participate in second round of arbitration if we have the same priority class
                     }
                     else {
