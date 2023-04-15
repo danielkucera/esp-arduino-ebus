@@ -2,6 +2,7 @@ name: PlatformIO CI
 
 on:
   push:
+    tags:
   pull_request:
 
 jobs:
