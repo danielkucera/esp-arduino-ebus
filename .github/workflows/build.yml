@@ -3,6 +3,7 @@ name: PlatformIO CI
 on:
   push:
     tags:
+      - v[1-9]*
   pull_request:
 
 jobs:
