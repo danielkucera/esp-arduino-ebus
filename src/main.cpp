@@ -54,16 +54,20 @@ void wdt_feed() {
 }
 
 inline void disableTX() {
-    digitalWrite(TX_DISABLE_PIN, HIGH);
+#ifdef TX_DISABLE_PIN
+  pinMode(TX_DISABLE_PIN, OUTPUT);
+  digitalWrite(TX_DISABLE_PIN, HIGH);
+#endif
 }
 
 inline void enableTX() {
-    digitalWrite(TX_DISABLE_PIN, LOW);
+#ifdef TX_DISABLE_PIN
+  digitalWrite(TX_DISABLE_PIN, LOW);
+#endif
 }
 
 void reset(){
   disableTX();
-  pinMode(TX_DISABLE_PIN, INPUT_PULLUP);
   ESP.restart();
 }
 
@@ -101,7 +105,6 @@ void setup() {
   }
 
   disableTX();
-  pinMode(TX_DISABLE_PIN, OUTPUT);
 
   WiFi.enableAP(false);
   WiFi.begin();

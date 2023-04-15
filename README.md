@@ -31,31 +31,37 @@ This section lists adapter hardware revisions together with specifics for each o
 - SMD trimmer
 
 ### v2.0
-- firmware file: firmware-HW_v3.x.bin 
+- firmware file: firmware-HW_v3.x.bin
 - step-down: XL7015
-- multiturn timmer
+- RESET_PIN: MCU GPIO5
+- replaced SMD to multiturn timmer
+- added TX-disable - GPIO2 - function not working
 
 ### v3.0
 - firmware file: firmware-HW_v3.x.bin 
 - step-down: ME3116
+- RESET_PIN: MCU GPIO5
+- fixed TX-disable - GPIO2 - blue LED on module shines when TX enabled
 - added programming header
-- added TX-disable function on pin 3 - blue LED on module shines when TX enabled
 - added LEDS for TX, RX, Power
 - added tp2 - you can apply 24V external power supply between tp2 (+) and BUS GND (-). If you remove D4, you can use an adapter with voltage 5-24V
 
 ### v4.0
 - firmware file: firmware-HW_v4.x.bin 
-- TX-disable moved to pin 5
+- RESET_PIN: TX-DISABLE (GPIO5)
+- moved TX-DISABLE to GPIO5
 - LEDs position changed
 - added tp3, jp1 - you can apply 24V external power supply between tp2 (+) and tp3 (-). If you cut jp1, you can use any adapter with voltage 5-24V
 
 ### v4.1
 - firmware file: firmware-HW_v4.x.bin 
+- RESET_PIN: TX-DISABLE (GPIO5)
 - added debug pin to programming header
 
 ### v5.0
 - firmware file: firmware-HW_v5.x.bin 
 - MCU changed to ESP32-C3
+- RESET_PIN: TO-EBUS (GPIO20)
 - removed TX-DISABLE - MCU doesn't transmit any messages during startup on UART pins
 - added USB-C connector for power and/or programming
 - added VCC selector jumper - you can choose from:
@@ -67,6 +73,7 @@ This section lists adapter hardware revisions together with specifics for each o
 
 ### v5.1
 - firmware file: firmware-HW_v5.x.bin 
+- RESET_PIN: TO-EBUS (GPIO20)
 - fixed reference voltage resistor value
 
 ## Troubleshooting
@@ -86,8 +93,10 @@ It's possible that ebus doesn't have enough power to supply the adapter together
 Run ebusd with `--lograwdata=data --latency=2000 --log=all:debug` options. Then save the log, open an issue here, describe the problem and attach the log. I'll try to help you.
 
 ## Config reset
+- check which RESET_PIN is used in your adapter (see hardware revisions)
+  - note: RESET_PIN has been changing in different software versions. The defined value refers to latest software revision. If the value doesn't work, you may try also pin ESP-RX/FROM-EBUS
 - disconnect device from bus
-- connect TX-DISABLE (previously ESP-RX) and GND pins using a wire
+- connect RESET_PIN and GND pins using a wire
 - connect device to bus
 - wait 5 seconds
 - disconnect the wire
