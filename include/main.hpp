@@ -11,7 +11,6 @@
 #define HOSTNAME "esp-eBus"
 #define RESET_MS 1000
 
-
 #ifdef ESP32
 #define USE_SOFTWARE_SERIAL 1
 #define USE_ASYNCHRONOUS 1    // requires USE_SOFTWARE_SERIAL
