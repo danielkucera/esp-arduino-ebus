@@ -23,9 +23,7 @@
 #define AVAILABLE_THRESHOLD 1
 #endif
 
-#define DEBUG_LOG //
-
-//int DEBUG_LOG_IMPL(const char *format, ...);
+inline int DEBUG_LOG(const char *format, ...) { return 0;}
 //#define DEBUG_LOG DEBUG_LOG_IMPL
 
 bool handleNewClient(WiFiServer &server, WiFiClient clients[]);

@@ -201,7 +201,7 @@ void loop() {
   }
 
   //check UART for data
-  if (size_t len = Serial.available()) {
+  if (Serial.available()) {
     uint8_t bytes[ARBITRATION_BUFFER_SIZE+1];
     bytes[0]= Serial.read();
     busState.data(bytes[0]);
@@ -223,7 +223,7 @@ void loop() {
 
     // push data to clients, including bytes[0] and all bytes
     // returned by arbitrateEnhClient, that start at bytes[1]
-    for (int i = 0; i < bytesread; i++) {
+    for (size_t i = 0; i < bytesread; i++) {
       for (int j = 0; j < MAX_SRV_CLIENTS; j++){
         if (pushClient(&serverClients[j], bytes[i])){
           last_comms = millis();
