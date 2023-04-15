@@ -44,14 +44,6 @@ void send_res(WiFiClient* client, uint8_t c, uint8_t d){
     client->write(data, 2);
 }
 
-void send_received(WiFiClient* client, uint8_t byte){
-    if (byte< 0x80){
-        client->write(byte);
-    } else {
-        send_res(client, RECEIVED, byte);
-    }
-}
-
 void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
     if (c == CMD_INIT){
         send_res(client, RESETTED, 0x0);
@@ -60,15 +52,24 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
     if (c == CMD_START){
         if (d == SYN){
             arbitration_client = NULL;
+            DEBUG_LOG("CMD_START SYN\n");
             send_res(client, FAILED, 0x3f);
             return;
         } else {
             // start arbitration
-
-            if (arbitration_client) {
-                // only one client can be in arbitration
-                send_res(client, FAILED, 0x3f);
-                return;
+            if (arbitration_client ) {
+                if (arbitration_client!=client) {
+                    // only one client can be in arbitration
+                    DEBUG_LOG("CMD_START ONGOING 0x%02 0x%02x\n", arbitration_address, d);
+                    send_res(client, FAILED, 0x3f);
+                    return;
+                }
+                else {
+                    DEBUG_LOG("CMD_START REPEAT 0x%02x\n", d);
+                }
+            }
+            else {
+                DEBUG_LOG("CMD_START 0x%02x\n", d);
             }
 
             arbitration_client = client;
@@ -79,6 +80,7 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
         }
     }
     if (c == CMD_SEND){
+        DEBUG_LOG("SEND 0x%02x\n", d);
         Serial.write(d);
         return;
     }
@@ -141,59 +143,85 @@ void handleEnhClient(WiFiClient* client){
 }
 
 size_t arbitrateEnhClient(WiFiClient* client, EBusState& busstate, uint8_t* bytes){
-    int bytesread = 0;
+    size_t bytesread = 0;
+    static int arb = 0;
     if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
         // only allowed to start arbitration when the bus is in "eReceivedFirstSYN" state
         if (    busstate._state == EBusState::eReceivedFirstSYN && 
-                Serial.available() == 0 && 
                 arbitration_client == client) 
             { 
-
-            // ebusd expects the starting SYN
-            send_res(client, RECEIVED, SYN); 
+            
+            // Arbitration is timing sensitive. Avoid communicating with WifiClient during arbitration
+            DEBUG_LOG("ARB START %04i 0x%02x %ld us\n", arb++, arbitration_address, busstate.passedsincesyn());
+            
+            if (Serial.available() != 0)
+            {
+                // ebusd expects the starting SYN
+                send_res(client, RECEIVED, SYN); 
+                send_res(client, FAILED, 0x3f);
+                DEBUG_LOG("ARB LATE 0x%02x\n", Serial.peek());
+                arbitration_client=NULL;
+                return 0;
+            }
 
             // start of arbitration
             bool participateSecond = false;
             bool won = false;
+            int  loopcount = 0;
             
+            DEBUG_LOG("ARB MASTER1    0x%02x %ld us\n", arbitration_address, busstate.passedsincesyn());
             Serial.write(arbitration_address);
-            while (busstate._state != EBusState::eBusy && !won ){
-                if (bytesread == ARBITRATION_BUFFER_SIZE-1){
-                        send_res(client, FAILED, 0x3f);
-                        arbitration_client = NULL;
-                        return bytesread;                    
-                }
+
+            while (busstate._state != EBusState::eBusy && !won && loopcount++ < ARBITRATION_BUFFER_SIZE){
                 while (Serial.available() == 0) {
                     if (millis() > arbitration_start + ARBITRATION_TIMEOUT_MS) {
+                        DEBUG_LOG("ARB TIMEOUT 1 0x%02x 0x%02x\n", busstate._master, busstate._byte);
+                        // ebusd expects the starting SYN
+                        send_res(client, RECEIVED, SYN); 
                         send_res(client, FAILED, 0x3f);
                         arbitration_client = NULL;
                         return bytesread;
                     }
                 }
                 uint8_t symbol = Serial.read();
+                DEBUG_LOG("ARB SYMBOL     0x%02x %ld us\n", symbol, busstate.passedsincesyn());
                 busstate.data(symbol);
                 bytes[bytesread++] = symbol;
 
+                if (busstate._state == EBusState::eStartup) {
+                        DEBUG_LOG("ARB STARTUP    0x%02x 0x%02x\n", busstate._master, busstate._byte);
+                        // ebusd expects the starting SYN
+                        send_res(client, RECEIVED, SYN); 
+                        send_res(client, FAILED, 0x3f);
+                        arbitration_client = NULL;
+                        return bytesread;
+                }
                 if (busstate._state == EBusState::eReceivedAddressAfterFirstSYN) {
                     if (symbol == arbitration_address) {
+                        DEBUG_LOG("ARB WON1       0x%02x %ld us\n", symbol, busstate.passedsincesyn());
                         won = true; // we won; nobody else will write to the bus
-                    } else if ((symbol & 0b11110000) == (arbitration_address & 0b11110000)) { 
+                    } else if ((symbol & 0b00001111) == (arbitration_address & 0b00001111)) { 
+                        DEBUG_LOG("ARB PARTICIPATE SECOND 0x%02x 0x%02x\n", arbitration_address, symbol);
                         participateSecond = true; // participate in second round of arbitration if we have the same priority class
                     }
                     else {
+                        DEBUG_LOG("ARB LOST1      0x%02x %ld us\n", symbol, busstate.passedsincesyn());
                         // arbitration might be ongoing between other bus participants, so we cannot yet know what 
                         // the winning master is. Need to wait for eBusy
                     }
                 }
                 if (busstate._state == EBusState::eReceivedSecondSYN && participateSecond) {
-                    // participate in second round of arbitration
+                    // execute second round of arbitration
+                    DEBUG_LOG("ARB MASTER2    0x%02x %ld us\n", arbitration_address, busstate.passedsincesyn());
                     Serial.write(arbitration_address);
                 }
                 if (busstate._state == EBusState::eReceivedAddressAfterSecondSYN) {
                     if (symbol == arbitration_address) {
+                        DEBUG_LOG("ARB WON2       0x%02x %ld us\n", symbol, busstate.passedsincesyn());
                         won = true; // we won; nobody else will write to the bus
                     }
                     else {
+                        DEBUG_LOG("ARB LOST2      0x%02x %ld us\n", symbol, busstate.passedsincesyn());
                         // we now know which address has won and we could exit here. 
                         // but it is easier to wait for eBusy, so after the while loop, the 
                         // "lost" state can be handled the same as when somebody lost in the first round
@@ -201,16 +229,23 @@ size_t arbitrateEnhClient(WiFiClient* client, EBusState& busstate, uint8_t* byte
                 }
             }
             if (won) {
+                // ebusd expects the starting SYN
+                DEBUG_LOG("ARB SEND WON   0x%02x %ld us\n", busstate._master, busstate.passedsincesyn());
+                send_res(client, RECEIVED, SYN); 
                 send_res(client, STARTED, busstate._master);
+
             }
             else {
-                // Report FAILED arbitration. Include the extra byte.
+                // ebusd expects the starting SYN
+                DEBUG_LOG("ARB SEND LOST  0x%02x 0x%02x %ld us\n", busstate._master, busstate._byte, busstate.passedsincesyn());
+                send_res(client, RECEIVED, SYN); 
                 send_res(client, FAILED, busstate._master);
-                send_received(client, busstate._byte);  
+                send_res(client, RECEIVED, busstate._byte);
             }   
             arbitration_client = NULL;     
         }
         if (arbitration_client && (millis() > arbitration_start + ARBITRATION_TIMEOUT_MS)){
+            DEBUG_LOG("ARB TIMEOUT 2 0x%02x 0x%02x\n", busstate._master, busstate._byte);
             send_res(arbitration_client, FAILED, 0x3f);
             arbitration_client = NULL;
         }
@@ -220,7 +255,7 @@ size_t arbitrateEnhClient(WiFiClient* client, EBusState& busstate, uint8_t* byte
 
 int pushEnhClient(WiFiClient* client, uint8_t B){
     if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
-        send_received(client, B);
+        send_res(client, RECEIVED,  B);
         return 1;
     }
     return 0;

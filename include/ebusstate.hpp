@@ -32,19 +32,19 @@ public:
         : _state(eStartup)
     {}
 
-    void data(uint8_t symbol)
+    inline void data(uint8_t symbol)
     {
         switch (_state)
         {
         case eStartup:
-            _state = symbol == SYN ? eReceivedFirstSYN : eStartup;
+            _state = symbol == SYN ? syn(eReceivedFirstSYN) : eStartup;
             break;
         case eReceivedFirstSYN:
-            _state = symbol == SYN ? eReceivedFirstSYN : eReceivedAddressAfterFirstSYN;
+            _state = symbol == SYN ? syn(eReceivedFirstSYN) : eReceivedAddressAfterFirstSYN;
             _master = symbol;
             break;
         case eReceivedAddressAfterFirstSYN:
-            _state = symbol == SYN ? eReceivedSecondSYN : eBusy;
+            _state = symbol == SYN ? syn(eReceivedSecondSYN ): eBusy;
             _byte = symbol;
             break;
         case eReceivedSecondSYN:
@@ -56,14 +56,20 @@ public:
             _byte = symbol;
             break;            
         case eBusy:
-            _state = symbol == SYN ? eReceivedFirstSYN : eBusy;
+            _state = symbol == SYN ? syn(eReceivedFirstSYN) : eBusy;
             break;
         }
     }
-
+    inline eState syn(eState newstate)
+    {
+        _SYNtime = micros();
+        return newstate;
+    }
     eState synerror(eState currentstate, eState newstate)
     {
-        // ("unexpected SYN on bus while state is %s, setting state to %s\n", enumvalue(currentstate), enumvalue(newstate));
+        unsigned long lastsyn = passedsincesyn();
+        _SYNtime = micros();
+        DEBUG_LOG ("unexpected SYN on bus while state is %s, setting state to %s m=0x%02x, b=0x%02x %ld us\n", enumvalue(currentstate), enumvalue(newstate), _master, _byte, lastsyn);
         return newstate;
     }
 
@@ -72,8 +78,15 @@ public:
         _state = eStartup;
     }
 
+    unsigned long passedsincesyn()
+    {
+        return micros() - _SYNtime;
+
+    }
+
     eState  _state;
     uint8_t _master;
     uint8_t _byte;   
+    unsigned long _SYNtime;
 };
 #endif
