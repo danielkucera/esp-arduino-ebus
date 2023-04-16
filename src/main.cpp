@@ -82,6 +82,8 @@ void setup() {
 #ifdef ESP32
   Serial1.begin(115200, SERIAL_8N1, 8, 10);
   Serial.begin(2400, SERIAL_8N1, 21, 20);
+  // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
+  Serial.setRxFIFOFull(1); 
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
   Serial1.begin(115200);
@@ -146,7 +148,6 @@ bool handleStatusServerRequests() {
     client.printf("version: %s\r\n", AUTO_VERSION);
     client.flush();
     client.stop();
-    maxLoopDuration = 0;
   }
   return true;
 }
@@ -183,7 +184,12 @@ void loop() {
   }
 
   // Check if new client on the status server
-  handleStatusServerRequests();
+  if (handleStatusServerRequests()) {
+    // exclude handleStatusServerRequests from maxLoopDuration calculation
+    // as it skews the typical loop duration and set maxLoopDuration to 0
+    loop_duration();
+    maxLoopDuration = 0;
+  }
 
   // Check if there are any new clients on the eBUS servers
   if (handleNewClient(wifiServer, serverClients)){
