@@ -76,8 +76,20 @@ void reset_config() {
   wifiManager.resetSettings();
   reset();
 }
+
+void check_reset() {
+  // check if RESET_PIN being hold low and reset
+  pinMode(RESET_PIN, INPUT_PULLUP);
+  unsigned long resetStart = millis();
+  while(digitalRead(RESET_PIN) == 0){
+    if (millis() > resetStart + RESET_MS){
+      reset_config();
+    }
+  }
+}
  
 void setup() {
+  check_reset();
 
   Serial.setRxBufferSize(RXBUFFERSIZE);
 
@@ -94,15 +106,6 @@ void setup() {
 #endif
 
   Serial1.setDebugOutput(true);
-
-  // check if RESET_PIN being hold low and reset
-  pinMode(RESET_PIN, INPUT_PULLUP);
-  unsigned long resetStart = millis();
-  while(digitalRead(RESET_PIN) == 0){
-    if (millis() > resetStart + RESET_MS){
-      reset_config();
-    }
-  }
 
   disableTX();
 
