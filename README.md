@@ -114,19 +114,23 @@ There are following options:
 ### platform.io
 - clone this repository using git
 - `pip3 install platformio`
+- check for correct firmware file (see hardware revisions)
 - inside the project folder run:
-```
-pio run -e esp12e-ota -t upload
-```
+  - for firmware-HW_v3.x.bin: `pio run -e esp12e-v3.0-ota -t upload`
+  - for firmware-HW_v4.x.bin: `pio run -e esp12e-ota -t upload`
+  - for firmware-HW_v5.x.bin: `pio run -e esp32-c3-ota -t upload`
 
 ### espota.py
 - you need python installed in your computer
 - download [espota.py script](https://github.com/esp8266/Arduino/blob/master/tools/espota.py)
   - for Windows, you can download espota.exe from [esp32-xx.zip](https://github.com/espressif/arduino-esp32/releases) - it is located in `tools` folder
 - download firmware according to your hardware version from https://github.com/danielkucera/esp8266-arduino-ebus/releases
+- use port number:
+  - 8266 - for esp8266 (HW up to v4.1)
+  - 3232 - for esp32-c3 (HW from v5.0 up)
 - to upgrade, run:
 ```
-$ python3 espota.py -i esp-ebus.local -f firmware.bin -r -d
+$ python3 espota.py -i esp-ebus.local -f <FIRMWARE_FILE_NAME> -p <PORT_NUMBER> -r -d
 16:33:23 [DEBUG]: Options: {'esp_ip': 'esp-ebus.local', 'host_ip': '0.0.0.0', 'esp_port': 8266, 'host_port': 47056, 'auth': '', 'image': 'firmware.bin', 'spiffs': False, 'debug': True, 'progress': True}
 16:33:23 [INFO]: Starting on 0.0.0.0:47056
 16:33:23 [INFO]: Upload size: 380320
