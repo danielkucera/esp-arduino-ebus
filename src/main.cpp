@@ -143,7 +143,6 @@ bool handleStatusServerRequests() {
     client.printf("version: %s\r\n", AUTO_VERSION);
     client.flush();
     client.stop();
-    maxLoopDuration = 0;
   }
   return true;
 }
@@ -180,7 +179,12 @@ void loop() {
   }
 
   // Check if new client on the status server
-  handleStatusServerRequests();
+  if (handleStatusServerRequests()) {
+    // exclude handleStatusServerRequests from maxLoopDuration calculation
+    // as it skews the typical loop duration and set maxLoopDuration to 0
+    loop_duration();
+    maxLoopDuration = 0;
+  }
 
   // Check if there are any new clients on the eBUS servers
   if (handleNewClient(wifiServer, serverClients)){
