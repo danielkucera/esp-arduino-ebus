@@ -54,16 +54,20 @@ void wdt_feed() {
 }
 
 inline void disableTX() {
-    digitalWrite(TX_DISABLE_PIN, HIGH);
+#ifdef TX_DISABLE_PIN
+  pinMode(TX_DISABLE_PIN, OUTPUT);
+  digitalWrite(TX_DISABLE_PIN, HIGH);
+#endif
 }
 
 inline void enableTX() {
-    digitalWrite(TX_DISABLE_PIN, LOW);
+#ifdef TX_DISABLE_PIN
+  digitalWrite(TX_DISABLE_PIN, LOW);
+#endif
 }
 
 void reset(){
   disableTX();
-  pinMode(TX_DISABLE_PIN, INPUT_PULLUP);
   ESP.restart();
 }
 
@@ -72,8 +76,20 @@ void reset_config() {
   wifiManager.resetSettings();
   reset();
 }
+
+void check_reset() {
+  // check if RESET_PIN being hold low and reset
+  pinMode(RESET_PIN, INPUT_PULLUP);
+  unsigned long resetStart = millis();
+  while(digitalRead(RESET_PIN) == 0){
+    if (millis() > resetStart + RESET_MS){
+      reset_config();
+    }
+  }
+}
  
 void setup() {
+  check_reset();
 
   Serial.setRxBufferSize(RXBUFFERSIZE);
 
@@ -91,17 +107,7 @@ void setup() {
 
   Serial1.setDebugOutput(true);
 
-  // check if RESET_PIN being hold low and reset
-  pinMode(RESET_PIN, INPUT_PULLUP);
-  unsigned long resetStart = millis();
-  while(digitalRead(RESET_PIN) == 0){
-    if (millis() > resetStart + RESET_MS){
-      reset_config();
-    }
-  }
-
   disableTX();
-  pinMode(TX_DISABLE_PIN, OUTPUT);
 
   WiFi.enableAP(false);
   WiFi.begin();

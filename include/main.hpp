@@ -5,12 +5,7 @@
 #define RXBUFFERSIZE 1024
 #define STACK_PROTECTOR  512 // bytes
 #define HOSTNAME "esp-eBus"
-#define RESET_PIN 5
 #define RESET_MS 1000
-
-#ifndef TX_DISABLE_PIN
-#define TX_DISABLE_PIN 5
-#endif
 
 #ifdef ESP32
 // https://esp32.com/viewtopic.php?t=19788
