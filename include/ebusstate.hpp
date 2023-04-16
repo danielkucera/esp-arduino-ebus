@@ -63,11 +63,11 @@ public:
             _byte = symbol;
             break;
         case eReceivedSecondSYN:
-            _state = symbol == SYN ? synerror(_state, eStartup) : eReceivedAddressAfterSecondSYN;
+            _state = symbol == SYN ? error(_state, eReceivedFirstSYN) : eReceivedAddressAfterSecondSYN;
             _master = symbol;
             break;
         case eReceivedAddressAfterSecondSYN:
-            _state = symbol == SYN ? synerror(_state, eStartup) : eBusy;
+            _state = symbol == SYN ? error(_state, eReceivedFirstSYN) : eBusy;
             _byte = symbol;
             break;            
         case eBusy:
@@ -80,9 +80,9 @@ public:
         _SYNtime = micros();
         return newstate;
     }
-    eState synerror(eState currentstate, eState newstate)
+    eState error(eState currentstate, eState newstate)
     {
-        unsigned long lastsyn = passedsincesyn();
+        unsigned long lastsyn = microsSinceLastSyn();
         _SYNtime = micros();
         DEBUG_LOG ("unexpected SYN on bus while state is %s, setting state to %s m=0x%02x, b=0x%02x %ld us\n", enumvalue(currentstate), enumvalue(newstate), _master, _byte, lastsyn);
         return newstate;
@@ -93,7 +93,7 @@ public:
         _state = eStartup;
     }
 
-    unsigned long passedsincesyn()
+    unsigned long microsSinceLastSyn()
     {
         return micros() - _SYNtime;
 
