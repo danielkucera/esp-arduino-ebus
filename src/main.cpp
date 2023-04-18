@@ -2,6 +2,7 @@
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 #include "main.hpp"
 #include "ebusstate.hpp"
+#include "arbitration.hpp"
 
 #ifdef ESP32
   #include <esp_task_wdt.h>
@@ -21,7 +22,7 @@ WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
-EBusState  busState;
+EBusState   busState;
 
 unsigned long last_comms = 0;
 int last_reset_code = -1;
@@ -89,7 +90,35 @@ void check_reset() {
     }
   }
 }
- 
+
+
+void OnReceiveCB()
+{
+  //static EBusState   busState;
+  //static Arbitration arbitration;
+  // We received a byte. 
+  // Handle arbitration in this CB; has to be fast enough to be done for the next character
+  // We can't send data to WifiClient
+  // - likely not thread safe
+  // - would take too long
+  // Instead regular wifi client communication needs to happen in the main loop, untill maybe WifiClient can be put in
+  // a task and we communicate to WifiClient with messages
+  // BusState should only be used from this thread, only relevant case
+  // HardwareSerial is thread safe, no problem to call write and read from different threads
+  
+  //uint_t byte = Serial.read();
+  //busState.data(byte);
+  //arbitration.data(byte);
+  
+  // send results to mainloop
+
+}
+
+void OnReceiveErrorCB(hardwareSerial_error_t e)
+{
+  // todo
+}
+
 void setup() {
   check_reset();
 
@@ -98,6 +127,9 @@ void setup() {
 #ifdef ESP32
   Serial1.begin(115200, SERIAL_8N1, 8, 10);
   Serial.begin(2400, SERIAL_8N1, 21, 20);
+  Serial.onReceive(OnReceiveCB, false);
+  Serial.onReceiveError(OnReceiveErrorCB);
+
   // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
   Serial.setRxFIFOFull(1); 
   last_reset_code = rtc_get_reset_reason(0);
