@@ -8,6 +8,7 @@
   #include <esp_task_wdt.h>
   #include <ESPmDNS.h>
   #include "esp32c3/rom/rtc.h"
+  #include "driver/uart.h"
 #else
   #include <ESP8266mDNS.h>
   #include <ESP8266TrueRandom.h>
@@ -90,8 +91,14 @@ void check_reset() {
     }
   }
 }
+QueueHandle_t receivequeue;
+WiFiClient* startEnhArbitration(Arbitration& arbitration, EBusState& busstate );
 
+void enhArbitrationWon(WiFiClient*  client, uint8_t master);
+void enhArbitrationLost(WiFiClient*  client, uint8_t master, uint8_t nextsymbol);
+void enhArbitrationError(WiFiClient*  client);
 
+Arbitration arbitration;
 void OnReceiveCB()
 {
   //static EBusState   busState;
@@ -106,17 +113,49 @@ void OnReceiveCB()
   // BusState should only be used from this thread, only relevant case
   // HardwareSerial is thread safe, no problem to call write and read from different threads
   
-  //uint_t byte = Serial.read();
-  //busState.data(byte);
-  //arbitration.data(byte);
-  
+  static WiFiClient*  client = 0;
+  uint8_t byte = Serial.read();
+  busState.data(byte);
+  Arbitration::state state = arbitration.data(busState, byte);
+  switch (state) {
+    case Arbitration::none:
+        client=startEnhArbitration(arbitration, busState);
+    case Arbitration::arbitrating:
+        break;
+    case Arbitration::won:
+        DEBUG_LOG("ARB SEND WON   0x%02x %ld us\n", busState._master, busState.microsSinceLastSyn());
+        enhArbitrationWon(client, busState._master);
+        client=0;
+        //send_res(client, STARTED, busstate._master);
+        //arbitration_client = NULL;
+        //return bytesread;
+        break;
+    case Arbitration::lost:
+        DEBUG_LOG("ARB SEND LOST  0x%02x 0x%02x %ld us\n", busState._master, busState._byte, busState.microsSinceLastSyn());
+        enhArbitrationLost(client, busState._master, busState._byte);
+        client=0;
+        //send_res(client, FAILED, busstate._master);
+        //send_res(client, RECEIVED, busstate._byte);
+        //arbitration_client = NULL;
+        //return bytesread;
+        break;
+    case Arbitration::error:
+        enhArbitrationError(client);
+        client=0;
+        break;
+  }
+  xQueueSendToBack(receivequeue, &byte, 0);
   // send results to mainloop
+  // -> each byte as it needs to be forwarded to other clients
+  // -> the state of the arbitration
 
 }
 
 void OnReceiveErrorCB(hardwareSerial_error_t e)
 {
-  // todo
+  if (e != UART_BREAK){
+    DEBUG_LOG("OnReceiveErrorCB %i\n", e);
+  }
 }
 
 void setup() {
@@ -127,12 +166,14 @@ void setup() {
 #ifdef ESP32
   Serial1.begin(115200, SERIAL_8N1, 8, 10);
   Serial.begin(2400, SERIAL_8N1, 21, 20);
+  // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
+  Serial.setRxFIFOFull(1); 
   Serial.onReceive(OnReceiveCB, false);
   Serial.onReceiveError(OnReceiveErrorCB);
 
-  // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
-  Serial.setRxFIFOFull(1); 
+
   last_reset_code = rtc_get_reset_reason(0);
+  receivequeue=xQueueCreate(RXBUFFERSIZE, sizeof(uint8_t));
 #elif defined(ESP8266)
   Serial1.begin(115200);
   Serial.begin(2400);
@@ -168,6 +209,27 @@ void setup() {
   last_comms = millis();
 }
 
+#define DEBUG_LOG_BUFFER_SIZE 4000
+static char   message_buffer[DEBUG_LOG_BUFFER_SIZE];
+static size_t message_buffer_position;
+int DEBUG_LOG_IMPL(const char *format, ...)
+{
+   int ret;
+   if (message_buffer_position>=DEBUG_LOG_BUFFER_SIZE)
+       return 0;
+   
+   va_list aptr;
+   va_start(aptr, format);
+   ret = vsnprintf(&message_buffer[message_buffer_position], DEBUG_LOG_BUFFER_SIZE-message_buffer_position, format, aptr);
+   va_end(aptr);
+   message_buffer_position+=ret;
+   if (message_buffer_position >= DEBUG_LOG_BUFFER_SIZE) {
+     message_buffer_position=DEBUG_LOG_BUFFER_SIZE;
+   }
+   message_buffer[DEBUG_LOG_BUFFER_SIZE-1]=0;
+
+   return ret;
+}
 
 bool handleStatusServerRequests() {
   if (!statusServer.hasClient())
@@ -176,6 +238,7 @@ bool handleStatusServerRequests() {
   WiFiClient client = statusServer.available();
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.printf("HTTP/1.1 200 OK\r\n\r\n");
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
     client.printf("free_heap: %d B\n", ESP.getFreeHeap());
@@ -183,6 +246,12 @@ bool handleStatusServerRequests() {
     client.printf("loop_duration: %ld us\r\n", loopDuration);
     client.printf("max_loop_duration: %ld us\r\n", maxLoopDuration);
     client.printf("version: %s\r\n", AUTO_VERSION);
+    if (message_buffer_position>0)
+    {
+      client.printf("lastmessages:\r\n%s\r\n", message_buffer);
+      message_buffer[0]=0;
+      message_buffer_position=0;
+    }
     client.flush();
     client.stop();
   }
@@ -245,16 +314,19 @@ void loop() {
   }
 
   //check UART for data
-  if (Serial.available()) {
-    uint8_t bytes[ARBITRATION_BUFFER_SIZE+1];
-    bytes[0]= Serial.read();
-    busState.data(bytes[0]);
+  //if (Serial.available()) {
+  uint8_t bytes[ARBITRATION_BUFFER_SIZE+1];
+  if (xQueueReceive(receivequeue, &bytes[0], 0) > 0) {
+    
+    //bytes[0]= Serial.read();
+    
+    //busState.data(bytes[0]);
 
     // handle enhanced client that is in arbitration mode
     // as a side effect, additional data can be read from the bus, which needs to
     // send to the other clients. this data will be returned in the bytes argument
     size_t bytesread = 0;
-    int arbitrated_client = -1;
+    /*int arbitrated_client = -1;
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
       bytesread = arbitrateEnhClient(&enhClients[i], busState, &bytes[1]);
       if (bytesread>0){
@@ -262,7 +334,7 @@ void loop() {
         arbitrated_client = i;
         break;
       }
-    }
+    }*/
     bytesread++; // for byte at position bytes[0]
 
     // push data to clients, including bytes[0] and all bytes
@@ -275,11 +347,11 @@ void loop() {
         if (pushClient(&serverClientsRO[j], bytes[i])){
           last_comms = millis();
         }
-        if (j != arbitrated_client) {
+        //if (j != arbitrated_client) {
           if (pushEnhClient(&enhClients[j], bytes[i])){
             last_comms = millis();
           }
-        }
+        //}
       }
     }
   }

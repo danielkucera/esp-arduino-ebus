@@ -38,7 +38,6 @@ bool Arbitration::start(EBusState& busstate, uint8_t master)
 // rely on the uart to keep the timing
 // just make sure the byte to send is available in time
 Arbitration::state Arbitration::data(EBusState& busstate, uint8_t symbol) {
-    static int arb = 0;
     if (!_arbitrating){
         return none;
     }
