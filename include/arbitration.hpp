@@ -7,7 +7,7 @@ class Arbitration
 {
     public:
         enum state {none,  // no arbitration ongoing/not yet completed
-                    arbitrating,
+                    arbitrating, // arbitration ongoing
                     won,   // won
                     lost,  // lost
                     error  // error
