@@ -73,7 +73,6 @@ void BusType::receive(uint8_t byte)
   static WiFiClient*  client = 0;
 
   busState.data(byte);
-  
   Arbitration::state state = arbitration.data(busState, byte);
   switch (state) {
     case Arbitration::none:
@@ -120,34 +119,3 @@ void BusType::receive(uint8_t byte)
     }
   }
 }
-
-
-  //static EBusState   busState;
-  //static Arbitration arbitration;
-  // We received a byte. 
-  // Handle arbitration in this CB; has to be fast enough to be done for the next character
-  // We can't send data to WifiClient
-  // - likely not thread safe
-  // - would take too long
-  // Instead regular wifi client communication needs to happen in the main loop, untill maybe WifiClient can be put in
-  // a task and we communicate to WifiClient with messages
-  // BusState should only be used from this thread, only relevant case
-  // HardwareSerial is thread safe, no problem to call write and read from different threads
-  // send results to mainloop
-  // -> each byte as it needs to be forwarded to other clients
-  // -> the state of the arbitration
-
-  // What is needed in the main loop?
-  // - Each client should receive all chars that incoming on the bus
-  // - Need to maintain the correct order of bytes, both for
-  //   receiving clients as for arbitrating clients
-  // - enhanced clients need to receive data in the enhanced format
-  // - If an arbitration is ongoing for client X
-  //   + Client X should not receive the chars that are part of the arbitration
-  //   + Client X should receive the result of the arbitration
-  //     and then it should receive the bytes as usual
-  // How do we communicate to main loop?
-  // - for each byte, 
-  //   + the byte
-  //   + is it a regular byte, or the result of arbitration
-  //   + a client id in case an arbitration is ongoing
