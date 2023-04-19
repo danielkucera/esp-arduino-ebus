@@ -1,10 +1,9 @@
 #ifndef _EBUSSTATE_H_
 #define _EBUSSTATE_H_
 #include "main.hpp"
+#include "enhanced.hpp"
 
-enum symbols {
-    SYN = 0xAA
-};
+
 
 class EBusState {
 public:

@@ -1,14 +1,13 @@
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 #include "main.hpp"
-#include "ebusstate.hpp"
-#include "arbitration.hpp"
+#include "enhanced.hpp"
+#include "bus.hpp"
 
 #ifdef ESP32
   #include <esp_task_wdt.h>
   #include <ESPmDNS.h>
   #include "esp32c3/rom/rtc.h"
-  #include "driver/uart.h"
 #else
   #include <ESP8266mDNS.h>
   #include <ESP8266TrueRandom.h>
@@ -23,7 +22,6 @@ WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
-EBusState   busState;
 
 unsigned long last_comms = 0;
 int last_reset_code = -1;
@@ -91,72 +89,6 @@ void check_reset() {
     }
   }
 }
-QueueHandle_t receivequeue;
-WiFiClient* startEnhArbitration(Arbitration& arbitration, EBusState& busstate );
-
-void enhArbitrationWon(WiFiClient*  client, uint8_t master);
-void enhArbitrationLost(WiFiClient*  client, uint8_t master, uint8_t nextsymbol);
-void enhArbitrationError(WiFiClient*  client);
-
-Arbitration arbitration;
-void OnReceiveCB()
-{
-  //static EBusState   busState;
-  //static Arbitration arbitration;
-  // We received a byte. 
-  // Handle arbitration in this CB; has to be fast enough to be done for the next character
-  // We can't send data to WifiClient
-  // - likely not thread safe
-  // - would take too long
-  // Instead regular wifi client communication needs to happen in the main loop, untill maybe WifiClient can be put in
-  // a task and we communicate to WifiClient with messages
-  // BusState should only be used from this thread, only relevant case
-  // HardwareSerial is thread safe, no problem to call write and read from different threads
-  
-  static WiFiClient*  client = 0;
-  uint8_t byte = Serial.read();
-  busState.data(byte);
-  Arbitration::state state = arbitration.data(busState, byte);
-  switch (state) {
-    case Arbitration::none:
-        client=startEnhArbitration(arbitration, busState);
-    case Arbitration::arbitrating:
-        break;
-    case Arbitration::won:
-        DEBUG_LOG("ARB SEND WON   0x%02x %ld us\n", busState._master, busState.microsSinceLastSyn());
-        enhArbitrationWon(client, busState._master);
-        client=0;
-        //send_res(client, STARTED, busstate._master);
-        //arbitration_client = NULL;
-        //return bytesread;
-        break;
-    case Arbitration::lost:
-        DEBUG_LOG("ARB SEND LOST  0x%02x 0x%02x %ld us\n", busState._master, busState._byte, busState.microsSinceLastSyn());
-        enhArbitrationLost(client, busState._master, busState._byte);
-        client=0;
-        //send_res(client, FAILED, busstate._master);
-        //send_res(client, RECEIVED, busstate._byte);
-        //arbitration_client = NULL;
-        //return bytesread;
-        break;
-    case Arbitration::error:
-        enhArbitrationError(client);
-        client=0;
-        break;
-  }
-  xQueueSendToBack(receivequeue, &byte, 0);
-  // send results to mainloop
-  // -> each byte as it needs to be forwarded to other clients
-  // -> the state of the arbitration
-
-}
-
-void OnReceiveErrorCB(hardwareSerial_error_t e)
-{
-  if (e != UART_BREAK){
-    DEBUG_LOG("OnReceiveErrorCB %i\n", e);
-  }
-}
 
 void setup() {
   check_reset();
@@ -168,12 +100,7 @@ void setup() {
   Serial.begin(2400, SERIAL_8N1, 21, 20);
   // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
   Serial.setRxFIFOFull(1); 
-  Serial.onReceive(OnReceiveCB, false);
-  Serial.onReceiveError(OnReceiveErrorCB);
-
-
   last_reset_code = rtc_get_reset_reason(0);
-  receivequeue=xQueueCreate(RXBUFFERSIZE, sizeof(uint8_t));
 #elif defined(ESP8266)
   Serial1.begin(115200);
   Serial.begin(2400);
@@ -313,45 +240,27 @@ void loop() {
     handleEnhClient(&enhClients[i]);
   }
 
-  //check UART for data
-  //if (Serial.available()) {
-  uint8_t bytes[ARBITRATION_BUFFER_SIZE+1];
-  if (xQueueReceive(receivequeue, &bytes[0], 0) > 0) {
-    
-    //bytes[0]= Serial.read();
-    
-    //busState.data(bytes[0]);
-
-    // handle enhanced client that is in arbitration mode
-    // as a side effect, additional data can be read from the bus, which needs to
-    // send to the other clients. this data will be returned in the bytes argument
-    size_t bytesread = 0;
-    /*int arbitrated_client = -1;
+  //check queue for data
+  BusType::data d;
+  if (Bus.read(d) > 0) {
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-      bytesread = arbitrateEnhClient(&enhClients[i], busState, &bytes[1]);
-      if (bytesread>0){
-        last_comms = millis();
-        arbitrated_client = i;
-        break;
+      if (d._enhanced) {
+        if (d._client == &enhClients[i]) {
+          pushEnhClient(&enhClients[i], d._c, d._d);
+        }
       }
-    }*/
-    bytesread++; // for byte at position bytes[0]
-
-    // push data to clients, including bytes[0] and all bytes
-    // returned by arbitrateEnhClient, that start at bytes[1]
-    for (size_t i = 0; i < bytesread; i++) {
-      for (int j = 0; j < MAX_SRV_CLIENTS; j++){
-        if (pushClient(&serverClients[j], bytes[i])){
+      else {
+        if (pushClient(&serverClients[i], d._d)){
           last_comms = millis();
         }
-        if (pushClient(&serverClientsRO[j], bytes[i])){
+        if (pushClient(&serverClientsRO[i], d._d)){
           last_comms = millis();
         }
-        //if (j != arbitrated_client) {
-          if (pushEnhClient(&enhClients[j], bytes[i])){
+        if (d._client != &enhClients[i]) {
+          if (pushEnhClient(&enhClients[i], d._c, d._d)){
             last_comms = millis();
           }
-        //}
+        }
       }
     }
   }

@@ -2,33 +2,14 @@
 #include "main.hpp"
 #include "ebusstate.hpp"
 #include "arbitration.hpp"
+#include "enhanced.hpp"
 
 #define M1 0b11000000
 #define M2 0b10000000
 
 #define ARBITRATION_TIMEOUT_MS 2000
 
-enum requests {
-    CMD_INIT = 0,
-    CMD_SEND,
-    CMD_START,
-    CMD_INFO
-};
 
-enum responses {
-    RESETTED = 0x0,
-    RECEIVED = 0x1,
-    STARTED = 0x2,
-    INFO = 0x3,
-    FAILED = 0xa,
-    ERROR_EBUS = 0xb,
-    ERROR_HOST = 0xc
-};
-
-enum errors {
-    ERR_FRAMING = 0x00,
-    ERR_OVERRUN = 0x01
-};
 
 WiFiClient* arbitration_client = NULL;
 unsigned long arbitration_start = 0;
@@ -147,6 +128,30 @@ void handleEnhClient(WiFiClient* client){
     }
 }
 
+int pushEnhClient(WiFiClient* client, uint8_t c, uint8_t d){
+    if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
+        send_res(client, c,  d);
+        return 1;
+    }
+    return 0;
+}
+
+void enhArbitrationDone(WiFiClient* client) {
+    // lock
+    arbitration_client = NULL;
+    // unlock
+}
+
+WiFiClient* enhArbitrationRequested(uint8_t& aa) {
+    // lock
+    aa = arbitration_address;
+    return arbitration_client;
+    // unlock
+}
+
+
+
+/*
 size_t arbitrateEnhClient(WiFiClient* client, EBusState& busstate, uint8_t* bytes){
     size_t bytesread = 0;
     if (client->availableForWrite() >= AVAILABLE_THRESHOLD && arbitration_client == client) {
@@ -199,91 +204,4 @@ size_t arbitrateEnhClient(WiFiClient* client, EBusState& busstate, uint8_t* byte
     }
     return bytesread;
 }
-
-struct command{
-    uint8_t c;
-    uint8_t d;
-};
-
-#define SENDCOMMANDQUEUELENGTH 10
-
-inline QueueHandle_t getSendQueue()
-{
-    static QueueHandle_t sendqueue = 0;
-    if (sendqueue == 0) {
-        sendqueue=xQueueCreate(SENDCOMMANDQUEUELENGTH, sizeof(command));
-    }
-    return sendqueue;
-}
-bool arbitration_ongoing = false;
-int pushEnhClient(WiFiClient* client, uint8_t B){
-    if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
-        if (arbitration_ongoing) {
-            command c;
-            while (xQueueReceive(getSendQueue(), &c, 0) > 0) {
-                send_res(client, c.c, c.d);
-            }
-        }
-        else {
-        send_res(client, RECEIVED,  B);
-
-        }
-        return 1;
-    }
-    return 0;
-}
-
-
-WiFiClient* startEnhArbitration(Arbitration& arbitration, EBusState& busState ){
-    WiFiClient* client = 0;
-    static unsigned long lastTime = 0;
-    static int amount = 10;
-    unsigned long now = millis();
-    unsigned long delta = now - lastTime;
-    bool a=false;
-    if (delta > 500) {
-        //a=true;
-        lastTime =now;
-    }
-    // lock
-    if ((arbitration_client || a) && !arbitration_ongoing) {
-        a=false;
-        //arbitration_address=0xf3;
-        if (arbitration.start(busState, arbitration_address)) {
-            client  = arbitration_client;
-            arbitration_ongoing = true;
-        }
-    }
-    // unlock
-    return client;
-}
-
-void queue_command(uint8_t c, uint8_t d)
-{
-    command com = {c, d};
-    xQueueSendToBack(getSendQueue(), &com, 0);
-}
-
-void enhArbitrationWon(WiFiClient*  client, uint8_t master){
-    // lock
-    arbitration_client = NULL;
-    arbitration_ongoing = false;
-    queue_command(STARTED, master);
-    // unlock
-}
-
-void enhArbitrationLost(WiFiClient*  client, uint8_t master, uint8_t nextsymbol){
-    // lock
-    arbitration_client = NULL;
-    arbitration_ongoing = false;
-    queue_command(FAILED, master);
-    queue_command(RECEIVED, nextsymbol);
-    // unlock
-}
-void enhArbitrationError(WiFiClient*  client){
-    // lock
-    queue_command(ERROR_EBUS, ERR_FRAMING);
-    arbitration_client = NULL;
-    arbitration_ongoing = false;
-    // unlock
-}
+*/

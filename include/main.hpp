@@ -11,6 +11,8 @@
 #define HOSTNAME "esp-eBus"
 #define RESET_MS 1000
 
+#define USE_ASYNCHRONOUS 
+
 #ifdef ESP32
 // https://esp32.com/viewtopic.php?t=19788
 #define AVAILABLE_THRESHOLD 0
@@ -26,10 +28,5 @@ bool handleNewClient(WiFiServer &server, WiFiClient clients[]);
 int pushClient(WiFiClient* client, uint8_t B);
 void handleClient(WiFiClient* client);
 
-class EBusState;
-
-size_t arbitrateEnhClient(WiFiClient* client, EBusState& busstate, uint8_t* bytes);
-int    pushEnhClient(WiFiClient* client, uint8_t B);
-void   handleEnhClient(WiFiClient* client);
 
 #endif
