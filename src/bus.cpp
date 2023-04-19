@@ -27,7 +27,7 @@ BusType::BusType()
 #ifdef USE_ASYNCHRONOUS
   Serial.onReceive(OnReceiveCB, false);
   Serial.onReceiveError(OnReceiveErrorCB);
-  _queue = xQueueCreate(RXBUFFERSIZE, sizeof(uint8_t));
+  _queue = xQueueCreate(RXBUFFERSIZE, sizeof(data));
 #endif    
 }
 
@@ -40,7 +40,9 @@ BusType::~BusType(){
 bool BusType::read(data& d)
 {
 #ifdef USE_ASYNCHRONOUS
-    return xQueueReceive(_queue, &d, 0) > 0; 
+    bool result =  xQueueReceive(_queue, &d, 0) == pdTRUE; 
+    return result;
+
 #else
     if (Serial.available()){
         uint8_t byte = Serial.read();
@@ -110,7 +112,7 @@ void BusType::receive(uint8_t byte)
     }
     case Arbitration::error:
     {
-        push( {true, ERROR_EBUS, ERR_FRAMING, client}); // send only to the arbitrating client
+        push({true, ERROR_EBUS, ERR_FRAMING, client}); // send only to the arbitrating client
         push({false, RECEIVED, byte, 0}); // send to everybody
         enhArbitrationDone(client);
         client=0;

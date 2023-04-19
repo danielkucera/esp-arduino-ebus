@@ -242,7 +242,7 @@ void loop() {
 
   //check queue for data
   BusType::data d;
-  if (Bus.read(d) > 0) {
+  if (Bus.read(d)) {
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
