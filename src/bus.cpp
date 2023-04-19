@@ -55,7 +55,7 @@ bool BusType::read(data& d)
 #endif
 }
 
-void BusType::push(data& d)
+void BusType::push(const data& d)
 {
 #ifdef USE_ASYNCHRONOUS
     xQueueSendToBack(_queue, &d, 0); 
@@ -78,28 +78,23 @@ void BusType::receive(uint8_t byte)
         uint8_t arbitration_address;
         client = enhArbitrationRequested(arbitration_address);
         if (client && arbitration.start(busState, arbitration_address)) {     
-          data d = {false, RECEIVED, byte, client}; // do not send to arbitration client
-          push(d);                  
+          push({false, RECEIVED, byte, client}); // do not send to arbitration client
         }
         else {
           client = 0;
-          data d = {false, RECEIVED, byte, 0}; // send to everybody
-          push(d);  
+          push({false, RECEIVED, byte, 0}); // send to everybody
         }
         break;
     case Arbitration::arbitrating:
     {
-        data d = {false, RECEIVED, byte, client}; // do not send to arbitration client
-        push(d);
+        push({false, RECEIVED, byte, client}); // do not send to arbitration client
         break;
     }
     case Arbitration::won:
     {
         DEBUG_LOG("ARB SEND WON   0x%02x %ld us\n", busState._master, busState.microsSinceLastSyn());
-        data d1 = {false, RECEIVED, byte, client}; // do not send to arbitration client
-        push(d1); 
-        data d2 = {true, STARTED, busState._master, client}; // send only to the arbitrating client
-        push(d2);         
+        push({false, RECEIVED, byte, client}); // do not send to arbitration client
+        push({true, STARTED, busState._master, client}); // send only to the arbitrating client
         enhArbitrationDone(client);
         client=0;
         break;
@@ -107,20 +102,16 @@ void BusType::receive(uint8_t byte)
     case Arbitration::lost:
     {
         DEBUG_LOG("ARB SEND LOST  0x%02x 0x%02x %ld us\n", busState._master, busState._byte, busState.microsSinceLastSyn());
-        data data1 = {true, FAILED, busState._master, client}; // send only to the arbitrating client
-        push(data1);       
-        data d2 = {false, RECEIVED, byte, 0}; // send to everybody    
-        push(d2);     
+        push({true, FAILED, busState._master, client}); // send only to the arbitrating client
+        push({false, RECEIVED, byte, 0}); // send to everybody    
         enhArbitrationDone(client);
         client=0;
         break;
     }
     case Arbitration::error:
     {
-        data d1 = {true, ERROR_EBUS, ERR_FRAMING, client}; // send only to the arbitrating client
-        push(d1);
-        data d2 = {false, RECEIVED, byte, 0}; // send to everybody
-        push(d2);
+        push( {true, ERROR_EBUS, ERR_FRAMING, client}); // send only to the arbitrating client
+        push({false, RECEIVED, byte, 0}); // send to everybody
         enhArbitrationDone(client);
         client=0;
         break;

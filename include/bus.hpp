@@ -21,7 +21,7 @@ class BusType
     bool read(data& d);
 
   private:
-    void push(data& d);
+    void push(const data& d);
     void receive (uint8_t byte);
 
 #ifdef USE_ASYNCHRONOUS
