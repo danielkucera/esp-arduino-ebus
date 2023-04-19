@@ -4,7 +4,11 @@
 #include "enhanced.hpp"
 
 
-
+// Implements the state of the bus
+// The arbitration process can only start at well defined states of the bus
+// To asses the state, all data received on the bus needs to be send to this object
+// The object takes care of startup of the bus and recovery when an unexpected event 
+// happens 
 class EBusState {
 public:
     enum eState {
@@ -36,7 +40,7 @@ public:
     EBusState()
         : _state(eStartup)
     {}
-
+    // Evaluate a symbol received on UART and determine what the new state of the bus is
     inline void data(uint8_t symbol)
     {
         switch (_state)

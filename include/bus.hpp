@@ -3,6 +3,11 @@
 #include "main.hpp"
 #include "queue"
 
+// This object retrieves data from the Serial object and
+// let's it flow through the arbitration process.
+// The "read" method will return data with meta information that tells what should be done
+// with the returned data.
+// This object hides if the underlying implementation is synchronous or asynchronous
 class BusType
 {
   public:
@@ -18,6 +23,7 @@ class BusType
     BusType();
     ~BusType();
 
+    // Is there a value available that should be send to a client?
     bool read(data& d);
 
   private:
