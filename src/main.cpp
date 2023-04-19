@@ -158,6 +158,12 @@ int DEBUG_LOG_IMPL(const char *format, ...)
    return ret;
 }
 
+#ifdef USE_ASYNCHRONOUS
+#define ASYNC_MODE true
+#else
+#define ASYNC_MODE false
+#endif
+
 bool handleStatusServerRequests() {
   if (!statusServer.hasClient())
     return false;
@@ -166,6 +172,7 @@ bool handleStatusServerRequests() {
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
     client.printf("HTTP/1.1 200 OK\r\n\r\n");
+    client.printf("async mode: %s\n", ASYNC_MODE? "true" : "false");
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
     client.printf("free_heap: %d B\n", ESP.getFreeHeap());
