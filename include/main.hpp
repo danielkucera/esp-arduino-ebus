@@ -6,6 +6,7 @@
 
 #define MAX_SRV_CLIENTS 4
 #define RXBUFFERSIZE 1024
+#define QUEUE_SIZE 480 
 #define ARBITRATION_BUFFER_SIZE 20
 #define STACK_PROTECTOR  512 // bytes
 #define HOSTNAME "esp-eBus"
@@ -13,8 +14,8 @@
 
 
 #ifdef ESP32
-// https://esp32.com/viewtopic.php?t=19788
 #define USE_ASYNCHRONOUS 
+// https://esp32.com/viewtopic.php?t=19788
 #define AVAILABLE_THRESHOLD 0
 #else
 #define AVAILABLE_THRESHOLD 1
@@ -25,7 +26,7 @@ int DEBUG_LOG_IMPL(const char *format, ...);
 #define DEBUG_LOG DEBUG_LOG_IMPL
 
 bool handleNewClient(WiFiServer &server, WiFiClient clients[]);
-int pushClient(WiFiClient* client, uint8_t B);
+int  pushClient(WiFiClient* client, uint8_t B);
 void handleClient(WiFiClient* client);
 
 

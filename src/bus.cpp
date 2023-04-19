@@ -27,7 +27,7 @@ BusType::BusType()
 #ifdef USE_ASYNCHRONOUS
   Serial.onReceive(OnReceiveCB, false);
   Serial.onReceiveError(OnReceiveErrorCB);
-  _queue = xQueueCreate(RXBUFFERSIZE, sizeof(data));
+  _queue = xQueueCreate(QUEUE_SIZE, sizeof(data));
 #endif    
 }
 
@@ -40,9 +40,7 @@ BusType::~BusType(){
 bool BusType::read(data& d)
 {
 #ifdef USE_ASYNCHRONOUS
-    bool result =  xQueueReceive(_queue, &d, 0) == pdTRUE; 
-    return result;
-
+    return xQueueReceive(_queue, &d, 0) == pdTRUE; 
 #else
     if (Serial.available()){
         uint8_t byte = Serial.read();
@@ -87,35 +85,27 @@ void BusType::receive(uint8_t byte)
         }
         break;
     case Arbitration::arbitrating:
-    {
         push({false, RECEIVED, byte, client}); // do not send to arbitration client
         break;
-    }
     case Arbitration::won:
-    {
         DEBUG_LOG("ARB SEND WON   0x%02x %ld us\n", busState._master, busState.microsSinceLastSyn());
-        push({false, RECEIVED, byte, client}); // do not send to arbitration client
-        push({true, STARTED, busState._master, client}); // send only to the arbitrating client
+        push({true,  STARTED,  busState._master, client}); // send only to the arbitrating client
+        push({false, RECEIVED, byte,             client}); // do not send to arbitrating client
         enhArbitrationDone(client);
         client=0;
         break;
-    }
     case Arbitration::lost:
-    {
         DEBUG_LOG("ARB SEND LOST  0x%02x 0x%02x %ld us\n", busState._master, busState._byte, busState.microsSinceLastSyn());
-        push({true, FAILED, busState._master, client}); // send only to the arbitrating client
-        push({false, RECEIVED, byte, 0}); // send to everybody    
+        push({true,  FAILED,   busState._master, client}); // send only to the arbitrating client
+        push({false, RECEIVED, byte,             0}); // send to everybody    
         enhArbitrationDone(client);
         client=0;
         break;
-    }
     case Arbitration::error:
-    {
-        push({true, ERROR_EBUS, ERR_FRAMING, client}); // send only to the arbitrating client
-        push({false, RECEIVED, byte, 0}); // send to everybody
+        push({true,  ERROR_EBUS, ERR_FRAMING, client}); // send only to the arbitrating client
+        push({false, RECEIVED,   byte,        0}); // send to everybody
         enhArbitrationDone(client);
         client=0;
         break;
-    }
   }
 }
