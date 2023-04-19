@@ -11,10 +11,10 @@
 #define HOSTNAME "esp-eBus"
 #define RESET_MS 1000
 
-#define USE_ASYNCHRONOUS 
 
 #ifdef ESP32
 // https://esp32.com/viewtopic.php?t=19788
+#define USE_ASYNCHRONOUS 
 #define AVAILABLE_THRESHOLD 0
 #else
 #define AVAILABLE_THRESHOLD 1
