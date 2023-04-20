@@ -31,7 +31,7 @@ enum errors {
 void        enhArbitrationDone(WiFiClient* client);
 WiFiClient* enhArbitrationRequested(uint8_t& arbitration_client);
 
-int    pushEnhClient(WiFiClient* client, uint8_t c, uint8_t d);
+int    pushEnhClient(WiFiClient* client, uint8_t c, uint8_t d, bool log);
 void   handleEnhClient(WiFiClient* client);
 
 #endif

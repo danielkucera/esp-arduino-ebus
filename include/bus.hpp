@@ -19,6 +19,7 @@ class BusType
         uint8_t     _c;        // command byte, only used when in "enhanced" mode
         uint8_t     _d;        // data byte for both regular and enhanced command
         WiFiClient* _client;   // the client that is being arbitrated
+        bool        _log;
       };
     BusType();
     ~BusType();
@@ -27,8 +28,8 @@ class BusType
     bool read(data& d);
 
   private:
-    void push(const data& d);
-    void receive (uint8_t byte);
+    inline void push    (const data& d);
+           void receive (uint8_t byte);
 
 #ifdef USE_ASYNCHRONOUS
       QueueHandle_t _queue;

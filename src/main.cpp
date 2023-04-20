@@ -253,7 +253,7 @@ void loop() {
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
-          pushEnhClient(&enhClients[i], d._c, d._d);
+          pushEnhClient(&enhClients[i], d._c, d._d, d._log);
         }
       }
       else {
@@ -264,7 +264,7 @@ void loop() {
           last_comms = millis();
         }
         if (d._client != &enhClients[i]) {
-          if (pushEnhClient(&enhClients[i], d._c, d._d)){
+          if (pushEnhClient(&enhClients[i], d._c, d._d, d._log)){
             last_comms = millis();
           }
         }
