@@ -29,6 +29,7 @@ class Arbitration
     //           + the bus is not in a state that allows to start arbitration
     //           + another arbitration is already ongoing
     //           + the master address is SYN
+    // = true  : arbitration started. Make sure to pass all bus data to this object through the "data" method
     bool               start  (EBusState& busstate, uint8_t master);
 
     // A symbol was received on the bus, what does this do to the arbitration state?
