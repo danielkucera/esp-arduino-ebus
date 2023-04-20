@@ -19,7 +19,7 @@ class BusType
         uint8_t     _c;        // command byte, only used when in "enhanced" mode
         uint8_t     _d;        // data byte for both regular and enhanced command
         WiFiClient* _client;   // the client that is being arbitrated
-        bool        _log;
+        WiFiClient* _logtoclient;   // the client that needs to log
       };
     BusType();
     ~BusType();
