@@ -87,7 +87,6 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
     }
     if (c == CMD_START){
         if (d == SYN){
-            //arbitration_client = NULL;
             clearEnhArbitrationClient();
             DEBUG_LOG("CMD_START SYN\n");
             return;
@@ -108,9 +107,7 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
             }
             else {
                 DEBUG_LOG("CMD_START 0x%02x\n", d);
-            }
-            //arbitration_client = client;
-            //arbitration_address = d;            
+            }       
             setEnhArbitrationClient(client, d);
             arbitration_start = millis();
             return;
@@ -144,8 +141,8 @@ bool read_cmd(WiFiClient* client, uint8_t (&data)[2]){
     }
 
     if (b<0b11000000){
-        DEBUG_LOG("first command missing\n");
-        client->write("first command missing");
+        DEBUG_LOG("first command signature error\n");
+        client->write("first command signature error");
         // first command signature error
         client->stop();
         return false;

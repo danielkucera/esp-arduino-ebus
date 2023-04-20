@@ -84,7 +84,7 @@ void BusType::receive(uint8_t byte)
             DEBUG_LOG("BUS START FAI  0x%02x %ld us\n", byte, busState.microsSinceLastSyn());
           }
         }
-        push({false, RECEIVED, byte, 0, client}); // send to everybody
+        push({false, RECEIVED, byte, 0, client}); // send to everybody. ebusd needs the SYN to get in the right mood
         break;
     case Arbitration::arbitrating:
         DEBUG_LOG("BUS ARBITRATIN 0x%02x %ld us\n", byte, busState.microsSinceLastSyn());

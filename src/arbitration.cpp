@@ -49,7 +49,6 @@ Arbitration::state Arbitration::data(EBusState& busstate, uint8_t symbol) {
     case EBusState::eStartupSecondSyn:
     case EBusState::eReceivedFirstSYN:
         DEBUG_LOG("ARB ERROR      0x%02x 0x%02x\n", busstate._master, busstate._byte);
-        //send_res(client, ERROR_EBUS, ERR_FRAMING);
         _arbitrating = false;
         return error;
     case EBusState::eReceivedAddressAfterFirstSYN: // did we win 1st round of abitration?
