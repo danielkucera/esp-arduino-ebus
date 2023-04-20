@@ -91,21 +91,21 @@ void BusType::receive(uint8_t byte)
         push({false, RECEIVED, byte, client, client}); // do not send to arbitration client
         break;
     case Arbitration::won:
-        enhArbitrationDone(client);
+        enhArbitrationDone();
         DEBUG_LOG("BUS SEND WON   0x%02x %ld us\n", busState._master, busState.microsSinceLastSyn());
         push({true,  STARTED,  busState._master, client, client}); // send only to the arbitrating client
         push({false, RECEIVED, byte,             client, client}); // do not send to arbitrating client
         client=0;
         break;
     case Arbitration::lost:
-        enhArbitrationDone(client);
+        enhArbitrationDone();
         DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %ld us\n", busState._master, busState._byte, busState.microsSinceLastSyn());
         push({true,  FAILED,   busState._master, client, client}); // send only to the arbitrating client
         push({false, RECEIVED, byte,             0,      client}); // send to everybody    
         client=0;
         break;
     case Arbitration::error:
-        enhArbitrationDone(client);
+        enhArbitrationDone();
         push({true,  ERROR_EBUS, ERR_FRAMING, client, client}); // send only to the arbitrating client
         push({false, RECEIVED,   byte,        0,      client}); // send to everybody
         client=0;

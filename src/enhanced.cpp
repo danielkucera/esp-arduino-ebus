@@ -194,7 +194,7 @@ int pushEnhClient(WiFiClient* client, uint8_t c, uint8_t d, bool log){
     return 0;
 }
 
-void enhArbitrationDone(WiFiClient* client) {
+void enhArbitrationDone() {
     clearEnhArbitrationClient();
 }
 

@@ -28,7 +28,7 @@ enum errors {
     ERR_OVERRUN = 0x01
 };
 
-void        enhArbitrationDone(WiFiClient* client);
+void        enhArbitrationDone();
 WiFiClient* enhArbitrationRequested(uint8_t& arbitration_client);
 
 int    pushEnhClient(WiFiClient* client, uint8_t c, uint8_t d, bool log);
