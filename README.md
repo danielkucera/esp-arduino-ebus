@@ -164,5 +164,6 @@ You will need an USB-TTL adaptor (dongle) which suports 3V3 voltage levels and h
 - now connect the dongle to your PC - you should see two red LEDs on, blue should flash briefly and stay off (v4.0+)
 - open NodeMCU PyFlasher and select your firmware file and serial port
 - click Flash NodeMCU and watch the progress in Console
+- if that doesn't work, connect also TP1 to 3V3 and try again (see Issue #27)
 
 
