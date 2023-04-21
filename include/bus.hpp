@@ -38,13 +38,13 @@ class BusType
   private:
     inline void push    (const data& d);
            void receive (uint8_t byte);
-  BusState     _busState;
-  Arbitration  _arbitration;
-  WiFiClient*  _client;
+    BusState     _busState;
+    Arbitration  _arbitration;
+    WiFiClient*  _client;
 #if USE_ASYNCHRONOUS
-      QueueHandle_t _queue;
-      static void OnReceiveCB();
-      static void OnReceiveErrorCB(hardwareSerial_error_t e);
+    QueueHandle_t _queue;
+    static void OnReceiveCB();
+    static void OnReceiveErrorCB(hardwareSerial_error_t e);
 #else
       std::queue<data> _queue;
 #endif    
