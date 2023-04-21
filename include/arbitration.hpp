@@ -15,13 +15,15 @@ class Arbitration
                     arbitrating, // arbitration ongoing
                     won,   // won
                     lost,  // lost
-                    error  // error
+                    error, // error
+                    restart  // restart
                     };
 
         Arbitration()
         : _arbitrating(false)
         , _participateSecond(false)
-        , _arbitration_address(0)
+        , _arbitrationAddress(0)
+        , _restartCount(0)
         {}
     // Try to start arbitration for the specified master.
     // Return values:
@@ -40,7 +42,8 @@ class Arbitration
     private:
         bool    _arbitrating;
         bool    _participateSecond;
-        uint8_t _arbitration_address;
+        uint8_t _arbitrationAddress;
+        int     _restartCount;
 };
 
 #endif

@@ -69,6 +69,7 @@ void BusType::receive(uint8_t byte)
   Arbitration::state state = _arbitration.data(_busState, byte);
   switch (state) {
     case Arbitration::none:
+    case Arbitration::restart:
         uint8_t arbitration_address;
         _client = enhArbitrationRequested(arbitration_address);
         if (_client) {

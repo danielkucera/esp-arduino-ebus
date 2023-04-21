@@ -25,7 +25,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master)
     }
     Serial.write(master);
 
-    _arbitration_address = master;
+    _arbitrationAddress = master;
     _arbitrating = true;
     _participateSecond = false;
     return true;
@@ -48,16 +48,22 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
     case BusState::eStartupSymbolAfterFirstSyn:
     case BusState::eStartupSecondSyn:
     case BusState::eReceivedFirstSYN:
-        DEBUG_LOG("ARB ERROR      0x%02x 0x%02x\n", busstate._master, busstate._byte);
+        DEBUG_LOG("ARB ERROR      0x%02x 0x%02x 0x%02x %ld us\n", busstate._master, busstate._byte, symbol, busstate.microsSinceLastSyn());
         _arbitrating = false;
+        // Sometimes a second SYN is received instead of an address
+        // Could be another bus participant won, but is not starting transmission
+        // Try to restart arbitration maximum 2 times
+        if (_restartCount++ < 3)
+            return restart;
         return error;
     case BusState::eReceivedAddressAfterFirstSYN: // did we win 1st round of abitration?
-        if (symbol == _arbitration_address) {
+        if (symbol == _arbitrationAddress) {
             DEBUG_LOG("ARB WON1       0x%02x %ld us\n", symbol, busstate.microsSinceLastSyn());
             _arbitrating = false;
+            _restartCount = 0;
             return won; // we won; nobody else will write to the bus
-        } else if ((symbol & 0b00001111) == (_arbitration_address & 0b00001111)) { 
-            DEBUG_LOG("ARB PART SECND 0x%02x 0x%02x\n", _arbitration_address, symbol);
+        } else if ((symbol & 0b00001111) == (_arbitrationAddress & 0b00001111)) { 
+            DEBUG_LOG("ARB PART SECND 0x%02x 0x%02x\n", _arbitrationAddress, symbol);
             _participateSecond = true; // participate in second round of arbitration if we have the same priority class
         }
         else {
@@ -69,17 +75,18 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
     case BusState::eReceivedSecondSYN: // did we sign up for second round arbitration?
         if (_participateSecond) {
             // execute second round of arbitration
-            DEBUG_LOG("ARB MASTER2    0x%02x %ld us\n", _arbitration_address, busstate.microsSinceLastSyn());
-            Serial.write(_arbitration_address);
+            DEBUG_LOG("ARB MASTER2    0x%02x %ld us\n", _arbitrationAddress, busstate.microsSinceLastSyn());
+            Serial.write(_arbitrationAddress);
         }
         else {
-            DEBUG_LOG("ARB SKIP       0x%02x %ld us\n", _arbitration_address, busstate.microsSinceLastSyn());
+            DEBUG_LOG("ARB SKIP       0x%02x %ld us\n", _arbitrationAddress, busstate.microsSinceLastSyn());
         }
         return arbitrating;
     case BusState::eReceivedAddressAfterSecondSYN: // did we win 2nd round of arbitration?
-        if (symbol == _arbitration_address) {
+        if (symbol == _arbitrationAddress) {
             DEBUG_LOG("ARB WON2       0x%02x %ld us\n", symbol, busstate.microsSinceLastSyn());
             _arbitrating = false;
+            _restartCount = 0;
             return won; // we won; nobody else will write to the bus
         }
         else {
@@ -91,6 +98,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
         return arbitrating;
     case BusState::eBusy:
         _arbitrating = false;
+        _restartCount = 0;
         return lost;            
     }
     return arbitrating;
