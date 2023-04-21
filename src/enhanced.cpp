@@ -1,13 +1,9 @@
 #include <WiFiClient.h>
 #include "main.hpp"
-#include "ebusstate.hpp"
-#include "arbitration.hpp"
 #include "enhanced.hpp"
 
 #define M1 0b11000000
 #define M2 0b10000000
-
-#define ARBITRATION_TIMEOUT_MS 2000
 
 // Locking
 #ifdef USE_ASYNCHRONOUS
@@ -32,7 +28,7 @@ SemaphoreHandle_t getMutex(){
 
 WiFiClient*   _arbitration_client = NULL;
 int           _arbitration_address = -1;
-unsigned long arbitration_start = 0;
+unsigned long _arbitration_start = 0;
 
 void getEnhArbitrationClient(WiFiClient* &client, uint8_t &address) {
     ENH_MUTEX_LOCK();
@@ -109,7 +105,7 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
                 DEBUG_LOG("CMD_START 0x%02x\n", d);
             }       
             setEnhArbitrationClient(client, d);
-            arbitration_start = millis();
+            _arbitration_start = millis();
             return;
         }
     }

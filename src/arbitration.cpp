@@ -1,7 +1,7 @@
 #include "arbitration.hpp"
-#include "ebusstate.hpp"
+#include "busstate.hpp"
 
-bool Arbitration::start(EBusState& busstate, uint8_t master)
+bool Arbitration::start(BusState& busstate, uint8_t master)
 {   static int arb = 0;
     if (_arbitrating) {
         return false;
@@ -9,7 +9,7 @@ bool Arbitration::start(EBusState& busstate, uint8_t master)
     if (master == SYN) {
         return false;
     }
-    if (busstate._state != EBusState::eReceivedFirstSYN) {
+    if (busstate._state != BusState::eReceivedFirstSYN) {
         return false;
     }
     DEBUG_LOG("ARB START %04i 0x%02x %ld us\n", arb++, master, busstate.microsSinceLastSyn());
@@ -37,21 +37,21 @@ bool Arbitration::start(EBusState& busstate, uint8_t master)
 //   bus permission must be in the range of 4300 us - 4456,24 us ."
 // rely on the uart to keep the timing
 // just make sure the byte to send is available in time
-Arbitration::state Arbitration::data(EBusState& busstate, uint8_t symbol) {
+Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
     if (!_arbitrating){
         return none;
     }
     switch (busstate._state) 
     {
-    case EBusState::eStartup: // error out
-    case EBusState::eStartupFirstSyn:
-    case EBusState::eStartupSymbolAfterFirstSyn:
-    case EBusState::eStartupSecondSyn:
-    case EBusState::eReceivedFirstSYN:
+    case BusState::eStartup: // error out
+    case BusState::eStartupFirstSyn:
+    case BusState::eStartupSymbolAfterFirstSyn:
+    case BusState::eStartupSecondSyn:
+    case BusState::eReceivedFirstSYN:
         DEBUG_LOG("ARB ERROR      0x%02x 0x%02x\n", busstate._master, busstate._byte);
         _arbitrating = false;
         return error;
-    case EBusState::eReceivedAddressAfterFirstSYN: // did we win 1st round of abitration?
+    case BusState::eReceivedAddressAfterFirstSYN: // did we win 1st round of abitration?
         if (symbol == _arbitration_address) {
             DEBUG_LOG("ARB WON1       0x%02x %ld us\n", symbol, busstate.microsSinceLastSyn());
             _arbitrating = false;
@@ -66,7 +66,7 @@ Arbitration::state Arbitration::data(EBusState& busstate, uint8_t symbol) {
             // the winning master is. Need to wait for eBusy
         }
         return arbitrating;
-    case EBusState::eReceivedSecondSYN: // did we sign up for second round arbitration?
+    case BusState::eReceivedSecondSYN: // did we sign up for second round arbitration?
         if (_participateSecond) {
             // execute second round of arbitration
             DEBUG_LOG("ARB MASTER2    0x%02x %ld us\n", _arbitration_address, busstate.microsSinceLastSyn());
@@ -76,7 +76,7 @@ Arbitration::state Arbitration::data(EBusState& busstate, uint8_t symbol) {
             DEBUG_LOG("ARB SKIP       0x%02x %ld us\n", _arbitration_address, busstate.microsSinceLastSyn());
         }
         return arbitrating;
-    case EBusState::eReceivedAddressAfterSecondSYN: // did we win 2nd round of arbitration?
+    case BusState::eReceivedAddressAfterSecondSYN: // did we win 2nd round of arbitration?
         if (symbol == _arbitration_address) {
             DEBUG_LOG("ARB WON2       0x%02x %ld us\n", symbol, busstate.microsSinceLastSyn());
             _arbitrating = false;
@@ -89,7 +89,7 @@ Arbitration::state Arbitration::data(EBusState& busstate, uint8_t symbol) {
             // "lost" state can be handled the same as when somebody lost in the first round
         }
         return arbitrating;
-    case EBusState::eBusy:
+    case BusState::eBusy:
         _arbitrating = false;
         return lost;            
     }

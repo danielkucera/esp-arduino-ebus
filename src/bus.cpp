@@ -1,13 +1,11 @@
 #include "main.hpp"
 #include "bus.hpp"
-#include "ebusstate.hpp"
-#include "arbitration.hpp"
 #include "enhanced.hpp"
 #include "queue"
 
 BusType Bus;
 
-#ifdef USE_ASYNCHRONOUS
+#if USE_ASYNCHRONOUS
 void BusType::OnReceiveCB()
 {
   uint8_t byte = Serial.read();
@@ -23,8 +21,9 @@ void BusType::OnReceiveErrorCB(hardwareSerial_error_t e)
 #endif
 
 BusType::BusType()
+: _client(0)
 {
-#ifdef USE_ASYNCHRONOUS
+#if USE_ASYNCHRONOUS
   Serial.onReceive(OnReceiveCB, false);
   Serial.onReceiveError(OnReceiveErrorCB);
   _queue = xQueueCreate(QUEUE_SIZE, sizeof(data));
@@ -32,14 +31,14 @@ BusType::BusType()
 }
 
 BusType::~BusType(){
-#ifdef USE_ASYNCHRONOUS
+#if USE_ASYNCHRONOUS
   vQueueDelete(_queue);
 #endif 
 }
 
 bool BusType::read(data& d)
 {
-#ifdef USE_ASYNCHRONOUS
+#if USE_ASYNCHRONOUS
     return xQueueReceive(_queue, &d, 0) == pdTRUE; 
 #else
     if (Serial.available()){
@@ -57,7 +56,7 @@ bool BusType::read(data& d)
 
 void BusType::push(const data& d)
 {
-#ifdef USE_ASYNCHRONOUS
+#if USE_ASYNCHRONOUS
     xQueueSendToBack(_queue, &d, 0); 
 #else
     _queue.push(d);
@@ -66,49 +65,45 @@ void BusType::push(const data& d)
 
 void BusType::receive(uint8_t byte)
 {
-  static EBusState   busState;
-  static Arbitration arbitration;
-  static WiFiClient*  client = 0;
-
-  busState.data(byte);
-  Arbitration::state state = arbitration.data(busState, byte);
+  _busState.data(byte);
+  Arbitration::state state = _arbitration.data(_busState, byte);
   switch (state) {
     case Arbitration::none:
         uint8_t arbitration_address;
-        client = enhArbitrationRequested(arbitration_address);
-        if (client) {
-          if (arbitration.start(busState, arbitration_address)) {     
-            DEBUG_LOG("BUS START SUC  0x%02x %ld us\n", byte, busState.microsSinceLastSyn());
+        _client = enhArbitrationRequested(arbitration_address);
+        if (_client) {
+          if (_arbitration.start(_busState, arbitration_address)) {     
+            DEBUG_LOG("BUS START SUC  0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
           }
           else {
-            DEBUG_LOG("BUS START FAI  0x%02x %ld us\n", byte, busState.microsSinceLastSyn());
+            DEBUG_LOG("BUS START FAI  0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
           }
         }
-        push({false, RECEIVED, byte, 0, client}); // send to everybody. ebusd needs the SYN to get in the right mood
+        push({false, RECEIVED, byte, 0, _client}); // send to everybody. ebusd needs the SYN to get in the right mood
         break;
     case Arbitration::arbitrating:
-        DEBUG_LOG("BUS ARBITRATIN 0x%02x %ld us\n", byte, busState.microsSinceLastSyn());
-        push({false, RECEIVED, byte, client, client}); // do not send to arbitration client
+        DEBUG_LOG("BUS ARBITRATIN 0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
+        push({false, RECEIVED, byte, _client, _client}); // do not send to arbitration client
         break;
     case Arbitration::won:
         enhArbitrationDone();
-        DEBUG_LOG("BUS SEND WON   0x%02x %ld us\n", busState._master, busState.microsSinceLastSyn());
-        push({true,  STARTED,  busState._master, client, client}); // send only to the arbitrating client
-        push({false, RECEIVED, byte,             client, client}); // do not send to arbitrating client
-        client=0;
+        DEBUG_LOG("BUS SEND WON   0x%02x %ld us\n", _busState._master, _busState.microsSinceLastSyn());
+        push({true,  STARTED,  _busState._master, _client, _client}); // send only to the arbitrating client
+        push({false, RECEIVED, byte,              _client, _client}); // do not send to arbitrating client
+        _client=0;
         break;
     case Arbitration::lost:
         enhArbitrationDone();
-        DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %ld us\n", busState._master, busState._byte, busState.microsSinceLastSyn());
-        push({true,  FAILED,   busState._master, client, client}); // send only to the arbitrating client
-        push({false, RECEIVED, byte,             0,      client}); // send to everybody    
-        client=0;
+        DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %ld us\n", _busState._master, _busState._byte, _busState.microsSinceLastSyn());
+        push({true,  FAILED,   _busState._master, _client, _client}); // send only to the arbitrating client
+        push({false, RECEIVED, byte,              0,       _client}); // send to everybody    
+        _client=0;
         break;
     case Arbitration::error:
         enhArbitrationDone();
-        push({true,  ERROR_EBUS, ERR_FRAMING, client, client}); // send only to the arbitrating client
-        push({false, RECEIVED,   byte,        0,      client}); // send to everybody
-        client=0;
+        push({true,  ERROR_EBUS, ERR_FRAMING, _client, _client}); // send only to the arbitrating client
+        push({false, RECEIVED,   byte,        0,       _client}); // send to everybody
+        _client=0;
         break;
   }
 }

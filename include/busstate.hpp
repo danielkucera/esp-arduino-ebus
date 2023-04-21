@@ -1,15 +1,15 @@
-#ifndef _EBUSSTATE_H_
-#define _EBUSSTATE_H_
+#ifndef _BUSSTATE_H_
+#define _BUSSTATE_H_
 #include "main.hpp"
 #include "enhanced.hpp"
 
 
-// Implements the state of the bus
-// The arbitration process can only start at well defined states of the bus
-// To asses the state, all data received on the bus needs to be send to this object
-// The object takes care of startup of the bus and recovery when an unexpected event 
-// happens 
-class EBusState {
+// Implements the state of the bus. The arbitration process can 
+// only start at well defined states of the bus. To asses the 
+// state, all data received on the bus needs to be send to this 
+// object. The object takes care of startup of the bus and 
+// recovery when an unexpected event happens. 
+class BusState {
 public:
     enum eState {
         eStartup,                      // In startup mode to analyze bus state
@@ -37,7 +37,7 @@ public:
         };
         return values[e];
     }
-    EBusState()
+    BusState()
         : _state(eStartup)
     {}
     // Evaluate a symbol received on UART and determine what the new state of the bus is

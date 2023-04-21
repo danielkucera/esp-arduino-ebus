@@ -1,13 +1,15 @@
 #ifndef _BUS_H_
 #define _BUS_H_
 #include "main.hpp"
+#include "busstate.hpp"
+#include "arbitration.hpp"
 #include "queue"
 
-// This object retrieves data from the Serial object and
-// let's it flow through the arbitration process.
-// The "read" method will return data with meta information that tells what should be done
-// with the returned data.
-// This object hides if the underlying implementation is synchronous or asynchronous
+// This object retrieves data from the Serial object and let's
+// it flow through the arbitration process. The "read" method 
+// will return data with meta information that tells what should 
+// be done with the returned data. This object hides if the 
+// underlying implementation is synchronous or asynchronous
 class BusType
 {
   public:
@@ -30,8 +32,10 @@ class BusType
   private:
     inline void push    (const data& d);
            void receive (uint8_t byte);
-
-#ifdef USE_ASYNCHRONOUS
+  BusState     _busState;
+  Arbitration  _arbitration;
+  WiFiClient*  _client;
+#if USE_ASYNCHRONOUS
       QueueHandle_t _queue;
       static void OnReceiveCB();
       static void OnReceiveErrorCB(hardwareSerial_error_t e);
