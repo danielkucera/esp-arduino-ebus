@@ -6,7 +6,7 @@
 #define M2 0b10000000
 
 // Locking
-#ifdef USE_ASYNCHRONOUS
+#if USE_ASYNCHRONOUS
 SemaphoreHandle_t getMutex(){
     static SemaphoreHandle_t _lock = NULL;
     if(_lock == NULL){
