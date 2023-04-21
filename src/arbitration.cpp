@@ -51,7 +51,8 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
         DEBUG_LOG("ARB ERROR      0x%02x 0x%02x 0x%02x %ld us %ld us\n", busstate._master, busstate._byte, symbol, busstate.microsSinceLastSyn(),  busstate.microsSincePreviousSyn());
         _arbitrating = false;
         // Sometimes a second SYN is received instead of an address
-        // Could be another bus participant won, but is not starting transmission
+        // This means the address we put on the bus in the "start" method
+        // got lost. Could be an electrical issue? Interference?
         // Try to restart arbitration maximum 2 times
         if (_restartCount++ < 3 && busstate._previousState == BusState::eReceivedFirstSYN)
             return restart;
