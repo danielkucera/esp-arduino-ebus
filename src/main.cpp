@@ -219,7 +219,9 @@ void loop() {
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
-          pushEnhClient(&enhClients[i], d._c, d._d, true);
+          if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
+            last_comms = millis();
+          }
         }
       }
       else {
