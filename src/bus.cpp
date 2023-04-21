@@ -20,7 +20,7 @@ void BusType::begin() {
   Serial.begin(2400, SERIAL_8N1, 21, 20);
   Serial.setRxFIFOFull(1); // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
 #elif defined(ESP8266)
-  Serial.begin();
+  Serial.begin(2400);
 #endif
 
 #if USE_ASYNCHRONOUS
