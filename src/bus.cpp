@@ -38,8 +38,8 @@ void BusType::end() {
 
 #if USE_ASYNCHRONOUS
 void BusType::OnReceiveCB() {
-  uint8_t byte = Serial.read();
-  Bus.receive(byte);
+  uint8_t symbol = Serial.read();
+  Bus.receive(symbol);
 }
 
 void BusType::OnReceiveErrorCB(hardwareSerial_error_t e) {
@@ -53,8 +53,8 @@ int BusType::availableForWrite() {
   return Serial.availableForWrite();
 }
 
-size_t BusType::write(uint8_t c) {
-  return Serial.write(c);
+size_t BusType::write(uint8_t symbol) {
+  return Serial.write(symbol);
 }
 
 bool BusType::read(data& d) {
@@ -62,8 +62,8 @@ bool BusType::read(data& d) {
     return xQueueReceive(_queue, &d, 0) == pdTRUE; 
 #else
     if (Serial.available()){
-        uint8_t byte = Serial.read();
-        receive(byte);
+        uint8_t symbol = Serial.read();
+        receive(symbol);
     }
     if (_queue.size() > 0) {
         d = _queue.front();
@@ -82,9 +82,9 @@ void BusType::push(const data& d){
 #endif
 }
 
-void BusType::receive(uint8_t byte) {
-  _busState.data(byte);
-  Arbitration::state state = _arbitration.data(_busState, byte);
+void BusType::receive(uint8_t symbol) {
+  _busState.data(symbol);
+  Arbitration::state state = _arbitration.data(_busState, symbol);
   switch (state) {
     case Arbitration::none:
     case Arbitration::restart:
@@ -92,36 +92,36 @@ void BusType::receive(uint8_t byte) {
         _client = enhArbitrationRequested(arbitration_address);
         if (_client) {
           if (_arbitration.start(_busState, arbitration_address)) {     
-            DEBUG_LOG("BUS START SUCC 0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
+            DEBUG_LOG("BUS START SUCC 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
           }
           else {
-            DEBUG_LOG("BUS START WAIT 0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
+            DEBUG_LOG("BUS START WAIT 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
           }
         }
-        push({false, RECEIVED, byte, 0, _client}); // send to everybody. ebusd needs the SYN to get in the right mood
+        push({false, RECEIVED, symbol, 0, _client}); // send to everybody. ebusd needs the SYN to get in the right mood
         break;
     case Arbitration::arbitrating:
-        DEBUG_LOG("BUS ARBITRATIN 0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
-        push({false, RECEIVED, byte, _client, _client}); // do not send to arbitration client
+        DEBUG_LOG("BUS ARBITRATIN 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
+        push({false, RECEIVED, symbol, _client, _client}); // do not send to arbitration client
         break;
     case Arbitration::won:
         enhArbitrationDone();
         DEBUG_LOG("BUS SEND WON   0x%02x %ld us\n", _busState._master, _busState.microsSinceLastSyn());
         push({true,  STARTED,  _busState._master, _client, _client}); // send only to the arbitrating client
-        push({false, RECEIVED, byte,              _client, _client}); // do not send to arbitrating client
+        push({false, RECEIVED, symbol,            _client, _client}); // do not send to arbitrating client
         _client=0;
         break;
     case Arbitration::lost:
         enhArbitrationDone();
-        DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %ld us\n", _busState._master, _busState._byte, _busState.microsSinceLastSyn());
+        DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %ld us\n", _busState._master, _busState._symbol, _busState.microsSinceLastSyn());
         push({true,  FAILED,   _busState._master, _client, _client}); // send only to the arbitrating client
-        push({false, RECEIVED, byte,              0,       _client}); // send to everybody    
+        push({false, RECEIVED, symbol,            0,       _client}); // send to everybody    
         _client=0;
         break;
     case Arbitration::error:
         enhArbitrationDone();
         push({true,  ERROR_EBUS, ERR_FRAMING, _client, _client}); // send only to the arbitrating client
-        push({false, RECEIVED,   byte,        0,       _client}); // send to everybody
+        push({false, RECEIVED,   symbol,      0,       _client}); // send to everybody
         _client=0;
         break;
   }

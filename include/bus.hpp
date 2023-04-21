@@ -32,12 +32,12 @@ class BusType
 
     // Is there a value available that should be send to a client?
     bool   read(data& d);
-    size_t write(uint8_t c);
+    size_t write(uint8_t symbol);
     int    availableForWrite();
 
   private:
     inline void push    (const data& d);
-           void receive (uint8_t byte);
+           void receive (uint8_t symbol);
     BusState     _busState;
     Arbitration  _arbitration;
     WiFiClient*  _client;

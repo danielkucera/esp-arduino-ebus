@@ -70,7 +70,7 @@ public:
         case eReceivedAddressAfterFirstSYN:
             _previousState = _state;
             _state = symbol == SYN ? syn(eReceivedSecondSYN ): eBusy;
-            _byte = symbol;
+            _symbol = symbol;
             break;
         case eReceivedSecondSYN:
             _previousState = _state;
@@ -80,7 +80,7 @@ public:
         case eReceivedAddressAfterSecondSYN:
             _previousState = _state;
             _state = symbol == SYN ? error(_state, eReceivedFirstSYN) : eBusy;
-            _byte = symbol;
+            _symbol = symbol;
             break;            
         case eBusy:
             _previousState = _state;
@@ -98,7 +98,7 @@ public:
     {
         _previousSYNtime = _SYNtime;
         _SYNtime = micros();
-        DEBUG_LOG ("unexpected SYN on bus while state is %s, setting state to %s m=0x%02x, b=0x%02x %ld us\n", enumvalue(currentstate), enumvalue(newstate), _master, _byte, microsSincePreviousSyn());
+        DEBUG_LOG ("unexpected SYN on bus while state is %s, setting state to %s m=0x%02x, b=0x%02x %ld us\n", enumvalue(currentstate), enumvalue(newstate), _master, _symbol, microsSincePreviousSyn());
         return newstate;
     }
 
@@ -120,7 +120,7 @@ public:
     eState  _state;
     eState  _previousState;
     uint8_t _master;
-    uint8_t _byte;   
+    uint8_t _symbol;   
     unsigned long _SYNtime;
     unsigned long _previousSYNtime;
 };

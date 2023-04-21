@@ -49,7 +49,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
     case BusState::eStartupSymbolAfterFirstSyn:
     case BusState::eStartupSecondSyn:
     case BusState::eReceivedFirstSYN:
-        DEBUG_LOG("ARB ERROR      0x%02x 0x%02x 0x%02x %ld us %ld us\n", busstate._master, busstate._byte, symbol, busstate.microsSinceLastSyn(),  busstate.microsSincePreviousSyn());
+        DEBUG_LOG("ARB ERROR      0x%02x 0x%02x 0x%02x %ld us %ld us\n", busstate._master, busstate._symbol, symbol, busstate.microsSinceLastSyn(),  busstate.microsSincePreviousSyn());
         _arbitrating = false;
         // Sometimes a second SYN is received instead of an address
         // This means the address we put on the bus in the "start" method
