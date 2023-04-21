@@ -13,6 +13,9 @@
 class BusType
 {
   public:
+    void begin();
+    void end();
+
     // "receive" data should go to all clients that are not in arbitration mode
     // "enhanced" data should go only to the arbitrating client
     // a client is in arbitration mode if _client is not null
@@ -27,8 +30,10 @@ class BusType
     ~BusType();
 
     // Is there a value available that should be send to a client?
-    bool read(data& d);
-
+    bool   read(data& d);
+    size_t write(uint8_t c);
+    int    availableForWrite();
+    
   private:
     inline void push    (const data& d);
            void receive (uint8_t byte);

@@ -1,6 +1,7 @@
 #include <WiFiClient.h>
 #include "main.hpp"
 #include "enhanced.hpp"
+#include "bus.hpp"
 
 #define M1 0b11000000
 #define M2 0b10000000
@@ -111,7 +112,7 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
     }
     if (c == CMD_SEND){
         DEBUG_LOG("SEND 0x%02x\n", d);
-        Serial.write(d);
+        Bus.write(d);
         return;
     }
     if (c == CMD_INFO){

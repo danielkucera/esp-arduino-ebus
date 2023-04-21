@@ -1,4 +1,5 @@
 #include "main.hpp"
+#include "bus.hpp"
 
 bool handleNewClient(WiFiServer &server, WiFiClient clients[]) {
   if (!server.hasClient())
@@ -35,8 +36,8 @@ int pushClient(WiFiClient* client, uint8_t B){
 }
 
 void handleClient(WiFiClient* client){
-    while (client->available() && Serial.availableForWrite() > 0) {
+    while (client->available() && Bus.availableForWrite() > 0) {
       // working char by char is not very efficient
-      Serial.write(client->read());
+      Bus.write(client->read());
     }
 }

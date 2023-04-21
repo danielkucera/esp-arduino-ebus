@@ -1,5 +1,6 @@
 #include "arbitration.hpp"
 #include "busstate.hpp"
+#include "bus.hpp"
 
 bool Arbitration::start(BusState& busstate, uint8_t master)
 {   static int arb = 0;
@@ -23,7 +24,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master)
         DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), now);
         return false;
     }
-    Serial.write(master);
+    Bus.write(master);
 
     _arbitrationAddress = master;
     _arbitrating = true;
@@ -78,7 +79,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
         if (_participateSecond) {
             // execute second round of arbitration
             DEBUG_LOG("ARB MASTER2    0x%02x %ld us\n", _arbitrationAddress, busstate.microsSinceLastSyn());
-            Serial.write(_arbitrationAddress);
+            Bus.write(_arbitrationAddress);
         }
         else {
             DEBUG_LOG("ARB SKIP       0x%02x %ld us\n", _arbitrationAddress, busstate.microsSinceLastSyn());

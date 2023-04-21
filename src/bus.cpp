@@ -5,24 +5,24 @@
 
 BusType Bus;
 
-#if USE_ASYNCHRONOUS
-void BusType::OnReceiveCB()
-{
-  uint8_t byte = Serial.read();
-  Bus.receive(byte);
+BusType::BusType()
+: _client(0) {
 }
 
-void BusType::OnReceiveErrorCB(hardwareSerial_error_t e)
-{
-  if (e != UART_BREAK_ERROR){
-    DEBUG_LOG("OnReceiveErrorCB %i\n", e);
-  }
+BusType::~BusType() {
+  end();
 }
+
+void BusType::begin() {
+  Serial.setRxBufferSize(RXBUFFERSIZE);
+
+#ifdef ESP32
+  Serial.begin(2400, SERIAL_8N1, 21, 20);
+  Serial.setRxFIFOFull(1); // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
+#elif defined(ESP8266)
+  Serial.begin();
 #endif
 
-BusType::BusType()
-: _client(0)
-{
 #if USE_ASYNCHRONOUS
   Serial.onReceive(OnReceiveCB, false);
   Serial.onReceiveError(OnReceiveErrorCB);
@@ -30,14 +30,34 @@ BusType::BusType()
 #endif    
 }
 
-BusType::~BusType(){
+void BusType::end() {
 #if USE_ASYNCHRONOUS
   vQueueDelete(_queue);
 #endif 
 }
 
-bool BusType::read(data& d)
-{
+#if USE_ASYNCHRONOUS
+void BusType::OnReceiveCB() {
+  uint8_t byte = Serial.read();
+  Bus.receive(byte);
+}
+
+void BusType::OnReceiveErrorCB(hardwareSerial_error_t e) {
+  if (e != UART_BREAK_ERROR){
+    DEBUG_LOG("OnReceiveErrorCB %i\n", e);
+  }
+}
+#endif
+
+int BusType::availableForWrite() {
+  return Serial.availableForWrite();
+}
+
+size_t BusType::write(uint8_t c) {
+  return Serial.write(c);
+}
+
+bool BusType::read(data& d) {
 #if USE_ASYNCHRONOUS
     return xQueueReceive(_queue, &d, 0) == pdTRUE; 
 #else
@@ -54,8 +74,7 @@ bool BusType::read(data& d)
 #endif
 }
 
-void BusType::push(const data& d)
-{
+void BusType::push(const data& d){
 #if USE_ASYNCHRONOUS
     xQueueSendToBack(_queue, &d, 0); 
 #else
@@ -63,8 +82,7 @@ void BusType::push(const data& d)
 #endif
 }
 
-void BusType::receive(uint8_t byte)
-{
+void BusType::receive(uint8_t byte) {
   _busState.data(byte);
   Arbitration::state state = _arbitration.data(_busState, byte);
   switch (state) {

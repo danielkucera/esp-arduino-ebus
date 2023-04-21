@@ -93,19 +93,14 @@ void check_reset() {
 void setup() {
   check_reset();
 
-  Serial.setRxBufferSize(RXBUFFERSIZE);
-
 #ifdef ESP32
   Serial1.begin(115200, SERIAL_8N1, 8, 10);
-  Serial.begin(2400, SERIAL_8N1, 21, 20);
-  // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
-  Serial.setRxFIFOFull(1); 
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
   Serial1.begin(115200);
-  Serial.begin(2400);
   last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
+  Bus.begin();
 
   Serial1.setDebugOutput(true);
 
