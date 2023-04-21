@@ -74,10 +74,10 @@ void BusType::receive(uint8_t byte)
         _client = enhArbitrationRequested(arbitration_address);
         if (_client) {
           if (_arbitration.start(_busState, arbitration_address)) {     
-            DEBUG_LOG("BUS START SUC  0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
+            DEBUG_LOG("BUS START SUCC 0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
           }
           else {
-            DEBUG_LOG("BUS START FAI  0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
+            DEBUG_LOG("BUS START WAIT 0x%02x %ld us\n", byte, _busState.microsSinceLastSyn());
           }
         }
         push({false, RECEIVED, byte, 0, _client}); // send to everybody. ebusd needs the SYN to get in the right mood

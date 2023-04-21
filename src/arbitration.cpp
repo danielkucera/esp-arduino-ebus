@@ -48,13 +48,14 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
     case BusState::eStartupSymbolAfterFirstSyn:
     case BusState::eStartupSecondSyn:
     case BusState::eReceivedFirstSYN:
-        DEBUG_LOG("ARB ERROR      0x%02x 0x%02x 0x%02x %ld us\n", busstate._master, busstate._byte, symbol, busstate.microsSinceLastSyn());
+        DEBUG_LOG("ARB ERROR      0x%02x 0x%02x 0x%02x %ld us %ld us\n", busstate._master, busstate._byte, symbol, busstate.microsSinceLastSyn(),  busstate.microsSincePreviousSyn());
         _arbitrating = false;
         // Sometimes a second SYN is received instead of an address
         // Could be another bus participant won, but is not starting transmission
         // Try to restart arbitration maximum 2 times
-        if (_restartCount++ < 3)
+        if (_restartCount++ < 3 && busstate._previousState == BusState::eReceivedFirstSYN)
             return restart;
+        _restartCount = 0;
         return error;
     case BusState::eReceivedAddressAfterFirstSYN: // did we win 1st round of abitration?
         if (symbol == _arbitrationAddress) {
