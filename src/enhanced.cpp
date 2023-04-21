@@ -29,7 +29,6 @@ SemaphoreHandle_t getMutex(){
 
 WiFiClient*   _arbitration_client = NULL;
 int           _arbitration_address = -1;
-unsigned long _arbitration_start = 0;
 
 void getEnhArbitrationClient(WiFiClient* &client, uint8_t &address) {
     ENH_MUTEX_LOCK();
@@ -106,7 +105,6 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
                 DEBUG_LOG("CMD_START 0x%02x\n", d);
             }       
             setEnhArbitrationClient(client, d);
-            _arbitration_start = millis();
             return;
         }
     }
