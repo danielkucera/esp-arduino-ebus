@@ -31,7 +31,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master)
         DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), microsSinceLastSyn);
         return false;
     }
-#if USE_ASYNCHRONOUS
+/*#if USE_ASYNCHRONOUS
     // When in async mode, we get immediately interrupted when a symbol is received on the bus
     // The earliest allowed to send is 4300 measured from the start bit of the SYN command
     // We don't have the exact timing of the start bit. Assume SYN takes 4167 us.
@@ -39,7 +39,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master)
     if (delay > 0) {
       delayMicroseconds(delay);
     }
-#endif
+#endif*/
     Bus.write(master);
     // Do logging of the ARB START message after writing the symbol, so enabled or disabled 
     // logging does not affect timing calculations.
@@ -67,11 +67,14 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
     case BusState::eReceivedFirstSYN:
         DEBUG_LOG("ARB ERROR      0x%02x 0x%02x 0x%02x %ld us %ld us\n", busstate._master, busstate._symbol, symbol, busstate.microsSinceLastSyn(),  busstate.microsSincePreviousSyn());
         _arbitrating = false;
-        // Sometimes a second SYN is received instead of an address
-        // This means the address we put on the bus in the "start" method
-        // got lost. Could be an electrical issue? Interference? Wrong timing of sending he symbol?
+        // Sometimes a second SYN is received instead of an address, either
+        // after having started the arbitration, or after participating in
+        // the second round of arbitration. This means the address we put on 
+        // the bus got lost. Most likely this is caused by not perfect timing
+        // of the arbitration on our side, but could also be electrical interference
+        // or wrong implementation in another bus participant. 
         // Try to restart arbitration maximum 2 times
-        if (_restartCount++ < 3 && busstate._previousState == BusState::eReceivedFirstSYN)
+        if (_restartCount++ < 3 && (busstate._previousState == BusState::eReceivedFirstSYN || busstate._previousState == BusState::eReceivedSecondSYN) )
             return restart;
         _restartCount = 0;
         return error;
@@ -95,7 +98,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
         if (_participateSecond) {
             // execute second round of arbitration
             unsigned long microsSinceLastSyn =  busstate.microsSinceLastSyn();
-#if USE_ASYNCHRONOUS
+/*#if USE_ASYNCHRONOUS
             // When in async mode, we get immediately interrupted when a symbol is received on the bus
             // The earliest allowed to send is 4300 measured from the start bit of the SYN command
             // We don't have the exact timing of the start bit. Assume SYN takes 4167 us.
@@ -103,7 +106,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
             if (delay > 0) {
                 delayMicroseconds(delay);
             }
-#endif
+#endif*/
             // Do logging of the ARB START message after writing the symbol, so enabled or disabled 
             // logging does not affect timing calculations.     
             Bus.write(_arbitrationAddress);
