@@ -131,6 +131,28 @@ void setup() {
   last_comms = millis();
 }
 
+#define DEBUG_LOG_BUFFER_SIZE 4000
+static char   message_buffer[DEBUG_LOG_BUFFER_SIZE];
+static size_t message_buffer_position;
+int DEBUG_LOG_IMPL(const char *format, ...)
+{
+   int ret;
+   if (message_buffer_position>=DEBUG_LOG_BUFFER_SIZE)
+       return 0;
+   
+   va_list aptr;
+   va_start(aptr, format);
+   ret = vsnprintf(&message_buffer[message_buffer_position], DEBUG_LOG_BUFFER_SIZE-message_buffer_position, format, aptr);
+   va_end(aptr);
+   message_buffer_position+=ret;
+   if (message_buffer_position >= DEBUG_LOG_BUFFER_SIZE) {
+     message_buffer_position=DEBUG_LOG_BUFFER_SIZE;
+   }
+   message_buffer[DEBUG_LOG_BUFFER_SIZE-1]=0;
+
+   return ret;
+}
+
 bool handleStatusServerRequests() {
   if (!statusServer.hasClient())
     return false;
@@ -138,6 +160,7 @@ bool handleStatusServerRequests() {
   WiFiClient client = statusServer.available();
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.printf("HTTP/1.1 200 OK\r\n\r\n");
     client.printf("async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
@@ -153,8 +176,13 @@ bool handleStatusServerRequests() {
     client.printf("nbr lost2: %i\r\n", Bus._nbrLost2);
     client.printf("nbr won1: %i\r\n", Bus._nbrWon1);    
     client.printf("nbr won2: %i\r\n", Bus._nbrWon2);    
-    client.printf("nbr errors: %i\r\n", Bus._nbrErrors);   
-
+    client.printf("nbr errors: %i\r\n", Bus._nbrErrors);    
+    if (message_buffer_position>0)
+    {
+      client.printf("lastmessages:\r\n%s\r\n", message_buffer);
+      message_buffer[0]=0;
+      message_buffer_position=0;
+    }
     client.flush();
     client.stop();
   }

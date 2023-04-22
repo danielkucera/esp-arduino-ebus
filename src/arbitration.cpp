@@ -1,8 +1,8 @@
 #include "arbitration.hpp"
 #include "busstate.hpp"
 #include "bus.hpp"
-#define ARB_FIRST_DELAY_US  -27
-#define ARB_SECOND_DELAY_US  -27
+#define ARB_FIRST_DELAY_US  -36
+#define ARB_SECOND_DELAY_US  -36
 
 // arbitration is timing sensitive. avoid communicating with WifiClient during arbitration
 // according https://ebus-wiki.org/lib/exe/fetch.php/ebus/spec_test_1_v1_1_1.pdf section 3.2
