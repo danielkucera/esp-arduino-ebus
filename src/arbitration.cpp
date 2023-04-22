@@ -2,6 +2,14 @@
 #include "busstate.hpp"
 #include "bus.hpp"
 
+// arbitration is timing sensitive. avoid communicating with WifiClient during arbitration
+// according https://ebus-wiki.org/lib/exe/fetch.php/ebus/spec_test_1_v1_1_1.pdf section 3.2
+//   "Calculated time distance between start bit of SYN byte and 
+//   bus permission must be in the range of 4300 us - 4456,24 us ."
+// SYN symbol is 4167 us. If we would receive the symbol immediately, 
+// we need to wait (4300 - 4167)=133 us after we received the SYN.
+// rely on the uart to keep the timing
+// just make sure the byte to send is available in time
 bool Arbitration::start(BusState& busstate, uint8_t master)
 {   static int arb = 0;
     if (_arbitrating) {
@@ -13,31 +21,40 @@ bool Arbitration::start(BusState& busstate, uint8_t master)
     if (busstate._state != BusState::eReceivedFirstSYN) {
         return false;
     }
-    DEBUG_LOG("ARB START %04i 0x%02x %ld us\n", arb++, master, busstate.microsSinceLastSyn());
                 
     // too late if we don't have enough time to send our symbol
     // assume we need at least 20 us to send the symbol
-    unsigned long now =  busstate.microsSinceLastSyn();
-    if (Serial.available() != 0 || now>((4456-20)-4160)) 
+    unsigned long microsSinceLastSyn =  busstate.microsSinceLastSyn();
+    if (Serial.available() != 0 || microsSinceLastSyn>((4456-20)-4160)) 
     {
         // if we are too late, don't try to participate and retry next round
-        DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), now);
+        DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), microsSinceLastSyn);
         return false;
     }
+#if USE_ASYNCHRONOUS
+    // When in async mode, we get immediately interrupted when a symbol is received on the bus
+    // The earliest allowed to send is 4300 measured from the start bit of the SYN command
+    // We don't have the exact timing of the start bit. Assume the symbol arrives with 15 us delay
+    // And that the SYN takes 4167 us.
+    int delay = (4300-4167)-busstate.microsSinceLastSyn()-15;
+    if (delay > 0) {
+      delayMicroseconds(delay);
+    }
+#endif
     Bus.write(master);
-
+    // Do logging of the ARB START message after writing the symbol, so enabled or disabled 
+    // logging does not affect timing calculations.
+#if USE_ASYNCHRONOUS
+    DEBUG_LOG("ARB START %04i 0x%02x %ld us %i  us\n", arb++, master, microsSinceLastSyn, delay);
+#else
+    DEBUG_LOG("ARB START %04i 0x%02x %ld us\n", arb++, master, microsSinceLastSyn);
+#endif
     _arbitrationAddress = master;
     _arbitrating = true;
     _participateSecond = false;
     return true;
 }
 
-// arbitration is timing sensitive. avoid communicating with WifiClient during arbitration
-// according https://ebus-wiki.org/lib/exe/fetch.php/ebus/spec_test_1_v1_1_1.pdf section 3.2
-//   "Calculated time distance between start bit of SYN byte and 
-//   bus permission must be in the range of 4300 us - 4456,24 us ."
-// rely on the uart to keep the timing
-// just make sure the byte to send is available in time
 Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
     if (!_arbitrating){
         return none;
@@ -53,7 +70,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
         _arbitrating = false;
         // Sometimes a second SYN is received instead of an address
         // This means the address we put on the bus in the "start" method
-        // got lost. Could be an electrical issue? Interference?
+        // got lost. Could be an electrical issue? Interference? Wrong timing of sending he symbol?
         // Try to restart arbitration maximum 2 times
         if (_restartCount++ < 3 && busstate._previousState == BusState::eReceivedFirstSYN)
             return restart;
