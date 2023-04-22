@@ -13,10 +13,13 @@ class Arbitration
     public:
         enum state {none,  // no arbitration ongoing/not yet completed
                     arbitrating, // arbitration ongoing
-                    won,   // won
-                    lost,  // lost
+                    won1,   // won
+                    won2,   // won
+                    lost1,  // lost
+                    lost2,  // lost
                     error, // error
-                    restart  // restart
+                    restart1,  // restart
+                    restart2,  // restart
                     };
 
         Arbitration()

@@ -35,10 +35,13 @@ class BusType
     size_t write(uint8_t symbol);
     int    availableForWrite();
 
-    int _nbrRestarts;
+    int _nbrRestarts1;
+    int _nbrRestarts2;
     int _nbrArbitrations;
-    int _nbrLost;
-    int _nbrWon;
+    int _nbrLost1;
+    int _nbrLost2;
+    int _nbrWon1;
+    int _nbrWon2;
     int _nbrErrors;
   private:
     inline void push    (const data& d);
