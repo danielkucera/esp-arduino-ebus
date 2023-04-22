@@ -148,7 +148,10 @@ bool handleStatusServerRequests() {
     client.printf("version: %s\r\n", AUTO_VERSION);
     client.printf("nbr arbitrations: %i\r\n", Bus._nbrArbitrations);
     client.printf("nbr restarts: %i\r\n", Bus._nbrRestarts);
-
+    client.printf("nbr lost: %i\r\n", Bus._nbrLost);
+    client.printf("nbr won: %i\r\n", Bus._nbrWon);    
+    client.printf("nbr errors: %i\r\n", Bus._nbrErrors); 
+    
     client.flush();
     client.stop();
   }

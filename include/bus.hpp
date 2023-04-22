@@ -37,6 +37,9 @@ class BusType
 
     int _nbrRestarts;
     int _nbrArbitrations;
+    int _nbrLost;
+    int _nbrWon;
+    int _nbrErrors;
   private:
     inline void push    (const data& d);
            void receive (uint8_t symbol);

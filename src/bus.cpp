@@ -8,7 +8,10 @@ BusType Bus;
 BusType::BusType()
   : _client(0) 
   , _nbrRestarts(0)
-  , _nbrArbitrations(0) {
+  , _nbrArbitrations(0) 
+  , _nbrLost(0)
+  , _nbrWon(0)
+  , _nbrErrors(0) {
 }
 
 BusType::~BusType() {
@@ -114,6 +117,7 @@ void BusType::receive(uint8_t symbol) {
         push({true,  STARTED,  _busState._master, _client, _client}); // send only to the arbitrating client
         push({false, RECEIVED, symbol,            _client, _client}); // do not send to arbitrating client
         _client=0;
+        _nbrWon++;
         break;
     case Arbitration::lost:
         enhArbitrationDone();
@@ -121,12 +125,14 @@ void BusType::receive(uint8_t symbol) {
         push({true,  FAILED,   _busState._master, _client, _client}); // send only to the arbitrating client
         push({false, RECEIVED, symbol,            0,       _client}); // send to everybody    
         _client=0;
+        _nbrLost++;
         break;
     case Arbitration::error:
         enhArbitrationDone();
         push({true,  ERROR_EBUS, ERR_FRAMING, _client, _client}); // send only to the arbitrating client
         push({false, RECEIVED,   symbol,      0,       _client}); // send to everybody
         _client=0;
+        _nbrErrors++;
         break;
   }
 }

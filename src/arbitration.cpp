@@ -34,8 +34,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master)
 #if USE_ASYNCHRONOUS
     // When in async mode, we get immediately interrupted when a symbol is received on the bus
     // The earliest allowed to send is 4300 measured from the start bit of the SYN command
-    // We don't have the exact timing of the start bit. Assume the symbol arrives with 15 us delay
-    // And that the SYN takes 4167 us.
+    // We don't have the exact timing of the start bit. Assume SYN takes 4167 us.
     int delay = (4300-4167)-busstate.microsSinceLastSyn()-15;
     if (delay > 0) {
       delayMicroseconds(delay);
@@ -95,8 +94,20 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
     case BusState::eReceivedSecondSYN: // did we sign up for second round arbitration?
         if (_participateSecond) {
             // execute second round of arbitration
-            DEBUG_LOG("ARB MASTER2    0x%02x %ld us\n", _arbitrationAddress, busstate.microsSinceLastSyn());
+            unsigned long microsSinceLastSyn =  busstate.microsSinceLastSyn();
+#if USE_ASYNCHRONOUS
+            // When in async mode, we get immediately interrupted when a symbol is received on the bus
+            // The earliest allowed to send is 4300 measured from the start bit of the SYN command
+            // We don't have the exact timing of the start bit. Assume SYN takes 4167 us.
+            int delay = (4300-4167)-busstate.microsSinceLastSyn()-15;
+            if (delay > 0) {
+                delayMicroseconds(delay);
+            }
+#endif
+            // Do logging of the ARB START message after writing the symbol, so enabled or disabled 
+            // logging does not affect timing calculations.     
             Bus.write(_arbitrationAddress);
+            DEBUG_LOG("ARB MASTER2    0x%02x %ld us\n", _arbitrationAddress, microsSinceLastSyn);
         }
         else {
             DEBUG_LOG("ARB SKIP       0x%02x %ld us\n", _arbitrationAddress, busstate.microsSinceLastSyn());
