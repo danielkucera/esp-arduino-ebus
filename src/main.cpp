@@ -146,6 +146,8 @@ bool handleStatusServerRequests() {
     client.printf("loop_duration: %ld us\r\n", loopDuration);
     client.printf("max_loop_duration: %ld us\r\n", maxLoopDuration);
     client.printf("version: %s\r\n", AUTO_VERSION);
+    client.printf("nbr arbitrations: %i\r\n", Bus._nbrArbitrations);
+    client.printf("nbr restarts: %i\r\n", Bus._nbrRestarts);
 
     client.flush();
     client.stop();

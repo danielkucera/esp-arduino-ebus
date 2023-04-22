@@ -35,12 +35,15 @@ class BusType
     size_t write(uint8_t symbol);
     int    availableForWrite();
 
+    int _nbrRestarts;
+    int _nbrArbitrations;
   private:
     inline void push    (const data& d);
            void receive (uint8_t symbol);
     BusState     _busState;
     Arbitration  _arbitration;
     WiFiClient*  _client;
+
 #if USE_ASYNCHRONOUS
     QueueHandle_t _queue;
     static void OnReceiveCB();

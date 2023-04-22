@@ -6,7 +6,9 @@
 BusType Bus;
 
 BusType::BusType()
-: _client(0) {
+  : _client(0) 
+  , _nbrRestarts(0)
+  , _nbrArbitrations(0) {
 }
 
 BusType::~BusType() {
@@ -86,12 +88,14 @@ void BusType::receive(uint8_t symbol) {
   _busState.data(symbol);
   Arbitration::state state = _arbitration.data(_busState, symbol);
   switch (state) {
-    case Arbitration::none:
     case Arbitration::restart:
+        _nbrRestarts++;
+    case Arbitration::none:
         uint8_t arbitration_address;
         _client = enhArbitrationRequested(arbitration_address);
         if (_client) {
-          if (_arbitration.start(_busState, arbitration_address)) {     
+          if (_arbitration.start(_busState, arbitration_address)) {   
+            _nbrArbitrations++;  
             DEBUG_LOG("BUS START SUCC 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
           }
           else {
