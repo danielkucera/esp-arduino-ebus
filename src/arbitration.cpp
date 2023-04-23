@@ -1,8 +1,9 @@
 #include "arbitration.hpp"
 #include "busstate.hpp"
 #include "bus.hpp"
-#define ARB_FIRST_DELAY_US  -36
-#define ARB_SECOND_DELAY_US  -36
+#define ARB_FIRST_DELAY_US  -50
+#define ARB_SECOND_DELAY_US  -50
+extern unsigned long lastStartBit;
 
 // arbitration is timing sensitive. avoid communicating with WifiClient during arbitration
 // according https://ebus-wiki.org/lib/exe/fetch.php/ebus/spec_test_1_v1_1_1.pdf section 3.2
@@ -12,7 +13,7 @@
 // we need to wait (4300 - 4167)=133 us after we received the SYN.
 // rely on the uart to keep the timing
 // just make sure the byte to send is available in time
-bool Arbitration::start(BusState& busstate, uint8_t master)
+bool Arbitration::start(BusState& busstate, uint8_t master, unsigned int startBitTime)
 {   static int arb = 0;
     if (_arbitrating) {
         return false;
@@ -26,8 +27,9 @@ bool Arbitration::start(BusState& busstate, uint8_t master)
                 
     // too late if we don't have enough time to send our symbol
     // assume we need at least 20 us to send the symbol
+    unsigned long now = micros();
     unsigned long microsSinceLastSyn =  busstate.microsSinceLastSyn();
-    if (Serial.available() != 0 || microsSinceLastSyn>((4456-20)-4160)) 
+    if (now - startBitTime > 4456) 
     {
         // if we are too late, don't try to participate and retry next round
         DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), microsSinceLastSyn);
@@ -35,9 +37,9 @@ bool Arbitration::start(BusState& busstate, uint8_t master)
     }
 #if USE_ASYNCHRONOUS
     // When in async mode, we get immediately interrupted when a symbol is received on the bus
-    // The earliest allowed to send is 4300 measured from the start bit of the SYN command
-    // We don't have the exact timing of the start bit. Assume SYN takes 4167 us.
-    int delay = (4300-4167)-busstate.microsSinceLastSyn()-ARB_FIRST_DELAY_US;
+    // The earliest allowed to send is 4300 measured from the start bit of the SYN command.
+    // This timing is provided by the Bus.
+    int delay = 4300-(now-startBitTime);
     if (delay > 0) {
       delayMicroseconds(delay);
     }
@@ -56,7 +58,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master)
     return true;
 }
 
-Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
+Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigned int startBitTime) {
     if (!_arbitrating){
         return none;
     }
@@ -104,9 +106,9 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol) {
             unsigned long microsSinceLastSyn =  busstate.microsSinceLastSyn();
 #if USE_ASYNCHRONOUS
             // When in async mode, we get immediately interrupted when a symbol is received on the bus
-            // The earliest allowed to send is 4300 measured from the start bit of the SYN command
-            // We don't have the exact timing of the start bit. Assume SYN takes 4167 us.
-            int delay = (4300-4167)-busstate.microsSinceLastSyn()-ARB_SECOND_DELAY_US;
+            // The earliest allowed to send is 4300 measured from the start bit of the SYN command.
+            // This timing is provided by the Bus.
+            int delay = 4300-(micros()-startBitTime); 
             if (delay > 0) {
                 delayMicroseconds(delay);
             }

@@ -35,12 +35,12 @@ class Arbitration
     //           + another arbitration is already ongoing
     //           + the master address is SYN
     // = true  : arbitration started. Make sure to pass all bus data to this object through the "data" method
-    bool               start  (BusState& busstate, uint8_t master);
+    bool               start  (BusState& busstate, uint8_t master, unsigned int startBitTime);
 
     // A symbol was received on the bus, what does this do to the arbitration state?
     // Return values:
     // - see description of state enum value
-    Arbitration::state data   (BusState& busstate, uint8_t symbol);
+    Arbitration::state data   (BusState& busstate, uint8_t symbol, unsigned int startBitTime);
 
     private:
         bool    _arbitrating;

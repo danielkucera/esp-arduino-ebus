@@ -3,59 +3,98 @@
 #include "enhanced.hpp"
 #include "queue"
 
+// Using SoftwareSerial we get notified through an interrupt
+// exactly when the start bit is received. We can use this
+// for the timing of the arbitration. Because SoftwareSerial
+// cannot write and read at the same, we use SoftwareSerial only
+// for reading and for timing we still use HardwareSerial
+#if USE_ASYNCHRONOUS
+#include <SoftwareSerial.h>
+SoftwareSerial mySerial;
+#endif
+
 BusType Bus;
 
+#define BAUD_RATE 2400
+#define MAX_FRAMEBITS (1 + 8 + 1)
+#define SERIAL_EVENT_TASK_STACK_SIZE 2048
+#define SERIAL_EVENT_TASK_PRIORITY (configMAX_PRIORITIES-1)
+#define SERIAL_EVENT_TASK_RUNNING_CORE -1
+
 BusType::BusType()
-  : _client(0) 
-  , _nbrRestarts1(0)
+  : _nbrRestarts1(0)
   , _nbrRestarts2(0)
   , _nbrArbitrations(0) 
   , _nbrLost1(0)
   , _nbrLost2(0)
   , _nbrWon1(0)
   , _nbrWon2(0)
-  , _nbrErrors(0) {
+  , _nbrErrors(0) 
+  , _client(0) {
 }
 
 BusType::~BusType() {
   end();
 }
 
+
+#if USE_ASYNCHRONOUS
+void IRAM_ATTR _receiveHandler() {
+  unsigned long lastStartBit= micros();
+  xQueueSendToBackFromISR(Bus._serialEventQueue, &lastStartBit, 0); 
+  vPortYieldFromISR();
+}
+
+void BusType::readDataFromSoftwareSerial(void *args)
+{
+    for(;;) {
+        //Waiting for UART event.
+        unsigned int startBitTime = 0;
+        if(xQueueReceive(Bus._serialEventQueue, (void * )&startBitTime, (portTickType)portMAX_DELAY)) {
+          auto avail = mySerial.available();
+          if ( !avail) {
+            // event fired on start bit, wait until first stop bit of longest frame
+            delayMicroseconds(1+ MAX_FRAMEBITS * 1000000 / BAUD_RATE);
+            avail = mySerial.available();
+          }
+          if (avail){
+              uint8_t symbol = mySerial.read();
+              Bus.receive(symbol, startBitTime);
+          }        
+       }
+    }
+    vTaskDelete(NULL);
+}
+#endif
+
 void BusType::begin() {
-  Serial.setRxBufferSize(RXBUFFERSIZE);
 
 #ifdef ESP32
-  Serial.begin(2400, SERIAL_8N1, 21, 20);
-  Serial.setRxFIFOFull(1); // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
+  Serial.begin(2400, SERIAL_8N1, -1, 20); // used for writing
+  mySerial.begin(2400, SWSERIAL_8N1, 21, -1); // used for reading
+  mySerial.enableTx(false);
+  mySerial.enableIntTx(false);
 #elif defined(ESP8266)
   Serial.begin(2400);
 #endif
 
 #if USE_ASYNCHRONOUS
-  Serial.onReceive(OnReceiveCB, false);
-  Serial.onReceiveError(OnReceiveErrorCB);
   _queue = xQueueCreate(QUEUE_SIZE, sizeof(data));
+  _serialEventQueue = xQueueCreate(QUEUE_SIZE, sizeof(unsigned int));
+  xTaskCreateUniversal(BusType::readDataFromSoftwareSerial, "_serialEventQueue", SERIAL_EVENT_TASK_STACK_SIZE, this, SERIAL_EVENT_TASK_PRIORITY, &_serialEventTask, SERIAL_EVENT_TASK_RUNNING_CORE);
+  mySerial.onReceive(_receiveHandler);
+#else
+  Serial.setRxBufferSize(RXBUFFERSIZE);
 #endif    
 }
 
 void BusType::end() {
 #if USE_ASYNCHRONOUS
   vQueueDelete(_queue);
+  vQueueDelete(_serialEventQueue);
 #endif 
 }
 
-#if USE_ASYNCHRONOUS
-void BusType::OnReceiveCB() {
-  uint8_t symbol = Serial.read();
-  Bus.receive(symbol);
-}
-
-void BusType::OnReceiveErrorCB(hardwareSerial_error_t e) {
-  if (e != UART_BREAK_ERROR){
-    DEBUG_LOG("OnReceiveErrorCB %i\n", e);
-  }
-}
-#endif
 
 int BusType::availableForWrite() {
   return Serial.availableForWrite();
@@ -71,7 +110,7 @@ bool BusType::read(data& d) {
 #else
     if (Serial.available()){
         uint8_t symbol = Serial.read();
-        receive(symbol);
+        receive(symbol, micros());
     }
     if (_queue.size() > 0) {
         d = _queue.front();
@@ -90,9 +129,9 @@ void BusType::push(const data& d){
 #endif
 }
 
-void BusType::receive(uint8_t symbol) {
+void BusType::receive(uint8_t symbol, unsigned int startBitTime) {
   _busState.data(symbol);
-  Arbitration::state state = _arbitration.data(_busState, symbol);
+  Arbitration::state state = _arbitration.data(_busState, symbol, startBitTime);
   switch (state) {
     case Arbitration::restart1:
       _nbrRestarts1++;
@@ -105,7 +144,7 @@ void BusType::receive(uint8_t symbol) {
         uint8_t arbitration_address;
         _client = enhArbitrationRequested(arbitration_address);
         if (_client) {
-          if (_arbitration.start(_busState, arbitration_address)) {   
+          if (_arbitration.start(_busState, arbitration_address, startBitTime)) {   
             _nbrArbitrations++;  
             DEBUG_LOG("BUS START SUCC 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
           }

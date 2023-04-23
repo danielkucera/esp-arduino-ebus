@@ -45,15 +45,21 @@ class BusType
     int _nbrErrors;
   private:
     inline void push    (const data& d);
-           void receive (uint8_t symbol);
+           void receive (uint8_t symbol, unsigned int startBitTime);
     BusState     _busState;
     Arbitration  _arbitration;
     WiFiClient*  _client;
 
 #if USE_ASYNCHRONOUS
+    friend void IRAM_ATTR _receiveHandler();
+    // queue from Bus to read method
     QueueHandle_t _queue;
-    static void OnReceiveCB();
-    static void OnReceiveErrorCB(hardwareSerial_error_t e);
+
+    // queue from receiveHandler to bus
+    QueueHandle_t _serialEventQueue;
+    TaskHandle_t  _serialEventTask;
+    
+    static void readDataFromSoftwareSerial(void *args);
 #else
       std::queue<data> _queue;
 #endif    
