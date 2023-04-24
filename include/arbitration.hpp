@@ -11,15 +11,15 @@
 class Arbitration
 {
     public:
-        enum state {none,  // no arbitration ongoing/not yet completed
+        enum state {none,        // no arbitration ongoing
                     arbitrating, // arbitration ongoing
-                    won1,   // won
-                    won2,   // won
-                    lost1,  // lost
-                    lost2,  // lost
-                    error, // error
-                    restart1,  // restart
-                    restart2,  // restart
+                    won1,        // won
+                    won2,        // won
+                    lost1,       // lost
+                    lost2,       // lost
+                    error,       // error
+                    restart1,    // restart the arbitration
+                    restart2,    // restart the arbitration
                     };
 
         Arbitration()
@@ -34,7 +34,7 @@ class Arbitration
     //           + the bus is not in a state that allows to start arbitration
     //           + another arbitration is already ongoing
     //           + the master address is SYN
-    // = true  : arbitration started. Make sure to pass all bus data to this object through the "data" method
+    // - true  : arbitration started. Make sure to pass all bus data to this object through the "data" method
     bool               start  (BusState& busstate, uint8_t master, unsigned long startBitTime);
 
     // A symbol was received on the bus, what does this do to the arbitration state?

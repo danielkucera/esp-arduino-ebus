@@ -1,9 +1,6 @@
 #include "arbitration.hpp"
 #include "busstate.hpp"
 #include "bus.hpp"
-#define ARB_FIRST_DELAY_US  -50
-#define ARB_SECOND_DELAY_US  -50
-extern unsigned long lastStartBit;
 
 // arbitration is timing sensitive. avoid communicating with WifiClient during arbitration
 // according https://ebus-wiki.org/lib/exe/fetch.php/ebus/spec_test_1_v1_1_1.pdf section 3.2
@@ -11,8 +8,6 @@ extern unsigned long lastStartBit;
 //   bus permission must be in the range of 4300 us - 4456,24 us ."
 // SYN symbol is 4167 us. If we would receive the symbol immediately, 
 // we need to wait (4300 - 4167)=133 us after we received the SYN.
-// rely on the uart to keep the timing
-// just make sure the byte to send is available in time
 bool Arbitration::start(BusState& busstate, uint8_t master, unsigned long startBitTime)
 {   static int arb = 0;
     if (_arbitrating) {
@@ -26,7 +21,6 @@ bool Arbitration::start(BusState& busstate, uint8_t master, unsigned long startB
     }
                 
     // too late if we don't have enough time to send our symbol
-    // assume we need at least 20 us to send the symbol
     unsigned long now = micros();
     unsigned long microsSinceLastSyn =  busstate.microsSinceLastSyn();
     unsigned long timeSinceStartBit = now-startBitTime;

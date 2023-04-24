@@ -7,7 +7,7 @@
 // exactly when the start bit is received. We can use this
 // for the timing of the arbitration. Because SoftwareSerial
 // cannot write and read at the same, we use SoftwareSerial only
-// for reading and for timing we still use HardwareSerial
+// for reading. For writing we still use HardwareSerial
 #if USE_ASYNCHRONOUS
 #include <SoftwareSerial.h>
 SoftwareSerial mySerial;
