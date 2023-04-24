@@ -40,9 +40,9 @@ BusType::~BusType() {
 
 #if USE_ASYNCHRONOUS
 void IRAM_ATTR _receiveHandler() {
-  unsigned long lastStartBit= micros();
-  xQueueSendToBackFromISR(Bus._serialEventQueue, &lastStartBit, 0); 
-  vPortYieldFromISR();
+  unsigned long startBitTime= micros();
+  xQueueSendToBackFromISR(Bus._serialEventQueue, &startBitTime, 0); 
+  portYIELD_FROM_ISR();
 }
 
 void BusType::readDataFromSoftwareSerial(void *args)

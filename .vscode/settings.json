@@ -7,6 +7,20 @@
         "*.tcc": "cpp",
         "fstream": "cpp",
         "istream": "cpp",
-        "ostream": "cpp"
-    }
+        "ostream": "cpp",
+        "array": "cpp",
+        "string": "cpp",
+        "string_view": "cpp",
+        "ranges": "cpp",
+        "functional": "cpp",
+        "cstddef": "cpp",
+        "chrono": "cpp"
+    },
+    "cSpell.words": [
+        "ARBITRATIN",
+        "busstate",
+        "currentstate",
+        "newstate",
+        "synerror"
+    ]
 }
