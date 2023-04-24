@@ -4,6 +4,7 @@
 #include "busstate.hpp"
 #include "arbitration.hpp"
 #include "queue"
+#include "atomic"
 
 // This object retrieves data from the Serial object and let's
 // it flow through the arbitration process. The "read" method 
@@ -35,14 +36,14 @@ class BusType
     size_t write(uint8_t symbol);
     int    availableForWrite();
 
-    int _nbrRestarts1;
-    int _nbrRestarts2;
-    int _nbrArbitrations;
-    int _nbrLost1;
-    int _nbrLost2;
-    int _nbrWon1;
-    int _nbrWon2;
-    int _nbrErrors;
+    std::atomic<int> _nbrRestarts1;
+    std::atomic<int> _nbrRestarts2;
+    std::atomic<int> _nbrArbitrations;
+    std::atomic<int> _nbrLost1;
+    std::atomic<int> _nbrLost2;
+    std::atomic<int> _nbrWon1;
+    std::atomic<int> _nbrWon2;
+    std::atomic<int> _nbrErrors;
   private:
     inline void push    (const data& d);
            void receive (uint8_t symbol, unsigned long startBitTime);

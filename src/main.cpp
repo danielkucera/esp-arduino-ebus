@@ -146,14 +146,14 @@ bool handleStatusServerRequests() {
     client.printf("loop_duration: %ld us\r\n", loopDuration);
     client.printf("max_loop_duration: %ld us\r\n", maxLoopDuration);
     client.printf("version: %s\r\n", AUTO_VERSION);
-    client.printf("nbr arbitrations: %i\r\n", Bus._nbrArbitrations);
-    client.printf("nbr restarts1: %i\r\n", Bus._nbrRestarts1);
-    client.printf("nbr restarts2: %i\r\n", Bus._nbrRestarts2);
-    client.printf("nbr lost1: %i\r\n", Bus._nbrLost1);
-    client.printf("nbr lost2: %i\r\n", Bus._nbrLost2);
-    client.printf("nbr won1: %i\r\n", Bus._nbrWon1);    
-    client.printf("nbr won2: %i\r\n", Bus._nbrWon2);    
-    client.printf("nbr errors: %i\r\n", Bus._nbrErrors);    
+    client.printf("nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
+    client.printf("nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
+    client.printf("nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
+    client.printf("nbr lost1: %i\r\n", (int)Bus._nbrLost1);
+    client.printf("nbr lost2: %i\r\n", (int)Bus._nbrLost2);
+    client.printf("nbr won1: %i\r\n", (int)Bus._nbrWon1);    
+    client.printf("nbr won2: %i\r\n", (int)Bus._nbrWon2);    
+    client.printf("nbr errors: %i\r\n", (int)Bus._nbrErrors);    
 
     client.flush();
     client.stop();
