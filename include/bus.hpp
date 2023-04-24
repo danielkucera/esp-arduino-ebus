@@ -45,7 +45,7 @@ class BusType
     int _nbrErrors;
   private:
     inline void push    (const data& d);
-           void receive (uint8_t symbol, unsigned int startBitTime);
+           void receive (uint8_t symbol, unsigned long startBitTime);
     BusState     _busState;
     Arbitration  _arbitration;
     WiFiClient*  _client;

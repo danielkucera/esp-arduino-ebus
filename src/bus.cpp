@@ -49,7 +49,7 @@ void BusType::readDataFromSoftwareSerial(void *args)
 {
     for(;;) {
         //Waiting for UART event.
-        unsigned int startBitTime = 0;
+        unsigned long startBitTime = 0;
         if(xQueueReceive(Bus._serialEventQueue, (void * )&startBitTime, (portTickType)portMAX_DELAY)) {
           auto avail = mySerial.available();
           if ( !avail) {
@@ -80,7 +80,7 @@ void BusType::begin() {
 
 #if USE_ASYNCHRONOUS
   _queue = xQueueCreate(QUEUE_SIZE, sizeof(data));
-  _serialEventQueue = xQueueCreate(QUEUE_SIZE, sizeof(unsigned int));
+  _serialEventQueue = xQueueCreate(QUEUE_SIZE, sizeof(unsigned long));
   xTaskCreateUniversal(BusType::readDataFromSoftwareSerial, "_serialEventQueue", SERIAL_EVENT_TASK_STACK_SIZE, this, SERIAL_EVENT_TASK_PRIORITY, &_serialEventTask, SERIAL_EVENT_TASK_RUNNING_CORE);
   mySerial.onReceive(_receiveHandler);
 #else
@@ -129,7 +129,7 @@ void BusType::push(const data& d){
 #endif
 }
 
-void BusType::receive(uint8_t symbol, unsigned int startBitTime) {
+void BusType::receive(uint8_t symbol, unsigned long startBitTime) {
   _busState.data(symbol);
   Arbitration::state state = _arbitration.data(_busState, symbol, startBitTime);
   switch (state) {

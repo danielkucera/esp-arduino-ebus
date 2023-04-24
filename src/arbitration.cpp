@@ -13,7 +13,7 @@ extern unsigned long lastStartBit;
 // we need to wait (4300 - 4167)=133 us after we received the SYN.
 // rely on the uart to keep the timing
 // just make sure the byte to send is available in time
-bool Arbitration::start(BusState& busstate, uint8_t master, unsigned int startBitTime)
+bool Arbitration::start(BusState& busstate, uint8_t master, unsigned long startBitTime)
 {   static int arb = 0;
     if (_arbitrating) {
         return false;
@@ -29,7 +29,8 @@ bool Arbitration::start(BusState& busstate, uint8_t master, unsigned int startBi
     // assume we need at least 20 us to send the symbol
     unsigned long now = micros();
     unsigned long microsSinceLastSyn =  busstate.microsSinceLastSyn();
-    if (now - startBitTime > 4456) 
+    unsigned long timeSinceStartBit = now-startBitTime;
+    if (timeSinceStartBit > 4456) 
     {
         // if we are too late, don't try to participate and retry next round
         DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), microsSinceLastSyn);
@@ -39,7 +40,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master, unsigned int startBi
     // When in async mode, we get immediately interrupted when a symbol is received on the bus
     // The earliest allowed to send is 4300 measured from the start bit of the SYN command.
     // This timing is provided by the Bus.
-    int delay = 4300-(now-startBitTime);
+    int delay = 4300-timeSinceStartBit;
     if (delay > 0) {
       delayMicroseconds(delay);
     }
@@ -58,7 +59,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master, unsigned int startBi
     return true;
 }
 
-Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigned int startBitTime) {
+Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigned long startBitTime) {
     if (!_arbitrating){
         return none;
     }
@@ -108,7 +109,8 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigne
             // When in async mode, we get immediately interrupted when a symbol is received on the bus
             // The earliest allowed to send is 4300 measured from the start bit of the SYN command.
             // This timing is provided by the Bus.
-            int delay = 4300-(micros()-startBitTime); 
+            unsigned long timeSinceStartBit = micros()-startBitTime;
+            int delay = 4300-timeSinceStartBit;            
             if (delay > 0) {
                 delayMicroseconds(delay);
             }
