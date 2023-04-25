@@ -3,11 +3,13 @@
 #include "enhanced.hpp"
 #include "queue"
 
-// Using SoftwareSerial we get notified through an interrupt
-// exactly when the start bit is received. We can use this
-// for the timing of the arbitration. Because SoftwareSerial
-// cannot write and read at the same, we use SoftwareSerial only
-// for reading. For writing we still use HardwareSerial
+// For ESP's based on FreeRTOS we can optimize the arbitration timing.
+// With SoftwareSerial we get notified with an callback that the 
+// signal has changed. SoftwareSerial itself can and does know the 
+// exact timing of the start bit. Use this for the timing of the 
+// arbitration. SoftwareSerial seems to have trouble with writing 
+// and reading at the same time. Hence use SoftwareSerial only for 
+// reading. For writing use HardwareSerial.
 #if USE_ASYNCHRONOUS
 #include <SoftwareSerial.h>
 SoftwareSerial mySerial;
@@ -51,14 +53,18 @@ void BusType::readDataFromSoftwareSerial(void *args)
         {
           int avail = mySerial.available();
           if ( !avail) {
-            // this would be a busy wait: delayMicroseconds(1+ MAX_FRAMEBITS * 1000000 / BAUD_RATE);
-            // Need to wait for 1000000 / BAUD_RATE, rounded to the next upper digit
-            // delayMicroseconds is a busy wait, which blocks the CPU to do other things
-            // Instead do the majority of the waiting with vTaskDelay. Because vTaskDelay is switching 
-            // at Tick cycle, doing vTaskDelay(1) can wait anywhere between 1 Tick and 2 Ticks. 
-            // Typically 1 Tick is 1 MS, although it depends on configuration. Here the code assumes 1 Tick is one MiliSecond.
-            // So we can do maximum 3 MS vTaskDelay and do the rest with a busy wait through delayMicroseconds()
-            // which is validated with the next compile time assert
+            // avoid this busy wait: delayMicroseconds(1+ MAX_FRAMEBITS * 1000000 / BAUD_RATE);
+
+            // Need to wait for 1000000 / BAUD_RATE, rounded to the next upper digit.
+            // delayMicroseconds is a busy wait, which blocks the CPU to do other things and 
+            // could be the reason that the Wifi connection is blocked.
+            // Instead of a busy wait, do the majority of the waiting with vTaskDelay. 
+            // Because vTaskDelay is switching at Tick cycle, doing vTaskDelay(1) can wait 
+            // anywhere between 1 Tick and 2 Ticks. Typically 1 Tick is 1 MiliSecond, although it 
+            // depends on configuration. Do maximum 3 MiliSeconds (Ticks) with vTaskDelay and do 
+            // the rest with a busy wait through delayMicroseconds()
+            
+            // Validate 1 Tick is 1 MiliSecond with a compile time assert
             static_assert (pdMS_TO_TICKS(1) == 1);
 
             unsigned int begin = micros();
