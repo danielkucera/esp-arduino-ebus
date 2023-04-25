@@ -4,8 +4,13 @@
 #include "busstate.hpp"
 #include "arbitration.hpp"
 #include "queue"
-#include "atomic"
 
+#ifdef ESP32
+#include "atomic"
+#define ATOMIC_INT std::atomic<int>
+#else
+#define ATOMIC_INT int
+#endif
 // This object retrieves data from the Serial object and let's
 // it flow through the arbitration process. The "read" method 
 // will return data with meta information that tells what should 
@@ -36,14 +41,15 @@ class BusType
     size_t write(uint8_t symbol);
     int    availableForWrite();
 
-    std::atomic<int> _nbrRestarts1;
-    std::atomic<int> _nbrRestarts2;
-    std::atomic<int> _nbrArbitrations;
-    std::atomic<int> _nbrLost1;
-    std::atomic<int> _nbrLost2;
-    std::atomic<int> _nbrWon1;
-    std::atomic<int> _nbrWon2;
-    std::atomic<int> _nbrErrors;
+    // std::atomic seems not well supported on esp12e, besides it is also not needed there
+    ATOMIC_INT _nbrRestarts1;
+    ATOMIC_INT _nbrRestarts2;
+    ATOMIC_INT _nbrArbitrations;
+    ATOMIC_INT _nbrLost1;
+    ATOMIC_INT _nbrLost2;
+    ATOMIC_INT _nbrWon1;
+    ATOMIC_INT _nbrWon2;
+    ATOMIC_INT _nbrErrors;
   private:
     inline void push    (const data& d);
            void receive (uint8_t symbol, unsigned long startBitTime);
