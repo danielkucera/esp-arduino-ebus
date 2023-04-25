@@ -37,31 +37,41 @@ BusType::~BusType() {
   end();
 }
 
-
 #if USE_ASYNCHRONOUS
-void IRAM_ATTR _receiveHandler() {
-  unsigned long startBitTime= micros();
-  xQueueSendToBackFromISR(Bus._serialEventQueue, &startBitTime, 0); 
-  portYIELD_FROM_ISR();
+void IRAM_ATTR BusType::receiveHandler() {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  xTaskNotifyFromISR( Bus._serialEventTask, 0, eNoAction, &xHigherPriorityTaskWoken );
+  portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
 }
 
 void BusType::readDataFromSoftwareSerial(void *args)
 {
     for(;;) {
-        //Waiting for UART event.
-        unsigned long startBitTime = 0;
-        if(xQueueReceive(Bus._serialEventQueue, (void * )&startBitTime, (portTickType)portMAX_DELAY)) {
-          auto avail = mySerial.available();
+        BaseType_t r=xTaskNotifyWait(0, 0, 0, portMAX_DELAY);
+        {
+          int avail = mySerial.available();
           if ( !avail) {
-            // event fired on start bit, wait until first stop bit of longest frame
-            delayMicroseconds(1+ MAX_FRAMEBITS * 1000000 / BAUD_RATE);
+            // this would be a busy wait: delayMicroseconds(1+ MAX_FRAMEBITS * 1000000 / BAUD_RATE);
+            // Need to wait for 1000000 / BAUD_RATE, rounded to the next upper digit
+            // delayMicroseconds is a busy wait, which blocks the CPU to do other things
+            // Instead do the majority of the waiting with vTaskDelay. Because vTaskDelay is switching 
+            // at Tick cycle, doing vTaskDelay(1) can wait anywhere between 1 Tick and 2 Ticks. 
+            // Typically 1 Tick is 1 MS, although it depends on configuration. Here the code assumes 1 Tick is one MiliSecond.
+            // So we can do maximum 3 MS vTaskDelay and do the rest with a busy wait through delayMicroseconds()
+            // which is validated with the next compile time assert
+            static_assert (pdMS_TO_TICKS(1) == 1);
+
+            unsigned int begin = micros();
+            vTaskDelay(pdMS_TO_TICKS(3));
+            unsigned int end = micros();
+            delayMicroseconds(4167-(end - begin));
             avail = mySerial.available();
           }
           if (avail){
               uint8_t symbol = mySerial.read();
-              Bus.receive(symbol, startBitTime);
-          }        
-       }
+              Bus.receive(symbol, mySerial.readStartBitTimeStamp());
+          }  
+        }
     }
     vTaskDelete(NULL);
 }
@@ -71,6 +81,7 @@ void BusType::begin() {
 
 #ifdef ESP32
   Serial.begin(2400, SERIAL_8N1, -1, 20); // used for writing
+  mySerial.enableStartBitTimeStampRecording(true);
   mySerial.begin(2400, SWSERIAL_8N1, 21, -1); // used for reading
   mySerial.enableTx(false);
   mySerial.enableIntTx(false);
@@ -80,9 +91,9 @@ void BusType::begin() {
 
 #if USE_ASYNCHRONOUS
   _queue = xQueueCreate(QUEUE_SIZE, sizeof(data));
-  _serialEventQueue = xQueueCreate(QUEUE_SIZE, sizeof(unsigned long));
   xTaskCreateUniversal(BusType::readDataFromSoftwareSerial, "_serialEventQueue", SERIAL_EVENT_TASK_STACK_SIZE, this, SERIAL_EVENT_TASK_PRIORITY, &_serialEventTask, SERIAL_EVENT_TASK_RUNNING_CORE);
-  mySerial.onReceive(_receiveHandler);
+  
+  mySerial.onReceive(BusType::receiveHandler);
 #else
   Serial.setRxBufferSize(RXBUFFERSIZE);
 #endif    
@@ -91,7 +102,6 @@ void BusType::begin() {
 void BusType::end() {
 #if USE_ASYNCHRONOUS
   vQueueDelete(_queue);
-  vQueueDelete(_serialEventQueue);
 #endif 
 }
 

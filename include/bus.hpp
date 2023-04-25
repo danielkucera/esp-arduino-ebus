@@ -52,12 +52,13 @@ class BusType
     WiFiClient*  _client;
 
 #if USE_ASYNCHRONOUS
-    friend void IRAM_ATTR _receiveHandler();
+    // handler to be notified when there is signal change on the serial input
+    static void IRAM_ATTR receiveHandler();
+
     // queue from Bus to read method
     QueueHandle_t _queue;
 
-    // queue from receiveHandler to bus
-    QueueHandle_t _serialEventQueue;
+    // task to read bytes form the serial object and process them with receive methods
     TaskHandle_t  _serialEventTask;
     
     static void readDataFromSoftwareSerial(void *args);

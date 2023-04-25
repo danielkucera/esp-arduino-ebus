@@ -27,7 +27,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master, unsigned long startB
     if (timeSinceStartBit > 4456) 
     {
         // if we are too late, don't try to participate and retry next round
-        DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), microsSinceLastSyn);
+        DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), timeSinceStartBit);
         return false;
     }
 #if USE_ASYNCHRONOUS
