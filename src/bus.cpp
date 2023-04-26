@@ -60,7 +60,7 @@ void BusType::readDataFromSoftwareSerial(void *args)
             // could be the reason that the Wifi connection is blocked.
             // Instead of a busy wait, do the majority of the waiting with vTaskDelay. 
             // Because vTaskDelay is switching at Tick cycle, doing vTaskDelay(1) can wait 
-            // anywhere between 1 Tick and 2 Ticks. Typically 1 Tick is 1 MiliSecond, although it 
+            // anywhere between 0 Tick and 1 Ticks. Typically 1 Tick is 1 MiliSecond, although it 
             // depends on configuration. Do maximum 3 MiliSeconds (Ticks) with vTaskDelay and do 
             // the rest with a busy wait through delayMicroseconds()
             
