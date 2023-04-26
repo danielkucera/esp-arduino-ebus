@@ -68,10 +68,17 @@ void BusType::readDataFromSoftwareSerial(void *args)
             static_assert (pdMS_TO_TICKS(1) == 1);
 
             unsigned int begin = micros();
-            vTaskDelay(pdMS_TO_TICKS(3));
-            unsigned int end = micros();
-            delayMicroseconds(4167-(end - begin));
-            avail = mySerial.available();
+            int count = 3;
+            while (!avail && count > 0) {
+               vTaskDelay(pdMS_TO_TICKS(1));
+               avail = mySerial.available();
+               count --;
+            }
+            if (!avail) {
+              unsigned int end = micros();
+              delayMicroseconds(4167-(end - begin));
+              avail = mySerial.available();
+            }
           }
           if (avail){
               uint8_t symbol = mySerial.read();
