@@ -106,8 +106,17 @@ void BusType::begin() {
 }
 
 void BusType::end() {
+  Serial.end();
+#ifdef ESP32
+  mySerial.end();
+#endif
+
 #if USE_ASYNCHRONOUS
   vQueueDelete(_queue);
+  _queue=0;
+  
+  vTaskDelete(_serialEventTask);
+  _serialEventTask=0;
 #endif 
 }
 

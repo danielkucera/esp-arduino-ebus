@@ -121,6 +121,10 @@ void setup() {
   wifiServerEnh.begin();
   statusServer.begin();
 
+  // Stop the Bus when the OTA update starts, because it interferes with the OTA process
+  ArduinoOTA.onStart([]() {
+    Bus.end();
+  });
   ArduinoOTA.begin();
 
   MDNS.end();
@@ -153,7 +157,7 @@ bool handleStatusServerRequests() {
     client.printf("nbr lost2: %i\r\n", (int)Bus._nbrLost2);
     client.printf("nbr won1: %i\r\n", (int)Bus._nbrWon1);    
     client.printf("nbr won2: %i\r\n", (int)Bus._nbrWon2);    
-    client.printf("nbr errors: %i\r\n", (int)Bus._nbrErrors);    
+    client.printf("nbr errors: %i\r\n", (int)Bus._nbrErrors);      
 
     client.flush();
     client.stop();
