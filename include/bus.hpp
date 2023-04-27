@@ -50,6 +50,7 @@ class BusType
     ATOMIC_INT _nbrWon1;
     ATOMIC_INT _nbrWon2;
     ATOMIC_INT _nbrErrors;
+    ATOMIC_INT _nbrLate;
   private:
     inline void push    (const data& d);
            void receive (uint8_t symbol, unsigned long startBitTime);

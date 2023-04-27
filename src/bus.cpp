@@ -42,17 +42,20 @@ BusType::~BusType() {
 #if USE_ASYNCHRONOUS
 void IRAM_ATTR BusType::receiveHandler() {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-  xTaskNotifyFromISR( Bus._serialEventTask, 0, eNoAction, &xHigherPriorityTaskWoken );
+  vTaskNotifyGiveFromISR( Bus._serialEventTask, &xHigherPriorityTaskWoken );
   portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
 }
 
 void BusType::readDataFromSoftwareSerial(void *args)
 {
     for(;;) {
-        BaseType_t r=xTaskNotifyWait(0, 0, 0, portMAX_DELAY);
+        BaseType_t r=ulTaskNotifyTake(pdFALSE, portMAX_DELAY);
         {
+          // For SoftwareSerial; 
+          // The method "available" always evaluates all the interrupts received
+          // The method "read" only evaluates the interrupts received if there is no byte available
           int avail = mySerial.available();
-          if ( !avail) {
+          if ( !avail && r==1) {
             // avoid this busy wait: delayMicroseconds(1+ MAX_FRAMEBITS * 1000000 / BAUD_RATE);
 
             // Need to wait for 1000000 / BAUD_RATE, rounded to the next upper digit.
@@ -60,23 +63,24 @@ void BusType::readDataFromSoftwareSerial(void *args)
             // could be the reason that the Wifi connection is blocked.
             // Instead of a busy wait, do the majority of the waiting with vTaskDelay. 
             // Because vTaskDelay is switching at Tick cycle, doing vTaskDelay(1) can wait 
-            // anywhere between 0 Tick and 1 Ticks. Typically 1 Tick is 1 MilliSecond, although it 
-            // depends on configuration. Do 4 MilliSeconds (Ticks) with vTaskDelay and do 
-            // the rest with a busy wait through delayMicroseconds()
+            // anywhere between 0 Tick and 1 Ticks. On esp32 Arduino  1 Tick is 1 MilliSecond, 
+            // although it depends on configuration. Do 4 MilliSeconds (Ticks) with vTaskDelay 
+            // and do the rest with a busy wait through delayMicroseconds()
             
             // Validate 1 Tick is 1 MilliSecond with a compile time assert
             static_assert (pdMS_TO_TICKS(1) == 1);
 
             unsigned long begin = micros();
-            vTaskDelay(4);
-            unsigned long end = micros();
-            unsigned long delay = end - begin;
-            if (delay < 4167)
-              delayMicroseconds(4167-delay);
+            vTaskDelay(pdMS_TO_TICKS(4));
+            unsigned long delayed = micros() - begin;
+
+            if ( delayed < 4167) {
+              delayMicroseconds(4167-delayed);
+            }
             avail = mySerial.available();
           }
           if (avail){
-              uint8_t symbol = mySerial.read();
+              int symbol = mySerial.read();
               Bus.receive(symbol, mySerial.readStartBitTimeStamp());
           }  
         }
@@ -171,12 +175,15 @@ void BusType::receive(uint8_t symbol, unsigned long startBitTime) {
         uint8_t arbitration_address;
         _client = enhArbitrationRequested(arbitration_address);
         if (_client) {
-          if (_arbitration.start(_busState, arbitration_address, startBitTime)) {   
-            _nbrArbitrations++;  
-            DEBUG_LOG("BUS START SUCC 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
-          }
-          else {
-            DEBUG_LOG("BUS START WAIT 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
+          switch (_arbitration.start(_busState, arbitration_address, startBitTime)) {
+            case Arbitration::started:
+              _nbrArbitrations++;
+              DEBUG_LOG("BUS START SUCC 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
+            break;
+            case Arbitration::late:
+              _nbrLate++;
+            case Arbitration::not_started:
+              DEBUG_LOG("BUS START WAIT 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
           }
         }
         push({false, RECEIVED, symbol, 0, _client}); // send to everybody. ebusd needs the SYN to get in the right mood

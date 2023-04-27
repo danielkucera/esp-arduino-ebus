@@ -157,6 +157,7 @@ bool handleStatusServerRequests() {
     client.printf("nbr lost2: %i\r\n", (int)Bus._nbrLost2);
     client.printf("nbr won1: %i\r\n", (int)Bus._nbrWon1);    
     client.printf("nbr won2: %i\r\n", (int)Bus._nbrWon2);    
+    client.printf("nbr late: %i\r\n", (int)Bus._nbrLate);      
     client.printf("nbr errors: %i\r\n", (int)Bus._nbrErrors);      
 
     client.flush();

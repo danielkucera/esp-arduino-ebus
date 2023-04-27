@@ -8,16 +8,16 @@
 //   bus permission must be in the range of 4300 us - 4456,24 us ."
 // SYN symbol is 4167 us. If we would receive the symbol immediately, 
 // we need to wait (4300 - 4167)=133 us after we received the SYN.
-bool Arbitration::start(BusState& busstate, uint8_t master, unsigned long startBitTime)
+Arbitration::result Arbitration::start(BusState& busstate, uint8_t master, unsigned long startBitTime)
 {   static int arb = 0;
     if (_arbitrating) {
-        return false;
+        return not_started;
     }
     if (master == SYN) {
-        return false;
+        return not_started;
     }
     if (busstate._state != BusState::eReceivedFirstSYN) {
-        return false;
+        return not_started;
     }
                 
     // too late if we don't have enough time to send our symbol
@@ -28,7 +28,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master, unsigned long startB
     {
         // if we are too late, don't try to participate and retry next round
         DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), timeSinceStartBit);
-        return false;
+        return late;
     }
 #if USE_ASYNCHRONOUS
     // When in async mode, we get immediately interrupted when a symbol is received on the bus
@@ -50,7 +50,7 @@ bool Arbitration::start(BusState& busstate, uint8_t master, unsigned long startB
     _arbitrationAddress = master;
     _arbitrating = true;
     _participateSecond = false;
-    return true;
+    return started;
 }
 
 Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigned long startBitTime) {
