@@ -10,7 +10,7 @@
 // arbitration. SoftwareSerial seems to have trouble with writing 
 // and reading at the same time. Hence use SoftwareSerial only for 
 // reading. For writing use HardwareSerial.
-#if USE_ASYNCHRONOUS
+#if USE_SOFTWARE_SERIAL
 #include <SoftwareSerial.h>
 SoftwareSerial mySerial;
 #endif
@@ -91,14 +91,24 @@ void BusType::readDataFromSoftwareSerial(void *args)
 
 void BusType::begin() {
 
-#ifdef ESP32
+#if USE_SOFTWARE_SERIAL
+ #if defined(ESP32)
   Serial.begin(2400, SERIAL_8N1, -1, 20); // used for writing
+ #elif defined(ESP8266)
+  Serial.begin(2400, SERIAL_8N1, SERIAL_TX_ONLY);
+ #endif
   mySerial.enableStartBitTimeStampRecording(true);
   mySerial.begin(2400, SWSERIAL_8N1, 21, -1); // used for reading
   mySerial.enableTx(false);
   mySerial.enableIntTx(false);
-#elif defined(ESP8266)
+#else
+ #if defined(ESP32)
+  Serial.begin(2400, SERIAL_8N1, 21, 20); // used for writing
+  Serial.setRxFIFOFull(1);
+ #elif defined(ESP8266)
   Serial.begin(2400);
+ #endif
+  Serial.setRxBufferSize(RXBUFFERSIZE);
 #endif
 
 #if USE_ASYNCHRONOUS
@@ -106,14 +116,12 @@ void BusType::begin() {
   xTaskCreateUniversal(BusType::readDataFromSoftwareSerial, "_serialEventQueue", SERIAL_EVENT_TASK_STACK_SIZE, this, SERIAL_EVENT_TASK_PRIORITY, &_serialEventTask, SERIAL_EVENT_TASK_RUNNING_CORE);
   
   mySerial.onReceive(BusType::receiveHandler);
-#else
-  Serial.setRxBufferSize(RXBUFFERSIZE);
 #endif    
 }
 
 void BusType::end() {
   Serial.end();
-#ifdef ESP32
+#if USE_SOFTWARE_SERIAL
   mySerial.end();
 #endif
 
@@ -139,10 +147,17 @@ bool BusType::read(data& d) {
 #if USE_ASYNCHRONOUS
     return xQueueReceive(_queue, &d, 0) == pdTRUE; 
 #else
+#if USE_SOFTWARE_SERIAL
+    if (mySerial.available()){
+        uint8_t symbol = mySerial.read();
+        receive(symbol, mySerial.readStartBitTimeStamp());
+    }
+#else
     if (Serial.available()){
         uint8_t symbol = Serial.read();
         receive(symbol, micros());
     }
+#endif
     if (_queue.size() > 0) {
         d = _queue.front();
         _queue.pop();

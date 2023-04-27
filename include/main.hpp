@@ -13,11 +13,12 @@
 
 
 #ifdef ESP32
-#define USE_ASYNCHRONOUS 1
-// https://esp32.com/viewtopic.php?t=19788
-#define AVAILABLE_THRESHOLD 0
+#define USE_SOFTWARE_SERIAL 1
+#define USE_ASYNCHRONOUS 1    // requires USE_SOFTWARE_SERIAL
+#define AVAILABLE_THRESHOLD 0 // https://esp32.com/viewtopic.php?t=19788
 #else
-#define USE_ASYNCHRONOUS 0
+#define USE_SOFTWARE_SERIAL 1
+#define USE_ASYNCHRONOUS 0    // requires USE_SOFTWARE_SERIAL
 #define AVAILABLE_THRESHOLD 1
 #endif
 

@@ -143,6 +143,7 @@ bool handleStatusServerRequests() {
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
     client.printf("async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
+    client.printf("software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
     client.printf("free_heap: %d B\n", ESP.getFreeHeap());
