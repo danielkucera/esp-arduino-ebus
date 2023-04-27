@@ -60,17 +60,19 @@ void BusType::readDataFromSoftwareSerial(void *args)
             // could be the reason that the Wifi connection is blocked.
             // Instead of a busy wait, do the majority of the waiting with vTaskDelay. 
             // Because vTaskDelay is switching at Tick cycle, doing vTaskDelay(1) can wait 
-            // anywhere between 0 Tick and 1 Ticks. Typically 1 Tick is 1 MiliSecond, although it 
-            // depends on configuration. Do maximum 3 MiliSeconds (Ticks) with vTaskDelay and do 
+            // anywhere between 0 Tick and 1 Ticks. Typically 1 Tick is 1 MilliSecond, although it 
+            // depends on configuration. Do 4 MilliSeconds (Ticks) with vTaskDelay and do 
             // the rest with a busy wait through delayMicroseconds()
             
-            // Validate 1 Tick is 1 MiliSecond with a compile time assert
+            // Validate 1 Tick is 1 MilliSecond with a compile time assert
             static_assert (pdMS_TO_TICKS(1) == 1);
 
-            unsigned int begin = micros();
-            vTaskDelay(3);
-            unsigned int end = micros();
-            delayMicroseconds(4167-(end - begin));
+            unsigned long begin = micros();
+            vTaskDelay(4);
+            unsigned long end = micros();
+            unsigned long delay = end - begin;
+            if (delay < 4167)
+              delayMicroseconds(4167-delay);
             avail = mySerial.available();
           }
           if (avail){
