@@ -33,8 +33,9 @@ Arbitration::result Arbitration::start(BusState& busstate, uint8_t master, unsig
 #if USE_ASYNCHRONOUS
     // When in async mode, we get immediately interrupted when a symbol is received on the bus
     // The earliest allowed to send is 4300 measured from the start bit of the SYN command.
-    // We receive the exact flange of the startbit, wait for that time. Still we need to 
-    // give time to the uart to put the byte on the bus and testing has shown this requires 700 micros
+    // We receive the exact flange of the startbit, use that to calculate the exact time to wait.
+    // Then subtract time from the wait to allow the uart to put the byte on the bus. Testing
+    // has shown this requires about 700 micros on the esp32-c3.
     int delay = 4300-timeSinceStartBit-700;
     if (delay > 0) {
       delayMicroseconds(delay);
@@ -103,8 +104,9 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigne
 #if USE_ASYNCHRONOUS
             // When in async mode, we get immediately interrupted when a symbol is received on the bus
             // The earliest allowed to send is 4300 measured from the start bit of the SYN command.
-            // We receive the exact flange of the startbit, wait for that time. Still we need to 
-            // give time to the uart to put the byte on the bus and testing has shown this requires 700 micros
+            // We receive the exact flange of the startbit, use that to calculate the exact time to wait.
+            // Then subtract time from the wait to allow the uart to put the byte on the bus. Testing
+            // has shown this requires about 700 micros on the esp32-c3.
             unsigned long timeSinceStartBit = micros()-startBitTime;
             int delay = 4300-timeSinceStartBit-700;   
             if (delay > 0) {

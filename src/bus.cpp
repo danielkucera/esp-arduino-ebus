@@ -83,10 +83,11 @@ void BusType::readDataFromSoftwareSerial(void *args)
             unsigned long delayed = micros() - begin;
 
             // Loop till the maximum duration of 1 byte (4167 micros from begin)
-            // and check every 500 micros, using combination of delayMicroseconds(500); and
-            // vTaskDelay(pdMS_TO_TICKS(1)) . This vTaskDelay will wait till for the next timeslice,
-            // which is typically about 500 micros away. The vTaskDelay's make sure we are in sync
-            // on each tick. 
+            // and check every 500 micros, using combination of delayMicroseconds(500) and
+            // vTaskDelay(pdMS_TO_TICKS(1)) . The vTaskDelay will wait till the end of the 
+            // current timeslice, which is typically about 500 micros away, because the 
+            // previous vTaskDelay makes sure the code is already synced to this tick
+            // Assumption: time needed for mySerial.available() is less than 500 micros.
             while (delayed < 4167 && !avail) {
               if (4167 - delayed > 1000) { // Need to wait more than 1000 micros?
                 delayMicroseconds(500);
