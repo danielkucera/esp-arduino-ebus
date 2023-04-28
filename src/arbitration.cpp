@@ -33,8 +33,9 @@ Arbitration::result Arbitration::start(BusState& busstate, uint8_t master, unsig
 #if USE_ASYNCHRONOUS
     // When in async mode, we get immediately interrupted when a symbol is received on the bus
     // The earliest allowed to send is 4300 measured from the start bit of the SYN command.
-    // This timing is provided by the Bus.
-    int delay = 4300-timeSinceStartBit;
+    // We receive the exact flange of the startbit, wait for that time. Still we need to 
+    // give time to the uart to put the byte on the bus and testing has shown this requires 700 micros
+    int delay = 4300-timeSinceStartBit-700;
     if (delay > 0) {
       delayMicroseconds(delay);
     }
@@ -102,9 +103,10 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigne
 #if USE_ASYNCHRONOUS
             // When in async mode, we get immediately interrupted when a symbol is received on the bus
             // The earliest allowed to send is 4300 measured from the start bit of the SYN command.
-            // This timing is provided by the Bus.
+            // We receive the exact flange of the startbit, wait for that time. Still we need to 
+            // give time to the uart to put the byte on the bus and testing has shown this requires 700 micros
             unsigned long timeSinceStartBit = micros()-startBitTime;
-            int delay = 4300-timeSinceStartBit;            
+            int delay = 4300-timeSinceStartBit-700;   
             if (delay > 0) {
                 delayMicroseconds(delay);
             }

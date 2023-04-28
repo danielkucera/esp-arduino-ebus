@@ -64,20 +64,44 @@ void BusType::readDataFromSoftwareSerial(void *args)
             // Instead of a busy wait, do the majority of the waiting with vTaskDelay. 
             // Because vTaskDelay is switching at Tick cycle, doing vTaskDelay(1) can wait 
             // anywhere between 0 Tick and 1 Ticks. On esp32 Arduino  1 Tick is 1 MilliSecond, 
-            // although it depends on configuration. Do 4 MilliSeconds (Ticks) with vTaskDelay 
-            // and do the rest with a busy wait through delayMicroseconds()
+            // although it depends on configuration. 
             
             // Validate 1 Tick is 1 MilliSecond with a compile time assert
             static_assert (pdMS_TO_TICKS(1) == 1);
 
+            // We need to poll mySerial for availability of a byte. Testing has shown that from 1 millisecond
+            // onward we need to check for incoming data every 500 micros. We have to wait using vTaskDelay
+            // to allow the processor to do other things, however that only allows millisecond resolution.
+            // To work around, split the polling in two sections:
+            // 1) Wait for 500 micros using busy wait with delayMicroseconds
+            // 2) Wait the rest of the timeslice, which will be about 500 micros, using vTaskDelay
             unsigned long begin = micros();
-            vTaskDelay(pdMS_TO_TICKS(4));
+            vTaskDelay(pdMS_TO_TICKS(1));
+            avail = mySerial.available();
+
+            // How was the delay until now?
             unsigned long delayed = micros() - begin;
 
-            if ( delayed < 4167) {
-              delayMicroseconds(4167-delayed);
+            // Loop till the maximum duration of 1 byte (4167 micros from begin)
+            // and check every 500 micros, using combination of delayMicroseconds(500); and
+            // vTaskDelay(pdMS_TO_TICKS(1)) . This vTaskDelay will wait till for the next timeslice,
+            // which is typically about 500 micros away. The vTaskDelay's make sure we are in sync
+            // on each tick. 
+            while (delayed < 4167 && !avail) {
+              if (4167 - delayed > 1000) { // Need to wait more than 1000 micros?
+                delayMicroseconds(500);
+                avail = mySerial.available();
+                if (!avail) {
+                  vTaskDelay(pdMS_TO_TICKS(1));
+                }                
+              }
+              else { // Otherwise spend the remaining wait with delayMicroseconds
+                unsigned long delay = 4167-delayed<500?4167-delayed:500;
+                delayMicroseconds(delay);
+              }
+              avail = mySerial.available();
+              delayed = micros() - begin;
             }
-            avail = mySerial.available();
           }
           if (avail){
               int symbol = mySerial.read();
