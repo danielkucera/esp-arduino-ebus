@@ -123,7 +123,7 @@ void BusType::begin() {
   Serial.begin(2400, SERIAL_8N1, SERIAL_TX_ONLY);
  #endif
   mySerial.enableStartBitTimeStampRecording(true);
-  mySerial.begin(2400, SWSERIAL_8N1, 21, -1); // used for reading
+  mySerial.begin(2400, SWSERIAL_8N1, 21, -1, false, RXBUFFERSIZE); // used for reading
   mySerial.enableTx(false);
   mySerial.enableIntTx(false);
 #else
