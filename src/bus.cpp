@@ -68,6 +68,7 @@ void BusType::readDataFromSoftwareSerial(void *args)
             
             // Validate 1 Tick is 1 MilliSecond with a compile time assert
             static_assert (pdMS_TO_TICKS(1) == 1);
+            static_assert (sizeof(uint32_t) == sizeof(unsigned long));
 
             // We need to poll mySerial for availability of a byte. Testing has shown that from 1 millisecond
             // onward we need to check for incoming data every 500 micros. We have to wait using vTaskDelay
@@ -218,18 +219,18 @@ void BusType::receive(uint8_t symbol, unsigned long startBitTime) {
           switch (_arbitration.start(_busState, arbitration_address, startBitTime)) {
             case Arbitration::started:
               _nbrArbitrations++;
-              DEBUG_LOG("BUS START SUCC 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
+              DEBUG_LOG("BUS START SUCC 0x%02x %lu us\n", symbol, _busState.microsSinceLastSyn());
             break;
             case Arbitration::late:
               _nbrLate++;
             case Arbitration::not_started:
-              DEBUG_LOG("BUS START WAIT 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
+              DEBUG_LOG("BUS START WAIT 0x%02x %lu us\n", symbol, _busState.microsSinceLastSyn());
           }
         }
         push({false, RECEIVED, symbol, 0, _client}); // send to everybody. ebusd needs the SYN to get in the right mood
         break;
     case Arbitration::arbitrating:
-        DEBUG_LOG("BUS ARBITRATIN 0x%02x %ld us\n", symbol, _busState.microsSinceLastSyn());
+        DEBUG_LOG("BUS ARBITRATIN 0x%02x %lu us\n", symbol, _busState.microsSinceLastSyn());
         push({false, RECEIVED, symbol, _client, _client}); // do not send to arbitration client
         break;
     case Arbitration::won1:
@@ -239,7 +240,7 @@ void BusType::receive(uint8_t symbol, unsigned long startBitTime) {
         _nbrWon2++;
         WON:
         enhArbitrationDone();
-        DEBUG_LOG("BUS SEND WON   0x%02x %ld us\n", _busState._master, _busState.microsSinceLastSyn());
+        DEBUG_LOG("BUS SEND WON   0x%02x %lu us\n", _busState._master, _busState.microsSinceLastSyn());
         push({true,  STARTED,  _busState._master, _client, _client}); // send only to the arbitrating client
         push({false, RECEIVED, symbol,            _client, _client}); // do not send to arbitrating client
         _client=0;
@@ -251,7 +252,7 @@ void BusType::receive(uint8_t symbol, unsigned long startBitTime) {
         _nbrLost2++;
         LOST:
         enhArbitrationDone();
-        DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %ld us\n", _busState._master, _busState._symbol, _busState.microsSinceLastSyn());
+        DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %lu us\n", _busState._master, _busState._symbol, _busState.microsSinceLastSyn());
         push({true,  FAILED,   _busState._master, _client, _client}); // send only to the arbitrating client
         push({false, RECEIVED, symbol,            0,       _client}); // send to everybody    
         _client=0;

@@ -27,7 +27,7 @@ Arbitration::result Arbitration::start(BusState& busstate, uint8_t master, unsig
     if (timeSinceStartBit > 4456) 
     {
         // if we are too late, don't try to participate and retry next round
-        DEBUG_LOG("ARB LATE 0x%02x %ld us\n", Serial.peek(), timeSinceStartBit);
+        DEBUG_LOG("ARB LATE 0x%02x %lu us\n", Serial.peek(), timeSinceStartBit);
         return late;
     }
 #if USE_ASYNCHRONOUS
@@ -45,9 +45,9 @@ Arbitration::result Arbitration::start(BusState& busstate, uint8_t master, unsig
     // Do logging of the ARB START message after writing the symbol, so enabled or disabled 
     // logging does not affect timing calculations.
 #if USE_ASYNCHRONOUS
-    DEBUG_LOG("ARB START %04i 0x%02x %ld us %i  us\n", arb++, master, microsSinceLastSyn, delay);
+    DEBUG_LOG("ARB START %04i 0x%02x %lu us %i  us\n", arb++, master, microsSinceLastSyn, delay);
 #else
-    DEBUG_LOG("ARB START %04i 0x%02x %ld us\n", arb++, master, microsSinceLastSyn);
+    DEBUG_LOG("ARB START %04i 0x%02x %lu us\n", arb++, master, microsSinceLastSyn);
 #endif
     _arbitrationAddress = master;
     _arbitrating = true;
@@ -66,7 +66,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigne
     case BusState::eStartupSymbolAfterFirstSyn:
     case BusState::eStartupSecondSyn:
     case BusState::eReceivedFirstSYN:
-        DEBUG_LOG("ARB ERROR      0x%02x 0x%02x 0x%02x %ld us %ld us\n", busstate._master, busstate._symbol, symbol, busstate.microsSinceLastSyn(),  busstate.microsSincePreviousSyn());
+        DEBUG_LOG("ARB ERROR      0x%02x 0x%02x 0x%02x %lu us %lu us\n", busstate._master, busstate._symbol, symbol, busstate.microsSinceLastSyn(),  busstate.microsSincePreviousSyn());
         _arbitrating = false;
         // Sometimes a second SYN is received instead of an address, either
         // after having started the arbitration, or after participating in
@@ -83,7 +83,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigne
         return error;
     case BusState::eReceivedAddressAfterFirstSYN: // did we win 1st round of abitration?
         if (symbol == _arbitrationAddress) {
-            DEBUG_LOG("ARB WON1       0x%02x %ld us\n", symbol, busstate.microsSinceLastSyn());
+            DEBUG_LOG("ARB WON1       0x%02x %lu us\n", symbol, busstate.microsSinceLastSyn());
             _arbitrating = false;
             _restartCount = 0;
             return won1; // we won; nobody else will write to the bus
@@ -92,7 +92,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigne
             _participateSecond = true; // participate in second round of arbitration if we have the same priority class
         }
         else {
-            DEBUG_LOG("ARB LOST1      0x%02x %ld us\n", symbol, busstate.microsSinceLastSyn());
+            DEBUG_LOG("ARB LOST1      0x%02x %lu us\n", symbol, busstate.microsSinceLastSyn());
             // arbitration might be ongoing between other bus participants, so we cannot yet know what 
             // the winning master is. Need to wait for eBusy
         }
@@ -116,21 +116,21 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigne
             // Do logging of the ARB START message after writing the symbol, so enabled or disabled 
             // logging does not affect timing calculations.     
             Bus.write(_arbitrationAddress);
-            DEBUG_LOG("ARB MASTER2    0x%02x %ld us\n", _arbitrationAddress, microsSinceLastSyn);
+            DEBUG_LOG("ARB MASTER2    0x%02x %lu us\n", _arbitrationAddress, microsSinceLastSyn);
         }
         else {
-            DEBUG_LOG("ARB SKIP       0x%02x %ld us\n", _arbitrationAddress, busstate.microsSinceLastSyn());
+            DEBUG_LOG("ARB SKIP       0x%02x %lu us\n", _arbitrationAddress, busstate.microsSinceLastSyn());
         }
         return arbitrating;
     case BusState::eReceivedAddressAfterSecondSYN: // did we win 2nd round of arbitration?
         if (symbol == _arbitrationAddress) {
-            DEBUG_LOG("ARB WON2       0x%02x %ld us\n", symbol, busstate.microsSinceLastSyn());
+            DEBUG_LOG("ARB WON2       0x%02x %lu us\n", symbol, busstate.microsSinceLastSyn());
             _arbitrating = false;
             _restartCount = 0;
             return won2; // we won; nobody else will write to the bus
         }
         else {
-            DEBUG_LOG("ARB LOST2      0x%02x %ld us\n", symbol, busstate.microsSinceLastSyn());
+            DEBUG_LOG("ARB LOST2      0x%02x %lu us\n", symbol, busstate.microsSinceLastSyn());
             // we now know which address has won and we could exit here. 
             // but it is easier to wait for eBusy, so after the while loop, the 
             // "lost" state can be handled the same as when somebody lost in the first round

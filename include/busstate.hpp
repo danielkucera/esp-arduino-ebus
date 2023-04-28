@@ -98,7 +98,7 @@ public:
     {
         _previousSYNtime = _SYNtime;
         _SYNtime = micros();
-        DEBUG_LOG ("unexpected SYN on bus while state is %s, setting state to %s m=0x%02x, b=0x%02x %ld us\n", enumvalue(currentstate), enumvalue(newstate), _master, _symbol, microsSincePreviousSyn());
+        DEBUG_LOG ("unexpected SYN on bus while state is %s, setting state to %s m=0x%02x, b=0x%02x %lu us\n", enumvalue(currentstate), enumvalue(newstate), _master, _symbol, microsSincePreviousSyn());
         return newstate;
     }
 
