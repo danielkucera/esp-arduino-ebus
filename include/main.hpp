@@ -12,10 +12,14 @@
 #define RESET_MS 1000
 
 #ifdef ESP32
+#define UART_TX 20
+#define UART_RX 21
 #define USE_SOFTWARE_SERIAL 1
 #define USE_ASYNCHRONOUS 1    // requires USE_SOFTWARE_SERIAL
 #define AVAILABLE_THRESHOLD 0 // https://esp32.com/viewtopic.php?t=19788
 #else
+#define UART_TX 1
+#define UART_RX 3
 #define USE_SOFTWARE_SERIAL 1
 #define USE_ASYNCHRONOUS 0    // requires USE_SOFTWARE_SERIAL
 #define AVAILABLE_THRESHOLD 1

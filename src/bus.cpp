@@ -119,28 +119,27 @@ void BusType::begin() {
 
 #if USE_SOFTWARE_SERIAL
  #if defined(ESP32)
-  Serial.begin(2400, SERIAL_8N1, -1, 20); // used for writing
+  Serial.begin(2400, SERIAL_8N1, -1, UART_TX); // used for writing
  #elif defined(ESP8266)
-  Serial.begin(2400, SERIAL_8N1, SERIAL_TX_ONLY);
+  Serial.begin(2400, SERIAL_8N1, SERIAL_TX_ONLY, UART_TX);
  #endif
   mySerial.enableStartBitTimeStampRecording(true);
-  mySerial.begin(2400, SWSERIAL_8N1, 21, -1, false, RXBUFFERSIZE); // used for reading
   mySerial.enableTx(false);
   mySerial.enableIntTx(false);
+  mySerial.begin(2400, SWSERIAL_8N1, UART_RX, -1, false, RXBUFFERSIZE); // used for reading
 #else
+  Serial.setRxBufferSize(RXBUFFERSIZE);
  #if defined(ESP32)
-  Serial.begin(2400, SERIAL_8N1, 21, 20); // used for writing
+  Serial.begin(2400, SERIAL_8N1, UART_RX, UART_TX); // used for writing
   Serial.setRxFIFOFull(1);
  #elif defined(ESP8266)
   Serial.begin(2400);
  #endif
-  Serial.setRxBufferSize(RXBUFFERSIZE);
 #endif
 
 #if USE_ASYNCHRONOUS
   _queue = xQueueCreate(QUEUE_SIZE, sizeof(data));
   xTaskCreateUniversal(BusType::readDataFromSoftwareSerial, "_serialEventQueue", SERIAL_EVENT_TASK_STACK_SIZE, this, SERIAL_EVENT_TASK_PRIORITY, &_serialEventTask, SERIAL_EVENT_TASK_RUNNING_CORE);
-  
   mySerial.onReceive(BusType::receiveHandler);
 #endif    
 }
@@ -173,17 +172,17 @@ bool BusType::read(data& d) {
 #if USE_ASYNCHRONOUS
     return xQueueReceive(_queue, &d, 0) == pdTRUE; 
 #else
-#if USE_SOFTWARE_SERIAL
+  #if USE_SOFTWARE_SERIAL
     if (mySerial.available()){
         uint8_t symbol = mySerial.read();
         receive(symbol, mySerial.readStartBitTimeStamp());
     }
-#else
+  #else
     if (Serial.available()){
         uint8_t symbol = Serial.read();
         receive(symbol, micros());
     }
-#endif
+  #endif
     if (_queue.size() > 0) {
         d = _queue.front();
         _queue.pop();
