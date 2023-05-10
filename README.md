@@ -64,9 +64,10 @@ This section lists adapter hardware revisions together with specifics for each o
 - RESET_PIN: TO-EBUS (GPIO20)
 - removed TX-DISABLE - MCU doesn't transmit any messages during startup on UART pins
 - added USB-C connector for power and/or programming
+  - USB power works only with USB-A - USB-C cables (bug)
 - added VCC selector jumper - you can choose from:
   - power from EBUS: jumper in position VCC-VBUS
-  - power from standard 5V USB-C adapter: jumper in position VCC-VUSB
+  - power from 5V USB-C connector: jumper in position VCC-VUSB
   - power from any adapter 5-24V: remove jumper and connect adapter to VCC and GND pins
 - SOD-123 diodes
 - added LED D8 for MCU status
@@ -75,6 +76,15 @@ This section lists adapter hardware revisions together with specifics for each o
 - firmware file: firmware-HW_v5.x.bin 
 - RESET_PIN: TO-EBUS (GPIO20)
 - fixed reference voltage resistor value
+
+### v5.2
+- firmware file: firmware-HW_v5.x.bin 
+- RESET_PIN: TO-EBUS (GPIO20)
+- USB power works with USB-C - USB-C cables
+- replaced VCC selector jumper with 2.0mm pitch:
+  - power from EBUS: jumper in position VCC-VBUS
+  - power from 5V USB-C connector: jumper removed
+  - power from any adapter 5-24V: remove jumper and connect adapter to VCC and GND pins
 
 ## Troubleshooting
 #### The adapter seems dead, no LED shines or blinks.
