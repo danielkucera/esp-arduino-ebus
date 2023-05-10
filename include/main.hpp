@@ -5,7 +5,7 @@
 #include <WiFiServer.h>
 
 #define MAX_SRV_CLIENTS 4
-#define RXBUFFERSIZE 1024
+#define RXBUFFERSIZE 512 // On ESP8266, maximum 512 icw SoftwareSerial, otherwise you run out of heap
 #define QUEUE_SIZE 480 
 #define STACK_PROTECTOR  512 // bytes
 #define HOSTNAME "esp-eBus"
