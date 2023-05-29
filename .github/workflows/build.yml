@@ -34,7 +34,9 @@ jobs:
     - name: Prepare release dir
       run: mkdir release
     - name: Build v5.x
-      run: pio run -e esp32-c3 ; mv .pio/build/esp32-c3/firmware.bin release/firmware-HW_v5.x.bin
+      run: pio run -e esp32-c3 ; cp .pio/build/esp32-c3/firmware.bin release/firmware-HW_v5.x.bin
+    - name: Assemble v5.x fullflash
+      run: ./fullflash.sh ; mv firmware-fullflash-HW_v5.x.bin release/
     - name: Build v4.x
       run: pio run -e esp12e ; mv .pio/build/esp12e/firmware.bin release/firmware-HW_v4.x.bin
     - name: Build v3.0
