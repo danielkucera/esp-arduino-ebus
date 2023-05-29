@@ -58,5 +58,5 @@ jobs:
     - name: Create release
       uses: ncipollo/release-action@v1
       with:
-        artifacts: "release/*"
+        artifacts: "release/artifact/*"
 
