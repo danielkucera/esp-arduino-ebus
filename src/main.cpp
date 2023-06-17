@@ -28,6 +28,8 @@ int last_reset_code = -1;
 
 unsigned long loopDuration = 0;
 unsigned long maxLoopDuration = 0;
+unsigned long lastConnectTime = 0;
+int reconnectCount = 0;
 
 int random_ch(){
 #ifdef ESP32
@@ -35,6 +37,11 @@ int random_ch(){
 #elif defined(ESP8266)
   return ESP8266TrueRandom.random(1, 13);
 #endif
+}
+
+void on_connected(WiFiEvent_t event, WiFiEventInfo_t info){
+  lastConnectTime = millis();
+  reconnectCount++;
 }
 
 void wdt_start() {
@@ -109,6 +116,8 @@ void setup() {
   WiFi.enableAP(false);
   WiFi.begin();
 
+  WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
+
   WiFiManager wifiManager(Serial1);
 
   wifiManager.setHostname(HOSTNAME);
@@ -145,6 +154,8 @@ bool handleStatusServerRequests() {
     client.printf("async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
     client.printf("software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
     client.printf("uptime: %ld ms\n", millis());
+    client.printf("last_connect_time: %ld ms\n", lastConnectTime);
+    client.printf("reconnect_count: %d \n", reconnectCount);
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
     client.printf("free_heap: %d B\n", ESP.getFreeHeap());
     client.printf("reset_code: %d\n", last_reset_code);
