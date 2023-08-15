@@ -5,21 +5,23 @@
 ## Quickstart
 - connect adapter to ebus
 - you should see at least one LED on the adapter shining (HW v3.0+) - if not, switch eBus wires
+- LED D1 blinking indicates activity on the bus. The adapter comes pre-adjusted (if purchased via lectronz) but if D1 is still on or off, you need to re-adjust it using trimer RV1:
+  - Note: the following directions are reversed (clockwise/counterclockwise) for adapters purchased via elecrow)
+  - turn the trimmer counterclockwise until you find the position between D1 blinking and still on
+  - turn the trimmer clockwise until you find the position between D1 blinking and still off
+  - count the turns between these positions and set the trimmer in the middle position with D1 blinking
+  - if you have adjusted the trimmer, disconnect and connect the adapter to bus again
 - search for WiFi networks, you should see network with name "esp-eBus"
 - connect to the network - a configuration page should open automatically
 - configure your WiFi network settings (SSID, password)
 - after reboot, you should be able to run `ping esp-ebus.local` successfully from a computer in your network (if your network is correctly configured for mDNS)
-- LED D1 blinking indicates activity on the bus. The adapter comes pre-adjusted but if D1 is still on or off, you need to re-adjust it using trimer RV1:
-  - turn the trimmer counterclockwise until you find the position between D1 blinking and still on
-  - turn the trimmer clockwise until you find the position between D1 blinking and still off
-  - count the turns between these positions and set the trimmer in the middle position with D1 blinking
+- to verify there are bytes being received by the adapter, you can connect to `esp-ebus.local` port `3334` using telnet - you should see unreadable binary data
+- you can use [ebusd](https://github.com/john30/ebusd) to decode bus messages, see ports section for device option configuration
 - the adapter listens on following TCP ports (latest SW):
   - 3333 - raw - on this port you can both read and write to the eBus - ebusd config: `-d esp-ebus.local:3333`
   - 3334 - listen only port - everything sent to this port will be discarded and not sent to bus
   - 3335 - [enhanced protocol](https://github.com/john30/ebusd/blob/b5d6a49/docs/enhanced_proto.md) - ebusd config: `-d enh:esp-ebus.local:3335`
   - 5555 - status server - you can telnet to this port (or http://esp-ebus.local:5555) to see some basic status info
-- to verify there are bytes being received by the adapter connect to `esp-ebus.local` port `3334` using telnet - you should see unreadable binary data
-- you can use [ebusd](https://github.com/john30/ebusd) to decode bus messages, see ports section for device option configuration
 
 ## Hardware revisions
 
