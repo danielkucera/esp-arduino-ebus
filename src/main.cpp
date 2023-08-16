@@ -1,6 +1,8 @@
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
 #include "main.hpp"
+#include "enhanced.hpp"
+#include "bus.hpp"
 
 #ifdef ESP32
   #include <esp_task_wdt.h>
@@ -87,23 +89,18 @@ void check_reset() {
     }
   }
 }
- 
+
 void setup() {
   check_reset();
 
-  Serial.setRxBufferSize(RXBUFFERSIZE);
-
 #ifdef ESP32
   Serial1.begin(115200, SERIAL_8N1, 8, 10);
-  Serial.begin(2400, SERIAL_8N1, 21, 20);
-  // ESP32 in Arduino uses heuristics to sometimes set RxFIFOFull to 1, better to be explicit
-  Serial.setRxFIFOFull(1); 
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
   Serial1.begin(115200);
-  Serial.begin(2400);
   last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
+  Bus.begin();
 
   Serial1.setDebugOutput(true);
 
@@ -124,6 +121,10 @@ void setup() {
   wifiServerEnh.begin();
   statusServer.begin();
 
+  // Stop the Bus when the OTA update starts, because it interferes with the OTA process
+  ArduinoOTA.onStart([]() {
+    Bus.end();
+  });
   ArduinoOTA.begin();
 
   MDNS.end();
@@ -134,7 +135,6 @@ void setup() {
   last_comms = millis();
 }
 
-
 bool handleStatusServerRequests() {
   if (!statusServer.hasClient())
     return false;
@@ -142,6 +142,8 @@ bool handleStatusServerRequests() {
   WiFiClient client = statusServer.available();
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.printf("async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
+    client.printf("software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
     client.printf("uptime: %ld ms\n", millis());
     client.printf("rssi: %d dBm\n", WiFi.RSSI());
     client.printf("free_heap: %d B\n", ESP.getFreeHeap());
@@ -149,6 +151,16 @@ bool handleStatusServerRequests() {
     client.printf("loop_duration: %ld us\r\n", loopDuration);
     client.printf("max_loop_duration: %ld us\r\n", maxLoopDuration);
     client.printf("version: %s\r\n", AUTO_VERSION);
+    client.printf("nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
+    client.printf("nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
+    client.printf("nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
+    client.printf("nbr lost1: %i\r\n", (int)Bus._nbrLost1);
+    client.printf("nbr lost2: %i\r\n", (int)Bus._nbrLost2);
+    client.printf("nbr won1: %i\r\n", (int)Bus._nbrWon1);    
+    client.printf("nbr won2: %i\r\n", (int)Bus._nbrWon2);    
+    client.printf("nbr late: %i\r\n", (int)Bus._nbrLate);      
+    client.printf("nbr errors: %i\r\n", (int)Bus._nbrErrors);      
+
     client.flush();
     client.stop();
   }
@@ -210,23 +222,31 @@ void loop() {
     handleEnhClient(&enhClients[i]);
   }
 
-  //check UART for data
-  if (size_t len = Serial.available()) {
-    byte B = Serial.read();
-
-    // push data to clients
+  //check queue for data
+  BusType::data d;
+  if (Bus.read(d)) {
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-      if (pushClient(&serverClients[i], B)){
-        last_comms = millis();
+      if (d._enhanced) {
+        if (d._client == &enhClients[i]) {
+          if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
+            last_comms = millis();
+          }
+        }
       }
-      if (pushClient(&serverClientsRO[i], B)){
-        last_comms = millis();
-      }
-      if (pushEnhClient(&enhClients[i], B)){
-        last_comms = millis();
+      else {
+        if (pushClient(&serverClients[i], d._d)){
+          last_comms = millis();
+        }
+        if (pushClient(&serverClientsRO[i], d._d)){
+          last_comms = millis();
+        }
+        if (d._client != &enhClients[i]) {
+          if (pushEnhClient(&enhClients[i], d._c, d._d, d._logtoclient == &enhClients[i])){
+            last_comms = millis();
+          }
+        }
       }
     }
-
   }
 
   loop_duration();

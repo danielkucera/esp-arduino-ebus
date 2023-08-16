@@ -1,35 +1,64 @@
 #include <WiFiClient.h>
 #include "main.hpp"
+#include "enhanced.hpp"
+#include "bus.hpp"
 
 #define M1 0b11000000
 #define M2 0b10000000
 
-#define ARBITRATION_TIMEOUT_MS 2000
+// Locking
+#if USE_ASYNCHRONOUS
+SemaphoreHandle_t getMutex(){
+    static SemaphoreHandle_t _lock = NULL;
+    if(_lock == NULL){
+        _lock = xSemaphoreCreateMutex();
+        if(_lock == NULL){
+            DEBUG_LOG("xSemaphoreCreateMutex failed");
+            return NULL;
+        }
+    }
+    return _lock;
+}
+#define ENH_MUTEX_LOCK()    do {} while (xSemaphoreTake(getMutex(), portMAX_DELAY) != pdPASS)
+#define ENH_MUTEX_UNLOCK()  xSemaphoreGive(getMutex())
+#else
+#define ENH_MUTEX_LOCK()    
+#define ENH_MUTEX_UNLOCK()  
+#endif
 
-enum symbols {
-    SYN = 0xAA
-};
 
-enum requests {
-    CMD_INIT = 0,
-    CMD_SEND,
-    CMD_START,
-    CMD_INFO
-};
+WiFiClient*   _arbitration_client = NULL;
+int           _arbitration_address = -1;
 
-enum responses {
-    RESETTED = 0x0,
-    RECEIVED = 0x1,
-    STARTED = 0x2,
-    INFO = 0x3,
-    FAILED = 0xa,
-    ERROR_EBUS = 0xb,
-    ERROR_HOST = 0xc
-};
+void getEnhArbitrationClient(WiFiClient* &client, uint8_t &address) {
+    ENH_MUTEX_LOCK();
+    client = _arbitration_client;
+    address= _arbitration_address;
+    ENH_MUTEX_UNLOCK();
+}
 
-WiFiClient* arbitration_client;
-unsigned long arbitration_start;
-int arbitration_address;
+void clearEnhArbitrationClient() {
+    ENH_MUTEX_LOCK();
+    _arbitration_client = 0;
+    _arbitration_address= -1;
+    ENH_MUTEX_UNLOCK();
+}
+
+bool setEnhArbitrationClient(WiFiClient* &client, uint8_t &address) {
+    bool result = true;
+    ENH_MUTEX_LOCK();
+    if (_arbitration_client == NULL) {
+        _arbitration_client = client;
+        _arbitration_address = address;
+    }
+    else {
+        result = false;
+        client = _arbitration_client;
+        address = _arbitration_address;
+    }
+    ENH_MUTEX_UNLOCK();
+    return result;
+}
 
 void decode(int b1, int b2, uint8_t (&data)[2]){
     data[0] = (b1 >> 2) & 0b1111;
@@ -47,14 +76,6 @@ void send_res(WiFiClient* client, uint8_t c, uint8_t d){
     client->write(data, 2);
 }
 
-void send_received(WiFiClient* client, uint8_t byte){
-    if (byte< 0x80){
-        client->write(byte);
-    } else {
-        send_res(client, RECEIVED, byte);
-    }
-}
-
 void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
     if (c == CMD_INIT){
         send_res(client, RESETTED, 0x0);
@@ -62,27 +83,34 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
     }
     if (c == CMD_START){
         if (d == SYN){
-            arbitration_client = NULL;
-            send_res(client, FAILED, 0x3f);
+            clearEnhArbitrationClient();
+            DEBUG_LOG("CMD_START SYN\n");
             return;
         } else {
             // start arbitration
-
-            if (arbitration_client) {
-                // only one client can be in arbitration
-                send_res(client, FAILED, 0x3f);
-                return;
+            WiFiClient* cl = client;
+            uint8_t     ad = d;
+            if (!setEnhArbitrationClient(client, d) ) {
+                if (cl!=client) {
+                    // only one client can be in arbitration
+                    DEBUG_LOG("CMD_START ONGOING 0x%02 0x%02x\n", ad, d);
+                    send_res(client, ERROR_HOST, ERR_FRAMING);
+                    return;
+                }
+                else {
+                    DEBUG_LOG("CMD_START REPEAT 0x%02x\n", d);
+                }
             }
-
-            arbitration_client = client;
-            arbitration_start = millis();
-            arbitration_address = d;
-
+            else {
+                DEBUG_LOG("CMD_START 0x%02x\n", d);
+            }       
+            setEnhArbitrationClient(client, d);
             return;
         }
     }
     if (c == CMD_SEND){
-        Serial.write(d);
+        DEBUG_LOG("SEND 0x%02x\n", d);
+        Bus.write(d);
         return;
     }
     if (c == CMD_INFO){
@@ -108,6 +136,7 @@ bool read_cmd(WiFiClient* client, uint8_t (&data)[2]){
     }
 
     if (b<0b11000000){
+        DEBUG_LOG("first command signature error\n");
         client->write("first command signature error");
         // first command signature error
         client->stop();
@@ -118,6 +147,7 @@ bool read_cmd(WiFiClient* client, uint8_t (&data)[2]){
 
     if (b2<0) {
         // second command missing
+        DEBUG_LOG("second command missing\n");
         client->write("second command missing");
         client->stop();
         return false;
@@ -125,6 +155,7 @@ bool read_cmd(WiFiClient* client, uint8_t (&data)[2]){
 
     if ((b2 & 0b11000000) != 0b10000000){
         // second command signature error
+        DEBUG_LOG("second command signature error\n");
         client->write("second command signature error");
         client->stop();
         return false;
@@ -143,38 +174,24 @@ void handleEnhClient(WiFiClient* client){
     }
 }
 
-int pushEnhClient(WiFiClient* client, uint8_t B){
+int pushEnhClient(WiFiClient* client, uint8_t c, uint8_t d, bool log){
+
+    if (log) {
+        DEBUG_LOG("DATA           0x%02x 0x%02x\n", c, d);
+    }
     if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
-
-        if ((B == SYN) && (Serial.available() == 0)){
-            if (arbitration_client == client) {
-                Serial.write(arbitration_address);
-
-                while (Serial.available() == 0) {
-                    if (millis() > arbitration_start + ARBITRATION_TIMEOUT_MS) {
-                        send_res(client, FAILED, 0x3f);
-                        arbitration_client = NULL;
-                        return 1;
-                    }
-                }
-
-                if (Serial.read() == arbitration_address){ // arbitration success
-                    send_res(client, STARTED, arbitration_address);
-                    arbitration_client = NULL;
-                } else { // arbitration fail
-                    // do nothing, arbitration will retry on next SYN until timeout or cancel
-                }
-                return 1;
-            }
-        }
-
-        if (arbitration_client && (millis() > arbitration_start + ARBITRATION_TIMEOUT_MS)){
-            send_res(arbitration_client, FAILED, 0x3f);
-            arbitration_client = NULL;
-        }
-
-        send_received(client, B);
+        send_res(client, c,  d);
         return 1;
     }
     return 0;
+}
+
+void enhArbitrationDone() {
+    clearEnhArbitrationClient();
+}
+
+WiFiClient* enhArbitrationRequested(uint8_t& aa) {
+    WiFiClient* client = NULL;
+    getEnhArbitrationClient(client, aa);
+    return client;
 }
