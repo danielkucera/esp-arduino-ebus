@@ -192,6 +192,14 @@ bool BusType::read(data& d) {
 #endif
 }
 
+int BusType::available() {
+#if USE_SOFTWARE_SERIAL
+  return mySerial.available(); 
+#else
+  return Serial.available();
+#endif  
+}
+
 void BusType::push(const data& d){
 #if USE_ASYNCHRONOUS
     xQueueSendToBack(_queue, &d, 0); 

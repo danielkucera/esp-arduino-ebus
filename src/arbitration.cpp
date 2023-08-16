@@ -24,7 +24,7 @@ Arbitration::result Arbitration::start(BusState& busstate, uint8_t master, unsig
     unsigned long now = micros();
     unsigned long microsSinceLastSyn =  busstate.microsSinceLastSyn();
     unsigned long timeSinceStartBit = now-startBitTime;
-    if (timeSinceStartBit > 4456) 
+    if (timeSinceStartBit > 4456 || Bus.available()) 
     {
         // if we are too late, don't try to participate and retry next round
         DEBUG_LOG("ARB LATE 0x%02x %lu us\n", Serial.peek(), timeSinceStartBit);
@@ -98,7 +98,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol, unsigne
         }
         return arbitrating;
     case BusState::eReceivedSecondSYN: // did we sign up for second round arbitration?
-        if (_participateSecond) {
+        if (_participateSecond && Bus.available() == 0) {
             // execute second round of arbitration
             unsigned long microsSinceLastSyn =  busstate.microsSinceLastSyn();
 #if USE_ASYNCHRONOUS

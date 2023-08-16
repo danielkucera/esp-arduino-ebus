@@ -20,7 +20,7 @@
 #else
 #define UART_TX 1
 #define UART_RX 3
-#define USE_SOFTWARE_SERIAL 1
+#define USE_SOFTWARE_SERIAL 0
 #define USE_ASYNCHRONOUS 0    // requires USE_SOFTWARE_SERIAL
 #define AVAILABLE_THRESHOLD 1
 #endif

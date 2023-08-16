@@ -40,6 +40,7 @@ class BusType
     bool   read(data& d);
     size_t write(uint8_t symbol);
     int    availableForWrite();
+    int    available();
 
     // std::atomic seems not well supported on esp12e, besides it is also not needed there
     ATOMIC_INT _nbrRestarts1;
