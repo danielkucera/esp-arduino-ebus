@@ -15,6 +15,10 @@
 
 #define ALPHA 0.3
 
+#define PWM_CHANNEL 0
+#define PWM_FREQ 10000
+#define PWM_RESOLUTION 8
+
 TaskHandle_t Task1;
 
 WiFiServer wifiServer(3333);
@@ -115,6 +119,8 @@ void loop_duration() {
 
 void data_loop(void * pvParameters){
   while(1){
+    loop_duration();
+
     //check clients for data
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
       handleClient(&serverClients[i]);
@@ -147,8 +153,6 @@ void data_loop(void * pvParameters){
         }
       }
     }
-
-    loop_duration();
   }
 }
 
@@ -168,6 +172,10 @@ void setup() {
 
   disableTX();
 
+  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(6, PWM_CHANNEL);
+  ledcWrite(PWM_CHANNEL, 120);
+
   WiFi.enableAP(false);
   WiFi.begin();
 
@@ -179,7 +187,7 @@ void setup() {
   wifiManager.setConfigPortalTimeout(120);
   wifiManager.setWiFiAPChannel(random_ch());
   wifiManager.autoConnect(HOSTNAME);
- 
+
   wifiServer.begin();
   wifiServerRO.begin();
   wifiServerEnh.begin();
