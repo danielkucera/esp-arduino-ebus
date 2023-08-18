@@ -21,6 +21,8 @@
 
 TaskHandle_t Task1;
 
+WiFiManager wifiManager(Serial1);
+
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
 WiFiServer wifiServerEnh(3335);
@@ -181,12 +183,11 @@ void setup() {
 
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
 
-  WiFiManager wifiManager(Serial1);
-
   wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
   wifiManager.setWiFiAPChannel(random_ch());
   wifiManager.autoConnect(HOSTNAME);
+  wifiManager.startWebPortal();
 
   wifiServer.begin();
   wifiServerRO.begin();
@@ -251,6 +252,8 @@ void loop() {
 #endif
 
   wdt_feed();
+
+  wifiManager.process();
 
   if (WiFi.status() != WL_CONNECTED) {
     reset();
