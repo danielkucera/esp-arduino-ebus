@@ -162,7 +162,7 @@ void setup() {
   check_reset();
 
 #ifdef ESP32
-  Serial1.begin(115200, SERIAL_8N1, 8, 10);
+  Serial1.begin(115200, SERIAL_8N1, 10, 9);
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
   Serial1.begin(115200);
