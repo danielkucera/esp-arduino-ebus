@@ -3,6 +3,9 @@
 #include "main.hpp"
 #include "enhanced.hpp"
 #include "bus.hpp"
+#include <Preferences.h>
+
+Preferences preferences;
 
 #ifdef ESP32
   #include <esp_task_wdt.h>
@@ -22,6 +25,7 @@
 TaskHandle_t Task1;
 
 WiFiManager wifiManager(Serial1);
+WiFiManagerParameter param_pwm_value("pwm_value", "PWM value", "", 6);
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -81,6 +85,19 @@ inline void enableTX() {
 #ifdef TX_DISABLE_PIN
   digitalWrite(TX_DISABLE_PIN, LOW);
 #endif
+}
+
+void set_pwm(uint8_t value){
+#ifdef PWM_PIN
+  ledcWrite(PWM_CHANNEL, value);
+#endif
+}
+
+uint32_t get_pwm(){
+#ifdef PWM_PIN
+  return ledcRead(PWM_CHANNEL);
+#endif
+  return 0;
 }
 
 void reset(){
@@ -158,6 +175,15 @@ void data_loop(void * pvParameters){
   }
 }
 
+void saveParamsCallback () {
+  uint8_t new_pwm_value = atoi(param_pwm_value.getValue());
+  if (new_pwm_value > 0){
+    set_pwm(new_pwm_value);
+    preferences.putUInt("pwm_value", new_pwm_value);
+  }
+  Serial1.printf("pwm_value set: %s %d\n", param_pwm_value.getValue(), new_pwm_value);
+}
+
 void setup() {
   check_reset();
 
@@ -174,14 +200,22 @@ void setup() {
 
   disableTX();
 
+  preferences.begin("esp-ebus", false);
+
+#ifdef PWM_PIN
   ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(6, PWM_CHANNEL);
-  ledcWrite(PWM_CHANNEL, 120);
+  ledcAttachPin(PWM_PIN, PWM_CHANNEL);
+#endif
+
+  set_pwm(preferences.getUInt("pwm_value", 130));
 
   WiFi.enableAP(false);
   WiFi.begin();
 
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
+
+  wifiManager.setSaveParamsCallback(saveParamsCallback);
+  wifiManager.addParameter(&param_pwm_value);
 
   wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
@@ -237,7 +271,7 @@ bool handleStatusServerRequests() {
     client.printf("nbr won2: %i\r\n", (int)Bus._nbrWon2);
     client.printf("nbr late: %i\r\n", (int)Bus._nbrLate);
     client.printf("nbr errors: %i\r\n", (int)Bus._nbrErrors);
-    client.printf("pwm_value: %i\r\n", pwm_value);
+    client.printf("pwm_value: %i\r\n", get_pwm());
 
     client.flush();
     client.stop();
