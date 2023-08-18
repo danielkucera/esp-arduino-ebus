@@ -15,6 +15,8 @@
 
 #define ALPHA 0.3
 
+TaskHandle_t Task1;
+
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
 WiFiServer wifiServerEnh(3335);
@@ -97,6 +99,59 @@ void check_reset() {
   }
 }
 
+void loop_duration() {
+  static unsigned long lastTime = 0;
+  unsigned long now = micros();
+  unsigned long delta = now - lastTime;
+
+  lastTime = now;
+
+  loopDuration = ((1 - ALPHA) * loopDuration + (ALPHA * delta));
+
+  if (delta > maxLoopDuration) {
+    maxLoopDuration = delta;
+  }
+}
+
+void data_loop(void * pvParameters){
+  while(1){
+    //check clients for data
+    for (int i = 0; i < MAX_SRV_CLIENTS; i++){
+      handleClient(&serverClients[i]);
+      handleEnhClient(&enhClients[i]);
+    }
+
+    //check queue for data
+    BusType::data d;
+    if (Bus.read(d)) {
+      for (int i = 0; i < MAX_SRV_CLIENTS; i++){
+        if (d._enhanced) {
+          if (d._client == &enhClients[i]) {
+            if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
+              last_comms = millis();
+            }
+          }
+        }
+        else {
+          if (pushClient(&serverClients[i], d._d)){
+            last_comms = millis();
+          }
+          if (pushClient(&serverClientsRO[i], d._d)){
+            last_comms = millis();
+          }
+          if (d._client != &enhClients[i]) {
+            if (pushEnhClient(&enhClients[i], d._c, d._d, d._logtoclient == &enhClients[i])){
+              last_comms = millis();
+            }
+          }
+        }
+      }
+    }
+
+    loop_duration();
+  }
+}
+
 void setup() {
   check_reset();
 
@@ -142,6 +197,8 @@ void setup() {
   wdt_start();
 
   last_comms = millis();
+
+  xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
 }
 
 bool handleStatusServerRequests() {
@@ -176,20 +233,6 @@ bool handleStatusServerRequests() {
     client.stop();
   }
   return true;
-}
-
-void loop_duration() {
-  static unsigned long lastTime = 0;
-  unsigned long now = micros();
-  unsigned long delta = now - lastTime;
-  
-  lastTime = now;
-
-  loopDuration = ((1 - ALPHA) * loopDuration + (ALPHA * delta));
-
-  if (delta > maxLoopDuration) {
-    maxLoopDuration = delta;
-  }
 }
 
 void loop() {
@@ -227,38 +270,4 @@ void loop() {
 
   handleNewClient(wifiServerRO, serverClientsRO);
 
-  //check clients for data
-  for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-    handleClient(&serverClients[i]);
-    handleEnhClient(&enhClients[i]);
-  }
-
-  //check queue for data
-  BusType::data d;
-  if (Bus.read(d)) {
-    for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-      if (d._enhanced) {
-        if (d._client == &enhClients[i]) {
-          if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
-            last_comms = millis();
-          }
-        }
-      }
-      else {
-        if (pushClient(&serverClients[i], d._d)){
-          last_comms = millis();
-        }
-        if (pushClient(&serverClientsRO[i], d._d)){
-          last_comms = millis();
-        }
-        if (d._client != &enhClients[i]) {
-          if (pushEnhClient(&enhClients[i], d._c, d._d, d._logtoclient == &enhClients[i])){
-            last_comms = millis();
-          }
-        }
-      }
-    }
-  }
-
-  loop_duration();
 }
