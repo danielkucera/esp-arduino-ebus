@@ -22,7 +22,9 @@ Preferences preferences;
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
 
+#ifdef ESP32
 TaskHandle_t Task1;
+#endif
 
 WiFiManager wifiManager(Serial1);
 WiFiManagerParameter param_pwm_value("pwm_value", "PWM value", "", 6);
@@ -51,10 +53,12 @@ int random_ch(){
 #endif
 }
 
+#ifdef ESP32
 void on_connected(WiFiEvent_t event, WiFiEventInfo_t info){
   lastConnectTime = millis();
   reconnectCount++;
 }
+#endif
 
 void wdt_start() {
 #ifdef ESP32
@@ -136,42 +140,46 @@ void loop_duration() {
   }
 }
 
-void data_loop(void * pvParameters){
-  while(1){
-    loop_duration();
+void data_process(){
+  loop_duration();
 
-    //check clients for data
+  //check clients for data
+  for (int i = 0; i < MAX_SRV_CLIENTS; i++){
+    handleClient(&serverClients[i]);
+    handleEnhClient(&enhClients[i]);
+  }
+
+  //check queue for data
+  BusType::data d;
+  if (Bus.read(d)) {
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-      handleClient(&serverClients[i]);
-      handleEnhClient(&enhClients[i]);
-    }
-
-    //check queue for data
-    BusType::data d;
-    if (Bus.read(d)) {
-      for (int i = 0; i < MAX_SRV_CLIENTS; i++){
-        if (d._enhanced) {
-          if (d._client == &enhClients[i]) {
-            if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
-              last_comms = millis();
-            }
+      if (d._enhanced) {
+        if (d._client == &enhClients[i]) {
+          if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
+            last_comms = millis();
           }
         }
-        else {
-          if (pushClient(&serverClients[i], d._d)){
+      }
+      else {
+        if (pushClient(&serverClients[i], d._d)){
+          last_comms = millis();
+        }
+        if (pushClient(&serverClientsRO[i], d._d)){
+          last_comms = millis();
+        }
+        if (d._client != &enhClients[i]) {
+          if (pushEnhClient(&enhClients[i], d._c, d._d, d._logtoclient == &enhClients[i])){
             last_comms = millis();
-          }
-          if (pushClient(&serverClientsRO[i], d._d)){
-            last_comms = millis();
-          }
-          if (d._client != &enhClients[i]) {
-            if (pushEnhClient(&enhClients[i], d._c, d._d, d._logtoclient == &enhClients[i])){
-              last_comms = millis();
-            }
           }
         }
       }
     }
+  }
+}
+
+void data_loop(void * pvParameters){
+  while(1){
+    data_process();
   }
 }
 
@@ -212,7 +220,9 @@ void setup() {
   WiFi.enableAP(false);
   WiFi.begin();
 
+#ifdef ESP32
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
+#endif
 
   wifiManager.setSaveParamsCallback(saveParamsCallback);
   wifiManager.addParameter(&param_pwm_value);
@@ -241,7 +251,9 @@ void setup() {
 
   last_comms = millis();
 
+#ifdef ESP32
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
+#endif
 }
 
 bool handleStatusServerRequests() {
@@ -284,11 +296,15 @@ void loop() {
 
 #ifdef ESP8266
   MDNS.update();
+
+  data_process();
 #endif
 
   wdt_feed();
 
+#ifdef ESP32
   wifiManager.process();
+#endif
 
   if (WiFi.status() != WL_CONNECTED) {
     reset();
