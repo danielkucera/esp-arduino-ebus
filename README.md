@@ -5,12 +5,18 @@
 ## Quickstart
 - connect adapter to ebus
 - you should see at least one LED on the adapter shining (HW v3.0+) - if not, switch eBus wires
-- LED D1 blinking indicates activity on the bus. The adapter comes pre-adjusted (if purchased via lectronz) but if D1 is still on or off, you need to re-adjust it using trimer RV1:
-  - Note: the following directions are reversed (clockwise/counterclockwise) for adapters purchased via elecrow)
-  - turn the trimmer counterclockwise until you find the position between D1 blinking and still on
-  - turn the trimmer clockwise until you find the position between D1 blinking and still off
-  - count the turns between these positions and set the trimmer in the middle position with D1 blinking
-  - if you have adjusted the trimmer, disconnect and connect the adapter to bus again
+- LED D1 blinking indicates activity on the bus. The adapter comes pre-adjusted but if D1 is still on or off, you need to re-adjust it:
+  - by a configuration in web interface for v6.0 and newer:
+    - open http://esp-ebus.local/param to adjust PWM value
+    - the default value is 130, max is 255, min is 1
+    - when D1 is still on, you need to lower the value
+    - when D1 is still off, you need to raise the value
+  - using trimer RV1 for v5.x and older:
+    - Note: the following directions are reversed (clockwise/counterclockwise) for adapters purchased via elecrow)
+    - turn the trimmer counterclockwise until you find the position between D1 blinking and still on
+    - turn the trimmer clockwise until you find the position between D1 blinking and still off
+    - count the turns between these positions and set the trimmer in the middle position with D1 blinking
+    - if you have adjusted the trimmer, disconnect and connect the adapter to bus again
 - search for WiFi networks, you should see network with name "esp-eBus"
 - connect to the network - a configuration page should open automatically
 - configure your WiFi network settings (SSID, password)
@@ -40,7 +46,7 @@ This section lists adapter hardware revisions together with specifics for each o
 - added TX-disable - GPIO2 - function not working
 
 ### v3.0
-- firmware file: firmware-HW_v3.x.bin 
+- firmware file: firmware-HW_v3.x.bin
 - step-down: ME3116
 - RESET_PIN: MCU GPIO5
 - fixed TX-disable - GPIO2 - blue LED on module shines when TX enabled
@@ -49,19 +55,19 @@ This section lists adapter hardware revisions together with specifics for each o
 - added tp2 - you can apply 24V external power supply between tp2 (+) and BUS GND (-). If you remove D4, you can use an adapter with voltage 5-24V
 
 ### v4.0
-- firmware file: firmware-HW_v4.x.bin 
+- firmware file: firmware-HW_v4.x.bin
 - RESET_PIN: TX-DISABLE (GPIO5)
 - moved TX-DISABLE to GPIO5
 - LEDs position changed
 - added tp3, jp1 - you can apply 24V external power supply between tp2 (+) and tp3 (-). If you cut jp1, you can use any adapter with voltage 5-24V
 
 ### v4.1
-- firmware file: firmware-HW_v4.x.bin 
+- firmware file: firmware-HW_v4.x.bin
 - RESET_PIN: TX-DISABLE (GPIO5)
 - added debug pin to programming header
 
 ### v5.0
-- firmware file: firmware-HW_v5.x.bin 
+- firmware file: firmware-HW_v5.x.bin
 - MCU changed to ESP32-C3
 - RESET_PIN: TO-EBUS (GPIO20)
 - removed TX-DISABLE - MCU doesn't transmit any messages during startup on UART pins
@@ -75,18 +81,28 @@ This section lists adapter hardware revisions together with specifics for each o
 - added LED D8 for MCU status
 
 ### v5.1
-- firmware file: firmware-HW_v5.x.bin 
+- firmware file: firmware-HW_v5.x.bin
 - RESET_PIN: TO-EBUS (GPIO20)
 - fixed reference voltage resistor value
 
 ### v5.2
-- firmware file: firmware-HW_v5.x.bin 
+- firmware file: firmware-HW_v5.x.bin
 - RESET_PIN: TO-EBUS (GPIO20)
 - USB power works with USB-C - USB-C cables
 - replaced VCC selector jumper with 2.0mm pitch:
   - power from EBUS: jumper in position VCC-VBUS
   - power from 5V USB-C connector: jumper removed
   - power from any adapter 5-24V: remove jumper and connect adapter to VCC and GND pins
+
+### v6.0
+- firmware file: firmware-HW_v5.x.bin
+- RESET_PIN: TO-EBUS (GPIO20)
+- trimmer is replaced by PWM setting in web interface
+
+### v6.1
+- firmware file: firmware-HW_v5.x.bin
+- RESET_PIN: TO-EBUS (GPIO20)
+- added missing via in v6.0
 
 ## Troubleshooting
 #### The adapter seems dead, no LED shines or blinks.
