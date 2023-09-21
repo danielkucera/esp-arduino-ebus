@@ -22,6 +22,9 @@ Preferences preferences;
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
 
+#define DEFAULT_AP "ebus-test"
+#define DEFAULT_PASS "lectronz"
+
 #ifdef ESP32
 TaskHandle_t Task1;
 #endif
@@ -223,6 +226,8 @@ void setup() {
 #ifdef ESP32
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
 #endif
+
+  wifiManager.preloadWiFi(DEFAULT_AP, DEFAULT_PASS);
 
   wifiManager.setSaveParamsCallback(saveParamsCallback);
   wifiManager.addParameter(&param_pwm_value);
