@@ -113,8 +113,7 @@ void reset(){
 }
 
 void reset_config() {
-  WiFiManager wifiManager(Serial1);  // Send debug on Serial1
-  wifiManager.resetSettings();
+  preferences.clear();
   reset();
 }
 
@@ -196,6 +195,8 @@ void saveParamsCallback () {
 }
 
 void setup() {
+  preferences.begin("esp-ebus", false);
+
   check_reset();
 
 #ifdef ESP32
@@ -211,8 +212,6 @@ void setup() {
 
   disableTX();
 
-  preferences.begin("esp-ebus", false);
-
 #ifdef PWM_PIN
   ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
@@ -220,14 +219,17 @@ void setup() {
 
   set_pwm(preferences.getUInt("pwm_value", 130));
 
+  if (preferences.getBool("firstboot", true)){
+    preferences.putBool("firstboot", false);
+    WiFi.begin(DEFAULT_AP, DEFAULT_PASS);
+  }
+
   WiFi.enableAP(false);
   WiFi.begin();
 
 #ifdef ESP32
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
 #endif
-
-  wifiManager.preloadWiFi(DEFAULT_AP, DEFAULT_PASS);
 
   wifiManager.setSaveParamsCallback(saveParamsCallback);
   wifiManager.addParameter(&param_pwm_value);
