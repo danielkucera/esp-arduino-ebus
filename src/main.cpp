@@ -18,7 +18,6 @@ Preferences preferences;
 
 #define ALPHA 0.3
 
-#define PWM_CHANNEL 0
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
 
@@ -29,7 +28,7 @@ Preferences preferences;
 TaskHandle_t Task1;
 #endif
 
-WiFiManager wifiManager(Serial1);
+WiFiManager wifiManager(DebugSer);
 WiFiManagerParameter param_pwm_value("pwm_value", "PWM value", "", 6);
 
 WiFiServer wifiServer(3333);
@@ -65,7 +64,13 @@ void on_connected(WiFiEvent_t event, WiFiEventInfo_t info){
 
 void wdt_start() {
 #ifdef ESP32
-  esp_task_wdt_init(6, true);
+//??
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms = 6000,
+    .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
+    .trigger_panic = 1,
+  };
+  esp_task_wdt_init(&wdt_config);
 #elif defined(ESP8266)
   ESP.wdtDisable();
 #endif
@@ -96,13 +101,13 @@ inline void enableTX() {
 
 void set_pwm(uint8_t value){
 #ifdef PWM_PIN
-  ledcWrite(PWM_CHANNEL, value);
+  ledcWrite(PWM_PIN, value);
 #endif
 }
 
 uint32_t get_pwm(){
 #ifdef PWM_PIN
-  return ledcRead(PWM_CHANNEL);
+  return ledcRead(PWM_PIN);
 #endif
   return 0;
 }
@@ -191,7 +196,7 @@ void saveParamsCallback () {
     set_pwm(new_pwm_value);
     preferences.putUInt("pwm_value", new_pwm_value);
   }
-  Serial1.printf("pwm_value set: %s %d\n", param_pwm_value.getValue(), new_pwm_value);
+  DebugSer.printf("pwm_value set: %s %d\n", param_pwm_value.getValue(), new_pwm_value);
 }
 
 void setup() {
@@ -200,21 +205,19 @@ void setup() {
   check_reset();
 
 #ifdef ESP32
-  Serial1.begin(115200, SERIAL_8N1, 10, 9);
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
-  Serial1.begin(115200);
   last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
   Bus.begin();
 
-  Serial1.setDebugOutput(true);
+  DebugSer.begin(115200);
+  DebugSer.setDebugOutput(true);
 
   disableTX();
 
 #ifdef PWM_PIN
-  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(PWM_PIN, PWM_CHANNEL);
+  ledcAttach(PWM_PIN, PWM_FREQ, PWM_RESOLUTION);
 #endif
 
   set_pwm(preferences.getUInt("pwm_value", 130));
@@ -267,7 +270,7 @@ bool handleStatusServerRequests() {
   if (!statusServer.hasClient())
     return false;
 
-  WiFiClient client = statusServer.available();
+  WiFiClient client = statusServer.accept();
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
     client.printf("async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
