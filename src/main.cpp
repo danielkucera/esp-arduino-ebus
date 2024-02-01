@@ -18,6 +18,7 @@ Preferences preferences;
 
 #define ALPHA 0.3
 
+#define PWM_CHANNEL 0
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
 
@@ -64,13 +65,7 @@ void on_connected(WiFiEvent_t event, WiFiEventInfo_t info){
 
 void wdt_start() {
 #ifdef ESP32
-//??
-  esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = 6000,
-    .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
-    .trigger_panic = 1,
-  };
-  esp_task_wdt_init(&wdt_config);
+  esp_task_wdt_init(6, true);
 #elif defined(ESP8266)
   ESP.wdtDisable();
 #endif
@@ -101,13 +96,13 @@ inline void enableTX() {
 
 void set_pwm(uint8_t value){
 #ifdef PWM_PIN
-  ledcWrite(PWM_PIN, value);
+  ledcWrite(PWM_CHANNEL, value);
 #endif
 }
 
 uint32_t get_pwm(){
 #ifdef PWM_PIN
-  return ledcRead(PWM_PIN);
+  return ledcRead(PWM_CHANNEL);
 #endif
   return 0;
 }
@@ -217,7 +212,8 @@ void setup() {
   disableTX();
 
 #ifdef PWM_PIN
-  ledcAttach(PWM_PIN, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
   set_pwm(preferences.getUInt("pwm_value", 130));
