@@ -1,5 +1,6 @@
 #include <ArduinoOTA.h>
-#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+#include <IotWebConf.h>
+#include <IotWebConfUsing.h>
 #include "main.hpp"
 #include "enhanced.hpp"
 #include "bus.hpp"
@@ -29,8 +30,12 @@ Preferences preferences;
 TaskHandle_t Task1;
 #endif
 
-WiFiManager wifiManager(DebugSer);
-WiFiManagerParameter param_pwm_value("pwm_value", "PWM value", "", 6);
+#define CONFIG_VERSION "eea"
+DNSServer dnsServer;
+WebServer configServer(80);
+char pwm_value_string[8];
+IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
+IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value_string, 8, "130", "1..255", "min='1' max='255' step='1'");
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -185,13 +190,29 @@ void data_loop(void * pvParameters){
   }
 }
 
+
 void saveParamsCallback () {
-  uint8_t new_pwm_value = atoi(param_pwm_value.getValue());
+
+  uint8_t new_pwm_value = atoi(pwm_value_string);
   if (new_pwm_value > 0){
     set_pwm(new_pwm_value);
     preferences.putUInt("pwm_value", new_pwm_value);
   }
-  DebugSer.printf("pwm_value set: %s %d\n", param_pwm_value.getValue(), new_pwm_value);
+  DebugSer.printf("pwm_value set: %s %d\n", pwm_value_string, new_pwm_value);
+
+}
+
+void handleRoot()
+{
+  // -- Let IotWebConf test and handle captive portal requests.
+  if (iotWebConf.handleCaptivePortal())
+  {
+    // -- Captive portal request were already served.
+    return;
+  }
+  String s = "Hello World";
+
+  configServer.send(200, "text/html", s);
 }
 
 void setup() {
@@ -220,25 +241,57 @@ void setup() {
 
   if (preferences.getBool("firstboot", true)){
     preferences.putBool("firstboot", false);
-    WiFi.begin(DEFAULT_AP, DEFAULT_PASS);
+    iotWebConf.init();
+    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, "ebusebus", IOTWEBCONF_WORD_LEN);
+    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
+    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz", IOTWEBCONF_WORD_LEN);
+    iotWebConf.saveConfig();
+  } else {
+    iotWebConf.skipApStartup();
   }
-
-  WiFi.enableAP(false);
+/*
+  WiFi.enableAP(true);
   WiFi.begin();
-
+*/
 #ifdef ESP32
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
 #endif
 
+  int wifi_ch = random_ch();
+  DebugSer.printf("Channel for AP mode: %d\n", wifi_ch);
+
+  iotWebConf.addSystemParameter(&pwm_value_param);
+  iotWebConf.setConfigSavedCallback(&saveParamsCallback);
+  iotWebConf.getApTimeoutParameter()->visible = true;
+  iotWebConf.setWifiConnectionTimeoutMs(7000);
+
+  // -- Initializing the configuration.
+  iotWebConf.init();
+
+  // -- Set up required URL handlers on the web server.
+  configServer.on("/", []{ iotWebConf.handleConfig(); });
+  configServer.on("/config", []{ iotWebConf.handleConfig(); });
+  configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
+  while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
+      iotWebConf.doLoop();
+  }
+
+/*
   wifiManager.setSaveParamsCallback(saveParamsCallback);
   wifiManager.addParameter(&param_pwm_value);
 
   wifiManager.setHostname(HOSTNAME);
   wifiManager.setConfigPortalTimeout(120);
-  wifiManager.setWiFiAPChannel(random_ch());
+  wifiManager.setWiFiAPChannel(wifi_ch);
   wifiManager.autoConnect(HOSTNAME);
   wifiManager.startWebPortal();
-
+  */
+/*
+  WiFi.channel(wifi_ch);
+  if (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+  }
+  */
   wifiServer.begin();
   wifiServerRO.begin();
   wifiServerEnh.begin();
@@ -298,6 +351,8 @@ bool handleStatusServerRequests() {
 }
 
 void loop() {
+  iotWebConf.doLoop();
+
   ArduinoOTA.handle();
 
 #ifdef ESP8266
@@ -309,7 +364,7 @@ void loop() {
   wdt_feed();
 
 #ifdef ESP32
-  wifiManager.process();
+  //wifiManager.process();
 #endif
 
   if (WiFi.status() != WL_CONNECTED) {
