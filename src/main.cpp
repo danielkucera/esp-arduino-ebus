@@ -249,21 +249,23 @@ void setup() {
   } else {
     iotWebConf.skipApStartup();
   }
-/*
-  WiFi.enableAP(true);
-  WiFi.begin();
-*/
+
 #ifdef ESP32
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
 #endif
 
   int wifi_ch = random_ch();
   DebugSer.printf("Channel for AP mode: %d\n", wifi_ch);
+  WiFi.channel(wifi_ch); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
 
   iotWebConf.addSystemParameter(&pwm_value_param);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
   iotWebConf.setWifiConnectionTimeoutMs(7000);
+
+#ifdef STATUS_LED_PIN
+  iotWebConf.setStatusPin(STATUS_LED_PIN);
+#endif
 
   // -- Initializing the configuration.
   iotWebConf.init();
@@ -272,26 +274,11 @@ void setup() {
   configServer.on("/", []{ iotWebConf.handleConfig(); });
   configServer.on("/config", []{ iotWebConf.handleConfig(); });
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
+
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
       iotWebConf.doLoop();
   }
 
-/*
-  wifiManager.setSaveParamsCallback(saveParamsCallback);
-  wifiManager.addParameter(&param_pwm_value);
-
-  wifiManager.setHostname(HOSTNAME);
-  wifiManager.setConfigPortalTimeout(120);
-  wifiManager.setWiFiAPChannel(wifi_ch);
-  wifiManager.autoConnect(HOSTNAME);
-  wifiManager.startWebPortal();
-  */
-/*
-  WiFi.channel(wifi_ch);
-  if (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-  }
-  */
   wifiServer.begin();
   wifiServerRO.begin();
   wifiServerEnh.begin();
@@ -351,8 +338,6 @@ bool handleStatusServerRequests() {
 }
 
 void loop() {
-  iotWebConf.doLoop();
-
   ArduinoOTA.handle();
 
 #ifdef ESP8266
@@ -364,7 +349,7 @@ void loop() {
   wdt_feed();
 
 #ifdef ESP32
-  //wifiManager.process();
+  iotWebConf.doLoop();
 #endif
 
   if (WiFi.status() != WL_CONNECTED) {
