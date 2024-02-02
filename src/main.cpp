@@ -50,7 +50,7 @@ int reconnectCount = 0;
 
 int random_ch(){
 #ifdef ESP32
-  return 6;
+  return esp_random() % 13 + 1 ;
 #elif defined(ESP8266)
   return ESP8266TrueRandom.random(1, 13);
 #endif
