@@ -25,6 +25,7 @@ Preferences preferences;
 
 #define DEFAULT_AP "ebus-test"
 #define DEFAULT_PASS "lectronz"
+#define DEFAULT_APMODE_PASS "ebusebus"
 
 #ifdef ESP32
 TaskHandle_t Task1;
@@ -246,7 +247,16 @@ void handleRoot()
     // -- Captive portal request were already served.
     return;
   }
-  String s = "Hello World";
+  String s = "<html><head><title>esp-eBus adapter</title>";
+  s += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";
+  s += "</head><body>";
+  s += "<a href='/status'>Adapter status</a><br>";
+  s += "<a href='/config'>Configuration</a> - user: admin password: your configured AP mode password or default: ";
+  s += DEFAULT_APMODE_PASS;
+  s += "<br>";
+  s += "<br>";
+  s += "For more info see project page: <a href='https://github.com/danielkucera/esp-arduino-ebus'>https://github.com/danielkucera/esp-arduino-ebus</a>";
+  s += "</body></html>";
 
   configServer.send(200, "text/html", s);
 }
@@ -278,7 +288,7 @@ void setup() {
   if (preferences.getBool("firstboot", true)){
     preferences.putBool("firstboot", false);
     iotWebConf.init();
-    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, "ebusebus", IOTWEBCONF_WORD_LEN);
+    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz", IOTWEBCONF_WORD_LEN);
     iotWebConf.saveConfig();
@@ -307,7 +317,7 @@ void setup() {
   iotWebConf.init();
 
   // -- Set up required URL handlers on the web server.
-  configServer.on("/", []{ iotWebConf.handleConfig(); });
+  configServer.on("/", []{ handleRoot(); });
   configServer.on("/config", []{ iotWebConf.handleConfig(); });
   configServer.on("/param", []{ iotWebConf.handleConfig(); });
   configServer.on("/status", []{ handleStatus(); });
