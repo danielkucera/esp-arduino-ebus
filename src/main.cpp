@@ -12,9 +12,15 @@ Preferences preferences;
   #include <esp_task_wdt.h>
   #include <ESPmDNS.h>
   #include "esp32c3/rom/rtc.h"
+  #include <IotWebConfESP32HTTPUpdateServer.h>
+
+  HTTPUpdateServer httpUpdater;
 #else
   #include <ESP8266mDNS.h>
   #include <ESP8266TrueRandom.h>
+  #include <ESP8266HTTPUpdateServer.h>
+
+  ESP8266HTTPUpdateServer httpUpdater;
 #endif
 
 #define ALPHA 0.3
@@ -254,6 +260,7 @@ void handleRoot()
   s += "<a href='/config'>Configuration</a> - user: admin password: your configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
   s += "<br>";
+  s += "<a href='/firmware'>Firmware update</a><br>";
   s += "<br>";
   s += "For more info see project page: <a href='https://github.com/danielkucera/esp-arduino-ebus'>https://github.com/danielkucera/esp-arduino-ebus</a>";
   s += "</body></html>";
@@ -322,6 +329,10 @@ void setup() {
   configServer.on("/param", []{ iotWebConf.handleConfig(); });
   configServer.on("/status", []{ handleStatus(); });
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
+
+  iotWebConf.setupUpdateServer(
+    [](const char* updatePath) { httpUpdater.setup(&configServer, updatePath); },
+    [](const char* userName, char* password) { httpUpdater.updateCredentials(userName, password); });
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
       iotWebConf.doLoop();
