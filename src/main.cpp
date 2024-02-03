@@ -202,6 +202,42 @@ void saveParamsCallback () {
 
 }
 
+char* status_string(){
+  static char status[1024];
+
+  int pos = 0;
+
+  pos += sprintf(status + pos, "async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
+  pos += sprintf(status + pos, "software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
+  pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
+  pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
+  pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
+  pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
+  pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
+  pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
+  pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
+  pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
+  pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
+  pos += sprintf(status + pos, "nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
+  pos += sprintf(status + pos, "nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
+  pos += sprintf(status + pos, "nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
+  pos += sprintf(status + pos, "nbr lost1: %i\r\n", (int)Bus._nbrLost1);
+  pos += sprintf(status + pos, "nbr lost2: %i\r\n", (int)Bus._nbrLost2);
+  pos += sprintf(status + pos, "nbr won1: %i\r\n", (int)Bus._nbrWon1);
+  pos += sprintf(status + pos, "nbr won2: %i\r\n", (int)Bus._nbrWon2);
+  pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
+  pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
+  pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
+
+  return status;
+}
+
+void handleStatus()
+{
+  configServer.send(200, "text/plain", status_string());
+}
+
+
 void handleRoot()
 {
   // -- Let IotWebConf test and handle captive portal requests.
@@ -273,6 +309,8 @@ void setup() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", []{ iotWebConf.handleConfig(); });
   configServer.on("/config", []{ iotWebConf.handleConfig(); });
+  configServer.on("/param", []{ iotWebConf.handleConfig(); });
+  configServer.on("/status", []{ handleStatus(); });
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
@@ -309,28 +347,7 @@ bool handleStatusServerRequests() {
   WiFiClient client = statusServer.accept();
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.printf("async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
-    client.printf("software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
-    client.printf("uptime: %ld ms\n", millis());
-    client.printf("last_connect_time: %ld ms\n", lastConnectTime);
-    client.printf("reconnect_count: %d \n", reconnectCount);
-    client.printf("rssi: %d dBm\n", WiFi.RSSI());
-    client.printf("free_heap: %d B\n", ESP.getFreeHeap());
-    client.printf("reset_code: %d\n", last_reset_code);
-    client.printf("loop_duration: %ld us\r\n", loopDuration);
-    client.printf("max_loop_duration: %ld us\r\n", maxLoopDuration);
-    client.printf("version: %s\r\n", AUTO_VERSION);
-    client.printf("nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
-    client.printf("nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
-    client.printf("nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
-    client.printf("nbr lost1: %i\r\n", (int)Bus._nbrLost1);
-    client.printf("nbr lost2: %i\r\n", (int)Bus._nbrLost2);
-    client.printf("nbr won1: %i\r\n", (int)Bus._nbrWon1);
-    client.printf("nbr won2: %i\r\n", (int)Bus._nbrWon2);
-    client.printf("nbr late: %i\r\n", (int)Bus._nbrLate);
-    client.printf("nbr errors: %i\r\n", (int)Bus._nbrErrors);
-    client.printf("pwm_value: %i\r\n", get_pwm());
-
+    client.print(status_string());
     client.flush();
     client.stop();
   }
