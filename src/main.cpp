@@ -1,5 +1,6 @@
 #include <ArduinoOTA.h>
-#include <WiFiManager.h>          //https://github.com/tzapu/WiFiManager WiFi Configuration Magic
+#include <IotWebConf.h>
+#include <IotWebConfUsing.h>
 #include "main.hpp"
 #include "enhanced.hpp"
 #include "bus.hpp"
@@ -11,9 +12,15 @@ Preferences preferences;
   #include <esp_task_wdt.h>
   #include <ESPmDNS.h>
   #include "esp32c3/rom/rtc.h"
+  #include <IotWebConfESP32HTTPUpdateServer.h>
+
+  HTTPUpdateServer httpUpdater;
 #else
   #include <ESP8266mDNS.h>
   #include <ESP8266TrueRandom.h>
+  #include <ESP8266HTTPUpdateServer.h>
+
+  ESP8266HTTPUpdateServer httpUpdater;
 #endif
 
 #define ALPHA 0.3
@@ -24,13 +31,18 @@ Preferences preferences;
 
 #define DEFAULT_AP "ebus-test"
 #define DEFAULT_PASS "lectronz"
+#define DEFAULT_APMODE_PASS "ebusebus"
 
 #ifdef ESP32
 TaskHandle_t Task1;
 #endif
 
-WiFiManager wifiManager(Serial1);
-WiFiManagerParameter param_pwm_value("pwm_value", "PWM value", "", 6);
+#define CONFIG_VERSION "eea"
+DNSServer dnsServer;
+WebServer configServer(80);
+char pwm_value_string[8];
+IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
+IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value_string, 8, "130", "1..255", "min='1' max='255' step='1'");
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -50,7 +62,7 @@ int reconnectCount = 0;
 
 int random_ch(){
 #ifdef ESP32
-  return 6;
+  return esp_random() % 13 + 1 ;
 #elif defined(ESP8266)
   return ESP8266TrueRandom.random(1, 13);
 #endif
@@ -185,13 +197,75 @@ void data_loop(void * pvParameters){
   }
 }
 
+
 void saveParamsCallback () {
-  uint8_t new_pwm_value = atoi(param_pwm_value.getValue());
+
+  uint8_t new_pwm_value = atoi(pwm_value_string);
   if (new_pwm_value > 0){
     set_pwm(new_pwm_value);
     preferences.putUInt("pwm_value", new_pwm_value);
   }
-  Serial1.printf("pwm_value set: %s %d\n", param_pwm_value.getValue(), new_pwm_value);
+  DebugSer.printf("pwm_value set: %s %d\n", pwm_value_string, new_pwm_value);
+
+}
+
+char* status_string(){
+  static char status[1024];
+
+  int pos = 0;
+
+  pos += sprintf(status + pos, "async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
+  pos += sprintf(status + pos, "software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
+  pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
+  pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
+  pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
+  pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
+  pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
+  pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
+  pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
+  pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
+  pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
+  pos += sprintf(status + pos, "nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
+  pos += sprintf(status + pos, "nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
+  pos += sprintf(status + pos, "nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
+  pos += sprintf(status + pos, "nbr lost1: %i\r\n", (int)Bus._nbrLost1);
+  pos += sprintf(status + pos, "nbr lost2: %i\r\n", (int)Bus._nbrLost2);
+  pos += sprintf(status + pos, "nbr won1: %i\r\n", (int)Bus._nbrWon1);
+  pos += sprintf(status + pos, "nbr won2: %i\r\n", (int)Bus._nbrWon2);
+  pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
+  pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
+  pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
+
+  return status;
+}
+
+void handleStatus()
+{
+  configServer.send(200, "text/plain", status_string());
+}
+
+
+void handleRoot()
+{
+  // -- Let IotWebConf test and handle captive portal requests.
+  if (iotWebConf.handleCaptivePortal())
+  {
+    // -- Captive portal request were already served.
+    return;
+  }
+  String s = "<html><head><title>esp-eBus adapter</title>";
+  s += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";
+  s += "</head><body>";
+  s += "<a href='/status'>Adapter status</a><br>";
+  s += "<a href='/config'>Configuration</a> - user: admin password: your configured AP mode password or default: ";
+  s += DEFAULT_APMODE_PASS;
+  s += "<br>";
+  s += "<a href='/firmware'>Firmware update</a><br>";
+  s += "<br>";
+  s += "For more info see project page: <a href='https://github.com/danielkucera/esp-arduino-ebus'>https://github.com/danielkucera/esp-arduino-ebus</a>";
+  s += "</body></html>";
+
+  configServer.send(200, "text/html", s);
 }
 
 void setup() {
@@ -200,15 +274,14 @@ void setup() {
   check_reset();
 
 #ifdef ESP32
-  Serial1.begin(115200, SERIAL_8N1, 10, 9);
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
-  Serial1.begin(115200);
   last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
   Bus.begin();
 
-  Serial1.setDebugOutput(true);
+  DebugSer.begin(115200);
+  DebugSer.setDebugOutput(true);
 
   disableTX();
 
@@ -221,24 +294,49 @@ void setup() {
 
   if (preferences.getBool("firstboot", true)){
     preferences.putBool("firstboot", false);
-    WiFi.begin(DEFAULT_AP, DEFAULT_PASS);
+    iotWebConf.init();
+    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
+    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
+    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz", IOTWEBCONF_WORD_LEN);
+    iotWebConf.saveConfig();
+  } else {
+    iotWebConf.skipApStartup();
   }
-
-  WiFi.enableAP(false);
-  WiFi.begin();
 
 #ifdef ESP32
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
 #endif
 
-  wifiManager.setSaveParamsCallback(saveParamsCallback);
-  wifiManager.addParameter(&param_pwm_value);
+  int wifi_ch = random_ch();
+  DebugSer.printf("Channel for AP mode: %d\n", wifi_ch);
+  WiFi.channel(wifi_ch); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
 
-  wifiManager.setHostname(HOSTNAME);
-  wifiManager.setConfigPortalTimeout(120);
-  wifiManager.setWiFiAPChannel(random_ch());
-  wifiManager.autoConnect(HOSTNAME);
-  wifiManager.startWebPortal();
+  iotWebConf.addSystemParameter(&pwm_value_param);
+  iotWebConf.setConfigSavedCallback(&saveParamsCallback);
+  iotWebConf.getApTimeoutParameter()->visible = true;
+  iotWebConf.setWifiConnectionTimeoutMs(7000);
+
+#ifdef STATUS_LED_PIN
+  iotWebConf.setStatusPin(STATUS_LED_PIN);
+#endif
+
+  // -- Initializing the configuration.
+  iotWebConf.init();
+
+  // -- Set up required URL handlers on the web server.
+  configServer.on("/", []{ handleRoot(); });
+  configServer.on("/config", []{ iotWebConf.handleConfig(); });
+  configServer.on("/param", []{ iotWebConf.handleConfig(); });
+  configServer.on("/status", []{ handleStatus(); });
+  configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
+
+  iotWebConf.setupUpdateServer(
+    [](const char* updatePath) { httpUpdater.setup(&configServer, updatePath); },
+    [](const char* userName, char* password) { httpUpdater.updateCredentials(userName, password); });
+
+  while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
+      iotWebConf.doLoop();
+  }
 
   wifiServer.begin();
   wifiServerRO.begin();
@@ -267,31 +365,10 @@ bool handleStatusServerRequests() {
   if (!statusServer.hasClient())
     return false;
 
-  WiFiClient client = statusServer.available();
+  WiFiClient client = statusServer.accept();
 
   if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.printf("async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
-    client.printf("software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
-    client.printf("uptime: %ld ms\n", millis());
-    client.printf("last_connect_time: %ld ms\n", lastConnectTime);
-    client.printf("reconnect_count: %d \n", reconnectCount);
-    client.printf("rssi: %d dBm\n", WiFi.RSSI());
-    client.printf("free_heap: %d B\n", ESP.getFreeHeap());
-    client.printf("reset_code: %d\n", last_reset_code);
-    client.printf("loop_duration: %ld us\r\n", loopDuration);
-    client.printf("max_loop_duration: %ld us\r\n", maxLoopDuration);
-    client.printf("version: %s\r\n", AUTO_VERSION);
-    client.printf("nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
-    client.printf("nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
-    client.printf("nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
-    client.printf("nbr lost1: %i\r\n", (int)Bus._nbrLost1);
-    client.printf("nbr lost2: %i\r\n", (int)Bus._nbrLost2);
-    client.printf("nbr won1: %i\r\n", (int)Bus._nbrWon1);
-    client.printf("nbr won2: %i\r\n", (int)Bus._nbrWon2);
-    client.printf("nbr late: %i\r\n", (int)Bus._nbrLate);
-    client.printf("nbr errors: %i\r\n", (int)Bus._nbrErrors);
-    client.printf("pwm_value: %i\r\n", get_pwm());
-
+    client.print(status_string());
     client.flush();
     client.stop();
   }
@@ -310,7 +387,7 @@ void loop() {
   wdt_feed();
 
 #ifdef ESP32
-  wifiManager.process();
+  iotWebConf.doLoop();
 #endif
 
   if (WiFi.status() != WL_CONNECTED) {

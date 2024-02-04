@@ -119,21 +119,21 @@ void BusType::begin() {
 
 #if USE_SOFTWARE_SERIAL
  #if defined(ESP32)
-  Serial.begin(2400, SERIAL_8N1, -1, UART_TX); // used for writing
+  BusSer.begin(2400, SERIAL_8N1, -1, UART_TX); // used for writing
  #elif defined(ESP8266)
-  Serial.begin(2400, SERIAL_8N1, SERIAL_TX_ONLY, UART_TX);
+  BusSer.begin(2400, SERIAL_8N1, SERIAL_TX_ONLY, UART_TX);
  #endif
   mySerial.enableStartBitTimeStampRecording(true);
   mySerial.enableTx(false);
   mySerial.enableIntTx(false);
   mySerial.begin(2400, SWSERIAL_8N1, UART_RX, -1, false, RXBUFFERSIZE); // used for reading
 #else
-  Serial.setRxBufferSize(RXBUFFERSIZE);
+  BusSer.setRxBufferSize(RXBUFFERSIZE);
  #if defined(ESP32)
-  Serial.begin(2400, SERIAL_8N1, UART_RX, UART_TX); // used for writing
-  Serial.setRxFIFOFull(1);
+  BusSer.begin(2400, SERIAL_8N1, UART_RX, UART_TX); // used for writing
+  BusSer.setRxFIFOFull(1);
  #elif defined(ESP8266)
-  Serial.begin(2400);
+  BusSer.begin(2400);
  #endif
 #endif
 
@@ -145,7 +145,7 @@ void BusType::begin() {
 }
 
 void BusType::end() {
-  Serial.end();
+  BusSer.end();
 #if USE_SOFTWARE_SERIAL
   mySerial.end();
 #endif
@@ -161,11 +161,11 @@ void BusType::end() {
 
 
 int BusType::availableForWrite() {
-  return Serial.availableForWrite();
+  return BusSer.availableForWrite();
 }
 
 size_t BusType::write(uint8_t symbol) {
-  return Serial.write(symbol);
+  return BusSer.write(symbol);
 }
 
 bool BusType::read(data& d) {
@@ -178,8 +178,8 @@ bool BusType::read(data& d) {
         receive(symbol, mySerial.readStartBitTimeStamp());
     }
   #else
-    if (Serial.available()){
-        uint8_t symbol = Serial.read();
+    if (BusSer.available()){
+        uint8_t symbol = BusSer.read();
         receive(symbol, micros());
     }
   #endif
@@ -196,7 +196,7 @@ int BusType::available() {
 #if USE_SOFTWARE_SERIAL
   return mySerial.available(); 
 #else
-  return Serial.available();
+  return BusSer.available();
 #endif  
 }
 

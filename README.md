@@ -18,7 +18,7 @@
     - count the turns between these positions and set the trimmer in the middle position with D1 blinking
     - if you have adjusted the trimmer, disconnect and connect the adapter to bus again
 - search for WiFi networks, you should see network with name "esp-eBus"
-- connect to the network - a configuration page should open automatically
+- connect to the network - a configuration page should open automatically, default password is: ebusebus
 - configure your WiFi network settings (SSID, password)
 - after reboot, you should be able to run `ping esp-ebus.local` successfully from a computer in your network (if your network is correctly configured for mDNS)
 - to verify there are bytes being received by the adapter, you can connect to `esp-ebus.local` port `3334` using telnet - you should see unreadable binary data
@@ -138,15 +138,15 @@ There are following options:
     - heavier option - it will compile the firmware from source code and upload using internall tooling
   - [using espota.py](#espotapy)
     - lightweight - just needs OTA script and precompiled firmware file
-- physically using a USB-TTL adaptor
+- physically using a USB-TTL adaptor or device USB port (HW v5.0+)
 
 ### web interface
-- [reset device](#config-reset) to access config portal
-- connect to the esp-eBus WiFi network
-- click blue `Update` button
+- open web interface of the device by IP or on: http://esp-ebus.local
+- find the update link
 - upload correct firmware file (see hardware revisions)
-- click red `Update` button
-- wait for restart, reconnect to adapter and configure WiFi
+- click `Update` button
+- wait for restart, reconnect to adapter and configure WiFi if not connected automatically
+- in case you cannot open web interface, [reset device](#config-reset) to access it
 
 ### platform.io
 - clone this repository using git
@@ -179,7 +179,19 @@ Uploading: [============================================================] 100% D
 16:33:31 [INFO]: Result: OK
 ```
 
-### upgrading using USB-TTL adaptor
+### upgrading over USB (HW v5.0+)
+ - this version has built-in USB serial interface
+ - download `firmware-fullflash-*` firmware from https://github.com/danielkucera/esp8266-arduino-ebus/releases
+ - connect `PROG` and `GND`
+ - connect adapter to a PC using USB-A - USB-C cable
+ - you should see a new serial port
+ - flash the firmware to address 0x0 using either one of tools:
+   - Web based: https://adafruit.github.io/Adafruit_WebSerial_ESPTool/
+   - Windows: using Flash Download Tools from https://www.espressif.com/en/support/download/other-tools
+   - Linux esptool.py: `esptool.py write_flash 0x0 firmware-fullflash-*`
+
+
+### upgrading over USB-TTL adaptor (before HW v5.0)
 You will need an USB-TTL adaptor (dongle) which suports 3V3 voltage levels and has 3V3 voltage output pin
 - download firmware bin file from https://github.com/danielkucera/esp8266-arduino-ebus/releases
 - download NodeMCU PyFlasher from https://github.com/marcelstoer/nodemcu-pyflasher/releases
