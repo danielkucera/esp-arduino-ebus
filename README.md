@@ -5,21 +5,29 @@
 ## Quickstart
 - connect adapter to ebus
 - you should see at least one LED on the adapter shining (HW v3.0+) - if not, switch eBus wires
+- LED D1 blinking indicates activity on the bus. The adapter comes pre-adjusted but if D1 is still on or off, you need to re-adjust it:
+  - by a configuration in web interface for v6.0 and newer:
+    - open http://esp-ebus.local/param to adjust PWM value
+    - the default value is 130, max is 255, min is 1
+    - when D1 is still on, you need to lower the value
+    - when D1 is still off, you need to raise the value
+  - using trimer RV1 for v5.x and older:
+    - Note: the following directions are reversed (clockwise/counterclockwise) for adapters purchased via elecrow)
+    - turn the trimmer counterclockwise until you find the position between D1 blinking and still on
+    - turn the trimmer clockwise until you find the position between D1 blinking and still off
+    - count the turns between these positions and set the trimmer in the middle position with D1 blinking
+    - if you have adjusted the trimmer, disconnect and connect the adapter to bus again
 - search for WiFi networks, you should see network with name "esp-eBus"
-- connect to the network - a configuration page should open automatically
+- connect to the network - a configuration page should open automatically, default password is: ebusebus
 - configure your WiFi network settings (SSID, password)
 - after reboot, you should be able to run `ping esp-ebus.local` successfully from a computer in your network (if your network is correctly configured for mDNS)
-- LED D1 blinking indicates activity on the bus. The adapter comes pre-adjusted but if D1 is still on or off, you need to re-adjust it using trimer RV1:
-  - turn the trimmer counterclockwise until you find the position between D1 blinking and still on
-  - turn the trimmer clockwise until you find the position between D1 blinking and still off
-  - count the turns between these positions and set the trimmer in the middle position with D1 blinking
+- to verify there are bytes being received by the adapter, you can connect to `esp-ebus.local` port `3334` using telnet - you should see unreadable binary data
+- you can use [ebusd](https://github.com/john30/ebusd) to decode bus messages, see ports section for device option configuration
 - the adapter listens on following TCP ports (latest SW):
   - 3333 - raw - on this port you can both read and write to the eBus - ebusd config: `-d esp-ebus.local:3333`
   - 3334 - listen only port - everything sent to this port will be discarded and not sent to bus
   - 3335 - [enhanced protocol](https://github.com/john30/ebusd/blob/b5d6a49/docs/enhanced_proto.md) - ebusd config: `-d enh:esp-ebus.local:3335`
   - 5555 - status server - you can telnet to this port (or http://esp-ebus.local:5555) to see some basic status info
-- to verify there are bytes being received by the adapter connect to `esp-ebus.local` port `3334` using telnet - you should see unreadable binary data
-- you can use [ebusd](https://github.com/john30/ebusd) to decode bus messages, see ports section for device option configuration
 
 ## Hardware revisions
 
@@ -38,7 +46,7 @@ This section lists adapter hardware revisions together with specifics for each o
 - added TX-disable - GPIO2 - function not working
 
 ### v3.0
-- firmware file: firmware-HW_v3.x.bin 
+- firmware file: firmware-HW_v3.x.bin
 - step-down: ME3116
 - RESET_PIN: MCU GPIO5
 - fixed TX-disable - GPIO2 - blue LED on module shines when TX enabled
@@ -47,19 +55,19 @@ This section lists adapter hardware revisions together with specifics for each o
 - added tp2 - you can apply 24V external power supply between tp2 (+) and BUS GND (-). If you remove D4, you can use an adapter with voltage 5-24V
 
 ### v4.0
-- firmware file: firmware-HW_v4.x.bin 
+- firmware file: firmware-HW_v4.x.bin
 - RESET_PIN: TX-DISABLE (GPIO5)
 - moved TX-DISABLE to GPIO5
 - LEDs position changed
 - added tp3, jp1 - you can apply 24V external power supply between tp2 (+) and tp3 (-). If you cut jp1, you can use any adapter with voltage 5-24V
 
 ### v4.1
-- firmware file: firmware-HW_v4.x.bin 
+- firmware file: firmware-HW_v4.x.bin
 - RESET_PIN: TX-DISABLE (GPIO5)
 - added debug pin to programming header
 
 ### v5.0
-- firmware file: firmware-HW_v5.x.bin 
+- firmware file: firmware-HW_v5.x.bin
 - MCU changed to ESP32-C3
 - RESET_PIN: TO-EBUS (GPIO20)
 - removed TX-DISABLE - MCU doesn't transmit any messages during startup on UART pins
@@ -73,18 +81,28 @@ This section lists adapter hardware revisions together with specifics for each o
 - added LED D8 for MCU status
 
 ### v5.1
-- firmware file: firmware-HW_v5.x.bin 
+- firmware file: firmware-HW_v5.x.bin
 - RESET_PIN: TO-EBUS (GPIO20)
 - fixed reference voltage resistor value
 
 ### v5.2
-- firmware file: firmware-HW_v5.x.bin 
+- firmware file: firmware-HW_v5.x.bin
 - RESET_PIN: TO-EBUS (GPIO20)
 - USB power works with USB-C - USB-C cables
 - replaced VCC selector jumper with 2.0mm pitch:
   - power from EBUS: jumper in position VCC-VBUS
   - power from 5V USB-C connector: jumper removed
   - power from any adapter 5-24V: remove jumper and connect adapter to VCC and GND pins
+
+### v6.0
+- firmware file: firmware-HW_v5.x.bin
+- RESET_PIN: TO-EBUS (GPIO20)
+- trimmer is replaced by PWM setting in web interface
+
+### v6.1
+- firmware file: firmware-HW_v5.x.bin
+- RESET_PIN: TO-EBUS (GPIO20)
+- added missing via in v6.0
 
 ## Troubleshooting
 #### The adapter seems dead, no LED shines or blinks.
@@ -120,15 +138,15 @@ There are following options:
     - heavier option - it will compile the firmware from source code and upload using internall tooling
   - [using espota.py](#espotapy)
     - lightweight - just needs OTA script and precompiled firmware file
-- physically using a USB-TTL adaptor
+- physically using a USB-TTL adaptor or device USB port (HW v5.0+)
 
 ### web interface
-- [reset device](#config-reset) to access config portal
-- connect to the esp-eBus WiFi network
-- click blue `Update` button
+- open web interface of the device by IP or on: http://esp-ebus.local
+- find the update link
 - upload correct firmware file (see hardware revisions)
-- click red `Update` button
-- wait for restart, reconnect to adapter and configure WiFi
+- click `Update` button
+- wait for restart, reconnect to adapter and configure WiFi if not connected automatically
+- in case you cannot open web interface, [reset device](#config-reset) to access it
 
 ### platform.io
 - clone this repository using git
@@ -161,7 +179,19 @@ Uploading: [============================================================] 100% D
 16:33:31 [INFO]: Result: OK
 ```
 
-### upgrading using USB-TTL adaptor
+### upgrading over USB (HW v5.0+)
+ - this version has built-in USB serial interface
+ - download `firmware-fullflash-*` firmware from https://github.com/danielkucera/esp8266-arduino-ebus/releases
+ - connect `PROG` and `GND`
+ - connect adapter to a PC using USB-A - USB-C cable
+ - you should see a new serial port
+ - flash the firmware to address 0x0 using either one of tools:
+   - Web based: https://adafruit.github.io/Adafruit_WebSerial_ESPTool/
+   - Windows: using Flash Download Tools from https://www.espressif.com/en/support/download/other-tools
+   - Linux esptool.py: `esptool.py write_flash 0x0 firmware-fullflash-*`
+
+
+### upgrading over USB-TTL adaptor (before HW v5.0)
 You will need an USB-TTL adaptor (dongle) which suports 3V3 voltage levels and has 3V3 voltage output pin
 - download firmware bin file from https://github.com/danielkucera/esp8266-arduino-ebus/releases
 - download NodeMCU PyFlasher from https://github.com/marcelstoer/nodemcu-pyflasher/releases

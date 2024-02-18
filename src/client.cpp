@@ -1,4 +1,5 @@
 #include "main.hpp"
+#include "bus.hpp"
 
 bool handleNewClient(WiFiServer &server, WiFiClient clients[]) {
   if (!server.hasClient())
@@ -8,7 +9,7 @@ bool handleNewClient(WiFiServer &server, WiFiClient clients[]) {
   int i;
   for (i = 0; i < MAX_SRV_CLIENTS; i++) {
     if (!clients[i]) { // equivalent to !serverClients[i].connected()
-      clients[i] = server.available();
+      clients[i] = server.accept();
       clients[i].setNoDelay(true);
       break;
     }
@@ -16,7 +17,7 @@ bool handleNewClient(WiFiServer &server, WiFiClient clients[]) {
 
   // No free/disconnected slot so reject
   if (i == MAX_SRV_CLIENTS) {
-    server.available().println("busy");
+    server.accept().println("busy");
     // hints: server.available() is a WiFiClient with short-term scope
     // when out of scope, a WiFiClient will
     // - flush() - all data will be sent
@@ -35,8 +36,8 @@ int pushClient(WiFiClient* client, uint8_t B){
 }
 
 void handleClient(WiFiClient* client){
-    while (client->available() && Serial.availableForWrite() > 0) {
+    while (client->available() && Bus.availableForWrite() > 0) {
       // working char by char is not very efficient
-      Serial.write(client->read());
+      Bus.write(client->read());
     }
 }
