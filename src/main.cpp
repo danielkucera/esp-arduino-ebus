@@ -345,10 +345,6 @@ void setup() {
   wifiServerEnh.begin();
   statusServer.begin();
 
-  // Stop the Bus when the OTA update starts, because it interferes with the OTA process
-  ArduinoOTA.onStart([]() {
-    Bus.end();
-  });
   ArduinoOTA.begin();
 
   MDNS.end();
