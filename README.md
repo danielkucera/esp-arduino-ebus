@@ -143,7 +143,7 @@ There are following options:
 ### web interface
 - open web interface of the device by IP or on: http://esp-ebus.local
 - find the update link
-- upload correct firmware file (see hardware revisions)
+- upload correct firmware file (see hardware revisions) - use version WITHOUT `fullflash` keyword
 - click `Update` button
 - wait for restart, reconnect to adapter and configure WiFi if not connected automatically
 - in case you cannot open web interface, [reset device](#config-reset) to access it
