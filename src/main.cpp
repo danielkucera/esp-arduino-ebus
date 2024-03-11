@@ -13,6 +13,7 @@ Preferences preferences;
   #include <ESPmDNS.h>
   #include "esp32c3/rom/rtc.h"
   #include <IotWebConfESP32HTTPUpdateServer.h>
+  #include <esp32-hal.h>
 
   HTTPUpdateServer httpUpdater;
 #else
@@ -209,39 +210,48 @@ void saveParamsCallback () {
 
 }
 
-char* status_string(){
-  static char status[1024];
+String status_string() {
+  String result;
 
-  int pos = 0;
+  result += "firmware_version: " + String(AUTO_VERSION) + "\r\n";
+#ifdef ESP32
+  result += "esp32_chip_model: " + String(ESP.getChipModel()) + " Rev " + String(ESP.getChipRevision()) + "\r\n";
+  result += "esp32_chip_cores: " + String(ESP.getChipCores()) + "\r\n";
+  result += "esp32_chip_temperature: " + String(temperatureRead()) + " °C\r\n";
+#endif
+  result += "cpu_chip_speed: " + String(ESP.getCpuFreqMHz()) + " MHz\r\n";
+  result += "flash_chip_speed: " + String(ESP.getFlashChipSpeed()/1000000) + " MHz\r\n";
+  result += "flash_size: " + String(ESP.getFlashChipSize()/1024/1024) + " MB\r\n";
+  result += "free_heap: " + String(ESP.getFreeHeap()) + " B\r\n";
+  result += "sdk_version: " + String(ESP.getSdkVersion()) + "\r\n";
+  result += "wifi_sid: " + String(WiFi.SSID()) + "\r\n";
+  result += "wifi_ip_address: " + String(WiFi.localIP().toString()) + "\r\n";
+  result += "wifi_rssi: " + String(WiFi.RSSI()) + " dBm\r\n";
+  result += "async_mode: " + String(USE_ASYNCHRONOUS ? "true" : "false") + "\r\n";
+  result += "software_serial_mode: " + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\r\n";
+  result += "uptime: " + String(millis()/1000) + " s\r\n";
+  result += "last_connect_time: " + String(lastConnectTime) + " ms\r\n";
+  result += "reconnect_count: " + String(reconnectCount) + " \r\n";
+  result += "reset_code: " + String(last_reset_code) + "\r\n";
+  result += "loop_duration: " + String(loopDuration) + " µs\r\n";
+  result += "max_loop_duration: " + String(maxLoopDuration) + " µs\r\n";
+  result += "nbr_arbitrations: " + String((int)Bus._nbrArbitrations) + "\r\n";
+  result += "nbr_restarts1: " + String((int)Bus._nbrRestarts1) + "\r\n";
+  result += "nbr_restarts2: " + String((int)Bus._nbrRestarts2) + "\r\n";
+  result += "nbr_lost1: " + String((int)Bus._nbrLost1) + "\r\n";
+  result += "nbr_lost2: " + String((int)Bus._nbrLost2) + "\r\n";
+  result += "nbr_won1: " + String((int)Bus._nbrWon1) + "\r\n";
+  result += "nbr_won2: " + String((int)Bus._nbrWon2) + "\r\n";
+  result += "nbr_late: " + String((int)Bus._nbrLate) + "\r\n";
+  result += "nbr_errors: " + String((int)Bus._nbrErrors) + "\r\n";
+  result += "pwm_value: " + String(get_pwm()) + "\r\n";
 
-  pos += sprintf(status + pos, "async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
-  pos += sprintf(status + pos, "software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
-  pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
-  pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
-  pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
-  pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
-  pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
-  pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
-  pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
-  pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
-  pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
-  pos += sprintf(status + pos, "nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
-  pos += sprintf(status + pos, "nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
-  pos += sprintf(status + pos, "nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
-  pos += sprintf(status + pos, "nbr lost1: %i\r\n", (int)Bus._nbrLost1);
-  pos += sprintf(status + pos, "nbr lost2: %i\r\n", (int)Bus._nbrLost2);
-  pos += sprintf(status + pos, "nbr won1: %i\r\n", (int)Bus._nbrWon1);
-  pos += sprintf(status + pos, "nbr won2: %i\r\n", (int)Bus._nbrWon2);
-  pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
-  pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
-  pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
-
-  return status;
+  return result;
 }
 
 void handleStatus()
 {
-  configServer.send(200, "text/plain", status_string());
+  configServer.send(200, "text/plain; charset=utf-8", status_string());
 }
 
 
