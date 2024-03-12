@@ -210,6 +210,34 @@ void saveParamsCallback () {
 
 }
 
+String get_last_error_str() {
+  String result;
+#ifdef ESP32
+  switch (last_reset_code)
+  {
+    case 1  : result = "Vbat power on reset";break;
+    case 3  : result = "Software reset digital core";break;
+    case 4  : result = "Legacy watch dog reset digital core";break;
+    case 5  : result = "Deep Sleep reset digital core";break;
+    case 6  : result = "Reset by SLC module, reset digital core";break;
+    case 7  : result = "Timer Group0 Watch dog reset digital core";break;
+    case 8  : result = "Timer Group1 Watch dog reset digital core";break;
+    case 9  : result = "RTC Watch dog Reset digital core";break;
+    case 10 : result = "Instrusion tested to reset CPU";break;
+    case 11 : result = "Time Group reset CPU";break;
+    case 12 : result = "Software reset CPU";break;
+    case 13 : result = "RTC Watch dog Reset CPU";break;
+    case 14 : result = "for APP CPU, reseted by PRO CPU";break;
+    case 15 : result = "Reset when the vdd voltage is not stable";break;
+    case 16 : result = "RTC Watch dog reset digital core and rtc module";break;
+    default : result = "Unknown";
+  }
+#elif defined(ESP8266)
+  result = ESP.getResetReason();
+#endif
+  return result;
+}
+
 String status_string() {
   String result;
 
@@ -233,6 +261,7 @@ String status_string() {
   result += "last_connect_time: " + String(lastConnectTime) + " ms\r\n";
   result += "reconnect_count: " + String(reconnectCount) + " \r\n";
   result += "reset_code: " + String(last_reset_code) + "\r\n";
+  result += "reset_reason: " + String(get_last_error_str()) + "\r\n";
   result += "loop_duration: " + String(loopDuration) + " µs\r\n";
   result += "max_loop_duration: " + String(maxLoopDuration) + " µs\r\n";
   result += "nbr_arbitrations: " + String((int)Bus._nbrArbitrations) + "\r\n";
@@ -286,7 +315,10 @@ void setup() {
 #ifdef ESP32
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
-  last_reset_code = (int) ESP.getResetInfoPtr();
+  struct rst_info *last_reset_ptr = ESP.getResetInfoPtr();
+  if (last_reset_ptr != NULL) {
+    last_reset_code = last_reset_ptr->reason;
+  }
 #endif
   Bus.begin();
 
