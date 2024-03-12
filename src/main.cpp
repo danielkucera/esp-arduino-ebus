@@ -215,6 +215,7 @@ String get_last_error_str() {
 #ifdef ESP32
   switch (last_reset_code)
   {
+    case 0  : result = "Normal power On";break;
     case 1  : result = "Vbat power on reset";break;
     case 3  : result = "Software reset digital core";break;
     case 4  : result = "Legacy watch dog reset digital core";break;
@@ -223,13 +224,20 @@ String get_last_error_str() {
     case 7  : result = "Timer Group0 Watch dog reset digital core";break;
     case 8  : result = "Timer Group1 Watch dog reset digital core";break;
     case 9  : result = "RTC Watch dog Reset digital core";break;
-    case 10 : result = "Instrusion tested to reset CPU";break;
-    case 11 : result = "Time Group reset CPU";break;
+    case 10 : result = "Intrusion tested to reset CPU";break;
+    case 11 : result = "Time Group0 reset CPU";break;
     case 12 : result = "Software reset CPU";break;
     case 13 : result = "RTC Watch dog Reset CPU";break;
     case 14 : result = "for APP CPU, reseted by PRO CPU";break;
     case 15 : result = "Reset when the vdd voltage is not stable";break;
     case 16 : result = "RTC Watch dog reset digital core and rtc module";break;
+    case 17 : result = "Time Group1 reset CPU";break;
+    case 18 : result = "Super watchdog reset digital core and rtc module";break;
+    case 19 : result = "Glitch reset digital core and rtc module";break;
+    case 20 : result = "Efuse reset digital core";break;
+    case 21 : result = "USB uart reset digital core";break;
+    case 22 : result = "USB jtag reset digital core";break;
+    case 23 : result = "Power glitch reset digital core and rtc module";break;
     default : result = "Unknown";
   }
 #elif defined(ESP8266)
