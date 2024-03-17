@@ -2,10 +2,6 @@
 #define _ENHANCED_H_
 #include <WiFiClient.h>
 
-enum symbols {
-    SYN = 0xAA
-};
-
 enum requests {
     CMD_INIT = 0,
     CMD_SEND,

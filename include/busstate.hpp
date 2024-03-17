@@ -1,8 +1,10 @@
 #ifndef _BUSSTATE_H_
 #define _BUSSTATE_H_
 #include "main.hpp"
-#include "enhanced.hpp"
 
+enum symbols {
+    SYN = 0xAA
+};
 
 // Implements the state of the bus. The arbitration process can 
 // only start at well defined states of the bus. To asses the 
