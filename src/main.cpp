@@ -3,6 +3,7 @@
 #include <IotWebConfUsing.h>
 #include "main.hpp"
 #include "enhanced.hpp"
+#include "message.hpp"
 #include "bus.hpp"
 #include <Preferences.h>
 
@@ -47,10 +48,12 @@ IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
 WiFiServer wifiServerEnh(3335);
+WiFiServer wifiServerMsg(8888);
 WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
+WiFiClient msgClients[MAX_SRV_CLIENTS];
 
 unsigned long last_comms = 0;
 int last_reset_code = -1;
@@ -161,6 +164,7 @@ void data_process(){
   for (int i = 0; i < MAX_SRV_CLIENTS; i++){
     handleClient(&serverClients[i]);
     handleEnhClient(&enhClients[i]);
+    handleMsgClient(&msgClients[i]);
   }
 
   //check queue for data
@@ -186,6 +190,9 @@ void data_process(){
             last_comms = millis();
           }
         }
+        if (pushMsgClient(&msgClients[i], d._d)){
+          last_comms = millis();
+        }   
       }
     }
   }
@@ -341,6 +348,7 @@ void setup() {
   wifiServer.begin();
   wifiServerRO.begin();
   wifiServerEnh.begin();
+  wifiServerMsg.begin();
   statusServer.begin();
 
   ArduinoOTA.begin();
@@ -407,6 +415,9 @@ void loop() {
     enableTX();
   }
   if (handleNewClient(wifiServerEnh, enhClients)){
+    enableTX();
+  }
+  if (handleNewClient(wifiServerMsg, msgClients)){
     enableTX();
   }
 

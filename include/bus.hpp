@@ -1,6 +1,6 @@
 #ifndef _BUS_H_
 #define _BUS_H_
-#include "main.hpp"
+#include <WiFiClient.h>
 #include "busstate.hpp"
 #include "arbitration.hpp"
 #include "queue"
