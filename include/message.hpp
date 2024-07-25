@@ -4,5 +4,7 @@
 
 int  pushMsgClient(WiFiClient* client, uint8_t B);
 void handleMsgClient(WiFiClient* client);
+char* printMessage();
+int printMessageCounter();
 
 #endif

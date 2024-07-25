@@ -55,6 +55,8 @@ WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 WiFiClient msgClients[MAX_SRV_CLIENTS];
 
+int msgClientsCount = 0;
+
 unsigned long last_comms = 0;
 int last_reset_code = -1;
 
@@ -242,6 +244,9 @@ char* status_string(){
   pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
   pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
+  pos += sprintf(status + pos, "msg clients: %i\r\n", msgClientsCount);
+  pos += sprintf(status + pos, "msg counter: %i\r\n", printMessageCounter());
+  pos += sprintf(status + pos, "last msg: %s\r\n", printMessage());
 
   return status;
 }
@@ -419,6 +424,7 @@ void loop() {
   }
   if (handleNewClient(wifiServerMsg, msgClients)){
     enableTX();
+    msgClientsCount++;
   }
 
   handleNewClient(wifiServerRO, serverClientsRO);

@@ -43,12 +43,29 @@ class Ebus
 public:
 	Ebus() = default;
 
-    const std::vector<uint8_t> push(const uint8_t byte);
+    const std::vector<uint8_t> push_read(const uint8_t byte);
+    const std::vector<uint8_t> push_write(const uint8_t byte);
+
+    inline void clear_write()
+    {
+        m_seq_write.clear();
+    }
+
+    inline const std::string to_string_write() const
+    {
+        return m_seq_write.to_string();
+    }
+
+    inline size_t size_of_write() const
+    {
+        return m_seq_write.size();
+    }
 
 private:
     // State m_state = State::MonitorBus;
 
-    Sequence m_sequence;
+    Sequence m_seq_read;
+    Sequence m_seq_write;
 };   
 
 } // namespace ebus
