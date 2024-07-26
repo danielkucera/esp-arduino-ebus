@@ -9,6 +9,10 @@ int pushMsgClient(WiFiClient* client, uint8_t byte) {
     if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
         const std::vector<uint8_t> sequence = bus.push_read(byte);
         client->write(sequence.data(), sequence.size());
+
+        // if (sequence.size() > 0)
+        //     client->write(bus.to_string_tel_read().c_str());
+
         return 1;
     }
     return 0;
@@ -37,7 +41,7 @@ void handleMsgClient(WiFiClient* client) {
 
 char* printMessage() {
     static char message[34];
-    sprintf(message, "%s\r\n", bus.to_string_write().c_str());
+    sprintf(message, "%s\r\n", bus.to_string_seq_write().c_str());
     return message;
 }
 

@@ -21,32 +21,33 @@
 
 const std::vector<uint8_t> ebus::Ebus::push_read(const uint8_t byte)
 {
-    std::vector<uint8_t> vector;
+  std::vector<uint8_t> vector;
 
-    if (byte == ebus::seq_syn)
+  if (byte == ebus::seq_syn)
+  {
+    if (m_seq_read.size() > 0)
     {
-      if (m_seq_read.size() > 0)
-      {
-        vector = m_seq_read.get_sequence();
-        m_seq_read.clear();
-      }
+     //  m_tel_read = Telegram(m_seq_read);
+      vector = m_seq_read.get_sequence();
+      m_seq_read.clear();
     }
-    else
-    {
-        m_seq_read.push_back(byte);
-    }
+  }
+  else
+  {
+    m_seq_read.push_back(byte);
+  }
 
-    return vector;
+  return vector;
 }
 
 const std::vector<uint8_t> ebus::Ebus::push_write(const uint8_t byte)
 {
-    std::vector<uint8_t> vector;
+  std::vector<uint8_t> vector;
 
-    m_seq_write.push_back(byte);
+  m_seq_write.push_back(byte);
 
-    if (m_seq_write.size() > 0)
-      vector = m_seq_write.get_sequence();
+  if (m_seq_write.size() > 0)
+    vector = m_seq_write.get_sequence();
 
-    return vector;
+  return vector;
 }

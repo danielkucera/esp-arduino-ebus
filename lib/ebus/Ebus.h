@@ -21,6 +21,7 @@
 #define EBUS_EBUS_H
 
 #include "Sequence.h"
+#include "Telegram.h"
 
 namespace ebus
 {
@@ -41,17 +42,22 @@ class Ebus
 {
 
 public:
-	Ebus() = default;
+    Ebus() = default;
 
     const std::vector<uint8_t> push_read(const uint8_t byte);
     const std::vector<uint8_t> push_write(const uint8_t byte);
+
+    inline const std::string to_string_tel_read()
+    {
+        return m_tel_read.to_string();
+    }
 
     inline void clear_write()
     {
         m_seq_write.clear();
     }
 
-    inline const std::string to_string_write() const
+    inline const std::string to_string_seq_write() const
     {
         return m_seq_write.to_string();
     }
@@ -66,6 +72,8 @@ private:
 
     Sequence m_seq_read;
     Sequence m_seq_write;
+
+    Telegram m_tel_read;
 };   
 
 } // namespace ebus
