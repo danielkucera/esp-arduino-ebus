@@ -227,11 +227,16 @@ char* status_string(){
   pos += sprintf(status + pos, "async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
   pos += sprintf(status + pos, "software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
+  #ifdef ESP32
   pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
   pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
+  #endif
   pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
   pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
+  #ifdef ESP8266
+  pos += sprintf(status + pos, "reset_info: %s\n", ESP.getResetInfo().c_str());
+  #endif
   pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
   pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
@@ -263,11 +268,16 @@ String json_string() {
   s += "\"async mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
   s += "\"software serial mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
   s += "\"uptime\":" + String(millis()) + ",";
+  #ifdef ESP32
   s += "\"last_connect_time\":" + String(lastConnectTime) + ",";
   s += "\"reconnect_count\":" + String(reconnectCount) + ",";
+  #endif
   s += "\"rssi\":" + String(WiFi.RSSI()) + ",";
   s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
   s += "\"reset_code\":" + String(last_reset_code) + ",";
+  #ifdef ESP8266
+  s += "\"reset_info\":\"" + ESP.getResetInfo() + "\",";
+  #endif
   s += "\"loop_duration\":" + String(loopDuration) + ",";
   s += "\"max_loop_duration\":" + String(maxLoopDuration) + ",";
   s += "\"version\":\"" + String(AUTO_VERSION) + "\"},";
