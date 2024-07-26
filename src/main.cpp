@@ -64,7 +64,6 @@ int last_reset_code = -1;
 unsigned long loopDuration = 0;
 unsigned long maxLoopDuration = 0;
 unsigned long lastConnectTime = 0;
-int reconnectCount = 0;
 
 int random_ch(){
 #ifdef ESP32
