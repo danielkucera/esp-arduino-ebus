@@ -41,7 +41,7 @@ void handleMsgClient(WiFiClient* client) {
 
 char* printMessage() {
     static char message[34];
-    sprintf(message, "%s\r\n", bus.to_string_seq_write().c_str());
+    sprintf(message, "%s", bus.to_string_seq_write().c_str());
     return message;
 }
 
