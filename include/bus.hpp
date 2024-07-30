@@ -77,4 +77,11 @@ class BusType
 
 extern BusType Bus;
 
+void getArbitrationClient(WiFiClient* &client, uint8_t &address);
+void clearArbitrationClient();
+bool setArbitrationClient(WiFiClient* &client, uint8_t &address);
+
+void arbitrationDone();
+WiFiClient* arbitrationRequested(uint8_t& arbitration_client);
+
 #endif
