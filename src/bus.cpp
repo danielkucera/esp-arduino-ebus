@@ -1,6 +1,5 @@
+#include <queue>
 #include "bus.hpp"
-//#include "enhanced.hpp"
-#include "queue"
 
 // For ESP's based on FreeRTOS we can optimize the arbitration timing.
 // With SoftwareSerial we get notified with an callback that the 

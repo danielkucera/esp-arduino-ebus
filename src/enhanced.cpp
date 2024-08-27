@@ -13,60 +13,6 @@ enum requests {
     CMD_INFO
 };
 
-// // Locking
-// #if USE_ASYNCHRONOUS
-// SemaphoreHandle_t getMutex(){
-//     static SemaphoreHandle_t _lock = NULL;
-//     if(_lock == NULL){
-//         _lock = xSemaphoreCreateMutex();
-//         if(_lock == NULL){
-//             DEBUG_LOG("xSemaphoreCreateMutex failed");
-//             return NULL;
-//         }
-//     }
-//     return _lock;
-// }
-// #define ENH_MUTEX_LOCK()    do {} while (xSemaphoreTake(getMutex(), portMAX_DELAY) != pdPASS)
-// #define ENH_MUTEX_UNLOCK()  xSemaphoreGive(getMutex())
-// #else
-// #define ENH_MUTEX_LOCK()    
-// #define ENH_MUTEX_UNLOCK()  
-// #endif
-
-
-// WiFiClient*   _arbitration_client = NULL;
-// int           _arbitration_address = -1;
-
-// void getEnhArbitrationClient(WiFiClient* &client, uint8_t &address) {
-//     ENH_MUTEX_LOCK();
-//     client = _arbitration_client;
-//     address= _arbitration_address;
-//     ENH_MUTEX_UNLOCK();
-// }
-
-// void clearEnhArbitrationClient() {
-//     ENH_MUTEX_LOCK();
-//     _arbitration_client = 0;
-//     _arbitration_address= -1;
-//     ENH_MUTEX_UNLOCK();
-// }
-
-// bool setEnhArbitrationClient(WiFiClient* &client, uint8_t &address) {
-//     bool result = true;
-//     ENH_MUTEX_LOCK();
-//     if (_arbitration_client == NULL) {
-//         _arbitration_client = client;
-//         _arbitration_address = address;
-//     }
-//     else {
-//         result = false;
-//         client = _arbitration_client;
-//         address = _arbitration_address;
-//     }
-//     ENH_MUTEX_UNLOCK();
-//     return result;
-// }
-
 void decode(int b1, int b2, uint8_t (&data)[2]){
     data[0] = (b1 >> 2) & 0b1111;
     data[1] = ((b1 & 0b11) << 6) | (b2 & 0b00111111);
@@ -90,7 +36,6 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
     }
     if (c == CMD_START){
         if (d == SYN){
-            //clearEnhArbitrationClient();
             clearArbitrationClient();
             DEBUG_LOG("CMD_START SYN\n");
             return;
@@ -98,7 +43,6 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
             // start arbitration
             WiFiClient* cl = client;
             uint8_t     ad = d;
-            //if (!setEnhArbitrationClient(client, d) ) {
             if (!setArbitrationClient(client, d) ) {
                 if (cl!=client) {
                     // only one client can be in arbitration
@@ -113,7 +57,6 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d){
             else {
                 DEBUG_LOG("CMD_START 0x%02x\n", d);
             }       
-            //setEnhArbitrationClient(client, d);
             setArbitrationClient(client, d);
             return;
         }
@@ -195,13 +138,3 @@ int pushEnhClient(WiFiClient* client, uint8_t c, uint8_t d, bool log){
     }
     return 0;
 }
-
-// void enhArbitrationDone() {
-//     clearEnhArbitrationClient();
-// }
-
-// WiFiClient* enhArbitrationRequested(uint8_t& aa) {
-//     WiFiClient* client = NULL;
-//     getEnhArbitrationClient(client, aa);
-//     return client;
-// }
