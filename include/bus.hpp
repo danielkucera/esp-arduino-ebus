@@ -5,6 +5,21 @@
 #include "arbitration.hpp"
 #include "queue"
 
+enum responses {
+    RESETTED = 0x0,
+    RECEIVED = 0x1,
+    STARTED = 0x2,
+    INFO = 0x3,
+    FAILED = 0xa,
+    ERROR_EBUS = 0xb,
+    ERROR_HOST = 0xc
+};
+
+enum errors {
+    ERR_FRAMING = 0x00,
+    ERR_OVERRUN = 0x01
+};
+
 #ifdef ESP32
 #include "atomic"
 #define ATOMIC_INT std::atomic<int>
