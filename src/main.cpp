@@ -227,10 +227,10 @@ char* status_string(){
   pos += sprintf(status + pos, "async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
   pos += sprintf(status + pos, "software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
-  #ifdef ESP32
+ // #ifdef ESP32
   pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
   pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
-  #endif
+ // #endif
   pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
   pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
@@ -268,10 +268,10 @@ String json_string() {
   s += "\"async mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
   s += "\"software serial mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
   s += "\"uptime\":" + String(millis()) + ",";
-  #ifdef ESP32
+  // #ifdef ESP32
   s += "\"last_connect_time\":" + String(lastConnectTime) + ",";
   s += "\"reconnect_count\":" + String(reconnectCount) + ",";
-  #endif
+  // #endif
   s += "\"rssi\":" + String(WiFi.RSSI()) + ",";
   s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
   s += "\"reset_code\":" + String(last_reset_code) + ",";
@@ -366,6 +366,10 @@ void setup() {
 
 #ifdef ESP32
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
+#endif
+
+#ifdef ESP8266
+  WiFi.setAutoReconnect(true);
 #endif
 
   int wifi_ch = random_ch();
@@ -494,11 +498,18 @@ void loop() {
 #endif
 
   if (WiFi.status() != WL_CONNECTED) {
-    reset();
+    lastConnectTime = 0;
+    //reset();
+  }
+  else {
+    if (lastConnectTime == 0) {
+      lastConnectTime = millis();
+      reconnectCount++;
+    }
   }
 
   if (millis() > last_comms + 200*1000 ) {
-    reset();
+    //reset();
   }
 
   // Check if new client on the status server
