@@ -6,6 +6,13 @@
 #define M1 0b11000000
 #define M2 0b10000000
 
+enum requests {
+    CMD_INIT = 0,
+    CMD_SEND,
+    CMD_START,
+    CMD_INFO
+};
+
 // // Locking
 // #if USE_ASYNCHRONOUS
 // SemaphoreHandle_t getMutex(){

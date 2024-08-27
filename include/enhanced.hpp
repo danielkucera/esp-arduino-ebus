@@ -2,13 +2,6 @@
 #define _ENHANCED_H_
 #include <WiFiClient.h>
 
-enum requests {
-    CMD_INIT = 0,
-    CMD_SEND,
-    CMD_START,
-    CMD_INFO
-};
-
 // enum responses {
 //     RESETTED = 0x0,
 //     RECEIVED = 0x1,
