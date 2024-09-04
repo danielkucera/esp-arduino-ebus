@@ -328,7 +328,7 @@ String json_string() {
   s += "\"slave\":\"" + String(escape_json(printCommandSlave()).c_str()) + "\",";
   s += "\"slave size\":" + String(printCommandSlaveSize()) + ",";
   s += "\"slave index\":" + String(printCommandSlaveIndex()) + ",";
-  s += "\"slave state\":" + String(printCommandSlaveState()) + ",";
+  s += "\"slave state\":" + String(printCommandSlaveState()) + "";
   // s += "\"description\":\"" + String(escape_json(printCommandDescription(0)).c_str()) + "\",";
   // s += "\"value\":" + String(escape_json(printCommandValue(0)).c_str()) + "";
   s += "}}}";
@@ -428,7 +428,7 @@ void setup() {
   configServer.on("/config", []{ iotWebConf.handleConfig(); });
   configServer.on("/param", []{ iotWebConf.handleConfig(); });
   configServer.on("/status", []{ handleStatus(); });
-  //configServer.on("/json", []{ handleJson(); });
+  configServer.on("/json", []{ handleJson(); });
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
 
   iotWebConf.setupUpdateServer(
@@ -528,9 +528,9 @@ void loop() {
 
   wdt_feed();
 
-#ifdef ESP32
+// #ifdef ESP32
   iotWebConf.doLoop();
-#endif
+// #endif
 
   if (WiFi.status() != WL_CONNECTED) {
     lastConnectTime = 0;
