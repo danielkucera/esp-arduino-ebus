@@ -1,8 +1,11 @@
 #include "bus.hpp"
 #include "schedule.hpp"
-//#include "command.hpp"
+// #include "command.hpp"
+#ifndef _COMMAND_H_
+std::vector<Command> commandTable;
+#endif
 
-// create command.hpp like this
+// create include/command.hpp like this
 
 // #ifndef _COMMAND_H_
 // #define _COMMAND_H_
@@ -34,10 +37,6 @@ enum class State
 };
 
 State state = State::Idle;
-
-#ifndef _COMMAND_H_
-std::vector<Command> commandTable;
-#endif
 
 size_t commandIndex = 0;
 unsigned long commandCounter = 0;
