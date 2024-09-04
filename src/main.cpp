@@ -2,9 +2,12 @@
 #include <IotWebConf.h>
 #include <IotWebConfUsing.h>
 #include <Preferences.h>
+#include <sstream>
+#include <iomanip>
 #include "main.hpp"
 #include "enhanced.hpp"
 #include "message.hpp"
+#include "schedule.hpp"
 #include "bus.hpp"
 
 Preferences preferences;
@@ -170,9 +173,19 @@ void data_process(){
     handleMsgClient(&msgClients[i]);
   }
 
+  //check schedule for data
+  if (handleSchedule())
+    enableTX();
+
   //check queue for data
   BusType::data d;
   if (Bus.read(d)) {
+
+    // push data do schedule
+    if (pushSchedule(d._enhanced, d._client, d._d)) {
+      last_comms = millis();
+    }
+
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
@@ -206,7 +219,6 @@ void data_loop(void * pvParameters){
     data_process();
   }
 }
-
 
 void saveParamsCallback () {
 
@@ -250,9 +262,6 @@ char* status_string(){
   pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
   pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
-  pos += sprintf(status + pos, "msg clients: %i\r\n", msgClientsCount);
-  pos += sprintf(status + pos, "msg counter: %i\r\n", printMessageCounter());
-  pos += sprintf(status + pos, "last msg: %s\r\n", printMessage());
 
   return status;
 }
@@ -260,6 +269,18 @@ char* status_string(){
 void handleStatus()
 {
   configServer.send(200, "text/plain", status_string());
+}
+
+std::string escape_json(const std::string &s) {
+    std::ostringstream o;
+    for (auto c = s.cbegin(); c != s.cend(); c++) {
+        if (*c == '"' || *c == '\\' || ('\x00' <= *c && *c <= '\x1f')) {
+            o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(*c);
+        } else {
+            o << *c;
+        }
+    }
+    return o.str();
 }
 
 String json_string() {
@@ -295,7 +316,21 @@ String json_string() {
   s += "\"Message\":{";
   s += "\"msg clients\":" + String(msgClientsCount) + ",";
   s += "\"msg counter\":" + String(printMessageCounter()) + ",";
-  s += "\"last msg\":\"" + String(printMessage()) + "\"";
+  s += "\"msg\":\"" + String(printMessage()) + "\",";
+  s += "\"cmd state\":" + String(printCommandState()) + ",";
+  s += "\"cmd counter\":" + String(printCommandCounter()) + ",";
+  s += "\"cmd index\":" + String(printCommandIndex()) + ",";
+  s += "\"master\":\"" + String(escape_json(printCommandMaster()).c_str()) + "\",";
+  s += "\"master size\":" + String(printCommandMasterSize()) + ",";
+  s += "\"master send index\":" + String(printCommandMasterSendIndex()) + ",";  
+  s += "\"master recv index\":" + String(printCommandMasterRecvIndex()) + ",";
+  s += "\"master state\":" + String(printCommandMasterState()) + ",";
+  s += "\"slave\":\"" + String(escape_json(printCommandSlave()).c_str()) + "\",";
+  s += "\"slave size\":" + String(printCommandSlaveSize()) + ",";
+  s += "\"slave index\":" + String(printCommandSlaveIndex()) + ",";
+  s += "\"slave state\":" + String(printCommandSlaveState()) + ",";
+  // s += "\"description\":\"" + String(escape_json(printCommandDescription(0)).c_str()) + "\",";
+  // s += "\"value\":" + String(escape_json(printCommandValue(0)).c_str()) + "";
   s += "}}}";
 
   return s;

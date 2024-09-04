@@ -1,5 +1,5 @@
 /*
- * Copyright (C) Roland Jax 2012-2022 <roland.jax@liwest.at>
+ * Copyright (C) Roland Jax 2012-2024 <roland.jax@liwest.at>
  *
  * This file is part of ebus.
  *
@@ -28,52 +28,54 @@
 namespace ebus
 {
 
-static const uint8_t seq_zero = uint8_t(0x00);     // zero byte
+	static const uint8_t seq_zero = 0x00;	// zero byte
+	static const uint8_t seq_syn = 0xaa;	// synchronization byte
+	static const uint8_t seq_exp = 0xa9;	// expand byte
+	static const uint8_t seq_synexp = 0x01; // expanded synchronization byte
+	static const uint8_t seq_expexp = 0x00; // expanded expand byte
 
-static const uint8_t seq_syn = uint8_t(0xaa);      // synchronization byte
-static const uint8_t seq_exp = uint8_t(0xa9);      // expand byte
-static const uint8_t seq_synexp = uint8_t(0x01);   // expanded synchronization byte
-static const uint8_t seq_expexp = uint8_t(0x00);   // expanded expand byte
+	class Sequence
+	{
 
-class Sequence
-{
+	public:
+		static const size_t npos = -1;
 
-public:
-	static const size_t npos = -1;
+		Sequence() = default;
+		Sequence(const Sequence &seq, const size_t index, size_t len = 0);
 
-	Sequence() = default;
-	Sequence(const Sequence &seq, const size_t index, size_t len = 0);
+		void assign(const std::vector<uint8_t> &vec, const bool extended = true);
 
-	void assign(const std::vector<uint8_t> &vec, const bool extended = true);
+		void push_back(const uint8_t byte, const bool extended = true);
 
-	void push_back(const uint8_t byte, const bool extended = true);
+		const uint8_t &operator[](const size_t index) const;
+		const std::vector<uint8_t> range(const size_t index, const size_t len);
 
-	const uint8_t& operator[](const size_t index) const;
-	const std::vector<uint8_t> range(const size_t index, const size_t len);
+		size_t size() const;
 
-	size_t size() const;
+		void clear();
 
-	void clear();
+		uint8_t crc();
 
-	uint8_t crc();
+		void extend();
+		void reduce();
 
-	void extend();
-	void reduce();
+		const std::string to_string() const;
+		const std::vector<uint8_t> get_sequence() const;
 
-	const std::string to_string() const;
-	const std::vector<uint8_t> get_sequence() const;
+		static const std::vector<uint8_t> range(const std::vector<uint8_t> &seq, const size_t index, const size_t len);
 
-	static const std::vector<uint8_t> range(const std::vector<uint8_t> &seq, const size_t index, const size_t len);
+		static const std::vector<uint8_t> to_vector(const std::string &str);
 
-private:
-	std::vector<uint8_t> m_seq;
+		static const std::string to_string(const std::vector<uint8_t> &vec);
 
-	bool m_extended = false;
+	private:
+		std::vector<uint8_t> m_seq;
 
-	uint8_t calc_crc(const uint8_t byte, const uint8_t init);
-};
+		bool m_extended = false;
+
+		uint8_t calc_crc(const uint8_t byte, const uint8_t init);
+	};
 
 } // namespace ebus
 
 #endif // EBUS_SEQUENCE_H
-
