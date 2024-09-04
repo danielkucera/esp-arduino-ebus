@@ -5,16 +5,16 @@
 
 enum class datatype
 {
-    bcd,
-    uch,
-    sch,
-    uin,
-    sin,
-    d1b,
-    d1c,
-    d2b,
-    d2c,
-    flt
+    bcd, // BCD
+    uch, // uint8_t
+    sch, // int8_t
+    uin, // uint16_t
+    sin, // int16_t
+    d1b, // DATA1b
+    d1c, // DATA1c
+    d2b, // DATA2b
+    d2c, // DATA2c
+    flt  // float
 };
 
 struct Command
