@@ -2,8 +2,6 @@
 #include <IotWebConf.h>
 #include <IotWebConfUsing.h>
 #include <Preferences.h>
-#include <sstream>
-#include <iomanip>
 #include "main.hpp"
 #include "enhanced.hpp"
 #include "message.hpp"
@@ -53,7 +51,6 @@ WiFiServer wifiServerRO(3334);
 WiFiServer wifiServerEnh(3335);
 WiFiServer wifiServerMsg(8888);
 WiFiServer statusServer(5555);
-WiFiServer jsonServer(6666);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
@@ -271,20 +268,8 @@ void handleStatus()
   configServer.send(200, "text/plain", status_string());
 }
 
-std::string escape_json(const std::string &s) {
-    std::ostringstream o;
-    for (auto c = s.cbegin(); c != s.cend(); c++) {
-        if (*c == '"' || *c == '\\' || ('\x00' <= *c && *c <= '\x1f')) {
-            o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(*c);
-        } else {
-            o << *c;
-        }
-    }
-    return o.str();
-}
-
-String json_string() {
-
+void handleJsonStatus()
+{
   String s = "{\"esp-eBus\":{\"Status\":{";
   s += "\"async mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
   s += "\"software serial mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
@@ -296,9 +281,9 @@ String json_string() {
   s += "\"rssi\":" + String(WiFi.RSSI()) + ",";
   s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
   s += "\"reset_code\":" + String(last_reset_code) + ",";
-  #ifdef ESP8266
+#ifdef ESP8266
   s += "\"reset_info\":\"" + ESP.getResetInfo() + "\",";
-  #endif
+#endif
   s += "\"loop_duration\":" + String(loopDuration) + ",";
   s += "\"max_loop_duration\":" + String(maxLoopDuration) + ",";
   s += "\"version\":\"" + String(AUTO_VERSION) + "\"},";
@@ -320,25 +305,23 @@ String json_string() {
   s += "\"cmd state\":" + String(printCommandState()) + ",";
   s += "\"cmd counter\":" + String(printCommandCounter()) + ",";
   s += "\"cmd index\":" + String(printCommandIndex()) + ",";
-  s += "\"master\":\"" + String(escape_json(printCommandMaster()).c_str()) + "\",";
+  s += "\"master\":\"" + String(printCommandMaster()) + "\",";
   s += "\"master size\":" + String(printCommandMasterSize()) + ",";
-  s += "\"master send index\":" + String(printCommandMasterSendIndex()) + ",";  
+  s += "\"master send index\":" + String(printCommandMasterSendIndex()) + ",";
   s += "\"master recv index\":" + String(printCommandMasterRecvIndex()) + ",";
   s += "\"master state\":" + String(printCommandMasterState()) + ",";
-  s += "\"slave\":\"" + String(escape_json(printCommandSlave()).c_str()) + "\",";
+  s += "\"slave\":\"" + String(printCommandSlave()) + "\",";
   s += "\"slave size\":" + String(printCommandSlaveSize()) + ",";
   s += "\"slave index\":" + String(printCommandSlaveIndex()) + ",";
   s += "\"slave state\":" + String(printCommandSlaveState()) + "";
-  // s += "\"description\":\"" + String(escape_json(printCommandDescription(0)).c_str()) + "\",";
-  // s += "\"value\":" + String(escape_json(printCommandValue(0)).c_str()) + "";
   s += "}}}";
 
-  return s;
+  configServer.send(200, "application/json;charset=utf-8", s);
 }
 
-void handleJson()
+void handleJsonData()
 {
-  configServer.send(200, "application/json;charset=utf-8", json_string());
+  configServer.send(200, "application/json;charset=utf-8", printCommandJsonData());
 }
 
 void handleRoot()
@@ -428,7 +411,8 @@ void setup() {
   configServer.on("/config", []{ iotWebConf.handleConfig(); });
   configServer.on("/param", []{ iotWebConf.handleConfig(); });
   configServer.on("/status", []{ handleStatus(); });
-  configServer.on("/json", []{ handleJson(); });
+  configServer.on("/json/status", []{ handleJsonStatus(); });
+  configServer.on("/json/data", []{ handleJsonData(); });
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
 
   iotWebConf.setupUpdateServer(
@@ -444,7 +428,6 @@ void setup() {
   wifiServerEnh.begin();
   wifiServerMsg.begin();
   statusServer.begin();
-  jsonServer.begin();
 
   ArduinoOTA.begin();
 
@@ -474,49 +457,6 @@ bool handleStatusServerRequests() {
   return true;
 }
 
-bool handleJsonServerRequests() {
-  if (!jsonServer.hasClient())
-    return false;
-
-  WiFiClient client = jsonServer.accept();
-
-  boolean isBlank = true;
-
-  while (client.connected()) {
-    
-    if (client.available()) {
-      
-      char c = client.read();
-
-      if (c == '\n' && isBlank) {
-        client.println("HTTP/1.1 200 OK");
-        client.println("Content-Type: application/json;charset=utf-8");
-        client.println("Server: esp-eBus");
-        client.println("Connnection: close");
-        client.println();
-
-        client.print(json_string());
-
-        client.println();
-        break;
-      }
-      else if (c == '\n') {
-        isBlank = true;
-      }
-      else if (c != '\r') {
-        isBlank = false;
-      }
-
-    }
-
-  }
-
-  client.flush();
-  client.stop();
-  
-  return true;
-}
-
 void loop() {
   ArduinoOTA.handle();
 
@@ -528,12 +468,14 @@ void loop() {
 
   wdt_feed();
 
+// TODO iotWebConf.doLoop() enabled - is there a reason why it was disabled?
 // #ifdef ESP32
   iotWebConf.doLoop();
 // #endif
 
   if (WiFi.status() != WL_CONNECTED) {
     lastConnectTime = 0;
+    // TODO call of reset() commented out in order to prevent restarts in listening mode
     //reset();
   }
   else {
@@ -544,20 +486,13 @@ void loop() {
   }
 
   if (millis() > last_comms + 200*1000 ) {
+    // TODO call of reset() commented out in order to prevent restarts in listening mode
     //reset();
   }
 
   // Check if new client on the status server
   if (handleStatusServerRequests()) {
     // exclude handleStatusServerRequests from maxLoopDuration calculation
-    // as it skews the typical loop duration and set maxLoopDuration to 0
-    loop_duration();
-    maxLoopDuration = 0;
-  }
-
-  // Check if new client on the json server
-  if (handleJsonServerRequests()) {
-    // exclude handleJsonServerRequests from maxLoopDuration calculation
     // as it skews the typical loop duration and set maxLoopDuration to 0
     loop_duration();
     maxLoopDuration = 0;

@@ -38,14 +38,16 @@ bool pushSchedule(bool enhanced, WiFiClient *client, uint8_t byte);
 size_t printCommandState();
 unsigned long printCommandCounter();
 size_t printCommandIndex();
-std::string printCommandMaster();
+String printCommandMaster();
 size_t printCommandMasterSize();
 size_t printCommandMasterSendIndex();
 size_t printCommandMasterRecvIndex();
 size_t printCommandMasterState();
-std::string printCommandSlave();
-size_t printCommandSlaveSize();
+String printCommandSlave();
+size_t printCommandSlaveSize(); 
 size_t printCommandSlaveIndex();
 size_t printCommandSlaveState();
+
+String printCommandJsonData();
 
 #endif

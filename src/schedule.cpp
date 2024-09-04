@@ -1,3 +1,5 @@
+#include <sstream>
+#include <iomanip>
 #include "bus.hpp"
 #include "schedule.hpp"
 // #include "command.hpp"
@@ -42,7 +44,7 @@ size_t commandIndex = 0;
 unsigned long commandCounter = 0;
 
 unsigned long millisLastCommand = 0;
-unsigned long distanceCommands = 20 * 1000;
+unsigned long distanceCommands = 20 * 1000; // TODO Systemparameter ?
 
 uint8_t QQ = 0xff; // TODO Systemparameter ?
 
@@ -130,6 +132,23 @@ std::string printCommandValue(size_t index)
     }
 
     return ostr.str();
+}
+
+std::string escape_json(const std::string &s)
+{
+    std::ostringstream o;
+    for (auto c = s.cbegin(); c != s.cend(); c++)
+    {
+        if (*c == '"' || *c == '\\' || ('\x00' <= *c && *c <= '\x1f'))
+        {
+            o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(*c);
+        }
+        else
+        {
+            o << *c;
+        }
+    }
+    return o.str();
 }
 
 void resetData()
@@ -373,9 +392,9 @@ size_t printCommandIndex()
     return commandIndex;
 }
 
-std::string printCommandMaster()
+String printCommandMaster()
 {
-    return master.to_string();
+    return escape_json(master.to_string()).c_str();
 }
 
 size_t printCommandMasterSize()
@@ -398,9 +417,9 @@ size_t printCommandMasterState()
     return telegram.getMasterState();
 }
 
-std::string printCommandSlave()
+String printCommandSlave()
 {
-    return slave.to_string();
+    return escape_json(slave.to_string()).c_str();
 }
 
 size_t printCommandSlaveSize()
@@ -416,4 +435,18 @@ size_t printCommandSlaveIndex()
 size_t printCommandSlaveState()
 {
     return telegram.getSlaveState();
+}
+
+String printCommandJsonData()
+{
+    String s = "{\"esp-eBus\":{\"Data\":{";
+    for(size_t i = 0; i < commandTable.size(); i++)
+    {
+        s += "\"" + String(escape_json(printCommandDescription(i)).c_str()) + "\":";
+        s += String(escape_json(printCommandValue(i)).c_str()) + ",";
+    }
+    s.remove(s.length()-1,1);
+    s += "}}}";
+
+    return s;
 }
