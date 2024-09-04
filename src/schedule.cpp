@@ -440,12 +440,15 @@ size_t printCommandSlaveState()
 String printCommandJsonData()
 {
     String s = "{\"esp-eBus\":{\"Data\":{";
-    for(size_t i = 0; i < commandTable.size(); i++)
+    for (size_t i = 0; i < commandTable.size(); i++)
     {
         s += "\"" + String(escape_json(printCommandDescription(i)).c_str()) + "\":";
         s += String(escape_json(printCommandValue(i)).c_str()) + ",";
     }
-    s.remove(s.length()-1,1);
+
+    if (commandTable.size() > 0)
+        s.remove(s.length() - 1, 1);
+
     s += "}}}";
 
     return s;
