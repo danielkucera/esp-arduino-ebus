@@ -108,6 +108,29 @@ std::vector<uint8_t> ebus::int16_2_byte(const int16_t &value)
 	return (int2byte<int16_t>(value));
 }
 
+// uint32_t
+uint32_t ebus::byte_2_uint32(const std::vector<uint8_t>& bytes)
+{
+	return (byte2int<uint32_t>(bytes));
+}
+
+std::vector<uint8_t> ebus::uint32_2_byte(const uint32_t& value)
+{
+	return (int2byte<uint32_t>(value));
+}
+
+
+// int32_t
+int32_t ebus::byte_2_int32(const std::vector<uint8_t>& bytes)
+{
+	return (byte2int<int32_t>(bytes));
+}
+
+std::vector<uint8_t> ebus::int32_2_byte(const int32_t& value)
+{
+	return (int2byte<int32_t>(value));
+}
+
 // DATA1b
 double_t ebus::byte_2_data1b(const std::vector<uint8_t> &bytes)
 {

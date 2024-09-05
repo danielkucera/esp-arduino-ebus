@@ -98,6 +98,16 @@ namespace ebus
 
 	std::vector<uint8_t> int16_2_byte(const int16_t &value);
 
+	// uint32_t
+	uint32_t byte_2_uint32(const std::vector<uint8_t> &bytes);
+
+	std::vector<uint8_t> uint32_2_byte(const uint32_t &value);
+
+	// int32_t
+	int32_t byte_2_int32(const std::vector<uint8_t> &bytes);
+
+	std::vector<uint8_t> int32_2_byte(const int32_t &value);
+
 	// DATA1b
 	double_t byte_2_data1b(const std::vector<uint8_t> &bytes);
 
