@@ -79,8 +79,7 @@ uint8_t ebus::Sequence::crc()
 	for (size_t i = 0; i < m_seq.size(); i++)
 		crc = calc_crc(m_seq.at(i), crc);
 
-	if (!m_extended)
-		reduce();
+	reduce();
 
 	return (crc);
 }

@@ -44,7 +44,7 @@ size_t commandIndex = 0;
 unsigned long commandCounter = 0;
 
 unsigned long millisLastCommand = 0;
-unsigned long distanceCommands = 20 * 1000; // TODO Systemparameter ?
+unsigned long distanceCommands = 10 * 1000; // TODO Systemparameter ?
 
 uint8_t QQ = 0xff; // TODO Systemparameter ?
 
@@ -84,6 +84,12 @@ void saveCommandValue(datatype type, ebus::Sequence seq)
     case datatype::sin:
         commandTable[commandIndex].ivalue = ebus::byte_2_int16(telegram.getSlave().range(1, 2));
         break;
+    case datatype::ulg:
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint32(telegram.getSlave().range(1, 2));
+        break;
+    case datatype::slg:
+        commandTable[commandIndex].ivalue = ebus::byte_2_int32(telegram.getSlave().range(1, 2));
+        break;
     case datatype::d1b:
         commandTable[commandIndex].dvalue = ebus::byte_2_data1b(telegram.getSlave().range(1, 1));
         break;
@@ -120,14 +126,22 @@ std::string printCommandValue(size_t index)
     case datatype::bcd:
     case datatype::uch:
     case datatype::uin:
+    case datatype::ulg:
         ostr << commandTable[index].uvalue;
         break;
     case datatype::sch:
     case datatype::sin:
+    case datatype::slg:
         ostr << commandTable[index].ivalue;
         break;
-    default:
+    case datatype::d1b:
+    case datatype::d1c:
+    case datatype::d2b:
+    case datatype::d2c:
+    case datatype::flt:
         ostr << commandTable[index].dvalue;
+        break;
+    default:
         break;
     }
 
@@ -200,7 +214,7 @@ bool handleSchedule()
             if (telegram.getMasterState() == SEQ_OK)
             {
                 master = telegram.getMaster();
-                master.push_back(telegram.getMasterCRC());
+                master.push_back(telegram.getMasterCRC(), false);
                 master.extend();
 
                 // start arbitration

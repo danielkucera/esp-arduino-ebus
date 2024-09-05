@@ -10,6 +10,8 @@ enum class datatype
     sch, // int8_t
     uin, // uint16_t
     sin, // int16_t
+    ulg, // uint32_t
+    slg, // int32_t
     d1b, // DATA1b
     d1c, // DATA1c
     d2b, // DATA2b
@@ -24,8 +26,8 @@ struct Command
     const char *unit;    // unit of interested value
     const datatype type; // datatype of interested value
     int pos;             // position of interested value
-    uint uvalue;         // value as unsigned char/integer
-    int ivalue;          // value as char/interger
+    uint32_t uvalue;     // value as unsigned char/integer
+    int32_t ivalue;      // value as char/interger
     double dvalue;       // value as double
 };
 
@@ -44,7 +46,7 @@ size_t printCommandMasterSendIndex();
 size_t printCommandMasterRecvIndex();
 size_t printCommandMasterState();
 String printCommandSlave();
-size_t printCommandSlaveSize(); 
+size_t printCommandSlaveSize();
 size_t printCommandSlaveIndex();
 size_t printCommandSlaveState();
 
