@@ -1,10 +1,10 @@
 #include <ArduinoOTA.h>
 #include <IotWebConf.h>
 #include <IotWebConfUsing.h>
+#include <Preferences.h>
 #include "main.hpp"
 #include "enhanced.hpp"
 #include "bus.hpp"
-#include <Preferences.h>
 
 Preferences preferences;
 
@@ -307,6 +307,10 @@ void setup() {
   WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
 #endif
 
+#ifdef ESP8266
+  WiFi.setAutoReconnect(true);
+#endif  
+
   int wifi_ch = random_ch();
   DebugSer.printf("Channel for AP mode: %d\n", wifi_ch);
   WiFi.channel(wifi_ch); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
@@ -387,7 +391,13 @@ void loop() {
 #endif
 
   if (WiFi.status() != WL_CONNECTED) {
-    reset();
+    lastConnectTime = 0;
+  }
+  else {
+    if (lastConnectTime == 0) {
+      lastConnectTime = millis();
+      reconnectCount++;
+    }
   }
 
   if (millis() > last_comms + 200*1000 ) {
