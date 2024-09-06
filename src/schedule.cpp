@@ -85,10 +85,10 @@ void saveCommandValue(datatype type, ebus::Sequence seq)
         commandTable[commandIndex].ivalue = ebus::byte_2_int16(telegram.getSlave().range(1, 2));
         break;
     case datatype::ulg:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint32(telegram.getSlave().range(1, 2));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint32(telegram.getSlave().range(1, 4));
         break;
     case datatype::slg:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int32(telegram.getSlave().range(1, 2));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int32(telegram.getSlave().range(1, 4));
         break;
     case datatype::d1b:
         commandTable[commandIndex].dvalue = ebus::byte_2_data1b(telegram.getSlave().range(1, 1));
