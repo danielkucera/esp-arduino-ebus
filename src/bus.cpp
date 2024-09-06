@@ -84,7 +84,6 @@ WiFiClient* arbitrationRequested(uint8_t& aa) {
     return client;
 }
 
-
 BusType::BusType()
   : _nbrRestarts1(0)
   , _nbrRestarts2(0)

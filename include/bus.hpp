@@ -20,6 +20,13 @@ enum errors {
     ERR_OVERRUN = 0x01
 };
 
+void getArbitrationClient(WiFiClient* &client, uint8_t &address);
+void clearArbitrationClient();
+bool setArbitrationClient(WiFiClient* &client, uint8_t &address);
+
+void arbitrationDone();
+WiFiClient* arbitrationRequested(uint8_t& arbitration_client);
+
 #ifdef ESP32
 #include "atomic"
 #define ATOMIC_INT std::atomic<int>
@@ -91,12 +98,5 @@ class BusType
 };
 
 extern BusType Bus;
-
-void getArbitrationClient(WiFiClient* &client, uint8_t &address);
-void clearArbitrationClient();
-bool setArbitrationClient(WiFiClient* &client, uint8_t &address);
-
-void arbitrationDone();
-WiFiClient* arbitrationRequested(uint8_t& arbitration_client);
 
 #endif
