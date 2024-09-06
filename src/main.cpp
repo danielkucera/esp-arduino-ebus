@@ -388,7 +388,7 @@ void setup() {
 
 #ifdef ESP8266
   WiFi.setAutoReconnect(true);
-#endif
+#endif  
 
   int wifi_ch = random_ch();
   DebugSer.printf("Channel for AP mode: %d\n", wifi_ch);
@@ -475,8 +475,6 @@ void loop() {
 
   if (WiFi.status() != WL_CONNECTED) {
     lastConnectTime = 0;
-    // TODO call of reset() commented out in order to prevent restarts in listening mode
-    //reset();
   }
   else {
     if (lastConnectTime == 0) {
