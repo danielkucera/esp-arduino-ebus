@@ -56,10 +56,10 @@ uint8_t ebus::byte_2_bcd(const std::vector<uint8_t> &bytes)
 std::vector<uint8_t> ebus::bcd_2_byte(const uint8_t &value)
 {
 	uint8_t byte = convert_base(value, 10, 16);
-	std::vector<uint8_t> result(1, uint8_t(byte));
+	std::vector<uint8_t> result(1, byte);
 
 	if (value > 99)
-		result[0] = uint8_t(0xff);
+		result[0] = 0xff;
 
 	return (result);
 }
