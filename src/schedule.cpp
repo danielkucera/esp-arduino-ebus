@@ -24,8 +24,6 @@ std::vector<Command> commandTable;
 #include "Sequence.h"
 #include "Telegram.h"
 
-#include <sstream>
-
 enum class State
 {
     Idle,
