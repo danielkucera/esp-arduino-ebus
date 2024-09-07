@@ -484,8 +484,7 @@ void loop() {
   }
 
   if (millis() > last_comms + 200*1000 ) {
-    // TODO call of reset() commented out in order to prevent restarts in listening mode
-    //reset();
+    reset();
   }
 
   // Check if new client on the status server
