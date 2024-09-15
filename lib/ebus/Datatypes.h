@@ -17,6 +17,8 @@
  * along with ebus. If not, see http://www.gnu.org/licenses/.
  */
 
+// This file offers various functions for decoding/encoding in accordance with the ebus data types and beyond.
+
 #ifndef EBUS_DATATYPES_H
 #define EBUS_DATATYPES_H
 

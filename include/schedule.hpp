@@ -3,6 +3,10 @@
 
 #include <WiFiClient.h>
 
+// Implementation of the perodic sending of predefined commands (Master-Slave Telegram)
+// based on the ebus classes Telegram, Sequence and Datatypes.
+// The results are provided as a json string.
+
 enum class datatype
 {
     bcd, // BCD

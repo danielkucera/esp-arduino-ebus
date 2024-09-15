@@ -4,7 +4,6 @@
 #include <Preferences.h>
 #include "main.hpp"
 #include "enhanced.hpp"
-#include "message.hpp"
 #include "schedule.hpp"
 #include "statistic.hpp"
 #include "bus.hpp"
@@ -50,14 +49,10 @@ IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
 WiFiServer wifiServerEnh(3335);
-WiFiServer wifiServerMsg(8888);
 WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
-WiFiClient msgClients[MAX_SRV_CLIENTS];
-
-int msgClientsCount = 0;
 
 unsigned long last_comms = 0;
 int last_reset_code = -1;
@@ -169,7 +164,6 @@ void data_process(){
   for (int i = 0; i < MAX_SRV_CLIENTS; i++){
     handleClient(&serverClients[i]);
     handleEnhClient(&enhClients[i]);
-    handleMsgClient(&msgClients[i]);
   }
 
   //check schedule for data
@@ -210,9 +204,6 @@ void data_process(){
             last_comms = millis();
           }
         }
-        if (pushMsgClient(&msgClients[i], d._d)){
-          last_comms = millis();
-        }   
       }
     }
   }
@@ -240,8 +231,8 @@ char* status_string(){
 
   int pos = 0;
 
-  pos += sprintf(status + pos, "async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
-  pos += sprintf(status + pos, "software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
+  pos += sprintf(status + pos, "async_mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
+  pos += sprintf(status + pos, "software_serial_mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
  // #ifdef ESP32
   pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
@@ -256,15 +247,15 @@ char* status_string(){
   pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
   pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
-  pos += sprintf(status + pos, "nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
-  pos += sprintf(status + pos, "nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
-  pos += sprintf(status + pos, "nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
-  pos += sprintf(status + pos, "nbr lost1: %i\r\n", (int)Bus._nbrLost1);
-  pos += sprintf(status + pos, "nbr lost2: %i\r\n", (int)Bus._nbrLost2);
-  pos += sprintf(status + pos, "nbr won1: %i\r\n", (int)Bus._nbrWon1);
-  pos += sprintf(status + pos, "nbr won2: %i\r\n", (int)Bus._nbrWon2);
-  pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
-  pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
+  pos += sprintf(status + pos, "nbr_arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
+  pos += sprintf(status + pos, "nbr_restarts1: %i\r\n", (int)Bus._nbrRestarts1);
+  pos += sprintf(status + pos, "nbr_restarts2: %i\r\n", (int)Bus._nbrRestarts2);
+  pos += sprintf(status + pos, "nbr_lost1: %i\r\n", (int)Bus._nbrLost1);
+  pos += sprintf(status + pos, "nbr_lost2: %i\r\n", (int)Bus._nbrLost2);
+  pos += sprintf(status + pos, "nbr_won1: %i\r\n", (int)Bus._nbrWon1);
+  pos += sprintf(status + pos, "nbr_won2: %i\r\n", (int)Bus._nbrWon2);
+  pos += sprintf(status + pos, "nbr_late: %i\r\n", (int)Bus._nbrLate);
+  pos += sprintf(status + pos, "nbr_errors: %i\r\n", (int)Bus._nbrErrors);
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
 
   return status;
@@ -278,8 +269,8 @@ void handleStatus()
 void handleJsonStatus()
 {
   String s = "{\"esp-eBus\":{\"Status\":{";
-  s += "\"async mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
-  s += "\"software serial mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
+  s += "\"async_mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
+  s += "\"software_serial_mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
   s += "\"uptime\":" + String(millis()) + ",";
   // #ifdef ESP32
   s += "\"last_connect_time\":" + String(lastConnectTime) + ",";
@@ -295,32 +286,29 @@ void handleJsonStatus()
   s += "\"max_loop_duration\":" + String(maxLoopDuration) + ",";
   s += "\"version\":\"" + String(AUTO_VERSION) + "\"},";
   s += "\"Arbitration\":{";
-  s += "\"nbr arbitrations\":" + String(Bus._nbrArbitrations) + ",";
-  s += "\"nbr restarts1\":" + String(Bus._nbrRestarts1) + ",";
-  s += "\"nbr restarts2\":" + String(Bus._nbrRestarts2) + ",";
-  s += "\"nbr lost1\":" + String(Bus._nbrLost1) + ",";
-  s += "\"nbr lost2\":" + String(Bus._nbrLost2) + ",";
-  s += "\"nbr won1\":" + String(Bus._nbrWon1) + ",";
-  s += "\"nbr won2\":" + String(Bus._nbrWon2) + ",";
-  s += "\"nbr late\":" + String(Bus._nbrLate) + ",";
-  s += "\"nbr errors\":" + String(Bus._nbrErrors) + ",";
+  s += "\"nbr_arbitrations\":" + String(Bus._nbrArbitrations) + ",";
+  s += "\"nbr_restarts1\":" + String(Bus._nbrRestarts1) + ",";
+  s += "\"nbr_restarts2\":" + String(Bus._nbrRestarts2) + ",";
+  s += "\"nbr_lost1\":" + String(Bus._nbrLost1) + ",";
+  s += "\"nbr_lost2\":" + String(Bus._nbrLost2) + ",";
+  s += "\"nbr_won1\":" + String(Bus._nbrWon1) + ",";
+  s += "\"nbr_won2\":" + String(Bus._nbrWon2) + ",";
+  s += "\"nbr_late\":" + String(Bus._nbrLate) + ",";
+  s += "\"nbr_errors\":" + String(Bus._nbrErrors) + ",";
   s += "\"pwm_value\":" + String(get_pwm()) + "},";
-  s += "\"Message\":{";
-  s += "\"msg clients\":" + String(msgClientsCount) + ",";
-  s += "\"msg counter\":" + String(printMessageCounter()) + ",";
-  s += "\"msg\":\"" + String(printMessage()) + "\",";
-  s += "\"cmd state\":" + String(printCommandState()) + ",";
-  s += "\"cmd counter\":" + String(printCommandCounter()) + ",";
-  s += "\"cmd index\":" + String(printCommandIndex()) + ",";
+  s += "\"Command\":{";
+  s += "\"cmd_state\":" + String(printCommandState()) + ",";
+  s += "\"cmd_counter\":" + String(printCommandCounter()) + ",";
+  s += "\"cmd_index\":" + String(printCommandIndex()) + ",";
   s += "\"master\":\"" + String(printCommandMaster()) + "\",";
-  s += "\"master size\":" + String(printCommandMasterSize()) + ",";
-  s += "\"master send index\":" + String(printCommandMasterSendIndex()) + ",";
-  s += "\"master recv index\":" + String(printCommandMasterRecvIndex()) + ",";
-  s += "\"master state\":" + String(printCommandMasterState()) + ",";
+  s += "\"master_size\":" + String(printCommandMasterSize()) + ",";
+  s += "\"master_send_index\":" + String(printCommandMasterSendIndex()) + ",";
+  s += "\"master_recv_index\":" + String(printCommandMasterRecvIndex()) + ",";
+  s += "\"master_state\":" + String(printCommandMasterState()) + ",";
   s += "\"slave\":\"" + String(printCommandSlave()) + "\",";
-  s += "\"slave size\":" + String(printCommandSlaveSize()) + ",";
-  s += "\"slave index\":" + String(printCommandSlaveIndex()) + ",";
-  s += "\"slave state\":" + String(printCommandSlaveState()) + "";
+  s += "\"slave_size\":" + String(printCommandSlaveSize()) + ",";
+  s += "\"slave_index\":" + String(printCommandSlaveIndex()) + ",";
+  s += "\"slave_state\":" + String(printCommandSlaveState()) + "";
   s += "}}}";
 
   configServer.send(200, "application/json;charset=utf-8", s);
@@ -439,7 +427,6 @@ void setup() {
   wifiServer.begin();
   wifiServerRO.begin();
   wifiServerEnh.begin();
-  wifiServerMsg.begin();
   statusServer.begin();
 
   ArduinoOTA.begin();
@@ -514,10 +501,6 @@ void loop() {
   }
   if (handleNewClient(wifiServerEnh, enhClients)){
     enableTX();
-  }
-  if (handleNewClient(wifiServerMsg, msgClients)){
-    enableTX();
-    msgClientsCount++;
   }
 
   handleNewClient(wifiServerRO, serverClientsRO);

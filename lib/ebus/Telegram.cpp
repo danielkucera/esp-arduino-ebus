@@ -72,14 +72,14 @@ void ebus::Telegram::parse(Sequence &seq)
 		m_slaveACK = seq[5 + m_masterNN + 1];
 
 		// acknowledge byte is invalid
-		if (m_slaveACK != seq_ack && m_slaveACK != seq_nak)
+		if (m_slaveACK != sym_ack && m_slaveACK != sym_nak)
 		{
 			m_slaveState = SEQ_ERR_ACK;
 			return;
 		}
 
 		// handle NAK from slave
-		if (m_slaveACK == seq_nak)
+		if (m_slaveACK == sym_nak)
 		{
 			// sequence is too short
 			if (seq.size() < (size_t)(master.size() + 1))
@@ -113,14 +113,14 @@ void ebus::Telegram::parse(Sequence &seq)
 			m_slaveACK = tmp[5 + m_masterNN + 1];
 
 			// acknowledge byte is invalid
-			if (m_slaveACK != seq_ack && m_slaveACK != seq_nak)
+			if (m_slaveACK != sym_ack && m_slaveACK != sym_nak)
 			{
 				m_slaveState = SEQ_ERR_ACK;
 				return;
 			}
 
 			// acknowledge byte is negativ
-			if (m_slaveACK == seq_nak)
+			if (m_slaveACK == sym_nak)
 			{
 				// sequence is too long
 				if (tmp.size() > (size_t)(5 + m_masterNN + 2))
@@ -161,14 +161,14 @@ void ebus::Telegram::parse(Sequence &seq)
 		m_masterACK = seq2[1 + m_slaveNN + 1];
 
 		// acknowledge byte is invalid
-		if (m_masterACK != seq_ack && m_masterACK != seq_nak)
+		if (m_masterACK != sym_ack && m_masterACK != sym_nak)
 		{
 			m_masterState = SEQ_ERR_ACK;
 			return;
 		}
 
 		// handle NAK from master
-		if (m_masterACK == seq_nak)
+		if (m_masterACK == sym_nak)
 		{
 			// sequence is too short
 			if (seq2.size() < (size_t)(slave.size() + 2))
@@ -199,7 +199,7 @@ void ebus::Telegram::parse(Sequence &seq)
 			m_masterACK = tmp[1 + m_slaveNN + 1];
 
 			// acknowledge byte is invalid
-			if (m_masterACK != seq_ack && m_masterACK != seq_nak)
+			if (m_masterACK != sym_ack && m_masterACK != sym_nak)
 			{
 				m_masterState = SEQ_ERR_ACK;
 				return;
@@ -214,7 +214,7 @@ void ebus::Telegram::parse(Sequence &seq)
 			}
 
 			// acknowledge byte is negativ
-			if (m_masterACK == seq_nak)
+			if (m_masterACK == sym_nak)
 			{
 				// sequence is invalid
 				m_slaveState = SEQ_ERR_INVALID;
@@ -263,7 +263,7 @@ void ebus::Telegram::createMaster(Sequence &seq)
 	}
 
 	// number data byte is invalid
-	if (uint8_t(seq[4]) > seq_max_bytes)
+	if (uint8_t(seq[4]) > max_bytes)
 	{
 		m_masterState = SEQ_ERR_NN;
 		return;
@@ -325,7 +325,7 @@ void ebus::Telegram::createSlave(Sequence &seq)
 	}
 
 	// number data byte is invalid
-	if (uint8_t(seq[0]) > seq_max_bytes)
+	if (uint8_t(seq[0]) > max_bytes)
 	{
 		m_slaveState = SEQ_ERR_NN;
 		return;
@@ -369,14 +369,14 @@ void ebus::Telegram::clear()
 
 	m_master.clear();
 	m_masterNN = 0;
-	m_masterCRC = seq_zero;
-	m_masterACK = seq_zero;
+	m_masterCRC = sym_zero;
+	m_masterACK = sym_zero;
 	m_masterState = SEQ_EMPTY;
 
 	m_slave.clear();
 	m_slaveNN = 0;
-	m_slaveCRC = seq_zero;
-	m_slaveACK = seq_zero;
+	m_slaveCRC = sym_zero;
+	m_slaveACK = sym_zero;
 	m_slaveState = SEQ_EMPTY;
 }
 
@@ -487,7 +487,7 @@ bool ebus::Telegram::isMaster(const uint8_t byte)
 
 bool ebus::Telegram::isSlave(const uint8_t byte)
 {
-	return (!isMaster(byte) && byte != seq_syn && byte != seq_exp);
+	return (!isMaster(byte) && byte != sym_syn && byte != sym_exp);
 }
 
 uint8_t ebus::Telegram::slaveAddress(const uint8_t address)
@@ -531,7 +531,7 @@ const std::string ebus::Telegram::toStringSlaveError()
 
 void ebus::Telegram::set_type(const uint8_t byte)
 {
-	if (byte == seq_broad)
+	if (byte == sym_broad)
 		m_type = Type::BC;
 	else if (isMaster(byte))
 		m_type = Type::MM;
@@ -541,7 +541,7 @@ void ebus::Telegram::set_type(const uint8_t byte)
 
 bool ebus::Telegram::isAddressValid(const uint8_t byte)
 {
-	return (byte != seq_syn && byte != seq_exp);
+	return (byte != sym_syn && byte != sym_exp);
 }
 
 int ebus::Telegram::checkMasterSequence(Sequence &seq)
@@ -559,7 +559,7 @@ int ebus::Telegram::checkMasterSequence(Sequence &seq)
 		return (SEQ_ERR_ZZ);
 
 	// number data byte is invalid
-	if (uint8_t(seq[4]) > seq_max_bytes)
+	if (uint8_t(seq[4]) > max_bytes)
 		return (SEQ_ERR_NN);
 
 	// sequence is too short (incl. CRC)
@@ -576,7 +576,7 @@ int ebus::Telegram::checkSlaveSequence(Sequence &seq)
 		return (SEQ_ERR_SHORT);
 
 	// number data byte is invalid
-	if (uint8_t(seq[0]) > seq_max_bytes)
+	if (uint8_t(seq[0]) > max_bytes)
 		return (SEQ_ERR_NN);
 
 	// sequence is too short (incl. CRC)

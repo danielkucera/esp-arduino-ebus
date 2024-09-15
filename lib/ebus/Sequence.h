@@ -17,6 +17,12 @@
  * along with ebus. If not, see http://www.gnu.org/licenses/.
  */
 
+// This class implements basic routines for sequence handling in accordance with the ebus specification,
+// in particular the reduction, extension and crc-calculation.
+//
+// (reduced) 0xaa <-> 0xa9 0x01 (expanded)
+// (reduced) 0xa9 <-> 0xa9 0x00 (expanded)
+
 #ifndef EBUS_SEQUENCE_H
 #define EBUS_SEQUENCE_H
 
@@ -28,11 +34,11 @@
 namespace ebus
 {
 
-	static const uint8_t seq_zero = 0x00;	// zero byte
-	static const uint8_t seq_syn = 0xaa;	// synchronization byte
-	static const uint8_t seq_exp = 0xa9;	// expand byte
-	static const uint8_t seq_synexp = 0x01; // expanded synchronization byte
-	static const uint8_t seq_expexp = 0x00; // expanded expand byte
+	static const uint8_t sym_zero = 0x00;	// zero byte
+	static const uint8_t sym_syn = 0xaa;	// synchronization byte
+	static const uint8_t sym_exp = 0xa9;	// expand byte
+	static const uint8_t sym_synexp = 0x01; // expanded synchronization byte
+	static const uint8_t sym_expexp = 0x00; // expanded expand byte
 
 	class Sequence
 	{

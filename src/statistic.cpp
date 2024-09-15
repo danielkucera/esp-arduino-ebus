@@ -58,7 +58,7 @@ void resetStatistic()
 
 void collectStatistic(const uint8_t byte)
 {
-    if (byte == ebus::seq_syn)
+    if (byte == ebus::sym_syn)
     {
         if (sequence.size() > 0)
         {

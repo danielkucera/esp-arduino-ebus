@@ -17,6 +17,30 @@
  * along with ebus. If not, see http://www.gnu.org/licenses/.
  */
 
+// The telegram class can parse, create and evaluate sequences in accordance with the ebus specification.
+//
+// Master-Slave Telegram:
+// Sender  (Master): QQ ZZ PB SB NN DBx CRC                ACK SYN
+// Receiver (Slave):                        ACK NN DBx CRC
+//
+// Master-Master Telegram:
+// Sender   (Master): QQ ZZ PB SB NN DBx CRC     SYN
+// Receiver (Master):                        ACK
+//
+// Broadcast Telegram:
+// Sender (Master): QQ ZZ PB SB NN DBx CRC SYN
+// Receiver  (All):
+//
+// QQ...Source address (25 possible addresses)
+// ZZ...Destination address (254 possible addresses)
+// PB...Primary command
+// SB...Secondary command
+// NN...Number of databytes (0 < NN < 16)
+// DBx..Data bytes
+// CRC..8-Bit CRC byte
+// ACK..Acknowledgement byte (0x00 OK, 0xff NOK)
+// SYN..Synchronisation byte (0xaa)
+
 #ifndef EBUS_TELEGRAM_H
 #define EBUS_TELEGRAM_H
 
@@ -51,11 +75,11 @@ namespace ebus
 		MS		   // master slave
 	};
 
-	static const uint8_t seq_ack = 0x00;   // positive acknowledge
-	static const uint8_t seq_nak = 0xff;   // negative acknowledge
-	static const uint8_t seq_broad = 0xfe; // broadcast destination address
+	static const uint8_t sym_ack = 0x00;   // positive acknowledge
+	static const uint8_t sym_nak = 0xff;   // negative acknowledge
+	static const uint8_t sym_broad = 0xfe; // broadcast destination address
 
-	static const int seq_max_bytes = 16; // 16 maximum data bytes
+	static const int max_bytes = 16; // 16 maximum data bytes
 
 	class Telegram
 	{
@@ -105,17 +129,17 @@ namespace ebus
 
 		Sequence m_master;
 		size_t m_masterNN = 0;
-		uint8_t m_masterCRC = seq_zero;
+		uint8_t m_masterCRC = sym_zero;
 		int m_masterState = SEQ_EMPTY;
 
-		uint8_t m_slaveACK = seq_zero;
+		uint8_t m_slaveACK = sym_zero;
 
 		Sequence m_slave;
 		size_t m_slaveNN = 0;
-		uint8_t m_slaveCRC = seq_zero;
+		uint8_t m_slaveCRC = sym_zero;
 		int m_slaveState = SEQ_EMPTY;
 
-		uint8_t m_masterACK = seq_zero;
+		uint8_t m_masterACK = sym_zero;
 
 		const std::string errorText(const int error);
 

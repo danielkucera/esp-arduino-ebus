@@ -27,8 +27,6 @@ std::vector<Command> commandTable;
 
 // #endif
 
-
-
 enum class State
 {
     MonitorBus,
@@ -258,7 +256,7 @@ bool handleSchedule()
         if (Bus.availableForWrite() && sendAcknowledge)
         {
             sendAcknowledge = false;
-            byte = ebus::seq_ack;
+            byte = ebus::sym_ack;
             DEBUG_LOG("SEND ACK 0x%02x\n", byte);
             Bus.write(byte);
         }
@@ -267,7 +265,7 @@ bool handleSchedule()
         if (Bus.availableForWrite() && sendAcknowledge)
         {
             sendAcknowledge = false;
-            byte = ebus::seq_nak;
+            byte = ebus::sym_nak;
             DEBUG_LOG("SEND NAK 0x%02x\n", byte);
             Bus.write(byte);
         }
@@ -276,7 +274,7 @@ bool handleSchedule()
         if (Bus.availableForWrite() && sendSyn)
         {
             sendSyn = false;
-            byte = ebus::seq_syn;
+            byte = ebus::sym_syn;
             DEBUG_LOG("SEND SYN 0x%02x\n", byte);
             Bus.write(byte);
         }
@@ -325,7 +323,7 @@ bool pushSchedule(bool enhanced, WiFiClient *client, const uint8_t byte)
         break;
     case State::ReceiveAcknowledge:
         DEBUG_LOG("RECEIVE 0x%02x\n", byte);
-        if (byte == ebus::seq_ack)
+        if (byte == ebus::sym_ack)
         {
             state = State::ReceiveResponse;
         }
@@ -347,9 +345,9 @@ bool pushSchedule(bool enhanced, WiFiClient *client, const uint8_t byte)
         slave.push_back(byte);
 
         if (slave.size() == 1)
-            slaveNN = 1 + int(byte) + 1; // NN + Dx + CRC
+            slaveNN = 1 + int(byte) + 1; // NN + DBx + CRC
 
-        if (byte == ebus::seq_exp) // AA >> A9 + 01 || A9 >> A9 + 00
+        if (byte == ebus::sym_exp) // AA >> A9 + 01 || A9 >> A9 + 00
             slaveNN++;
 
         if (slave.size() >= slaveNN)
