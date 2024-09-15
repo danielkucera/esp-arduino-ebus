@@ -20,16 +20,16 @@
 // The telegram class can parse, create and evaluate sequences in accordance with the ebus specification.
 //
 // Master-Slave Telegram:
-// Sender  (Master): QQ ZZ PB SB NN DBx CRC                ACK SYN
-// Receiver (Slave):                        ACK NN DBx CRC
+// Sender   (Master): QQ ZZ PB SB NN DBx CRC                ACK SYN
+// Receiver ( Slave):                        ACK NN DBx CRC
 //
 // Master-Master Telegram:
 // Sender   (Master): QQ ZZ PB SB NN DBx CRC     SYN
 // Receiver (Master):                        ACK
 //
 // Broadcast Telegram:
-// Sender (Master): QQ ZZ PB SB NN DBx CRC SYN
-// Receiver  (All):
+// Sender   (Master): QQ ZZ PB SB NN DBx CRC SYN
+// Receiver    (All):
 //
 // QQ...Source address (25 possible addresses)
 // ZZ...Destination address (254 possible addresses)
