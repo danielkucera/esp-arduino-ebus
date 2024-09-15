@@ -179,7 +179,7 @@ void data_process(){
       collectStatistic(d._d);
     }
 
-    // push data do schedule
+    // push data to schedule
     if (pushSchedule(d._enhanced, d._client, d._d)) {
       last_comms = millis();
     }
