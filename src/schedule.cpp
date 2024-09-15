@@ -114,7 +114,7 @@ void saveCommandValue(datatype type, ebus::Sequence seq)
 std::string printCommandDescription(size_t index)
 {
     std::ostringstream ostr;
-    ostr << commandTable[index].desc << " " << commandTable[index].unit;
+    ostr << index << "_" << commandTable[index].desc << "_" << commandTable[index].unit;
     return ostr.str();
 }
 

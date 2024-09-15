@@ -234,16 +234,11 @@ char* status_string(){
   pos += sprintf(status + pos, "async_mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
   pos += sprintf(status + pos, "software_serial_mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
- // #ifdef ESP32
   pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
   pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
- // #endif
   pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
   pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
-  #ifdef ESP8266
-  pos += sprintf(status + pos, "reset_info: %s\n", ESP.getResetInfo().c_str());
-  #endif
   pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
   pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
@@ -296,7 +291,7 @@ void handleJsonStatus()
   s += "\"nbr_late\":" + String(Bus._nbrLate) + ",";
   s += "\"nbr_errors\":" + String(Bus._nbrErrors) + ",";
   s += "\"pwm_value\":" + String(get_pwm()) + "},";
-  s += "\"Command\":{";
+  s += "\"Last_Command\":{";
   s += "\"cmd_state\":" + String(printCommandState()) + ",";
   s += "\"cmd_counter\":" + String(printCommandCounter()) + ",";
   s += "\"cmd_index\":" + String(printCommandIndex()) + ",";
