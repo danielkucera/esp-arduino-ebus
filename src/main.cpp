@@ -267,16 +267,11 @@ void handleJsonStatus()
   s += "\"async_mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
   s += "\"software_serial_mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
   s += "\"uptime\":" + String(millis()) + ",";
-  // #ifdef ESP32
   s += "\"last_connect_time\":" + String(lastConnectTime) + ",";
   s += "\"reconnect_count\":" + String(reconnectCount) + ",";
-  // #endif
   s += "\"rssi\":" + String(WiFi.RSSI()) + ",";
   s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
   s += "\"reset_code\":" + String(last_reset_code) + ",";
-#ifdef ESP8266
-  s += "\"reset_info\":\"" + ESP.getResetInfo() + "\",";
-#endif
   s += "\"loop_duration\":" + String(loopDuration) + ",";
   s += "\"max_loop_duration\":" + String(maxLoopDuration) + ",";
   s += "\"version\":\"" + String(AUTO_VERSION) + "\"},";
@@ -463,10 +458,9 @@ void loop() {
 
   wdt_feed();
 
-// TODO iotWebConf.doLoop() enabled - is there a reason why it was disabled?
-// #ifdef ESP32
+#ifdef ESP32
   iotWebConf.doLoop();
-// #endif
+#endif
 
   if (WiFi.status() != WL_CONNECTED) {
     lastConnectTime = 0;
