@@ -6,6 +6,7 @@
 #include "enhanced.hpp"
 #include "message.hpp"
 #include "schedule.hpp"
+#include "statistic.hpp"
 #include "bus.hpp"
 
 Preferences preferences;
@@ -115,6 +116,7 @@ inline void enableTX() {
 void set_pwm(uint8_t value){
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
+  resetStatistic();
 #endif
 }
 
@@ -177,6 +179,11 @@ void data_process(){
   //check queue for data
   BusType::data d;
   if (Bus.read(d)) {
+
+    // collect statistic data
+    if (!d._enhanced) {
+      collectStatistic(d._d);
+    }
 
     // push data do schedule
     if (pushSchedule(d._enhanced, d._client, d._d)) {
@@ -324,6 +331,11 @@ void handleJsonData()
   configServer.send(200, "application/json;charset=utf-8", printCommandJsonData());
 }
 
+void handleJsonStatistic()
+{
+  configServer.send(200, "application/json;charset=utf-8", printCommandJsonStatistic());
+}
+
 void handleRoot()
 {
   // -- Let IotWebConf test and handle captive portal requests.
@@ -413,6 +425,7 @@ void setup() {
   configServer.on("/status", []{ handleStatus(); });
   configServer.on("/json/status", []{ handleJsonStatus(); });
   configServer.on("/json/data", []{ handleJsonData(); });
+  configServer.on("/json/statistic", []{ handleJsonStatistic(); });
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
 
   iotWebConf.setupUpdateServer(
