@@ -1,7 +1,14 @@
+#include "schedule.hpp"
+
 #include <sstream>
 #include <iomanip>
+
+#include "Datatypes.h"
+#include "Sequence.h"
+#include "Telegram.h"
+
 #include "bus.hpp"
-#include "schedule.hpp"
+
 // #include "command.hpp"
 #ifndef _COMMAND_H_
 std::vector<Command> commandTable;
@@ -20,13 +27,11 @@ std::vector<Command> commandTable;
 
 // #endif
 
-#include "Datatypes.h"
-#include "Sequence.h"
-#include "Telegram.h"
+
 
 enum class State
 {
-    Idle,
+    MonitorBus,
     Arbitration,
     SendMessage,
     ReceiveAcknowledge,
@@ -36,7 +41,7 @@ enum class State
     FreeBus
 };
 
-State state = State::Idle;
+State state = State::MonitorBus;
 
 size_t commandIndex = 0;
 unsigned long commandCounter = 0;
@@ -201,7 +206,7 @@ bool handleSchedule()
 
     switch (state)
     {
-    case State::Idle:
+    case State::MonitorBus:
         if (millis() > millisLastCommand + distanceCommands)
         {
             millisLastCommand = millis();
@@ -283,14 +288,14 @@ bool handleSchedule()
     return true;
 }
 
-bool pushSchedule(bool enhanced, WiFiClient *client, uint8_t byte)
+bool pushSchedule(bool enhanced, WiFiClient *client, const uint8_t byte)
 {
     if (commandTable.size() == 0)
         return false;
 
     switch (state)
     {
-    case State::Idle:
+    case State::MonitorBus:
         break;
     case State::Arbitration:
         // workaround - master sequence comes twice - waiting for second master sequence without "enhanced" flag
@@ -310,7 +315,7 @@ bool pushSchedule(bool enhanced, WiFiClient *client, uint8_t byte)
         // reset - if arbitration went wrong
         if (millis() > millisLastCommand + (distanceCommands / 4))
         {
-            state = State::Idle;
+            state = State::MonitorBus;
         }
         break;
     case State::SendMessage:
@@ -380,7 +385,7 @@ bool pushSchedule(bool enhanced, WiFiClient *client, uint8_t byte)
         }
         break;
     case State::FreeBus:
-        state = State::Idle;
+        state = State::MonitorBus;
         break;
     default:
         break;

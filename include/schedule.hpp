@@ -35,7 +35,7 @@ std::string printCommandDescription(size_t index);
 std::string printCommandValue(size_t index);
 
 bool handleSchedule();
-bool pushSchedule(bool enhanced, WiFiClient *client, uint8_t byte);
+bool pushSchedule(bool enhanced, WiFiClient *client, const uint8_t byte);
 
 size_t printCommandState();
 unsigned long printCommandCounter();
