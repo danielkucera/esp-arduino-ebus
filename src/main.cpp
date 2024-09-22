@@ -167,8 +167,7 @@ void data_process(){
   }
 
   //check schedule for data
-  if (handleSchedule())
-    enableTX();
+  handleScheduleSend();
 
   //check queue for data
   BusType::data d;
@@ -180,7 +179,7 @@ void data_process(){
     }
 
     // push data to schedule
-    if (pushSchedule(d._enhanced, d._client, d._d)) {
+    if (handleScheduleRecv(d._enhanced, d._client, d._d)) {
       last_comms = millis();
     }
 
@@ -286,19 +285,15 @@ void handleJsonStatus()
   s += "\"nbr_late\":" + String(Bus._nbrLate) + ",";
   s += "\"nbr_errors\":" + String(Bus._nbrErrors) + ",";
   s += "\"pwm_value\":" + String(get_pwm()) + "},";
-  s += "\"Last_Command\":{";
-  s += "\"cmd_state\":" + String(printCommandState()) + ",";
-  s += "\"cmd_counter\":" + String(printCommandCounter()) + ",";
-  s += "\"cmd_index\":" + String(printCommandIndex()) + ",";
-  s += "\"master\":\"" + String(printCommandMaster()) + "\",";
-  s += "\"master_size\":" + String(printCommandMasterSize()) + ",";
-  s += "\"master_send_index\":" + String(printCommandMasterSendIndex()) + ",";
-  s += "\"master_recv_index\":" + String(printCommandMasterRecvIndex()) + ",";
-  s += "\"master_state\":" + String(printCommandMasterState()) + ",";
-  s += "\"slave\":\"" + String(printCommandSlave()) + "\",";
-  s += "\"slave_size\":" + String(printCommandSlaveSize()) + ",";
-  s += "\"slave_index\":" + String(printCommandSlaveIndex()) + ",";
-  s += "\"slave_state\":" + String(printCommandSlaveState()) + "";
+  s += "\"Commands\":{";
+  s += "\"cmd_number\":" + String(getCommands()) + ",";
+  s += "\"cmd_counter\":" + String(getCommandCounter()) + "},";
+  s += "\"Last\":{";
+  s += "\"last_index\":" + String(getCommandIndex()) + ",";
+  s += "\"last_master\":\"" + String(printCommandMaster()) + "\",";
+  s += "\"last_master_state\":" + String(printCommandMasterState()) + ",";
+  s += "\"last_slave\":\"" + String(printCommandSlave()) + "\",";
+  s += "\"last_slave_state\":" + String(printCommandSlaveState()) + "";
   s += "}}}";
 
   configServer.send(200, "application/json;charset=utf-8", s);
@@ -427,6 +422,9 @@ void setup() {
   wdt_start();
 
   last_comms = millis();
+
+  if (getCommands() > 0)
+    enableTX();
 
 #ifdef ESP32
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);

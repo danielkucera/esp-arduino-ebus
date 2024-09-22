@@ -111,6 +111,21 @@ void saveCommandValue(datatype type, ebus::Sequence seq)
     }
 }
 
+size_t getCommands()
+{
+    return commandTable.size();
+}
+
+size_t getCommandIndex()
+{
+    return commandIndex;
+}
+
+unsigned long getCommandCounter()
+{
+    return commandCounter;
+}
+
 std::string printCommandDescription(size_t index)
 {
     std::ostringstream ostr;
@@ -195,10 +210,10 @@ Command nextCommand()
     return commandTable[commandIndex];
 }
 
-bool handleSchedule()
+void handleScheduleSend()
 {
     if (commandTable.size() == 0)
-        return false;
+        return;
 
     u_int8_t byte;
 
@@ -282,11 +297,9 @@ bool handleSchedule()
     default:
         break;
     }
-
-    return true;
 }
 
-bool pushSchedule(bool enhanced, WiFiClient *client, const uint8_t byte)
+bool handleScheduleRecv(bool enhanced, WiFiClient *client, const uint8_t byte)
 {
     if (commandTable.size() == 0)
         return false;
@@ -362,6 +375,8 @@ bool pushSchedule(bool enhanced, WiFiClient *client, const uint8_t byte)
             }
             else
             {
+                slaveIndex = 0;
+                slave.clear();
                 sendAcknowledge = true;
                 state = State::SendNegativeAcknowledge;
             }
@@ -392,39 +407,9 @@ bool pushSchedule(bool enhanced, WiFiClient *client, const uint8_t byte)
     return true;
 }
 
-size_t printCommandState()
-{
-    return static_cast<size_t>(state);
-}
-
-unsigned long printCommandCounter()
-{
-    return commandCounter;
-}
-
-size_t printCommandIndex()
-{
-    return commandIndex;
-}
-
 String printCommandMaster()
 {
     return escape_json(master.to_string()).c_str();
-}
-
-size_t printCommandMasterSize()
-{
-    return master.size();
-}
-
-size_t printCommandMasterSendIndex()
-{
-    return sendIndex;
-}
-
-size_t printCommandMasterRecvIndex()
-{
-    return receiveIndex;
 }
 
 size_t printCommandMasterState()
@@ -435,16 +420,6 @@ size_t printCommandMasterState()
 String printCommandSlave()
 {
     return escape_json(slave.to_string()).c_str();
-}
-
-size_t printCommandSlaveSize()
-{
-    return slave.size();
-}
-
-size_t printCommandSlaveIndex()
-{
-    return slaveIndex;
 }
 
 size_t printCommandSlaveState()

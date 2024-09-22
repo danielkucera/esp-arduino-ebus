@@ -35,23 +35,19 @@ struct Command
     double dvalue;       // value as double
 };
 
+size_t getCommands();
+size_t getCommandIndex();
+unsigned long getCommandCounter();
+
 std::string printCommandDescription(size_t index);
 std::string printCommandValue(size_t index);
 
-bool handleSchedule();
-bool pushSchedule(bool enhanced, WiFiClient *client, const uint8_t byte);
+void handleScheduleSend();
+bool handleScheduleRecv(bool enhanced, WiFiClient *client, const uint8_t byte);
 
-size_t printCommandState();
-unsigned long printCommandCounter();
-size_t printCommandIndex();
 String printCommandMaster();
-size_t printCommandMasterSize();
-size_t printCommandMasterSendIndex();
-size_t printCommandMasterRecvIndex();
 size_t printCommandMasterState();
 String printCommandSlave();
-size_t printCommandSlaveSize();
-size_t printCommandSlaveIndex();
 size_t printCommandSlaveState();
 
 String printCommandJsonData();

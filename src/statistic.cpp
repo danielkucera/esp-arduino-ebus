@@ -95,7 +95,7 @@ void collectStatistic(const uint8_t byte)
 
 String printCommandJsonStatistic()
 {
-    String s = "{\"esp-eBus\":{\"Bus\":{";
+    String s = "{\"esp-eBus\":{\"Telegrams\":{";
     s += "\"count_received\":" + String(countReceived) + ",";
     s += "\"count_success\":" + String(countSuccess) + ",";
     s += "\"percent_success\":" + String(countSuccess / (float)countReceived * 100.0f) + ",";
