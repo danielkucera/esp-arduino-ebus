@@ -41,7 +41,7 @@ enum class State
 
 State state = State::MonitorBus;
 
-size_t commandIndex = 0;
+size_t commandIndex = commandTable.size();
 unsigned long commandCounter = 0;
 
 unsigned long millisLastCommand = 0;
@@ -74,37 +74,37 @@ void saveCommandValue(datatype type, ebus::Sequence seq)
         commandTable[commandIndex].uvalue = ebus::byte_2_bcd(seq.range(1, 1));
         break;
     case datatype::uch:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint8(telegram.getSlave().range(1, 1));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint8(seq.range(1, 1));
         break;
     case datatype::sch:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int8(telegram.getSlave().range(1, 1));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int8(seq.range(1, 1));
         break;
     case datatype::uin:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint16(telegram.getSlave().range(1, 2));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint16(seq.range(1, 2));
         break;
     case datatype::sin:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int16(telegram.getSlave().range(1, 2));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int16(seq.range(1, 2));
         break;
     case datatype::ulg:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint32(telegram.getSlave().range(1, 4));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint32(seq.range(1, 4));
         break;
     case datatype::slg:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int32(telegram.getSlave().range(1, 4));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int32(seq.range(1, 4));
         break;
     case datatype::d1b:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data1b(telegram.getSlave().range(1, 1));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data1b(seq.range(1, 1));
         break;
     case datatype::d1c:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data1c(telegram.getSlave().range(1, 1));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data1c(seq.range(1, 1));
         break;
     case datatype::d2b:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data2b(telegram.getSlave().range(1, 2));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data2b(seq.range(1, 2));
         break;
     case datatype::d2c:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data2c(telegram.getSlave().range(1, 2));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data2c(seq.range(1, 2));
         break;
     case datatype::flt:
-        commandTable[commandIndex].dvalue = ebus::byte_2_float(telegram.getSlave().range(1, 2));
+        commandTable[commandIndex].dvalue = ebus::byte_2_float(seq.range(1, 2));
         break;
     default:
         break;
