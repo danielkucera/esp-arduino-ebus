@@ -39,6 +39,10 @@ std::map<int, unsigned long> slaveFailure =
      {SEQ_ERR_ACK_MISS, 0},
      {SEQ_ERR_INVALID, 0}};
 
+unsigned long count00 = 0;
+unsigned long count0704Success = 0;
+unsigned long count0704Failure = 0;
+
 void resetStatistic()
 {
     countReceived = 0;
@@ -54,6 +58,10 @@ void resetStatistic()
 
     for (std::map<int, unsigned long>::iterator it = slaveFailure.begin(); it != slaveFailure.end(); ++it)
         it->second = 0;
+
+    count00 = 0;
+    count0704Success = 0;
+    count0704Failure = 0;
 }
 
 void collectStatistic(const uint8_t byte)
@@ -84,6 +92,19 @@ void collectStatistic(const uint8_t byte)
                 masterFailure[tel.getMasterState()]++;
                 slaveFailure[tel.getSlaveState()]++;
             }
+
+            if (sequence.size() == 1 && sequence[0] == 0x00)
+            {
+                count00++;
+            }
+            else if (sequence.size() >= 3 && sequence[2] == 0x07 && sequence[3] == 0x04)
+            {
+                if (sequence.size() > 6)
+                    count0704Success++;
+                else
+                    count0704Failure++;
+            }
+
             sequence.clear();
         }
     }
@@ -98,8 +119,8 @@ String printCommandJsonStatistic()
     String s = "{\"esp-eBus\":{\"Telegrams\":{";
     s += "\"count_received\":" + String(countReceived) + ",";
     s += "\"count_success\":" + String(countSuccess) + ",";
-    s += "\"percent_success\":" + String(countSuccess / (float)countReceived * 100.0f) + ",";
     s += "\"count_failure\":" + String(countFailure) + ",";
+    s += "\"percent_success\":" + String(countSuccess / (float)countReceived * 100.0f) + ",";
     s += "\"percent_failure\":" + String(countFailure / (float)countReceived * 100.0f) + "},";
     s += "\"Type_Success\":{";
     s += "\"count_master_slave\":" + String(countMasterSlave) + ",";
@@ -128,7 +149,11 @@ String printCommandJsonStatistic()
     s += "\"slave_qq\":" + String(slaveFailure[SEQ_ERR_QQ]) + ",";
     s += "\"slave_zz\":" + String(slaveFailure[SEQ_ERR_ZZ]) + ",";
     s += "\"slave_ack_miss\":" + String(slaveFailure[SEQ_ERR_ACK_MISS]) + ",";
-    s += "\"slave_invalid\":" + String(slaveFailure[SEQ_ERR_INVALID]) + "";
+    s += "\"slave_invalid\":" + String(slaveFailure[SEQ_ERR_INVALID]) + "},";
+    s += "\"Special\":{";
+    s += "\"00\":" + String(count00) + ",";
+    s += "\"0704_success\":" + String(count0704Success) + ",";
+    s += "\"0704_failure\":" + String(count0704Failure) + "";
     s += "}}}";
 
     return s;
