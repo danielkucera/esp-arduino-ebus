@@ -27,6 +27,7 @@
 #include <cmath>
 #include <cstddef>
 #include <vector>
+#include <string>
 
 namespace ebus
 {
@@ -134,6 +135,11 @@ namespace ebus
 	double_t byte_2_float(const std::vector<uint8_t> &bytes);
 
 	std::vector<uint8_t> float_2_byte(const double_t &value);
+
+	// string
+	const std::string byte_2_string(const std::vector<uint8_t> &vec);
+
+	const std::vector<uint8_t> string_2_byte(const std::string &str);
 
 } // namespace ebus
 

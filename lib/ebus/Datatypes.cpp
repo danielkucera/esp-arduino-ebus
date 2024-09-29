@@ -19,6 +19,8 @@
 
 #include "Datatypes.h"
 
+#include <sstream>
+
 // helper functions
 uint ebus::convert_base(uint value, const uint &oldBase, const uint &newBase)
 {
@@ -109,24 +111,23 @@ std::vector<uint8_t> ebus::int16_2_byte(const int16_t &value)
 }
 
 // uint32_t
-uint32_t ebus::byte_2_uint32(const std::vector<uint8_t>& bytes)
+uint32_t ebus::byte_2_uint32(const std::vector<uint8_t> &bytes)
 {
 	return (byte2int<uint32_t>(bytes));
 }
 
-std::vector<uint8_t> ebus::uint32_2_byte(const uint32_t& value)
+std::vector<uint8_t> ebus::uint32_2_byte(const uint32_t &value)
 {
 	return (int2byte<uint32_t>(value));
 }
 
-
 // int32_t
-int32_t ebus::byte_2_int32(const std::vector<uint8_t>& bytes)
+int32_t ebus::byte_2_int32(const std::vector<uint8_t> &bytes)
 {
 	return (byte2int<int32_t>(bytes));
 }
 
-std::vector<uint8_t> ebus::int32_2_byte(const int32_t& value)
+std::vector<uint8_t> ebus::int32_2_byte(const int32_t &value)
 {
 	return (int2byte<int32_t>(value));
 }
@@ -184,4 +185,25 @@ double_t ebus::byte_2_float(const std::vector<uint8_t> &bytes)
 std::vector<uint8_t> ebus::float_2_byte(const double_t &value)
 {
 	return (int2byte(static_cast<int16_t>(round_digits(value * 1000, 3))));
+}
+
+// string
+const std::string ebus::byte_2_string(const std::vector<uint8_t> &vec)
+{
+	std::ostringstream ostr;
+
+	for (size_t i = 0; i < vec.size(); i++)
+		ostr << static_cast<char>(vec[i]);
+
+	return (ostr.str());
+}
+
+const std::vector<uint8_t> ebus::string_2_byte(const std::string &str)
+{
+	std::vector<uint8_t> result;
+
+	for (size_t i = 0; i < str.size(); i++)
+		result.push_back(uint8_t(str[i]));
+
+	return (result);
 }
