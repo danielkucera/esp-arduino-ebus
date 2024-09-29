@@ -143,10 +143,14 @@ String getSlaves()
         s += "\"Producer: " + String(getLeading(it->second[1]));
         s += " Device: ";
         s += ebus::byte_2_string(it->second.range(2, 5)).c_str();
-        s += " SW: " + String(std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[7]))).c_str());
-        s += "." + String(std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[8]))).c_str());
-        s += " HW: " + String(std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[9]))).c_str());
-        s += "." + String(std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[10]))).c_str());
+        s += " SW: "; 
+        s += std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[7]))).c_str();
+        s += ".";
+        s += std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[8]))).c_str();
+        s += " HW: ";
+        s += std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[9]))).c_str();
+        s += ".";
+        s += std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[10]))).c_str();
         s += "\",";
     }
 
