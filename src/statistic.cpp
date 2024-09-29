@@ -1,7 +1,10 @@
 #include "statistic.hpp"
 #include "Telegram.h"
+#include "Datatypes.h"
 
 #include <map>
+#include <sstream>
+#include <iomanip>
 
 ebus::Sequence sequence;
 
@@ -43,6 +46,8 @@ unsigned long count00 = 0;
 unsigned long count0704Success = 0;
 unsigned long count0704Failure = 0;
 
+std::map<uint8_t, ebus::Sequence> slaves;
+
 void resetStatistic()
 {
     countReceived = 0;
@@ -62,6 +67,8 @@ void resetStatistic()
     count00 = 0;
     count0704Success = 0;
     count0704Failure = 0;
+
+    slaves.clear();
 }
 
 void collectStatistic(const uint8_t byte)
@@ -100,9 +107,14 @@ void collectStatistic(const uint8_t byte)
             else if (sequence.size() >= 3 && sequence[2] == 0x07 && sequence[3] == 0x04)
             {
                 if (sequence.size() > 6)
+                {
                     count0704Success++;
+                    slaves[sequence[1]] = tel.getSlave();
+                }
                 else
+                {
                     count0704Failure++;
+                }
             }
 
             sequence.clear();
@@ -112,6 +124,36 @@ void collectStatistic(const uint8_t byte)
     {
         sequence.push_back(byte);
     }
+}
+
+String getLeading(uint8_t byte)
+{
+    std::ostringstream ostr;
+    ostr << std::nouppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(byte);
+    return ostr.str().c_str();
+}
+
+String getSlaves()
+{
+    String s;
+
+    for (std::map<uint8_t, ebus::Sequence>::iterator it = slaves.begin(); it != slaves.end(); ++it)
+    {
+        s += "\"0x" + String(getLeading(it->first)) + "\":";
+        s += "\"Producer: " + String(getLeading(it->second[1]));
+        s += " Device: ";
+        s += ebus::byte_2_string(it->second.range(2, 5)).c_str();
+        s += " SW: " + String(std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[7]))).c_str());
+        s += "." + String(std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[8]))).c_str());
+        s += " HW: " + String(std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[9]))).c_str());
+        s += "." + String(std::to_string(ebus::byte_2_bcd(std::vector<uint8_t>(1, it->second[10]))).c_str());
+        s += "\",";
+    }
+
+    if (slaves.size() > 0)
+        s.remove(s.length() - 1, 1);
+
+    return s;
 }
 
 String printCommandJsonStatistic()
@@ -153,8 +195,9 @@ String printCommandJsonStatistic()
     s += "\"Special\":{";
     s += "\"00\":" + String(count00) + ",";
     s += "\"0704_success\":" + String(count0704Success) + ",";
-    s += "\"0704_failure\":" + String(count0704Failure) + "";
+    s += "\"0704_failure\":" + String(count0704Failure) + "},";
+    s += "\"Slaves\":{";
+    s += getSlaves();
     s += "}}}";
-
     return s;
 }

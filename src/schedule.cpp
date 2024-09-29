@@ -1,13 +1,13 @@
 #include "schedule.hpp"
 
-#include <sstream>
-#include <iomanip>
-
 #include "Datatypes.h"
 #include "Sequence.h"
 #include "Telegram.h"
 
 #include "bus.hpp"
+
+#include <sstream>
+#include <iomanip>
 
 // #include "command.hpp"
 #ifndef _COMMAND_H_
