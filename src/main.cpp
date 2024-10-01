@@ -4,6 +4,8 @@
 #include <Preferences.h>
 #include "main.hpp"
 #include "enhanced.hpp"
+#include "schedule.hpp"
+#include "statistic.hpp"
 #include "bus.hpp"
 
 Preferences preferences;
@@ -109,6 +111,7 @@ inline void enableTX() {
 void set_pwm(uint8_t value){
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
+  resetStatistic();
 #endif
 }
 
@@ -163,9 +166,23 @@ void data_process(){
     handleEnhClient(&enhClients[i]);
   }
 
+  //check schedule for data
+  handleScheduleSend();
+
   //check queue for data
   BusType::data d;
   if (Bus.read(d)) {
+
+    // collect statistic data
+    if (!d._enhanced) {
+      collectStatistic(d._d);
+    }
+
+    // push data to schedule
+    if (handleScheduleRecv(d._enhanced, d._client, d._d)) {
+      last_comms = millis();
+    }
+
     for (int i = 0; i < MAX_SRV_CLIENTS; i++){
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
@@ -197,7 +214,6 @@ void data_loop(void * pvParameters){
   }
 }
 
-
 void saveParamsCallback () {
 
   uint8_t new_pwm_value = atoi(pwm_value_string);
@@ -214,8 +230,8 @@ char* status_string(){
 
   int pos = 0;
 
-  pos += sprintf(status + pos, "async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
-  pos += sprintf(status + pos, "software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
+  pos += sprintf(status + pos, "async_mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
+  pos += sprintf(status + pos, "software_serial_mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
   pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
   pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
@@ -225,15 +241,15 @@ char* status_string(){
   pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
   pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
-  pos += sprintf(status + pos, "nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
-  pos += sprintf(status + pos, "nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
-  pos += sprintf(status + pos, "nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
-  pos += sprintf(status + pos, "nbr lost1: %i\r\n", (int)Bus._nbrLost1);
-  pos += sprintf(status + pos, "nbr lost2: %i\r\n", (int)Bus._nbrLost2);
-  pos += sprintf(status + pos, "nbr won1: %i\r\n", (int)Bus._nbrWon1);
-  pos += sprintf(status + pos, "nbr won2: %i\r\n", (int)Bus._nbrWon2);
-  pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
-  pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
+  pos += sprintf(status + pos, "nbr_arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
+  pos += sprintf(status + pos, "nbr_restarts1: %i\r\n", (int)Bus._nbrRestarts1);
+  pos += sprintf(status + pos, "nbr_restarts2: %i\r\n", (int)Bus._nbrRestarts2);
+  pos += sprintf(status + pos, "nbr_lost1: %i\r\n", (int)Bus._nbrLost1);
+  pos += sprintf(status + pos, "nbr_lost2: %i\r\n", (int)Bus._nbrLost2);
+  pos += sprintf(status + pos, "nbr_won1: %i\r\n", (int)Bus._nbrWon1);
+  pos += sprintf(status + pos, "nbr_won2: %i\r\n", (int)Bus._nbrWon2);
+  pos += sprintf(status + pos, "nbr_late: %i\r\n", (int)Bus._nbrLate);
+  pos += sprintf(status + pos, "nbr_errors: %i\r\n", (int)Bus._nbrErrors);
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
 
   return status;
@@ -244,6 +260,54 @@ void handleStatus()
   configServer.send(200, "text/plain", status_string());
 }
 
+void handleJsonStatus()
+{
+  String s = "{\"esp-eBus\":{\"Status\":{";
+  s += "\"async_mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
+  s += "\"software_serial_mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
+  s += "\"uptime\":" + String(millis()) + ",";
+  s += "\"last_connect_time\":" + String(lastConnectTime) + ",";
+  s += "\"reconnect_count\":" + String(reconnectCount) + ",";
+  s += "\"rssi\":" + String(WiFi.RSSI()) + ",";
+  s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
+  s += "\"reset_code\":" + String(last_reset_code) + ",";
+  s += "\"loop_duration\":" + String(loopDuration) + ",";
+  s += "\"max_loop_duration\":" + String(maxLoopDuration) + ",";
+  s += "\"version\":\"" + String(AUTO_VERSION) + "\"},";
+  s += "\"Arbitration\":{";
+  s += "\"nbr_arbitrations\":" + String(Bus._nbrArbitrations) + ",";
+  s += "\"nbr_restarts1\":" + String(Bus._nbrRestarts1) + ",";
+  s += "\"nbr_restarts2\":" + String(Bus._nbrRestarts2) + ",";
+  s += "\"nbr_lost1\":" + String(Bus._nbrLost1) + ",";
+  s += "\"nbr_lost2\":" + String(Bus._nbrLost2) + ",";
+  s += "\"nbr_won1\":" + String(Bus._nbrWon1) + ",";
+  s += "\"nbr_won2\":" + String(Bus._nbrWon2) + ",";
+  s += "\"nbr_late\":" + String(Bus._nbrLate) + ",";
+  s += "\"nbr_errors\":" + String(Bus._nbrErrors) + ",";
+  s += "\"pwm_value\":" + String(get_pwm()) + "},";
+  s += "\"Commands\":{";
+  s += "\"cmd_number\":" + String(getCommands()) + ",";
+  s += "\"cmd_counter\":" + String(getCommandCounter()) + "},";
+  s += "\"Last\":{";
+  s += "\"last_index\":" + String(getCommandIndex()) + ",";
+  s += "\"last_master\":\"" + String(printCommandMaster()) + "\",";
+  s += "\"last_master_state\":" + String(printCommandMasterState()) + ",";
+  s += "\"last_slave\":\"" + String(printCommandSlave()) + "\",";
+  s += "\"last_slave_state\":" + String(printCommandSlaveState()) + "";
+  s += "}}}";
+
+  configServer.send(200, "application/json;charset=utf-8", s);
+}
+
+void handleJsonData()
+{
+  configServer.send(200, "application/json;charset=utf-8", printCommandJsonData());
+}
+
+void handleJsonStatistic()
+{
+  configServer.send(200, "application/json;charset=utf-8", printCommandJsonStatistic());
+}
 
 void handleRoot()
 {
@@ -332,6 +396,9 @@ void setup() {
   configServer.on("/config", []{ iotWebConf.handleConfig(); });
   configServer.on("/param", []{ iotWebConf.handleConfig(); });
   configServer.on("/status", []{ handleStatus(); });
+  configServer.on("/json/status", []{ handleJsonStatus(); });
+  configServer.on("/json/data", []{ handleJsonData(); });
+  configServer.on("/json/statistic", []{ handleJsonStatistic(); });
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
 
   iotWebConf.setupUpdateServer(
@@ -355,6 +422,9 @@ void setup() {
   wdt_start();
 
   last_comms = millis();
+
+  if (getCommands() > 0)
+    enableTX();
 
 #ifdef ESP32
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
