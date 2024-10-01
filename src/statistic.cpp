@@ -141,16 +141,9 @@ String getSlaves()
     {
         s += "\"0x" + String(getLeading(it->first)) + "\":";
         s += "\"Producer: " + String(getLeading(it->second[1]));
-        s += " Device: ";
-        s += ebus::byte_2_string(it->second.range(2, 5)).c_str();
-        s += " SW: "; 
-        s += std::to_string(ebus::byte_2_bcd(it->second.range(7, 1))).c_str();
-        s += ".";
-        s += std::to_string(ebus::byte_2_bcd(it->second.range(8, 1))).c_str();
-        s += " HW: ";
-        s += std::to_string(ebus::byte_2_bcd(it->second.range(9, 1))).c_str();
-        s += ".";
-        s += std::to_string(ebus::byte_2_bcd(it->second.range(10, 1))).c_str();
+        s += " Device: " + String(ebus::byte_2_string(it->second.range(2, 5)).c_str());
+        s += " SW: " + String(getLeading(it->second[7])) + "." + String(getLeading(it->second[8]));
+        s += " HW: " + String(getLeading(it->second[9])) + "." + String(getLeading(it->second[10]));
         s += "\",";
     }
 
