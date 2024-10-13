@@ -7,6 +7,7 @@
 #include "schedule.hpp"
 #include "statistic.hpp"
 #include "bus.hpp"
+#include "mqtt.hpp"
 
 Preferences preferences;
 
@@ -35,6 +36,9 @@ Preferences preferences;
 #define DEFAULT_PASS "lectronz"
 #define DEFAULT_APMODE_PASS "ebusebus"
 
+#define MQTT_SERVER_LEN 80
+#define MQTT_PORT 1883
+
 #ifdef ESP32
 TaskHandle_t Task1;
 #endif
@@ -43,8 +47,10 @@ TaskHandle_t Task1;
 DNSServer dnsServer;
 WebServer configServer(80);
 char pwm_value_string[8];
+char mqtt_server[MQTT_SERVER_LEN];
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
 IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value_string, 8, "130", "1..255", "min='1' max='255' step='1'");
+IotWebConfTextParameter mqtt_server_param = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server,  MQTT_SERVER_LEN);
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -62,25 +68,47 @@ unsigned long maxLoopDuration = 0;
 unsigned long lastConnectTime = 0;
 int reconnectCount = 0;
 
-int random_ch(){
+bool needMqttConnect = false;
+unsigned long lastMqttConnectionAttempt = 0;
+unsigned long lastMqttStatus = 0;
+
+bool connectMqtt() {
+  if (mqttClient.connected())
+    return true;
+
+  unsigned long now = millis();
+  
+  if (1000 > now - lastMqttConnectionAttempt)
+    return false;
+  
+  mqttClient.connect();
+
+  if (!mqttClient.connected()) {
+    lastMqttConnectionAttempt = now;
+    return false;
+  }
+
+  return true;
+}
+
+void wifiConnected() {
+  lastConnectTime = millis();
+  reconnectCount++;
+  needMqttConnect = true;
+}
+
+int random_ch() {
 #ifdef ESP32
   return esp_random() % 13 + 1 ;
-#elif defined(ESP8266)
+#else
   return ESP8266TrueRandom.random(1, 13);
 #endif
 }
 
-#ifdef ESP32
-void on_connected(WiFiEvent_t event, WiFiEventInfo_t info){
-  lastConnectTime = millis();
-  reconnectCount++;
-}
-#endif
-
 void wdt_start() {
 #ifdef ESP32
   esp_task_wdt_init(6, true);
-#elif defined(ESP8266)
+#else
   ESP.wdtDisable();
 #endif
 }
@@ -88,10 +116,8 @@ void wdt_start() {
 void wdt_feed() {
 #ifdef ESP32
   esp_task_wdt_reset();
-#elif defined(ESP8266)
-  ESP.wdtFeed();
 #else
-#error UNKNOWN PLATFORM
+  ESP.wdtFeed();
 #endif
 }
 
@@ -108,21 +134,21 @@ inline void enableTX() {
 #endif
 }
 
-void set_pwm(uint8_t value){
+void set_pwm(uint8_t value) {
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
   resetStatistic();
 #endif
 }
 
-uint32_t get_pwm(){
+uint32_t get_pwm() {
 #ifdef PWM_PIN
   return ledcRead(PWM_CHANNEL);
 #endif
   return 0;
 }
 
-void reset(){
+void reset() {
   disableTX();
   ESP.restart();
 }
@@ -157,7 +183,7 @@ void loop_duration() {
   }
 }
 
-void data_process(){
+void data_process() {
   loop_duration();
 
   //check clients for data
@@ -208,24 +234,50 @@ void data_process(){
   }
 }
 
-void data_loop(void * pvParameters){
-  while(1){
+void data_loop(void *pvParameters) {
+  while (1) {
     data_process();
   }
+}
+
+bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper)
+{
+  bool valid = true;
+
+  int l = webRequestWrapper->arg(mqtt_server_param.getId()).length();
+  
+  if (l == 0) {
+    valid = false;
+  }
+  else if (l > 79) {
+    String tmp = "max. ";
+    tmp += String(MQTT_SERVER_LEN);
+    tmp += " characters allowed";
+    mqtt_server_param.errorMessage = tmp.c_str();
+    valid = false;
+  }
+
+  return valid;
 }
 
 void saveParamsCallback () {
 
   uint8_t new_pwm_value = atoi(pwm_value_string);
-  if (new_pwm_value > 0){
+  if (new_pwm_value > 0) {
     set_pwm(new_pwm_value);
     preferences.putUInt("pwm_value", new_pwm_value);
   }
   DebugSer.printf("pwm_value set: %s %d\n", pwm_value_string, new_pwm_value);
 
+  String mqtt_server_tmp = String(mqtt_server);
+  mqtt_server_tmp.trim();
+  if (mqtt_server_tmp.length() > 0)
+    preferences.putString("mqtt_server", mqtt_server_tmp.c_str());
+  else
+    preferences.putString("mqtt_server", "");
 }
 
-char* status_string(){
+char* status_string() {
   static char status[1024];
 
   int pos = 0;
@@ -255,13 +307,11 @@ char* status_string(){
   return status;
 }
 
-void handleStatus()
-{
+void handleStatus() {
   configServer.send(200, "text/plain", status_string());
 }
 
-void handleJsonStatus()
-{
+String printJsonStatus() {
   String s = "{\"esp-eBus\":{\"Status\":{";
   s += "\"async_mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
   s += "\"software_serial_mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
@@ -296,21 +346,22 @@ void handleJsonStatus()
   s += "\"last_slave_state\":" + String(printCommandSlaveState()) + "";
   s += "}}}";
 
-  configServer.send(200, "application/json;charset=utf-8", s);
+  return s;
 }
 
-void handleJsonData()
-{
+void handleJsonStatus() {
+  configServer.send(200, "application/json;charset=utf-8", printJsonStatus());
+}
+
+void handleJsonData() {
   configServer.send(200, "application/json;charset=utf-8", printCommandJsonData());
 }
 
-void handleJsonStatistic()
-{
+void handleJsonStatistic() {
   configServer.send(200, "application/json;charset=utf-8", printCommandJsonStatistic());
 }
 
-void handleRoot()
-{
+void handleRoot() {
   // -- Let IotWebConf test and handle captive portal requests.
   if (iotWebConf.handleCaptivePortal())
   {
@@ -332,6 +383,20 @@ void handleRoot()
   configServer.send(200, "text/html", s);
 }
 
+bool handleStatusServerRequests() {
+  if (!statusServer.hasClient())
+    return false;
+
+  WiFiClient client = statusServer.accept();
+
+  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.print(status_string());
+    client.flush();
+    client.stop();
+  }
+  return true;
+}
+
 void setup() {
   preferences.begin("esp-ebus", false);
 
@@ -339,9 +404,10 @@ void setup() {
 
 #ifdef ESP32
   last_reset_code = rtc_get_reset_reason(0);
-#elif defined(ESP8266)
+#else
   last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
+
   Bus.begin();
 
   DebugSer.begin(115200);
@@ -362,34 +428,34 @@ void setup() {
     strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz", IOTWEBCONF_WORD_LEN);
+    preferences.putString("mqtt_server", "");
+    
     iotWebConf.saveConfig();
   } else {
     iotWebConf.skipApStartup();
   }
-
-#ifdef ESP32
-  WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
-#endif
-
-#ifdef ESP8266
-  WiFi.setAutoReconnect(true);
-#endif  
 
   int wifi_ch = random_ch();
   DebugSer.printf("Channel for AP mode: %d\n", wifi_ch);
   WiFi.channel(wifi_ch); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
 
   iotWebConf.addSystemParameter(&pwm_value_param);
+  iotWebConf.addSystemParameter(&mqtt_server_param);
+  iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
   iotWebConf.setWifiConnectionTimeoutMs(7000);
+  iotWebConf.setWifiConnectionCallback(&wifiConnected);
 
 #ifdef STATUS_LED_PIN
   iotWebConf.setStatusPin(STATUS_LED_PIN);
 #endif
 
   // -- Initializing the configuration.
-  iotWebConf.init();
+  bool validConfig = iotWebConf.init();
+  if (!validConfig) {
+    mqtt_server[0] = '\0';
+  }
 
   // -- Set up required URL handlers on the web server.
   configServer.on("/", []{ handleRoot(); });
@@ -408,6 +474,16 @@ void setup() {
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
       iotWebConf.doLoop();
   }
+
+  mqttClient.onConnect(onMqttConnect);
+  mqttClient.onDisconnect(onMqttDisconnect);
+  mqttClient.onSubscribe(onMqttSubscribe);
+  mqttClient.onUnsubscribe(onMqttUnsubscribe);
+  mqttClient.onMessage(onMqttMessage);
+  mqttClient.onPublish(onMqttPublish);
+
+  if (mqtt_server[0] != '\0')
+    mqttClient.setServer(mqtt_server, MQTT_PORT);
 
   wifiServer.begin();
   wifiServerRO.begin();
@@ -431,46 +507,35 @@ void setup() {
 #endif
 }
 
-bool handleStatusServerRequests() {
-  if (!statusServer.hasClient())
-    return false;
-
-  WiFiClient client = statusServer.accept();
-
-  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.print(status_string());
-    client.flush();
-    client.stop();
-  }
-  return true;
-}
-
 void loop() {
   ArduinoOTA.handle();
 
 #ifdef ESP8266
   MDNS.update();
-
   data_process();
 #endif
 
   wdt_feed();
 
-#ifdef ESP32
+  // this should be called on all platforms
   iotWebConf.doLoop();
-#endif
 
-  if (WiFi.status() != WL_CONNECTED) {
-    lastConnectTime = 0;
-  }
-  else {
-    if (lastConnectTime == 0) {
-      lastConnectTime = millis();
-      reconnectCount++;
+  if (needMqttConnect) {
+    if (connectMqtt()) {
+      needMqttConnect = false;
     }
   }
+  else if ((iotWebConf.getState() == iotwebconf::OnLine) && (!mqttClient.connected()))
+  {
+    needMqttConnect = true;
+  }
 
-  if (millis() > last_comms + 200*1000 ) {
+  if (mqttClient.connected() && millis() > lastMqttStatus + 60*1000) {
+    lastMqttStatus = millis();
+    mqttClient.publish("ebus/status", 0, true, (char*)printJsonStatus().c_str());
+  }
+
+  if (millis() > last_comms + 200*1000) {
     reset();
   }
 
@@ -483,10 +548,11 @@ void loop() {
   }
 
   // Check if there are any new clients on the eBUS servers
-  if (handleNewClient(wifiServer, serverClients)){
+  if (handleNewClient(wifiServer, serverClients)) {
     enableTX();
   }
-  if (handleNewClient(wifiServerEnh, enhClients)){
+
+  if (handleNewClient(wifiServerEnh, enhClients)) {
     enableTX();
   }
 
