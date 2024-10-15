@@ -73,44 +73,44 @@ void setPublichCallback(std::function<void(const char *topic, const char *payloa
   publichCallback = func;
 }
 
-void saveCommandValue(datatype type, ebus::Sequence seq)
+void saveCommandValue(ebus::type type, ebus::Sequence seq)
 {
     switch (commandTable[commandIndex].type)
     {
-    case datatype::bcd:
+    case ebus::type::BCD:
         commandTable[commandIndex].uvalue = ebus::byte_2_bcd(seq.range(1, 1));
         break;
-    case datatype::uch:
+    case ebus::type::UINT8:
         commandTable[commandIndex].uvalue = ebus::byte_2_uint8(seq.range(1, 1));
         break;
-    case datatype::sch:
+    case ebus::type::INT8:
         commandTable[commandIndex].ivalue = ebus::byte_2_int8(seq.range(1, 1));
         break;
-    case datatype::uin:
+    case ebus::type::UINT16:
         commandTable[commandIndex].uvalue = ebus::byte_2_uint16(seq.range(1, 2));
         break;
-    case datatype::sin:
+    case ebus::type::INT16:
         commandTable[commandIndex].ivalue = ebus::byte_2_int16(seq.range(1, 2));
         break;
-    case datatype::ulg:
+    case ebus::type::UINT32:
         commandTable[commandIndex].uvalue = ebus::byte_2_uint32(seq.range(1, 4));
         break;
-    case datatype::slg:
+    case ebus::type::INT32:
         commandTable[commandIndex].ivalue = ebus::byte_2_int32(seq.range(1, 4));
         break;
-    case datatype::d1b:
+    case ebus::type::DATA1b:
         commandTable[commandIndex].dvalue = ebus::byte_2_data1b(seq.range(1, 1));
         break;
-    case datatype::d1c:
+    case ebus::type::DATA1c:
         commandTable[commandIndex].dvalue = ebus::byte_2_data1c(seq.range(1, 1));
         break;
-    case datatype::d2b:
+    case ebus::type::DATA2b:
         commandTable[commandIndex].dvalue = ebus::byte_2_data2b(seq.range(1, 2));
         break;
-    case datatype::d2c:
+    case ebus::type::DATA2c:
         commandTable[commandIndex].dvalue = ebus::byte_2_data2c(seq.range(1, 2));
         break;
-    case datatype::flt:
+    case ebus::type::FLOAT:
         commandTable[commandIndex].dvalue = ebus::byte_2_float(seq.range(1, 2));
         break;
     default:
@@ -153,22 +153,22 @@ std::string printCommandValue(size_t index)
 
     switch (commandTable[index].type)
     {
-    case datatype::bcd:
-    case datatype::uch:
-    case datatype::uin:
-    case datatype::ulg:
+    case ebus::type::BCD:
+    case ebus::type::UINT8:
+    case ebus::type::UINT16:
+    case ebus::type::UINT32:
         ostr << commandTable[index].uvalue;
         break;
-    case datatype::sch:
-    case datatype::sin:
-    case datatype::slg:
+    case ebus::type::INT8:
+    case ebus::type::INT16:
+    case ebus::type::INT32:
         ostr << commandTable[index].ivalue;
         break;
-    case datatype::d1b:
-    case datatype::d1c:
-    case datatype::d2b:
-    case datatype::d2c:
-    case datatype::flt:
+    case ebus::type::DATA1b:
+    case ebus::type::DATA1c:
+    case ebus::type::DATA2b:
+    case ebus::type::DATA2c:
+    case ebus::type::FLOAT:
         ostr << commandTable[index].dvalue;
         break;
     default:

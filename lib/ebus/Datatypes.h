@@ -31,6 +31,23 @@
 
 namespace ebus
 {
+	// available data types
+	enum class type
+	{
+		BCD,
+		UINT8,
+		INT8,
+		UINT16,
+		INT16,
+		UINT32,
+		INT32,
+		DATA1b,
+		DATA1c,
+		DATA2b,
+		DATA2c,
+		FLOAT,
+		STRING
+	};
 
 	// templates for byte / integer conversion
 	template <typename T>
