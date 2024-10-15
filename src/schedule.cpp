@@ -66,6 +66,13 @@ bool slaveRepeated = false;
 bool sendAcknowledge = true;
 bool sendSyn = true;
 
+std::function<void(const char *topic, const char *payload)> publichCallback = nullptr;
+
+void setPublichCallback(std::function<void(const char *topic, const char *payload)> func)
+{
+  publichCallback = func;
+}
+
 void saveCommandValue(datatype type, ebus::Sequence seq)
 {
     switch (commandTable[commandIndex].type)
@@ -108,6 +115,13 @@ void saveCommandValue(datatype type, ebus::Sequence seq)
         break;
     default:
         break;
+    }
+
+    if (publichCallback != nullptr)
+    {
+        String topic = "ebus/data/";
+        topic += commandTable[commandIndex].desc;
+        publichCallback(topic.c_str(), printCommandJsonData(commandIndex).c_str());
     }
 }
 
@@ -441,5 +455,13 @@ String printCommandJsonData()
 
     s += "}}}";
 
+    return s;
+}
+
+String printCommandJsonData(size_t i)
+{
+    String s = "{\"esp-eBus\":{\"Data\":{";
+    s += "\"" + String(escape_json(printCommandDescription(i)).c_str()) + "\":";
+    s += String(escape_json(printCommandValue(i)).c_str()) + "}}}";
     return s;
 }

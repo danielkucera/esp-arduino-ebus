@@ -35,6 +35,8 @@ struct Command
     double dvalue;       // value as double
 };
 
+void setPublichCallback(std::function<void(const char *topic, const char *payload)> func);
+
 size_t getCommands();
 size_t getCommandIndex();
 unsigned long getCommandCounter();
@@ -51,5 +53,6 @@ String printCommandSlave();
 size_t printCommandSlaveState();
 
 String printCommandJsonData();
+String printCommandJsonData(size_t i);
 
 #endif
