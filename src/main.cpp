@@ -246,10 +246,7 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper)
 
   int l = webRequestWrapper->arg(mqtt_server_param.getId()).length();
   
-  if (l == 0) {
-    valid = false;
-  }
-  else if (l > 79) {
+  if (l > MQTT_SERVER_LEN - 1) {
     String tmp = "max. ";
     tmp += String(MQTT_SERVER_LEN);
     tmp += " characters allowed";
@@ -303,6 +300,7 @@ char* status_string() {
   pos += sprintf(status + pos, "nbr_late: %i\r\n", (int)Bus._nbrLate);
   pos += sprintf(status + pos, "nbr_errors: %i\r\n", (int)Bus._nbrErrors);
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
+  pos += sprintf(status + pos, "mqtt_server: %s\r\n", mqtt_server);
 
   return status;
 }
@@ -311,7 +309,7 @@ void handleStatus() {
   configServer.send(200, "text/plain", status_string());
 }
 
-String printJsonStatus() {
+String status_string_json() {
   String s = "{\"esp-eBus\":{\"Status\":{";
   s += "\"async_mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
   s += "\"software_serial_mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
@@ -334,7 +332,8 @@ String printJsonStatus() {
   s += "\"nbr_won2\":" + String(Bus._nbrWon2) + ",";
   s += "\"nbr_late\":" + String(Bus._nbrLate) + ",";
   s += "\"nbr_errors\":" + String(Bus._nbrErrors) + ",";
-  s += "\"pwm_value\":" + String(get_pwm()) + "},";
+  s += "\"pwm_value\":" + String(get_pwm()) + ",";
+  s += "\"mqtt_server\":\"" + String(mqtt_server) + "\"},";
   s += "\"Commands\":{";
   s += "\"cmd_number\":" + String(getCommands()) + ",";
   s += "\"cmd_counter\":" + String(getCommandCounter()) + "},";
@@ -350,7 +349,7 @@ String printJsonStatus() {
 }
 
 void handleJsonStatus() {
-  configServer.send(200, "application/json;charset=utf-8", printJsonStatus());
+  configServer.send(200, "application/json;charset=utf-8", status_string_json());
 }
 
 void handleJsonData() {
@@ -359,6 +358,10 @@ void handleJsonData() {
 
 void handleJsonStatistic() {
   configServer.send(200, "application/json;charset=utf-8", printCommandJsonStatistic());
+}
+
+void publish(const char *topic, const char *payload) {
+  mqttClient.publish(topic, 0, true, payload);
 }
 
 void handleRoot() {
@@ -452,10 +455,7 @@ void setup() {
 #endif
 
   // -- Initializing the configuration.
-  bool validConfig = iotWebConf.init();
-  if (!validConfig) {
-    mqtt_server[0] = '\0';
-  }
+  iotWebConf.init();
 
   // -- Set up required URL handlers on the web server.
   configServer.on("/", []{ handleRoot(); });
@@ -484,6 +484,8 @@ void setup() {
 
   if (mqtt_server[0] != '\0')
     mqttClient.setServer(mqtt_server, MQTT_PORT);
+
+  setPublichCallback(&publish);
 
   wifiServer.begin();
   wifiServerRO.begin();
@@ -532,7 +534,7 @@ void loop() {
 
   if (mqttClient.connected() && millis() > lastMqttStatus + 60*1000) {
     lastMqttStatus = millis();
-    mqttClient.publish("ebus/status", 0, true, (char*)printJsonStatus().c_str());
+    mqttClient.publish("ebus/status", 0, true, (char*)status_string_json().c_str());
   }
 
   if (millis() > last_comms + 200*1000) {
@@ -557,5 +559,4 @@ void loop() {
   }
 
   handleNewClient(wifiServerRO, serverClientsRO);
-
 }
