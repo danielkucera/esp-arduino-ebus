@@ -4,8 +4,7 @@
 #include <WiFiClient.h>
 #include "Datatypes.h"
 
-// Implementation of the perodic sending of predefined commands (Master-Slave Telegram)
-// based on the ebus classes Telegram, Sequence and Datatypes.
+// Implementation of the perodic sending of predefined commands.
 // The results are provided as a json string.
 
 struct Command
@@ -20,7 +19,7 @@ struct Command
     double dvalue;         // value as double
 };
 
-void setPublichCallback(std::function<void(const char *topic, const char *payload)> func);
+void setPublishCallback(std::function<void(const char *topic, const char *payload)> func);
 
 size_t getCommands();
 size_t getCommandIndex();
@@ -32,12 +31,11 @@ std::string printCommandValue(size_t index);
 void handleScheduleSend();
 bool handleScheduleRecv(bool enhanced, WiFiClient *client, const uint8_t byte);
 
-String printCommandMaster();
-size_t printCommandMasterState();
-String printCommandSlave();
-size_t printCommandSlaveState();
-
 String printCommandJsonData();
 String printCommandJsonData(size_t i);
+
+bool busReadyCallback();
+void busWriteCallback(const uint8_t byte);
+void saveResponseCallback(const std::vector<uint8_t> response);
 
 #endif

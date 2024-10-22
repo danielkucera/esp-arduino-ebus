@@ -66,7 +66,7 @@ namespace ebus
 		void reduce();
 
 		const std::string to_string() const;
-		const std::vector<uint8_t> get_sequence() const;
+		const std::vector<uint8_t> to_vector() const;
 
 		static const std::vector<uint8_t> range(const std::vector<uint8_t> &seq, const size_t index, const size_t len);
 

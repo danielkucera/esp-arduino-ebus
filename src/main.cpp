@@ -240,8 +240,7 @@ void data_loop(void *pvParameters) {
   }
 }
 
-bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper)
-{
+bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   bool valid = true;
 
   int l = webRequestWrapper->arg(mqtt_server_param.getId()).length();
@@ -301,6 +300,8 @@ char* status_string() {
   pos += sprintf(status + pos, "nbr_errors: %i\r\n", (int)Bus._nbrErrors);
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
   pos += sprintf(status + pos, "mqtt_server: %s\r\n", mqtt_server);
+  pos += sprintf(status + pos, "cmd_number: %d\r\n", getCommands());
+  pos += sprintf(status + pos, "cmd_counter: %ld\r\n", getCommandCounter());
 
   return status;
 }
@@ -336,13 +337,7 @@ String status_string_json() {
   s += "\"mqtt_server\":\"" + String(mqtt_server) + "\"},";
   s += "\"Commands\":{";
   s += "\"cmd_number\":" + String(getCommands()) + ",";
-  s += "\"cmd_counter\":" + String(getCommandCounter()) + "},";
-  s += "\"Last\":{";
-  s += "\"last_index\":" + String(getCommandIndex()) + ",";
-  s += "\"last_master\":\"" + String(printCommandMaster()) + "\",";
-  s += "\"last_master_state\":" + String(printCommandMasterState()) + ",";
-  s += "\"last_slave\":\"" + String(printCommandSlave()) + "\",";
-  s += "\"last_slave_state\":" + String(printCommandSlaveState()) + "";
+  s += "\"cmd_counter\":" + String(getCommandCounter()) + "";
   s += "}}}";
 
   return s;
@@ -485,7 +480,7 @@ void setup() {
   if (mqtt_server[0] != '\0')
     mqttClient.setServer(mqtt_server, MQTT_PORT);
 
-  setPublichCallback(&publish);
+  setPublishCallback(&publish);
 
   wifiServer.begin();
   wifiServerRO.begin();

@@ -156,17 +156,17 @@ const std::string ebus::Sequence::to_string() const
 	return (ostr.str());
 }
 
-const std::vector<uint8_t> ebus::Sequence::get_sequence() const
+const std::vector<uint8_t> ebus::Sequence::to_vector() const
 {
 	return (m_seq);
 }
 
-const std::vector<uint8_t> ebus::Sequence::range(const std::vector<uint8_t> &seq, const size_t index, const size_t len)
+const std::vector<uint8_t> ebus::Sequence::range(const std::vector<uint8_t> &vec, const size_t index, const size_t len)
 {
 	std::vector<uint8_t> result;
 
-	for (size_t i = index; i < seq.size() && result.size() < len; i++)
-		result.push_back(seq.at(i));
+	for (size_t i = index; i < vec.size() && result.size() < len; i++)
+		result.push_back(vec.at(i));
 
 	return (result);
 }

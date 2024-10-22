@@ -98,7 +98,8 @@ namespace ebus
 
 		void clear();
 
-		uint8_t getMasterQQ() const;
+		uint8_t getSourceAddress() const;
+		uint8_t getTargetAddress() const;
 
 		Sequence getMaster() const;
 		uint8_t getMasterCRC() const;

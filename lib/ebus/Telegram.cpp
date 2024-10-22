@@ -380,9 +380,14 @@ void ebus::Telegram::clear()
 	m_slaveState = SEQ_EMPTY;
 }
 
-uint8_t ebus::Telegram::getMasterQQ() const
+uint8_t ebus::Telegram::getSourceAddress() const
 {
 	return (m_master[0]);
+}
+
+uint8_t ebus::Telegram::getTargetAddress() const
+{
+	return (m_master[1]);
 }
 
 ebus::Sequence ebus::Telegram::getMaster() const

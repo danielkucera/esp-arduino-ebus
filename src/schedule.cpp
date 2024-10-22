@@ -1,8 +1,6 @@
 #include "schedule.hpp"
 
-#include "Datatypes.h"
-#include "Sequence.h"
-#include "Telegram.h"
+#include "Ebus.h"
 
 #include "bus.hpp"
 
@@ -27,101 +25,71 @@ std::vector<Command> commandTable;
 
 // #endif
 
-enum class State
-{
-    MonitorBus,
-    Arbitration,
-    SendMessage,
-    ReceiveAcknowledge,
-    ReceiveResponse,
-    SendPositiveAcknowledge,
-    SendNegativeAcknowledge,
-    FreeBus
-};
-
-State state = State::MonitorBus;
-
 size_t commandIndex = commandTable.size();
 unsigned long commandCounter = 0;
 
 unsigned long millisLastCommand = 0;
 unsigned long distanceCommands = 10 * 1000; // TODO Systemparameter ?
 
-uint8_t QQ = 0xff; // TODO Systemparameter ?
-
 WiFiClient *dummyClient = new WiFiClient();
+ebus::Ebus ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &saveResponseCallback); // TODO 0xff Systemparameter ?
 
-ebus::Telegram telegram;
+std::function<void(const char *topic, const char *payload)> publishCallback = nullptr;
 
-ebus::Sequence master;
-size_t sendIndex = 0;
-size_t receiveIndex = 0;
-bool masterRepeated = false;
-
-ebus::Sequence slave;
-size_t slaveIndex = 0;
-size_t slaveNN = 0;
-bool slaveRepeated = false;
-
-bool sendAcknowledge = true;
-bool sendSyn = true;
-
-std::function<void(const char *topic, const char *payload)> publichCallback = nullptr;
-
-void setPublichCallback(std::function<void(const char *topic, const char *payload)> func)
+void setPublishCallback(std::function<void(const char *topic, const char *payload)> func)
 {
-  publichCallback = func;
+    publishCallback = func;
 }
 
-void saveCommandValue(ebus::type type, ebus::Sequence seq)
+void saveCommandValue(ebus::type type, const std::vector<uint8_t> vec)
 {
     switch (commandTable[commandIndex].type)
     {
     case ebus::type::BCD:
-        commandTable[commandIndex].uvalue = ebus::byte_2_bcd(seq.range(1, 1));
+        commandTable[commandIndex].uvalue = ebus::byte_2_bcd(ebus::Sequence::range(vec, 1, 1));
         break;
     case ebus::type::UINT8:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint8(seq.range(1, 1));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint8(ebus::Sequence::range(vec, 1, 1));
         break;
     case ebus::type::INT8:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int8(seq.range(1, 1));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int8(ebus::Sequence::range(vec, 1, 1));
         break;
     case ebus::type::UINT16:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint16(seq.range(1, 2));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint16(ebus::Sequence::range(vec, 1, 2));
         break;
     case ebus::type::INT16:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int16(seq.range(1, 2));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int16(ebus::Sequence::range(vec, 1, 2));
         break;
     case ebus::type::UINT32:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint32(seq.range(1, 4));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint32(ebus::Sequence::range(vec, 1, 4));
         break;
     case ebus::type::INT32:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int32(seq.range(1, 4));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int32(ebus::Sequence::range(vec, 1, 4));
         break;
     case ebus::type::DATA1b:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data1b(seq.range(1, 1));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data1b(ebus::Sequence::range(vec, 1, 1));
         break;
     case ebus::type::DATA1c:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data1c(seq.range(1, 1));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data1c(ebus::Sequence::range(vec, 1, 1));
         break;
     case ebus::type::DATA2b:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data2b(seq.range(1, 2));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data2b(ebus::Sequence::range(vec, 1, 2));
         break;
     case ebus::type::DATA2c:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data2c(seq.range(1, 2));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data2c(ebus::Sequence::range(vec, 1, 2));
         break;
     case ebus::type::FLOAT:
-        commandTable[commandIndex].dvalue = ebus::byte_2_float(seq.range(1, 2));
+        commandTable[commandIndex].dvalue = ebus::byte_2_float(ebus::Sequence::range(vec, 1, 2));
         break;
     default:
         break;
     }
 
-    if (publichCallback != nullptr)
+    if (publishCallback != nullptr)
     {
         String topic = "ebus/data/";
         topic += commandTable[commandIndex].desc;
-        publichCallback(topic.c_str(), printCommandJsonData(commandIndex).c_str());
+        publishCallback(topic.c_str(), printCommandJsonData(commandIndex).c_str());
     }
 }
 
@@ -195,24 +163,6 @@ std::string escape_json(const std::string &s)
     return o.str();
 }
 
-void resetData()
-{
-    telegram.clear();
-
-    master.clear();
-    sendIndex = 0;
-    receiveIndex = 0;
-    masterRepeated = false;
-
-    slave.clear();
-    slaveIndex = 0;
-    slaveNN = 0;
-    slaveRepeated = false;
-
-    sendAcknowledge = true;
-    sendSyn = true;
-}
-
 Command nextCommand()
 {
     commandCounter++;
@@ -229,88 +179,34 @@ void handleScheduleSend()
     if (commandTable.size() == 0)
         return;
 
-    u_int8_t byte;
-
-    switch (state)
+    if (ebusHandler.getState() == ebus::State::MonitorBus)
     {
-    case State::MonitorBus:
         if (millis() > millisLastCommand + distanceCommands)
         {
             millisLastCommand = millis();
 
-            resetData();
-            telegram.createMaster(QQ, ebus::Sequence::to_vector(nextCommand().data));
-
-            if (telegram.getMasterState() == SEQ_OK)
+            if (ebusHandler.enque(ebus::Sequence::to_vector(nextCommand().data)))
             {
-                master = telegram.getMaster();
-                master.push_back(telegram.getMasterCRC(), false);
-                master.extend();
-
                 // start arbitration
-                WiFiClient *cl = dummyClient;
-                uint8_t ad = master[receiveIndex];
+                WiFiClient *client = dummyClient;
+                uint8_t address = ebusHandler.getAddress();
 
-                if (!setArbitrationClient(cl, ad))
+                if (!setArbitrationClient(client, address))
                 {
-                    if (cl != dummyClient)
+                    if (client != dummyClient)
                     {
-                        DEBUG_LOG("ARBITRATION ONGOING 0x%02 0x%02x\n", ad, master[receiveIndex]);
+                        DEBUG_LOG("ARBITRATION ONGOING 0x%02 0x%02x\n", address, ebusHandler.getAddress());
                     }
                 }
                 else
                 {
-                    DEBUG_LOG("ARBITRATION START 0x%02x\n", ad);
+                    DEBUG_LOG("ARBITRATION START 0x%02x\n", address);
                 }
             }
-            state = State::Arbitration;
         }
-        break;
-    case State::Arbitration:
-        break;
-    case State::SendMessage:
-        if (Bus.availableForWrite() && sendIndex == receiveIndex)
-        {
-            byte = master[sendIndex];
-            DEBUG_LOG("SEND 0x%02x\n", byte);
-            Bus.write(byte);
-            sendIndex++;
-        }
-        break;
-    case State::ReceiveAcknowledge:
-        break;
-    case State::ReceiveResponse:
-        break;
-    case State::SendPositiveAcknowledge:
-        if (Bus.availableForWrite() && sendAcknowledge)
-        {
-            sendAcknowledge = false;
-            byte = ebus::sym_ack;
-            DEBUG_LOG("SEND ACK 0x%02x\n", byte);
-            Bus.write(byte);
-        }
-        break;
-    case State::SendNegativeAcknowledge:
-        if (Bus.availableForWrite() && sendAcknowledge)
-        {
-            sendAcknowledge = false;
-            byte = ebus::sym_nak;
-            DEBUG_LOG("SEND NAK 0x%02x\n", byte);
-            Bus.write(byte);
-        }
-        break;
-    case State::FreeBus:
-        if (Bus.availableForWrite() && sendSyn)
-        {
-            sendSyn = false;
-            byte = ebus::sym_syn;
-            DEBUG_LOG("SEND SYN 0x%02x\n", byte);
-            Bus.write(byte);
-        }
-        break;
-    default:
-        break;
     }
+
+    ebusHandler.handleSend();
 }
 
 bool handleScheduleRecv(bool enhanced, WiFiClient *client, const uint8_t byte)
@@ -318,127 +214,22 @@ bool handleScheduleRecv(bool enhanced, WiFiClient *client, const uint8_t byte)
     if (commandTable.size() == 0)
         return false;
 
-    switch (state)
+    if (ebusHandler.getState() == ebus::State::Arbitration)
     {
-    case State::MonitorBus:
-        break;
-    case State::Arbitration:
         // workaround - master sequence comes twice - waiting for second master sequence without "enhanced" flag
-        if (!enhanced)
-        {
-            if (client == dummyClient)
-            {
-                if (byte == master[receiveIndex])
-                {
-                    sendIndex = 1;
-                    receiveIndex = 1;
-                    state = State::SendMessage;
-                }
-            }
-        }
+        if (!enhanced && client == dummyClient)
+            ebusHandler.handleRecv(byte);
 
         // reset - if arbitration went wrong
         if (millis() > millisLastCommand + (distanceCommands / 4))
-        {
-            state = State::MonitorBus;
-        }
-        break;
-    case State::SendMessage:
-        receiveIndex++;
-        if (receiveIndex >= master.size())
-            state = State::ReceiveAcknowledge;
-        break;
-    case State::ReceiveAcknowledge:
-        DEBUG_LOG("RECEIVE 0x%02x\n", byte);
-        if (byte == ebus::sym_ack)
-        {
-            state = State::ReceiveResponse;
-        }
-        else if (!masterRepeated)
-        {
-            masterRepeated = true;
-            sendIndex = 1;
-            receiveIndex = 1;
-            state = State::SendMessage;
-        }
-        else
-        {
-            state = State::FreeBus;
-        }
-        break;
-    case State::ReceiveResponse:
-        DEBUG_LOG("RECEIVE 0x%02x\n", byte);
-        slaveIndex++;
-        slave.push_back(byte);
-
-        if (slave.size() == 1)
-            slaveNN = 1 + int(byte) + 1; // NN + DBx + CRC
-
-        if (byte == ebus::sym_exp) // AA >> A9 + 01 || A9 >> A9 + 00
-            slaveNN++;
-
-        if (slave.size() >= slaveNN)
-        {
-            telegram.createSlave(slave);
-            if (telegram.getSlaveState() == SEQ_OK)
-            {
-                sendAcknowledge = true;
-                state = State::SendPositiveAcknowledge;
-
-                saveCommandValue(commandTable[commandIndex].type, telegram.getSlave());
-            }
-            else
-            {
-                slaveIndex = 0;
-                slave.clear();
-                sendAcknowledge = true;
-                state = State::SendNegativeAcknowledge;
-            }
-        }
-
-        break;
-    case State::SendPositiveAcknowledge:
-        state = State::FreeBus;
-        break;
-    case State::SendNegativeAcknowledge:
-        if (!slaveRepeated)
-        {
-            slaveRepeated = true;
-            state = State::ReceiveResponse;
-        }
-        else
-        {
-            state = State::FreeBus;
-        }
-        break;
-    case State::FreeBus:
-        state = State::MonitorBus;
-        break;
-    default:
-        break;
+            ebusHandler.reset();
+    }
+    else
+    {
+        ebusHandler.handleRecv(byte);
     }
 
     return true;
-}
-
-String printCommandMaster()
-{
-    return escape_json(master.to_string()).c_str();
-}
-
-size_t printCommandMasterState()
-{
-    return telegram.getMasterState();
-}
-
-String printCommandSlave()
-{
-    return escape_json(slave.to_string()).c_str();
-}
-
-size_t printCommandSlaveState()
-{
-    return telegram.getSlaveState();
 }
 
 String printCommandJsonData()
@@ -464,4 +255,19 @@ String printCommandJsonData(size_t i)
     s += "\"" + String(escape_json(printCommandDescription(i)).c_str()) + "\":";
     s += String(escape_json(printCommandValue(i)).c_str()) + "}}}";
     return s;
+}
+
+bool busReadyCallback()
+{
+    return Bus.availableForWrite();
+}
+
+void busWriteCallback(const uint8_t byte)
+{
+    Bus.write(byte);
+}
+
+void saveResponseCallback(const std::vector<uint8_t> response)
+{
+    saveCommandValue(commandTable[commandIndex].type, response);
 }
