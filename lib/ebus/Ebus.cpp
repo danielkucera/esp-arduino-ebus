@@ -82,8 +82,6 @@ bool ebus::Ebus::enque(const std::vector<uint8_t> &message)
 
 void ebus::Ebus::handleSend()
 {
-    u_int8_t byte;
-
     switch (state)
     {
     case State::MonitorBus:
@@ -93,8 +91,7 @@ void ebus::Ebus::handleSend()
     case State::SendMessage:
         if (busReadyCallback() && sendIndex == receiveIndex)
         {
-            byte = master[sendIndex];
-            busWriteCallback(byte);
+            busWriteCallback(master[sendIndex]);
             sendIndex++;
         }
         break;
@@ -106,24 +103,21 @@ void ebus::Ebus::handleSend()
         if (busReadyCallback() && sendAcknowledge)
         {
             sendAcknowledge = false;
-            byte = ebus::sym_ack;
-            busWriteCallback(byte);
+            busWriteCallback(ebus::sym_ack);
         }
         break;
     case State::SendNegativeAcknowledge:
         if (busReadyCallback() && sendAcknowledge)
         {
             sendAcknowledge = false;
-            byte = ebus::sym_nak;
-            busWriteCallback(byte);
+            busWriteCallback(ebus::sym_nak);
         }
         break;
     case State::FreeBus:
         if (busReadyCallback() && sendSyn)
         {
             sendSyn = false;
-            byte = ebus::sym_syn;
-            busWriteCallback(byte);
+            busWriteCallback(ebus::sym_syn);
         }
         break;
     default:
