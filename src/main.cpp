@@ -192,10 +192,10 @@ void data_process() {
     handleEnhClient(&enhClients[i]);
   }
 
-  //check schedule for data
-  handleScheduleSend();
+  // check schedule for data
+  processSend();
 
-  //check queue for data
+  // check queue for data
   BusType::data d;
   if (Bus.read(d)) {
 
@@ -205,7 +205,7 @@ void data_process() {
     }
 
     // push data to schedule
-    if (handleScheduleRecv(d._enhanced, d._client, d._d)) {
+    if (processReceive(d._enhanced, d._client, d._d)) {
       last_comms = millis();
     }
 

@@ -13,7 +13,7 @@ struct Command
     const char *desc;      // description
     const char *unit;      // unit of interested value
     const ebus::type type; // datatype of interested value
-    int pos;               // position of interested value
+    size_t pos;            // position of interested value
     uint32_t uvalue;       // value as unsigned char/integer
     int32_t ivalue;        // value as char/interger
     double dvalue;         // value as double
@@ -28,8 +28,8 @@ unsigned long getCommandCounter();
 std::string printCommandDescription(size_t index);
 std::string printCommandValue(size_t index);
 
-void handleScheduleSend();
-bool handleScheduleRecv(bool enhanced, WiFiClient *client, const uint8_t byte);
+void processSend();
+bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte);
 
 String printCommandJsonData();
 String printCommandJsonData(size_t i);

@@ -20,8 +20,8 @@
 // Implementation of the sending routines for Master-Slave telegrams
 // based on the ebus classes Telegram and Sequence.
 
-#ifndef EBUS_EBUS_H
-#define EBUS_EBUS_H
+#ifndef EBUS_EBUSHANDLER_H
+#define EBUS_EBUSHANDLER_H
 
 #include "Telegram.h"
 
@@ -42,15 +42,15 @@ namespace ebus
         FreeBus
     };
 
-    class Ebus
+    class EbusHandler
     {
 
     public:
-        Ebus() = default;
-        Ebus(const uint8_t source,
-             std::function<bool()> busReadyFunction,
-             std::function<void(const uint8_t byte)> busWriteFunction,
-             std::function<void(const std::vector<uint8_t> response)> saveResponseFunction);
+        EbusHandler() = default;
+        EbusHandler(const uint8_t source,
+                    std::function<bool()> busReadyFunction,
+                    std::function<void(const uint8_t byte)> busWriteFunction,
+                    std::function<void(const std::vector<uint8_t> response)> saveResponseFunction);
 
         State getState() const;
         uint8_t getAddress() const;
@@ -58,8 +58,8 @@ namespace ebus
         void reset();
         bool enque(const std::vector<uint8_t> &message);
 
-        void handleSend();
-        bool handleRecv(const uint8_t byte);
+        void send();
+        bool receive(const uint8_t byte);
 
     private:
         uint8_t address;
@@ -88,4 +88,4 @@ namespace ebus
 
 } // namespace ebus
 
-#endif // EBUS_EBUS_H
+#endif // EBUS_EBUSHANDLER_H

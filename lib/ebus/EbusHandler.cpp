@@ -17,17 +17,17 @@
  * along with ebus. If not, see http://www.gnu.org/licenses/.
  */
 
-#include "Ebus.h"
+#include "EbusHandler.h"
 
 #include "Telegram.h"
 
 #include <sstream>
 #include <iomanip>
 
-ebus::Ebus::Ebus(const uint8_t source,
-                 std::function<bool()> busReadyFunction,
-                 std::function<void(const uint8_t byte)> busWriteFunction,
-                 std::function<void(const std::vector<uint8_t> response)> saveResponseFunction)
+ebus::EbusHandler::EbusHandler(const uint8_t source,
+                               std::function<bool()> busReadyFunction,
+                               std::function<void(const uint8_t byte)> busWriteFunction,
+                               std::function<void(const std::vector<uint8_t> response)> saveResponseFunction)
 {
     address = source;
     busReadyCallback = busReadyFunction;
@@ -35,17 +35,17 @@ ebus::Ebus::Ebus(const uint8_t source,
     saveResponseCallback = saveResponseFunction;
 }
 
-ebus::State ebus::Ebus::getState() const
+ebus::State ebus::EbusHandler::getState() const
 {
     return state;
 }
 
-uint8_t ebus::Ebus::getAddress() const
+uint8_t ebus::EbusHandler::getAddress() const
 {
     return address;
 }
 
-void ebus::Ebus::reset()
+void ebus::EbusHandler::reset()
 {
     state = State::MonitorBus;
 
@@ -65,7 +65,7 @@ void ebus::Ebus::reset()
     sendSyn = true;
 }
 
-bool ebus::Ebus::enque(const std::vector<uint8_t> &message)
+bool ebus::EbusHandler::enque(const std::vector<uint8_t> &message)
 {
     reset();
     telegram.createMaster(address, message);
@@ -80,7 +80,7 @@ bool ebus::Ebus::enque(const std::vector<uint8_t> &message)
     return false;
 }
 
-void ebus::Ebus::handleSend()
+void ebus::EbusHandler::send()
 {
     switch (state)
     {
@@ -125,7 +125,7 @@ void ebus::Ebus::handleSend()
     }
 }
 
-bool ebus::Ebus::handleRecv(const uint8_t byte)
+bool ebus::EbusHandler::receive(const uint8_t byte)
 {
     switch (state)
     {

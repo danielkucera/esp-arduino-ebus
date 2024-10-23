@@ -1,6 +1,6 @@
 #include "schedule.hpp"
 
-#include "Ebus.h"
+#include "EbusHandler.h"
 
 #include "bus.hpp"
 
@@ -32,7 +32,7 @@ unsigned long millisLastCommand = 0;
 unsigned long distanceCommands = 10 * 1000; // TODO Systemparameter ?
 
 WiFiClient *dummyClient = new WiFiClient();
-ebus::Ebus ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &saveResponseCallback); // TODO 0xff Systemparameter ?
+ebus::EbusHandler ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &saveResponseCallback); // TODO 0xff Systemparameter ?
 
 std::function<void(const char *topic, const char *payload)> publishCallback = nullptr;
 
@@ -41,45 +41,47 @@ void setPublishCallback(std::function<void(const char *topic, const char *payloa
     publishCallback = func;
 }
 
-void saveCommandValue(ebus::type type, const std::vector<uint8_t> vec)
+void saveCommandValue(const std::vector<uint8_t> vec)
 {
+    size_t pos = commandTable[commandIndex].pos;
+
     switch (commandTable[commandIndex].type)
     {
     case ebus::type::BCD:
-        commandTable[commandIndex].uvalue = ebus::byte_2_bcd(ebus::Sequence::range(vec, 1, 1));
+        commandTable[commandIndex].uvalue = ebus::byte_2_bcd(ebus::Sequence::range(vec, pos, 1));
         break;
     case ebus::type::UINT8:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint8(ebus::Sequence::range(vec, 1, 1));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint8(ebus::Sequence::range(vec, pos, 1));
         break;
     case ebus::type::INT8:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int8(ebus::Sequence::range(vec, 1, 1));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int8(ebus::Sequence::range(vec, pos, 1));
         break;
     case ebus::type::UINT16:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint16(ebus::Sequence::range(vec, 1, 2));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint16(ebus::Sequence::range(vec, pos, 2));
         break;
     case ebus::type::INT16:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int16(ebus::Sequence::range(vec, 1, 2));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int16(ebus::Sequence::range(vec, pos, 2));
         break;
     case ebus::type::UINT32:
-        commandTable[commandIndex].uvalue = ebus::byte_2_uint32(ebus::Sequence::range(vec, 1, 4));
+        commandTable[commandIndex].uvalue = ebus::byte_2_uint32(ebus::Sequence::range(vec, pos, 4));
         break;
     case ebus::type::INT32:
-        commandTable[commandIndex].ivalue = ebus::byte_2_int32(ebus::Sequence::range(vec, 1, 4));
+        commandTable[commandIndex].ivalue = ebus::byte_2_int32(ebus::Sequence::range(vec, pos, 4));
         break;
     case ebus::type::DATA1b:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data1b(ebus::Sequence::range(vec, 1, 1));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data1b(ebus::Sequence::range(vec, pos, 1));
         break;
     case ebus::type::DATA1c:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data1c(ebus::Sequence::range(vec, 1, 1));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data1c(ebus::Sequence::range(vec, pos, 1));
         break;
     case ebus::type::DATA2b:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data2b(ebus::Sequence::range(vec, 1, 2));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data2b(ebus::Sequence::range(vec, pos, 2));
         break;
     case ebus::type::DATA2c:
-        commandTable[commandIndex].dvalue = ebus::byte_2_data2c(ebus::Sequence::range(vec, 1, 2));
+        commandTable[commandIndex].dvalue = ebus::byte_2_data2c(ebus::Sequence::range(vec, pos, 2));
         break;
     case ebus::type::FLOAT:
-        commandTable[commandIndex].dvalue = ebus::byte_2_float(ebus::Sequence::range(vec, 1, 2));
+        commandTable[commandIndex].dvalue = ebus::byte_2_float(ebus::Sequence::range(vec, pos, 2));
         break;
     default:
         break;
@@ -146,21 +148,17 @@ std::string printCommandValue(size_t index)
     return ostr.str();
 }
 
-std::string escape_json(const std::string &s)
+std::string escape_json(const std::string &str)
 {
-    std::ostringstream o;
-    for (auto c = s.cbegin(); c != s.cend(); c++)
+    std::ostringstream ostr;
+    for (auto chr = str.cbegin(); chr != str.cend(); chr++)
     {
-        if (*c == '"' || *c == '\\' || ('\x00' <= *c && *c <= '\x1f'))
-        {
-            o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(*c);
-        }
+        if (*chr == '"' || *chr == '\\' || ('\x00' <= *chr && *chr <= '\x1f'))
+            ostr << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(*chr);
         else
-        {
-            o << *c;
-        }
+            ostr << *chr;
     }
-    return o.str();
+    return ostr.str();
 }
 
 Command nextCommand()
@@ -174,7 +172,7 @@ Command nextCommand()
     return commandTable[commandIndex];
 }
 
-void handleScheduleSend()
+void processSend()
 {
     if (commandTable.size() == 0)
         return;
@@ -206,10 +204,10 @@ void handleScheduleSend()
         }
     }
 
-    ebusHandler.handleSend();
+    ebusHandler.send();
 }
 
-bool handleScheduleRecv(bool enhanced, WiFiClient *client, const uint8_t byte)
+bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte)
 {
     if (commandTable.size() == 0)
         return false;
@@ -218,7 +216,7 @@ bool handleScheduleRecv(bool enhanced, WiFiClient *client, const uint8_t byte)
     {
         // workaround - master sequence comes twice - waiting for second master sequence without "enhanced" flag
         if (!enhanced && client == dummyClient)
-            ebusHandler.handleRecv(byte);
+            ebusHandler.receive(byte);
 
         // reset - if arbitration went wrong
         if (millis() > millisLastCommand + (distanceCommands / 4))
@@ -226,7 +224,7 @@ bool handleScheduleRecv(bool enhanced, WiFiClient *client, const uint8_t byte)
     }
     else
     {
-        ebusHandler.handleRecv(byte);
+        ebusHandler.receive(byte);
     }
 
     return true;
@@ -269,5 +267,5 @@ void busWriteCallback(const uint8_t byte)
 
 void saveResponseCallback(const std::vector<uint8_t> response)
 {
-    saveCommandValue(commandTable[commandIndex].type, response);
+    saveCommandValue(response);
 }
