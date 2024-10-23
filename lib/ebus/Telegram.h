@@ -32,7 +32,7 @@
 // Receiver    (All):
 //
 // QQ...Source address (25 possible addresses)
-// ZZ...Destination address (254 possible addresses)
+// ZZ...Target address (254 possible addresses)
 // PB...Primary command
 // SB...Secondary command
 // NN...Number of databytes (0 < NN < 16)
