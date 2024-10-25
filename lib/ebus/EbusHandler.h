@@ -50,7 +50,7 @@ namespace ebus
         EbusHandler(const uint8_t source,
                     std::function<bool()> busReadyFunction,
                     std::function<void(const uint8_t byte)> busWriteFunction,
-                    std::function<void(const std::vector<uint8_t> response)> saveResponseFunction);
+                    std::function<void(const std::vector<uint8_t> response)> responseFunction);
 
         State getState() const;
         uint8_t getAddress() const;
@@ -66,7 +66,7 @@ namespace ebus
 
         std::function<bool()> busReadyCallback = nullptr;
         std::function<void(const uint8_t byte)> busWriteCallback = nullptr;
-        std::function<void(const std::vector<uint8_t> response)> saveResponseCallback = nullptr;
+        std::function<void(const std::vector<uint8_t> response)> responseCallback = nullptr;
 
         State state = State::MonitorBus;
 

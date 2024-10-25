@@ -27,12 +27,12 @@
 ebus::EbusHandler::EbusHandler(const uint8_t source,
                                std::function<bool()> busReadyFunction,
                                std::function<void(const uint8_t byte)> busWriteFunction,
-                               std::function<void(const std::vector<uint8_t> response)> saveResponseFunction)
+                               std::function<void(const std::vector<uint8_t> response)> responseFunction)
 {
     address = source;
     busReadyCallback = busReadyFunction;
     busWriteCallback = busWriteFunction;
-    saveResponseCallback = saveResponseFunction;
+    responseCallback = responseFunction;
 }
 
 ebus::State ebus::EbusHandler::getState() const
@@ -179,7 +179,7 @@ bool ebus::EbusHandler::receive(const uint8_t byte)
                 sendAcknowledge = true;
                 state = State::SendPositiveAcknowledge;
 
-                saveResponseCallback(telegram.getSlave().to_vector());
+                responseCallback(telegram.getSlave().to_vector());
             }
             else
             {
