@@ -300,8 +300,6 @@ char* status_string() {
   pos += sprintf(status + pos, "nbr_errors: %i\r\n", (int)Bus._nbrErrors);
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
   pos += sprintf(status + pos, "mqtt_server: %s\r\n", mqtt_server);
-  pos += sprintf(status + pos, "cmd_number: %d\r\n", getCommands());
-  pos += sprintf(status + pos, "cmd_counter: %ld\r\n", getCommandCounter());
 
   return status;
 }
@@ -333,11 +331,9 @@ String status_string_json() {
   s += "\"nbr_won2\":" + String(Bus._nbrWon2) + ",";
   s += "\"nbr_late\":" + String(Bus._nbrLate) + ",";
   s += "\"nbr_errors\":" + String(Bus._nbrErrors) + ",";
-  s += "\"pwm_value\":" + String(get_pwm()) + ",";
-  s += "\"mqtt_server\":\"" + String(mqtt_server) + "\"},";
-  s += "\"Commands\":{";
-  s += "\"cmd_number\":" + String(getCommands()) + ",";
-  s += "\"cmd_counter\":" + String(getCommandCounter()) + "";
+  s += "\"pwm_value\":" + String(get_pwm()) + "},";
+  s += "\"MQTT\":{";
+  s += "\"mqtt_server\":\"" + String(mqtt_server) + "\"";
   s += "}}}";
 
   return s;
@@ -345,10 +341,6 @@ String status_string_json() {
 
 void handleJsonStatus() {
   configServer.send(200, "application/json;charset=utf-8", status_string_json());
-}
-
-void handleJsonData() {
-  configServer.send(200, "application/json;charset=utf-8", printCommandJsonData());
 }
 
 void handleJsonStatistic() {
@@ -458,7 +450,6 @@ void setup() {
   configServer.on("/param", []{ iotWebConf.handleConfig(); });
   configServer.on("/status", []{ handleStatus(); });
   configServer.on("/json/status", []{ handleJsonStatus(); });
-  configServer.on("/json/data", []{ handleJsonData(); });
   configServer.on("/json/statistic", []{ handleJsonStatistic(); });
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
 
@@ -527,10 +518,10 @@ void loop() {
     needMqttConnect = true;
   }
 
-  if (mqttClient.connected() && millis() > lastMqttStatus + 60*1000) {
-    lastMqttStatus = millis();
-    mqttClient.publish("ebus/status", 0, true, (char*)status_string_json().c_str());
-  }
+  // if (mqttClient.connected() && millis() > lastMqttStatus + 60*1000) {
+  //   lastMqttStatus = millis();
+  //   mqttClient.publish("ebus/status", 0, true, (char*)status_string_json().c_str());
+  // }
 
   if (millis() > last_comms + 200*1000) {
     reset();
