@@ -25,8 +25,8 @@ std::vector<Command> commands;
 
 // #endif
 
-size_t idx = commands.size();
-unsigned long counter = 0;
+bool initDone = false;
+Command *actCommand = nullptr;
 
 unsigned long lastCommand = 0;
 unsigned long distanceCommands = 10 * 1000; // TODO Systemparameter ?
@@ -36,14 +36,14 @@ ebus::EbusHandler ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &respo
 
 std::function<void(const char *topic, const char *payload)> publishCallback = nullptr;
 
-size_t getCommands()
+bool needTX()
 {
-    return commands.size();
+    return commands.size() > 0;
 }
 
-void setPublishCallback(std::function<void(const char *topic, const char *payload)> function)
+void setPublishCallback(std::function<void(const char *topic, const char *payload)> publishFunction)
 {
-    publishCallback = function;
+    publishCallback = publishFunction;
 }
 
 const char *escape_json(const std::string &str)
@@ -61,14 +61,14 @@ const char *escape_json(const std::string &str)
 
 void processResponse(const std::vector<uint8_t> vec)
 {
-    commands[idx].last = millis();
+    actCommand->last = millis();
 
     if (publishCallback != nullptr)
     {
-        size_t pos = commands[idx].position;
+        size_t pos = actCommand->position;
         std::ostringstream ostr;
 
-        switch (commands[idx].datatype)
+        switch (actCommand->datatype)
         {
         case ebus::type::BCD:
             ostr << ebus::byte_2_bcd(ebus::Sequence::range(vec, pos, 1));
@@ -111,24 +111,46 @@ void processResponse(const std::vector<uint8_t> vec)
         }
 
         String payload = "{\"value\":" + String(ostr.str().c_str()) + ",";
-        payload += "\"unit\":\"" + String(escape_json(commands[idx].unit)) + "\",";
-        payload += "\"command\":\"" + String(commands[idx].command) + "\",";
-        payload += "\"interval\":" + String(commands[idx].interval) + "}";
+        payload += "\"unit\":\"" + String(escape_json(actCommand->unit)) + "\",";
+        payload += "\"interval\":" + String(actCommand->interval) + ",";
+        payload += "\"last\":" + String(actCommand->last) + ",";
+        payload += "\"command\":\"" + String(escape_json(actCommand->command)) + "\"}";
 
-        publishCallback(escape_json(commands[idx].topic), payload.c_str());
+        publishCallback(actCommand->topic, payload.c_str());
     }
 }
 
-Command nextCommand()
+const std::vector<uint8_t> nextCommand()
 {
-    counter++;
-    
-    idx++;
+    if (!initDone)
+    {
+        size_t count = std::count_if(commands.begin(), commands.end(),
+                                     [](Command cmd)
+                                     { return cmd.last == 0; });
+        if (count == 0)
+        {
+            initDone = true;
+        }
+        else
+        {
+            for (std::vector<Command>::iterator it = commands.begin(); it != commands.end(); ++it)
+            {
+                if (it->last == 0)
+                {
+                    actCommand = &(*it);
+                    break;
+                }
+            }
+        }
+    }
+    else
+    {
+        actCommand = &(*std::min_element(commands.begin(), commands.end(),
+                                         [](const Command &i, const Command &j)
+                                         { return (i.last + i.interval * 1000) < (j.last + j.interval * 1000); }));
+    }
 
-    if (idx >= commands.size())
-        idx = 0;
-
-    return commands[idx];
+    return ebus::Sequence::to_vector(actCommand->command);
 }
 
 void processSend()
@@ -142,7 +164,7 @@ void processSend()
         {
             lastCommand = millis();
 
-            if (ebusHandler.enque(ebus::Sequence::to_vector(nextCommand().command)))
+            if (ebusHandler.enque(nextCommand()))
             {
                 // start arbitration
                 WiFiClient *client = dummyClient;
@@ -168,6 +190,8 @@ void processSend()
 
 bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte)
 {
+    // TODO statistic
+
     if (commands.size() == 0)
         return false;
 

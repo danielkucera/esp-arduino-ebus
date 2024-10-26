@@ -487,7 +487,7 @@ void setup() {
 
   last_comms = millis();
 
-  if (getCommands() > 0)
+  if (needTX())
     enableTX();
 
 #ifdef ESP32
