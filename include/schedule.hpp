@@ -2,6 +2,8 @@
 #define _SCHEDULE_H_
 
 #include <WiFiClient.h>
+
+#include "EbusHandler.h"
 #include "Datatypes.h"
 
 // Implementation of the perodic sending of predefined commands.
@@ -18,14 +20,30 @@ struct Command
     const char *topic;            // mqtt topic
 };
 
-bool needTX();
-void setPublishCallback(std::function<void(const char *topic, const char *payload)> publishFunction);
+class Schedule
+{
 
-void processSend();
-bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte);
+public:
+    Schedule();
 
-bool busReadyCallback();
-void busWriteCallback(const uint8_t byte);
-void responseCallback(const std::vector<uint8_t> response);
+    bool needTX();
+    void setPublishCallback(std::function<void(const char *topic, const char *payload)> publishFunction);
+
+    void processSend();
+    bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte);
+
+private:
+    WiFiClient *dummyClient = new WiFiClient();
+    ebus::EbusHandler ebusHandler;
+
+    uint8_t address = 0xff; // TODO 0xff Systemparameter ?
+
+    unsigned long distanceCommands = 5 * 1000; // TODO Systemparameter ?
+    unsigned long lastCommand = 0;
+
+    bool initDone = false;
+
+    const std::vector<uint8_t> nextCommand();
+};
 
 #endif

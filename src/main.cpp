@@ -60,6 +60,8 @@ WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 
+Schedule schedule;
+
 unsigned long last_comms = 0;
 int last_reset_code = -1;
 
@@ -193,7 +195,7 @@ void data_process() {
   }
 
   // check schedule for data
-  processSend();
+  schedule.processSend();
 
   // check queue for data
   BusType::data d;
@@ -205,7 +207,7 @@ void data_process() {
     }
 
     // push data to schedule
-    if (processReceive(d._enhanced, d._client, d._d)) {
+    if (schedule.processReceive(d._enhanced, d._client, d._d)) {
       last_comms = millis();
     }
 
@@ -471,7 +473,7 @@ void setup() {
   if (mqtt_server[0] != '\0')
     mqttClient.setServer(mqtt_server, MQTT_PORT);
 
-  setPublishCallback(&publish);
+  schedule.setPublishCallback(&publish);
 
   wifiServer.begin();
   wifiServerRO.begin();
@@ -487,7 +489,7 @@ void setup() {
 
   last_comms = millis();
 
-  if (needTX())
+  if (schedule.needTX())
     enableTX();
 
 #ifdef ESP32

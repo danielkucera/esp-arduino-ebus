@@ -1,7 +1,5 @@
 #include "schedule.hpp"
 
-#include "EbusHandler.h"
-
 #include "bus.hpp"
 
 #include <sstream>
@@ -25,26 +23,9 @@ std::vector<Command> commands;
 
 // #endif
 
-bool initDone = false;
 Command *actCommand = nullptr;
 
-unsigned long lastCommand = 0;
-unsigned long distanceCommands = 10 * 1000; // TODO Systemparameter ?
-
-WiFiClient *dummyClient = new WiFiClient();
-ebus::EbusHandler ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &responseCallback); // TODO 0xff Systemparameter ?
-
 std::function<void(const char *topic, const char *payload)> publishCallback = nullptr;
-
-bool needTX()
-{
-    return commands.size() > 0;
-}
-
-void setPublishCallback(std::function<void(const char *topic, const char *payload)> publishFunction)
-{
-    publishCallback = publishFunction;
-}
 
 const char *escape_json(const std::string &str)
 {
@@ -120,40 +101,37 @@ void processResponse(const std::vector<uint8_t> vec)
     }
 }
 
-const std::vector<uint8_t> nextCommand()
+bool busReadyCallback()
 {
-    if (!initDone)
-    {
-        size_t count = std::count_if(commands.begin(), commands.end(),
-                                     [](Command cmd)
-                                     { return cmd.last == 0; });
-        if (count == 0)
-        {
-            initDone = true;
-        }
-        else
-        {
-            for (std::vector<Command>::iterator it = commands.begin(); it != commands.end(); ++it)
-            {
-                if (it->last == 0)
-                {
-                    actCommand = &(*it);
-                    break;
-                }
-            }
-        }
-    }
-    else
-    {
-        actCommand = &(*std::min_element(commands.begin(), commands.end(),
-                                         [](const Command &i, const Command &j)
-                                         { return (i.last + i.interval * 1000) < (j.last + j.interval * 1000); }));
-    }
-
-    return ebus::Sequence::to_vector(actCommand->command);
+    return Bus.availableForWrite();
 }
 
-void processSend()
+void busWriteCallback(const uint8_t byte)
+{
+    Bus.write(byte);
+}
+
+void responseCallback(const std::vector<uint8_t> response)
+{
+    processResponse(std::vector<uint8_t>(response));
+}
+
+Schedule::Schedule()
+{
+    ebusHandler = ebus::EbusHandler(address, &busReadyCallback, &busWriteCallback, &responseCallback);
+}
+
+bool Schedule::needTX()
+{
+    return commands.size() > 0;
+}
+
+void Schedule::setPublishCallback(std::function<void(const char *topic, const char *payload)> publishFunction)
+{
+    publishCallback = publishFunction;
+}
+
+void Schedule::processSend()
 {
     if (commands.size() == 0)
         return;
@@ -188,7 +166,7 @@ void processSend()
     ebusHandler.send();
 }
 
-bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte)
+bool Schedule::processReceive(bool enhanced, WiFiClient *client, const uint8_t byte)
 {
     // TODO statistic
 
@@ -202,7 +180,7 @@ bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte)
             ebusHandler.receive(byte);
 
         // reset - if arbitration went wrong
-        if (millis() > lastCommand + (distanceCommands / 4))
+        if (millis() > lastCommand + 1 * 1000)
             ebusHandler.reset();
     }
     else
@@ -213,17 +191,35 @@ bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte)
     return true;
 }
 
-bool busReadyCallback()
+const std::vector<uint8_t> Schedule::nextCommand()
 {
-    return Bus.availableForWrite();
-}
+    if (!initDone)
+    {
+        size_t count = std::count_if(commands.begin(), commands.end(),
+                                     [](Command cmd)
+                                     { return cmd.last == 0; });
+        if (count == 0)
+        {
+            initDone = true;
+        }
+        else
+        {
+            for (std::vector<Command>::iterator it = commands.begin(); it != commands.end(); ++it)
+            {
+                if (it->last == 0)
+                {
+                    actCommand = &(*it);
+                    break;
+                }
+            }
+        }
+    }
+    else
+    {
+        actCommand = &(*std::min_element(commands.begin(), commands.end(),
+                                         [](const Command &i, const Command &j)
+                                         { return (i.last + i.interval * 1000) < (j.last + j.interval * 1000); }));
+    }
 
-void busWriteCallback(const uint8_t byte)
-{
-    Bus.write(byte);
-}
-
-void responseCallback(const std::vector<uint8_t> response)
-{
-    processResponse(response);
+    return ebus::Sequence::to_vector(actCommand->command);
 }
