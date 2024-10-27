@@ -17,8 +17,7 @@
  * along with ebus. If not, see http://www.gnu.org/licenses/.
  */
 
-// Implementation of the sending routines for Master-Slave telegrams
-// based on the ebus classes Telegram and Sequence.
+// Implementation of the sending routines for Master-Slave telegrams based on the ebus classes Telegram and Sequence.
 
 #ifndef EBUS_EBUSHANDLER_H
 #define EBUS_EBUSHANDLER_H

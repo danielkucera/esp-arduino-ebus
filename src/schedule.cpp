@@ -1,6 +1,7 @@
 #include "schedule.hpp"
 
 #include "bus.hpp"
+#include "mqtt.hpp"
 
 #include <ArduinoJson.h>
 
@@ -33,11 +34,6 @@ void Schedule::setAddress(const uint8_t source)
 {
     address = source;
     ebusHandler.setAddress(source);
-}
-
-void Schedule::setPublishCallback(std::function<void(const char *topic, const char *payload)> publishFunction)
-{
-    publishCallback = publishFunction;
 }
 
 bool Schedule::needTX()
@@ -82,7 +78,8 @@ void Schedule::processSend()
 
 bool Schedule::processReceive(bool enhanced, WiFiClient *client, const uint8_t byte)
 {
-    // TODO statistic
+    if (!enhanced)
+        ebusStatistics.collect(byte);
 
     if (commands.size() == 0)
         return false;
@@ -104,6 +101,81 @@ bool Schedule::processReceive(bool enhanced, WiFiClient *client, const uint8_t b
 
     return true;
 }
+
+void Schedule::resetStatistics()
+{
+    ebusStatistics.reset();
+}
+
+void Schedule::publishStatisticsMQTT()
+{
+    mqttClient.publish("ebus/statistics/total", 0, true, String(ebusStatistics.getTotal()).c_str());
+
+    mqttClient.publish("ebus/statistics/success", 0, true, String(ebusStatistics.getSuccess()).c_str());
+    mqttClient.publish("ebus/statistics/success/percent", 0, true, String(ebusStatistics.getSuccessPercent()).c_str());
+
+    mqttClient.publish("ebus/statistics/failure", 0, true, String(ebusStatistics.getFailure()).c_str());
+    mqttClient.publish("ebus/statistics/failure/percent", 0, true, String(ebusStatistics.getFailurePercent()).c_str());
+
+    mqttClient.publish("ebus/statistics/type/MS", 0, true, String(ebusStatistics.getMasterSlave()).c_str());
+    mqttClient.publish("ebus/statistics/type/MM", 0, true, String(ebusStatistics.getMasterMaster()).c_str());
+    mqttClient.publish("ebus/statistics/type/BC", 0, true, String(ebusStatistics.getBroadcast()).c_str());
+
+    mqttClient.publish("ebus/statistics/failure/master/empty", 0, true, String(ebusStatistics.getMasterFailure(SEQ_EMPTY)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/ok", 0, true, String(ebusStatistics.getMasterFailure(SEQ_OK)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/short", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_SHORT)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/long", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_LONG)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/nn", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_NN)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/crc", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_CRC)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/ack", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ACK)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/qq", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_QQ)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/zz", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ZZ)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/ack_miss", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ACK_MISS)).c_str());
+    mqttClient.publish("ebus/statistics/failure/master/invalid", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_INVALID)).c_str());
+
+    mqttClient.publish("ebus/statistics/failure/slave/empty", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_EMPTY)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/ok", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_OK)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/short", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_SHORT)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/long", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_LONG)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/nn", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_NN)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/crc", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_CRC)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/ack", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ACK)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/qq", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_QQ)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/zz", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ZZ)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/ack_miss", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ACK_MISS)).c_str());
+    mqttClient.publish("ebus/statistics/failure/slave/invalid", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_INVALID)).c_str());
+
+    mqttClient.publish("ebus/statistics/special/00", 0, true, String(ebusStatistics.get00()).c_str());
+    mqttClient.publish("ebus/statistics/special/0704_success", 0, true, String(ebusStatistics.get0704Success()).c_str());
+    mqttClient.publish("ebus/statistics/special/0704_failure", 0, true, String(ebusStatistics.get0704Failure()).c_str());
+}
+
+// String getLeading(uint8_t byte)
+// {
+//     std::ostringstream ostr;
+//     ostr << std::nouppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(byte);
+//     return ostr.str().c_str();
+// }
+
+// String getSlaves()
+// {
+//     String s;
+
+//     for (std::map<uint8_t, ebus::Sequence>::iterator it = slaves.begin(); it != slaves.end(); ++it)
+//     {
+//         s += "\"0x" + String(getLeading(it->first)) + "\":";
+//         s += "\"Producer: " + String(getLeading(it->second[1]));
+//         s += " Device: " + String(ebus::byte_2_string(it->second.range(2, 5)).c_str());
+//         s += " SW: " + String(getLeading(it->second[7])) + "." + String(getLeading(it->second[8]));
+//         s += " HW: " + String(getLeading(it->second[9])) + "." + String(getLeading(it->second[10]));
+//         s += "\",";
+//     }
+
+//     if (slaves.size() > 0)
+//         s.remove(s.length() - 1, 1);
+
+//     return s;
+// }
 
 const std::vector<uint8_t> Schedule::nextCommand()
 {
@@ -157,59 +229,56 @@ void Schedule::processResponse(const std::vector<uint8_t> vec)
 {
     actCommand->last = millis();
 
-    if (publishCallback != nullptr)
+    JsonDocument doc;
+
+    switch (actCommand->datatype)
     {
-        JsonDocument doc;
-
-        switch (actCommand->datatype)
-        {
-        case ebus::type::BCD:
-            doc["value"] = ebus::byte_2_bcd(ebus::Sequence::range(vec, actCommand->position, 1));
-            break;
-        case ebus::type::UINT8:
-            doc["value"] = ebus::byte_2_uint8(ebus::Sequence::range(vec, actCommand->position, 1));
-            break;
-        case ebus::type::INT8:
-            doc["value"] = ebus::byte_2_int8(ebus::Sequence::range(vec, actCommand->position, 1));
-            break;
-        case ebus::type::UINT16:
-            doc["value"] = ebus::byte_2_uint16(ebus::Sequence::range(vec, actCommand->position, 2));
-            break;
-        case ebus::type::INT16:
-            doc["value"] = ebus::byte_2_int16(ebus::Sequence::range(vec, actCommand->position, 2));
-            break;
-        case ebus::type::UINT32:
-            doc["value"] = ebus::byte_2_uint32(ebus::Sequence::range(vec, actCommand->position, 4));
-            break;
-        case ebus::type::INT32:
-            doc["value"] = ebus::byte_2_int32(ebus::Sequence::range(vec, actCommand->position, 4));
-            break;
-        case ebus::type::DATA1b:
-            doc["value"] = ebus::byte_2_data1b(ebus::Sequence::range(vec, actCommand->position, 1));
-            break;
-        case ebus::type::DATA1c:
-            doc["value"] = ebus::byte_2_data1c(ebus::Sequence::range(vec, actCommand->position, 1));
-            break;
-        case ebus::type::DATA2b:
-            doc["value"] = ebus::byte_2_data2b(ebus::Sequence::range(vec, actCommand->position, 2));
-            break;
-        case ebus::type::DATA2c:
-            doc["value"] = ebus::byte_2_data2c(ebus::Sequence::range(vec, actCommand->position, 2));
-            break;
-        case ebus::type::FLOAT:
-            doc["value"] = ebus::byte_2_float(ebus::Sequence::range(vec, actCommand->position, 2));
-            break;
-        default:
-            break;
-        }
-
-        doc["unit"] = actCommand->unit;
-        doc["interval"] = actCommand->interval;
-        doc["last"] = actCommand->last/1000;
-
-        String payload;
-        serializeJson(doc, payload);
-
-        publishCallback(actCommand->topic, payload.c_str());
+    case ebus::type::BCD:
+        doc["value"] = ebus::byte_2_bcd(ebus::Sequence::range(vec, actCommand->position, 1));
+        break;
+    case ebus::type::UINT8:
+        doc["value"] = ebus::byte_2_uint8(ebus::Sequence::range(vec, actCommand->position, 1));
+        break;
+    case ebus::type::INT8:
+        doc["value"] = ebus::byte_2_int8(ebus::Sequence::range(vec, actCommand->position, 1));
+        break;
+    case ebus::type::UINT16:
+        doc["value"] = ebus::byte_2_uint16(ebus::Sequence::range(vec, actCommand->position, 2));
+        break;
+    case ebus::type::INT16:
+        doc["value"] = ebus::byte_2_int16(ebus::Sequence::range(vec, actCommand->position, 2));
+        break;
+    case ebus::type::UINT32:
+        doc["value"] = ebus::byte_2_uint32(ebus::Sequence::range(vec, actCommand->position, 4));
+        break;
+    case ebus::type::INT32:
+        doc["value"] = ebus::byte_2_int32(ebus::Sequence::range(vec, actCommand->position, 4));
+        break;
+    case ebus::type::DATA1b:
+        doc["value"] = ebus::byte_2_data1b(ebus::Sequence::range(vec, actCommand->position, 1));
+        break;
+    case ebus::type::DATA1c:
+        doc["value"] = ebus::byte_2_data1c(ebus::Sequence::range(vec, actCommand->position, 1));
+        break;
+    case ebus::type::DATA2b:
+        doc["value"] = ebus::byte_2_data2b(ebus::Sequence::range(vec, actCommand->position, 2));
+        break;
+    case ebus::type::DATA2c:
+        doc["value"] = ebus::byte_2_data2c(ebus::Sequence::range(vec, actCommand->position, 2));
+        break;
+    case ebus::type::FLOAT:
+        doc["value"] = ebus::byte_2_float(ebus::Sequence::range(vec, actCommand->position, 2));
+        break;
+    default:
+        break;
     }
+
+    doc["unit"] = actCommand->unit;
+    doc["interval"] = actCommand->interval;
+    doc["last"] = actCommand->last / 1000;
+
+    String payload;
+    serializeJson(doc, payload);
+
+    mqttClient.publish(actCommand->topic, 0, true, payload.c_str());
 }

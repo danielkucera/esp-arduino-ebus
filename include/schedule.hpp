@@ -4,6 +4,7 @@
 #include <WiFiClient.h>
 
 #include "EbusHandler.h"
+#include "EbusStatistics.h"
 #include "Datatypes.h"
 
 // Implementation of the perodic sending of predefined commands.
@@ -26,20 +27,22 @@ class Schedule
 public:
     Schedule();
 
-    void setAddress(const uint8_t source);    
-    void setPublishCallback(std::function<void(const char *topic, const char *payload)> publishFunction);
+    void setAddress(const uint8_t source);
 
     bool needTX();
 
     void processSend();
     bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte);
 
+    void resetStatistics();
+    void publishStatisticsMQTT();
+
 private:
     uint8_t address = 0xff; // TODO 0xff Systemparameter ?
-    std::function<void(const char *topic, const char *payload)> publishCallback = nullptr;
 
     WiFiClient *dummyClient = new WiFiClient();
     ebus::EbusHandler ebusHandler;
+    ebus::EbusStatistics ebusStatistics;
 
     Command *actCommand = nullptr;
 

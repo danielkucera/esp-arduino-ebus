@@ -5,25 +5,24 @@
 #include "main.hpp"
 #include "enhanced.hpp"
 #include "schedule.hpp"
-#include "statistic.hpp"
 #include "bus.hpp"
 #include "mqtt.hpp"
 
 Preferences preferences;
 
 #ifdef ESP32
-  #include <esp_task_wdt.h>
-  #include <ESPmDNS.h>
-  #include "esp32c3/rom/rtc.h"
-  #include <IotWebConfESP32HTTPUpdateServer.h>
+#include <esp_task_wdt.h>
+#include <ESPmDNS.h>
+#include "esp32c3/rom/rtc.h"
+#include <IotWebConfESP32HTTPUpdateServer.h>
 
-  HTTPUpdateServer httpUpdater;
+HTTPUpdateServer httpUpdater;
 #else
-  #include <ESP8266mDNS.h>
-  #include <ESP8266TrueRandom.h>
-  #include <ESP8266HTTPUpdateServer.h>
+#include <ESP8266mDNS.h>
+#include <ESP8266TrueRandom.h>
+#include <ESP8266HTTPUpdateServer.h>
 
-  ESP8266HTTPUpdateServer httpUpdater;
+ESP8266HTTPUpdateServer httpUpdater;
 #endif
 
 #define ALPHA 0.3
@@ -70,17 +69,17 @@ int reconnectCount = 0;
 
 bool needMqttConnect = false;
 unsigned long lastMqttConnectionAttempt = 0;
-unsigned long lastMqttStatus = 0;
+unsigned long lastMqttUpdate = 0;
 
 bool connectMqtt() {
   if (mqttClient.connected())
     return true;
 
   unsigned long now = millis();
-  
+
   if (1000 > now - lastMqttConnectionAttempt)
     return false;
-  
+
   mqttClient.connect();
 
   if (!mqttClient.connected()) {
@@ -137,7 +136,7 @@ inline void enableTX() {
 void set_pwm(uint8_t value) {
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
-  resetStatistic();
+  schedule.resetStatistics();
 #endif
 }
 
@@ -199,11 +198,6 @@ void data_process() {
   BusType::data d;
   if (Bus.read(d)) {
 
-    // collect statistic data
-    if (!d._enhanced) {
-      collectStatistic(d._d);
-    }
-
     // push data to schedule
     if (schedule.processReceive(d._enhanced, d._client, d._d)) {
       last_comms = millis();
@@ -244,7 +238,7 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   bool valid = true;
 
   int l = webRequestWrapper->arg(mqtt_server_param.getId()).length();
-  
+
   if (l > MQTT_SERVER_LEN - 1) {
     String tmp = "max. ";
     tmp += String(MQTT_SERVER_LEN);
@@ -308,47 +302,37 @@ void handleStatus() {
   configServer.send(200, "text/plain", status_string());
 }
 
-String status_string_json() {
-  String s = "{\"esp-eBus\":{\"Status\":{";
-  s += "\"async_mode\":\"" + String(USE_ASYNCHRONOUS ? "true" : "false") + "\",";
-  s += "\"software_serial_mode\":\"" + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\",";
-  s += "\"uptime\":" + String(millis()) + ",";
-  s += "\"last_connect_time\":" + String(lastConnectTime) + ",";
-  s += "\"reconnect_count\":" + String(reconnectCount) + ",";
-  s += "\"rssi\":" + String(WiFi.RSSI()) + ",";
-  s += "\"free_heap\":" + String(ESP.getFreeHeap()) + ",";
-  s += "\"reset_code\":" + String(last_reset_code) + ",";
-  s += "\"loop_duration\":" + String(loopDuration) + ",";
-  s += "\"max_loop_duration\":" + String(maxLoopDuration) + ",";
-  s += "\"version\":\"" + String(AUTO_VERSION) + "\"},";
-  s += "\"Arbitration\":{";
-  s += "\"nbr_arbitrations\":" + String(Bus._nbrArbitrations) + ",";
-  s += "\"nbr_restarts1\":" + String(Bus._nbrRestarts1) + ",";
-  s += "\"nbr_restarts2\":" + String(Bus._nbrRestarts2) + ",";
-  s += "\"nbr_lost1\":" + String(Bus._nbrLost1) + ",";
-  s += "\"nbr_lost2\":" + String(Bus._nbrLost2) + ",";
-  s += "\"nbr_won1\":" + String(Bus._nbrWon1) + ",";
-  s += "\"nbr_won2\":" + String(Bus._nbrWon2) + ",";
-  s += "\"nbr_late\":" + String(Bus._nbrLate) + ",";
-  s += "\"nbr_errors\":" + String(Bus._nbrErrors) + ",";
-  s += "\"pwm_value\":" + String(get_pwm()) + "},";
-  s += "\"MQTT\":{";
-  s += "\"mqtt_server\":\"" + String(mqtt_server) + "\"";
-  s += "}}}";
+void publishStatusMQTT() {
+  mqttClient.publish("ebus/status/version", 0, true, String(AUTO_VERSION).c_str());
 
-  return s;
-}
+  mqttClient.publish("ebus/status/async", 0, true, String(USE_ASYNCHRONOUS ? "true" : "false").c_str());
+  mqttClient.publish("ebus/status/software_serial", 0, true, String(USE_SOFTWARE_SERIAL ? "true" : "false").c_str());
 
-void handleJsonStatus() {
-  configServer.send(200, "application/json;charset=utf-8", status_string_json());
-}
+  mqttClient.publish("ebus/status/uptime", 0, true, String(millis() / 1000).c_str());
+  mqttClient.publish("ebus/status/free_heap", 0, true, String(ESP.getFreeHeap()).c_str());
 
-void handleJsonStatistic() {
-  configServer.send(200, "application/json;charset=utf-8", printCommandJsonStatistic());
-}
+  mqttClient.publish("ebus/status/reset_code", 0, true, String(last_reset_code).c_str());
 
-void publish(const char *topic, const char *payload) {
-  mqttClient.publish(topic, 0, true, payload);
+  // TODO average of duration
+  mqttClient.publish("ebus/status/loop_duration", 0, true, String(loopDuration).c_str());
+  mqttClient.publish("ebus/status/loop_duration_max", 0, true, String(maxLoopDuration).c_str());
+
+  mqttClient.publish("ebus/status/wifi/last_connect", 0, true, String(lastConnectTime).c_str());
+  mqttClient.publish("ebus/status/wifi/reconnect", 0, true, String(reconnectCount).c_str());
+  mqttClient.publish("ebus/status/wifi/rssi", 0, true, String(WiFi.RSSI()).c_str());
+
+  mqttClient.publish("ebus/status/arbitration/total", 0, true, String(Bus._nbrArbitrations).c_str());
+  mqttClient.publish("ebus/status/arbitration/restarts1", 0, true, String(Bus._nbrRestarts1).c_str());
+  mqttClient.publish("ebus/status/arbitration/restarts2", 0, true, String(Bus._nbrRestarts2).c_str());
+  mqttClient.publish("ebus/status/arbitration/lost1", 0, true, String(Bus._nbrLost1).c_str());
+  mqttClient.publish("ebus/status/arbitration/lost2", 0, true, String(Bus._nbrLost2).c_str());
+  mqttClient.publish("ebus/status/arbitration/won1", 0, true, String(Bus._nbrWon1).c_str());
+  mqttClient.publish("ebus/status/arbitration/won2", 0, true, String(Bus._nbrWon2).c_str());
+  mqttClient.publish("ebus/status/arbitration/late", 0, true, String(Bus._nbrLate).c_str());
+  mqttClient.publish("ebus/status/arbitration/errors", 0, true, String(Bus._nbrErrors).c_str());
+
+  // TODO ebus address
+  mqttClient.publish("ebus/status/ebus/pwm", 0, true, String(get_pwm()).c_str());
 }
 
 void handleRoot() {
@@ -419,7 +403,7 @@ void setup() {
     strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz", IOTWEBCONF_WORD_LEN);
     preferences.putString("mqtt_server", "");
-    
+
     iotWebConf.saveConfig();
   } else {
     iotWebConf.skipApStartup();
@@ -449,8 +433,6 @@ void setup() {
   configServer.on("/config", []{ iotWebConf.handleConfig(); });
   configServer.on("/param", []{ iotWebConf.handleConfig(); });
   configServer.on("/status", []{ handleStatus(); });
-  configServer.on("/json/status", []{ handleJsonStatus(); });
-  configServer.on("/json/statistic", []{ handleJsonStatistic(); });
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
 
   iotWebConf.setupUpdateServer(
@@ -458,7 +440,7 @@ void setup() {
     [](const char* userName, char* password) { httpUpdater.updateCredentials(userName, password); });
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
-      iotWebConf.doLoop();
+    iotWebConf.doLoop();
   }
 
   mqttClient.onConnect(onMqttConnect);
@@ -470,8 +452,6 @@ void setup() {
 
   if (mqtt_server[0] != '\0')
     mqttClient.setServer(mqtt_server, MQTT_PORT);
-
-  schedule.setPublishCallback(&publish);
 
   wifiServer.begin();
   wifiServerRO.begin();
@@ -518,10 +498,12 @@ void loop() {
     needMqttConnect = true;
   }
 
-  // if (mqttClient.connected() && millis() > lastMqttStatus + 60*1000) {
-  //   lastMqttStatus = millis();
-  //   mqttClient.publish("ebus/status", 0, true, (char*)status_string_json().c_str());
-  // }
+  if (mqttClient.connected() && millis() > lastMqttUpdate + 60 * 1000)
+  {
+    lastMqttUpdate = millis();
+    publishStatusMQTT();
+    schedule.publishStatisticsMQTT();
+  }
 
   if (millis() > last_comms + 200*1000) {
     reset();
