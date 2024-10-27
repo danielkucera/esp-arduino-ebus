@@ -302,37 +302,36 @@ void handleStatus() {
   configServer.send(200, "text/plain", status_string());
 }
 
-void publishStatusMQTT() {
-  mqttClient.publish("ebus/status/version", 0, true, String(AUTO_VERSION).c_str());
-
-  mqttClient.publish("ebus/status/async", 0, true, String(USE_ASYNCHRONOUS ? "true" : "false").c_str());
-  mqttClient.publish("ebus/status/software_serial", 0, true, String(USE_SOFTWARE_SERIAL ? "true" : "false").c_str());
-
-  mqttClient.publish("ebus/status/uptime", 0, true, String(millis() / 1000).c_str());
-  mqttClient.publish("ebus/status/free_heap", 0, true, String(ESP.getFreeHeap()).c_str());
-
-  mqttClient.publish("ebus/status/reset_code", 0, true, String(last_reset_code).c_str());
-
-  // TODO average of duration
-  mqttClient.publish("ebus/status/loop_duration", 0, true, String(loopDuration).c_str());
-  mqttClient.publish("ebus/status/loop_duration_max", 0, true, String(maxLoopDuration).c_str());
-
-  mqttClient.publish("ebus/status/wifi/last_connect", 0, true, String(lastConnectTime).c_str());
-  mqttClient.publish("ebus/status/wifi/reconnect", 0, true, String(reconnectCount).c_str());
-  mqttClient.publish("ebus/status/wifi/rssi", 0, true, String(WiFi.RSSI()).c_str());
-
-  mqttClient.publish("ebus/status/arbitration/total", 0, true, String(Bus._nbrArbitrations).c_str());
-  mqttClient.publish("ebus/status/arbitration/restarts1", 0, true, String(Bus._nbrRestarts1).c_str());
-  mqttClient.publish("ebus/status/arbitration/restarts2", 0, true, String(Bus._nbrRestarts2).c_str());
-  mqttClient.publish("ebus/status/arbitration/lost1", 0, true, String(Bus._nbrLost1).c_str());
-  mqttClient.publish("ebus/status/arbitration/lost2", 0, true, String(Bus._nbrLost2).c_str());
-  mqttClient.publish("ebus/status/arbitration/won1", 0, true, String(Bus._nbrWon1).c_str());
-  mqttClient.publish("ebus/status/arbitration/won2", 0, true, String(Bus._nbrWon2).c_str());
-  mqttClient.publish("ebus/status/arbitration/late", 0, true, String(Bus._nbrLate).c_str());
-  mqttClient.publish("ebus/status/arbitration/errors", 0, true, String(Bus._nbrErrors).c_str());
+void publishMQTT() {
+  mqttClient.publish("ebus/firmware/version", 0, true, String(AUTO_VERSION).c_str());
+  mqttClient.publish("ebus/firmware/async", 0, true, String(USE_ASYNCHRONOUS ? "true" : "false").c_str());
+  mqttClient.publish("ebus/firmware/software_serial", 0, true, String(USE_SOFTWARE_SERIAL ? "true" : "false").c_str());
 
   // TODO ebus address
-  mqttClient.publish("ebus/status/ebus/pwm", 0, true, String(get_pwm()).c_str());
+  mqttClient.publish("ebus/device/pwm_value", 0, true, String(get_pwm()).c_str());
+
+  mqttClient.publish("ebus/device/uptime", 0, true, String(millis() / 1000).c_str());
+  mqttClient.publish("ebus/device/uptime_millis", 0, true, String(millis()).c_str());
+
+  // TODO average of duration
+  mqttClient.publish("ebus/device/loop_duration", 0, true, String(loopDuration).c_str());
+  mqttClient.publish("ebus/device/loop_duration_max", 0, true, String(maxLoopDuration).c_str());
+  mqttClient.publish("ebus/device/free_heap", 0, true, String(ESP.getFreeHeap()).c_str());
+  mqttClient.publish("ebus/device/reset_code", 0, true, String(last_reset_code).c_str());
+
+  mqttClient.publish("ebus/device/wifi/last_connect", 0, true, String(lastConnectTime).c_str());
+  mqttClient.publish("ebus/device/wifi/reconnect_count", 0, true, String(reconnectCount).c_str());
+  mqttClient.publish("ebus/device/wifi/rssi", 0, true, String(WiFi.RSSI()).c_str());
+
+  mqttClient.publish("ebus/arbitration/total", 0, true, String(Bus._nbrArbitrations).c_str());
+  mqttClient.publish("ebus/arbitration/restarts1", 0, true, String(Bus._nbrRestarts1).c_str());
+  mqttClient.publish("ebus/arbitration/restarts2", 0, true, String(Bus._nbrRestarts2).c_str());
+  mqttClient.publish("ebus/arbitration/lost1", 0, true, String(Bus._nbrLost1).c_str());
+  mqttClient.publish("ebus/arbitration/lost2", 0, true, String(Bus._nbrLost2).c_str());
+  mqttClient.publish("ebus/arbitration/won1", 0, true, String(Bus._nbrWon1).c_str());
+  mqttClient.publish("ebus/arbitration/won2", 0, true, String(Bus._nbrWon2).c_str());
+  mqttClient.publish("ebus/arbitration/late", 0, true, String(Bus._nbrLate).c_str());
+  mqttClient.publish("ebus/arbitration/errors", 0, true, String(Bus._nbrErrors).c_str());
 }
 
 void handleRoot() {
@@ -501,8 +500,8 @@ void loop() {
   if (mqttClient.connected() && millis() > lastMqttUpdate + 60 * 1000)
   {
     lastMqttUpdate = millis();
-    publishStatusMQTT();
-    schedule.publishStatisticsMQTT();
+    publishMQTT();
+    schedule.publishMQTT();
   }
 
   if (millis() > last_comms + 200*1000) {

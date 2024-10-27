@@ -35,7 +35,7 @@ public:
     bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte);
 
     void resetStatistics();
-    void publishStatisticsMQTT();
+    void publishMQTT();
 
 private:
     uint8_t address = 0xff; // TODO 0xff Systemparameter ?

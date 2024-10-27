@@ -107,47 +107,46 @@ void Schedule::resetStatistics()
     ebusStatistics.reset();
 }
 
-void Schedule::publishStatisticsMQTT()
+void Schedule::publishMQTT()
 {
-    mqttClient.publish("ebus/statistics/total", 0, true, String(ebusStatistics.getTotal()).c_str());
+    mqttClient.publish("ebus/messages/total", 0, true, String(ebusStatistics.getTotal()).c_str());
 
-    mqttClient.publish("ebus/statistics/success", 0, true, String(ebusStatistics.getSuccess()).c_str());
-    mqttClient.publish("ebus/statistics/success/percent", 0, true, String(ebusStatistics.getSuccessPercent()).c_str());
+    mqttClient.publish("ebus/messages/success", 0, true, String(ebusStatistics.getSuccess()).c_str());
+    mqttClient.publish("ebus/messages/success/percent", 0, true, String(ebusStatistics.getSuccessPercent()).c_str());
+    mqttClient.publish("ebus/messages/success/master_slave", 0, true, String(ebusStatistics.getSuccessMasterSlave()).c_str());
+    mqttClient.publish("ebus/messages/success/master_master", 0, true, String(ebusStatistics.getSuccessMasterMaster()).c_str());
+    mqttClient.publish("ebus/messages/success/broadcast", 0, true, String(ebusStatistics.getSuccessBroadcast()).c_str());
 
-    mqttClient.publish("ebus/statistics/failure", 0, true, String(ebusStatistics.getFailure()).c_str());
-    mqttClient.publish("ebus/statistics/failure/percent", 0, true, String(ebusStatistics.getFailurePercent()).c_str());
+    mqttClient.publish("ebus/messages/failure", 0, true, String(ebusStatistics.getFailure()).c_str());
+    mqttClient.publish("ebus/messages/failure/percent", 0, true, String(ebusStatistics.getFailurePercent()).c_str());
 
-    mqttClient.publish("ebus/statistics/type/MS", 0, true, String(ebusStatistics.getMasterSlave()).c_str());
-    mqttClient.publish("ebus/statistics/type/MM", 0, true, String(ebusStatistics.getMasterMaster()).c_str());
-    mqttClient.publish("ebus/statistics/type/BC", 0, true, String(ebusStatistics.getBroadcast()).c_str());
+    mqttClient.publish("ebus/messages/failure/master/empty", 0, true, String(ebusStatistics.getMasterFailure(SEQ_EMPTY)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/ok", 0, true, String(ebusStatistics.getMasterFailure(SEQ_OK)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/short", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_SHORT)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/long", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_LONG)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/nn", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_NN)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/crc", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_CRC)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/ack", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ACK)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/qq", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_QQ)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/zz", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ZZ)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/ack_miss", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ACK_MISS)).c_str());
+    mqttClient.publish("ebus/messages/failure/master/invalid", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_INVALID)).c_str());
 
-    mqttClient.publish("ebus/statistics/failure/master/empty", 0, true, String(ebusStatistics.getMasterFailure(SEQ_EMPTY)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/ok", 0, true, String(ebusStatistics.getMasterFailure(SEQ_OK)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/short", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_SHORT)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/long", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_LONG)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/nn", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_NN)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/crc", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_CRC)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/ack", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ACK)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/qq", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_QQ)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/zz", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ZZ)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/ack_miss", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ACK_MISS)).c_str());
-    mqttClient.publish("ebus/statistics/failure/master/invalid", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_INVALID)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/empty", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_EMPTY)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/ok", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_OK)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/short", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_SHORT)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/long", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_LONG)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/nn", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_NN)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/crc", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_CRC)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/ack", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ACK)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/qq", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_QQ)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/zz", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ZZ)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/ack_miss", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ACK_MISS)).c_str());
+    mqttClient.publish("ebus/messages/failure/slave/invalid", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_INVALID)).c_str());
 
-    mqttClient.publish("ebus/statistics/failure/slave/empty", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_EMPTY)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/ok", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_OK)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/short", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_SHORT)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/long", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_LONG)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/nn", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_NN)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/crc", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_CRC)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/ack", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ACK)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/qq", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_QQ)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/zz", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ZZ)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/ack_miss", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ACK_MISS)).c_str());
-    mqttClient.publish("ebus/statistics/failure/slave/invalid", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_INVALID)).c_str());
-
-    mqttClient.publish("ebus/statistics/special/00", 0, true, String(ebusStatistics.get00()).c_str());
-    mqttClient.publish("ebus/statistics/special/0704_success", 0, true, String(ebusStatistics.get0704Success()).c_str());
-    mqttClient.publish("ebus/statistics/special/0704_failure", 0, true, String(ebusStatistics.get0704Failure()).c_str());
+    mqttClient.publish("ebus/messages/special/00", 0, true, String(ebusStatistics.get00()).c_str());
+    mqttClient.publish("ebus/messages/special/0704_success", 0, true, String(ebusStatistics.get0704Success()).c_str());
+    mqttClient.publish("ebus/messages/special/0704_failure", 0, true, String(ebusStatistics.get0704Failure()).c_str());
 }
 
 // String getLeading(uint8_t byte)

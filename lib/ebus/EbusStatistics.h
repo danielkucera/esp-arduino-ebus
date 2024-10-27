@@ -45,9 +45,9 @@ namespace ebus
         float getSuccessPercent() const;
         float getFailurePercent() const;
 
-        unsigned long getMasterSlave() const;
-        unsigned long getMasterMaster() const;
-        unsigned long getBroadcast() const;
+        unsigned long getSuccessMasterSlave() const;
+        unsigned long getSuccessMasterMaster() const;
+        unsigned long getSuccessBroadcast() const;
 
         unsigned long getMasterFailure(const int key) const;
         unsigned long getSlaveFailure(const int key) const;
@@ -66,9 +66,9 @@ namespace ebus
         unsigned long countSuccess = 0;
         unsigned long countFailure = 0;
 
-        unsigned long countMasterSlave = 0;
-        unsigned long countMasterMaster = 0;
-        unsigned long countBroadcast = 0;
+        unsigned long countSuccessMasterSlave = 0;
+        unsigned long countSuccessMasterMaster = 0;
+        unsigned long countSuccessBroadcast = 0;
 
         std::map<int, unsigned long> masterFailure =
             {{SEQ_EMPTY, 0},

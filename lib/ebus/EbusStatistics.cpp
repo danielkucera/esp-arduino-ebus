@@ -35,11 +35,11 @@ void ebus::EbusStatistics::collect(const uint8_t byte)
                 countSuccess++;
 
                 if (tel.get_type() == ebus::Type::MS)
-                    countMasterSlave++;
+                    countSuccessMasterSlave++;
                 else if (tel.get_type() == ebus::Type::MM)
-                    countMasterMaster++;
+                    countSuccessMasterMaster++;
                 else if (tel.get_type() == ebus::Type::BC)
-                    countBroadcast++;
+                    countSuccessBroadcast++;
             }
             else
             {
@@ -81,9 +81,9 @@ void ebus::EbusStatistics::reset()
     countSuccess = 0;
     countFailure = 0;
 
-    countMasterSlave = 0;
-    countMasterMaster = 0;
-    countBroadcast = 0;
+    countSuccessMasterSlave = 0;
+    countSuccessMasterMaster = 0;
+    countSuccessBroadcast = 0;
 
     for (std::pair<const int, unsigned long> &item : masterFailure)
         item.second = 0;
@@ -124,19 +124,19 @@ float ebus::EbusStatistics::getFailurePercent() const
     return countFailure / (float)countTotal * 100.0f;
 }
 
-unsigned long ebus::EbusStatistics::getMasterSlave() const
+unsigned long ebus::EbusStatistics::getSuccessMasterSlave() const
 {
-    return countMasterSlave;
+    return countSuccessMasterSlave;
 }
 
-unsigned long ebus::EbusStatistics::getMasterMaster() const
+unsigned long ebus::EbusStatistics::getSuccessMasterMaster() const
 {
-    return countMasterMaster;
+    return countSuccessMasterMaster;
 }
 
-unsigned long ebus::EbusStatistics::getBroadcast() const
+unsigned long ebus::EbusStatistics::getSuccessBroadcast() const
 {
-    return countBroadcast;
+    return countSuccessBroadcast;
 }
 
 unsigned long ebus::EbusStatistics::getMasterFailure(const int key) const
