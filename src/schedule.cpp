@@ -205,8 +205,7 @@ void Schedule::processResponse(const std::vector<uint8_t> vec)
 
         doc["unit"] = actCommand->unit;
         doc["interval"] = actCommand->interval;
-        doc["last"] = actCommand->last;
-        doc["command"] = actCommand->command;
+        doc["last"] = actCommand->last/1000;
 
         String payload;
         serializeJson(doc, payload);
