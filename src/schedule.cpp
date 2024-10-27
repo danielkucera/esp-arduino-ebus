@@ -2,8 +2,7 @@
 
 #include "bus.hpp"
 
-#include <sstream>
-#include <iomanip>
+#include <ArduinoJson.h>
 
 // #include "command.hpp"
 #ifndef _COMMAND_H_
@@ -23,112 +22,27 @@ std::vector<Command> commands;
 
 // #endif
 
-Command *actCommand = nullptr;
-
-std::function<void(const char *topic, const char *payload)> publishCallback = nullptr;
-
-const char *escape_json(const std::string &str)
-{
-    std::ostringstream ostr;
-    for (auto chr = str.cbegin(); chr != str.cend(); chr++)
-    {
-        if (*chr == '"' || *chr == '\\' || ('\x00' <= *chr && *chr <= '\x1f'))
-            ostr << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(*chr);
-        else
-            ostr << *chr;
-    }
-    return ostr.str().c_str();
-}
-
-void processResponse(const std::vector<uint8_t> vec)
-{
-    actCommand->last = millis();
-
-    if (publishCallback != nullptr)
-    {
-        size_t pos = actCommand->position;
-        std::ostringstream ostr;
-
-        switch (actCommand->datatype)
-        {
-        case ebus::type::BCD:
-            ostr << ebus::byte_2_bcd(ebus::Sequence::range(vec, pos, 1));
-            break;
-        case ebus::type::UINT8:
-            ostr << ebus::byte_2_uint8(ebus::Sequence::range(vec, pos, 1));
-            break;
-        case ebus::type::INT8:
-            ostr << ebus::byte_2_int8(ebus::Sequence::range(vec, pos, 1));
-            break;
-        case ebus::type::UINT16:
-            ostr << ebus::byte_2_uint16(ebus::Sequence::range(vec, pos, 2));
-            break;
-        case ebus::type::INT16:
-            ostr << ebus::byte_2_int16(ebus::Sequence::range(vec, pos, 2));
-            break;
-        case ebus::type::UINT32:
-            ostr << ebus::byte_2_uint32(ebus::Sequence::range(vec, pos, 4));
-            break;
-        case ebus::type::INT32:
-            ostr << ebus::byte_2_int32(ebus::Sequence::range(vec, pos, 4));
-            break;
-        case ebus::type::DATA1b:
-            ostr << ebus::byte_2_data1b(ebus::Sequence::range(vec, pos, 1));
-            break;
-        case ebus::type::DATA1c:
-            ostr << ebus::byte_2_data1c(ebus::Sequence::range(vec, pos, 1));
-            break;
-        case ebus::type::DATA2b:
-            ostr << ebus::byte_2_data2b(ebus::Sequence::range(vec, pos, 2));
-            break;
-        case ebus::type::DATA2c:
-            ostr << ebus::byte_2_data2c(ebus::Sequence::range(vec, pos, 2));
-            break;
-        case ebus::type::FLOAT:
-            ostr << ebus::byte_2_float(ebus::Sequence::range(vec, pos, 2));
-            break;
-        default:
-            break;
-        }
-
-        String payload = "{\"value\":" + String(ostr.str().c_str()) + ",";
-        payload += "\"unit\":\"" + String(escape_json(actCommand->unit)) + "\",";
-        payload += "\"interval\":" + String(actCommand->interval) + ",";
-        payload += "\"last\":" + String(actCommand->last) + ",";
-        payload += "\"command\":\"" + String(escape_json(actCommand->command)) + "\"}";
-
-        publishCallback(actCommand->topic, payload.c_str());
-    }
-}
-
-bool busReadyCallback()
-{
-    return Bus.availableForWrite();
-}
-
-void busWriteCallback(const uint8_t byte)
-{
-    Bus.write(byte);
-}
-
-void responseCallback(const std::vector<uint8_t> response)
-{
-    processResponse(std::vector<uint8_t>(response));
-}
+Schedule schedule;
 
 Schedule::Schedule()
 {
     ebusHandler = ebus::EbusHandler(address, &busReadyCallback, &busWriteCallback, &responseCallback);
 }
 
-bool Schedule::needTX()
+void Schedule::setAddress(const uint8_t source)
 {
-    return commands.size() > 0;
+    address = source;
+    ebusHandler.setAddress(source);
 }
 
 void Schedule::setPublishCallback(std::function<void(const char *topic, const char *payload)> publishFunction)
 {
     publishCallback = publishFunction;
+}
+
+bool Schedule::needTX()
+{
+    return commands.size() > 0;
 }
 
 void Schedule::processSend()
@@ -222,4 +136,81 @@ const std::vector<uint8_t> Schedule::nextCommand()
     }
 
     return ebus::Sequence::to_vector(actCommand->command);
+}
+
+bool Schedule::busReadyCallback()
+{
+    return Bus.availableForWrite();
+}
+
+void Schedule::busWriteCallback(const uint8_t byte)
+{
+    Bus.write(byte);
+}
+
+void Schedule::responseCallback(const std::vector<uint8_t> response)
+{
+    schedule.processResponse(std::vector<uint8_t>(response));
+}
+
+void Schedule::processResponse(const std::vector<uint8_t> vec)
+{
+    actCommand->last = millis();
+
+    if (publishCallback != nullptr)
+    {
+        JsonDocument doc;
+
+        switch (actCommand->datatype)
+        {
+        case ebus::type::BCD:
+            doc["value"] = ebus::byte_2_bcd(ebus::Sequence::range(vec, actCommand->position, 1));
+            break;
+        case ebus::type::UINT8:
+            doc["value"] = ebus::byte_2_uint8(ebus::Sequence::range(vec, actCommand->position, 1));
+            break;
+        case ebus::type::INT8:
+            doc["value"] = ebus::byte_2_int8(ebus::Sequence::range(vec, actCommand->position, 1));
+            break;
+        case ebus::type::UINT16:
+            doc["value"] = ebus::byte_2_uint16(ebus::Sequence::range(vec, actCommand->position, 2));
+            break;
+        case ebus::type::INT16:
+            doc["value"] = ebus::byte_2_int16(ebus::Sequence::range(vec, actCommand->position, 2));
+            break;
+        case ebus::type::UINT32:
+            doc["value"] = ebus::byte_2_uint32(ebus::Sequence::range(vec, actCommand->position, 4));
+            break;
+        case ebus::type::INT32:
+            doc["value"] = ebus::byte_2_int32(ebus::Sequence::range(vec, actCommand->position, 4));
+            break;
+        case ebus::type::DATA1b:
+            doc["value"] = ebus::byte_2_data1b(ebus::Sequence::range(vec, actCommand->position, 1));
+            break;
+        case ebus::type::DATA1c:
+            doc["value"] = ebus::byte_2_data1c(ebus::Sequence::range(vec, actCommand->position, 1));
+            break;
+        case ebus::type::DATA2b:
+            doc["value"] = ebus::byte_2_data2b(ebus::Sequence::range(vec, actCommand->position, 2));
+            break;
+        case ebus::type::DATA2c:
+            doc["value"] = ebus::byte_2_data2c(ebus::Sequence::range(vec, actCommand->position, 2));
+            break;
+        case ebus::type::FLOAT:
+            doc["value"] = ebus::byte_2_float(ebus::Sequence::range(vec, actCommand->position, 2));
+            break;
+        default:
+            break;
+        }
+
+        doc["unit"] = actCommand->unit;
+        doc["interval"] = actCommand->interval;
+        doc["last"] = actCommand->last;
+        doc["command"] = actCommand->command;
+
+        String payload;
+        serializeJson(doc, payload);
+
+        publishCallback(actCommand->topic, payload.c_str());
+    }
 }

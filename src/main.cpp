@@ -50,7 +50,7 @@ char pwm_value_string[8];
 char mqtt_server[MQTT_SERVER_LEN];
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
 IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value_string, 8, "130", "1..255", "min='1' max='255' step='1'");
-IotWebConfTextParameter mqtt_server_param = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server,  MQTT_SERVER_LEN);
+IotWebConfTextParameter mqtt_server_param = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server,  MQTT_SERVER_LEN, "", "hostname");
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -59,8 +59,6 @@ WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
-
-Schedule schedule;
 
 unsigned long last_comms = 0;
 int last_reset_code = -1;

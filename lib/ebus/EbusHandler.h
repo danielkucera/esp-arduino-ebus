@@ -52,8 +52,10 @@ namespace ebus
                     std::function<void(const uint8_t byte)> busWriteFunction,
                     std::function<void(const std::vector<uint8_t> response)> responseFunction);
 
-        State getState() const;
+        void setAddress(const uint8_t source);
         uint8_t getAddress() const;
+
+        State getState() const;
 
         void reset();
         bool enque(const std::vector<uint8_t> &message);

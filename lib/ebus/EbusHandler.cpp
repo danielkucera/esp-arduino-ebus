@@ -35,14 +35,19 @@ ebus::EbusHandler::EbusHandler(const uint8_t source,
     responseCallback = responseFunction;
 }
 
-ebus::State ebus::EbusHandler::getState() const
+void ebus::EbusHandler::setAddress(const uint8_t source)
 {
-    return state;
+    address = source;
 }
 
 uint8_t ebus::EbusHandler::getAddress() const
 {
     return address;
+}
+
+ebus::State ebus::EbusHandler::getState() const
+{
+    return state;
 }
 
 void ebus::EbusHandler::reset()

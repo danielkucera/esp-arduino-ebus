@@ -26,17 +26,22 @@ class Schedule
 public:
     Schedule();
 
-    bool needTX();
+    void setAddress(const uint8_t source);    
     void setPublishCallback(std::function<void(const char *topic, const char *payload)> publishFunction);
+
+    bool needTX();
 
     void processSend();
     bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte);
 
 private:
+    uint8_t address = 0xff; // TODO 0xff Systemparameter ?
+    std::function<void(const char *topic, const char *payload)> publishCallback = nullptr;
+
     WiFiClient *dummyClient = new WiFiClient();
     ebus::EbusHandler ebusHandler;
 
-    uint8_t address = 0xff; // TODO 0xff Systemparameter ?
+    Command *actCommand = nullptr;
 
     unsigned long distanceCommands = 5 * 1000; // TODO Systemparameter ?
     unsigned long lastCommand = 0;
@@ -44,6 +49,14 @@ private:
     bool initDone = false;
 
     const std::vector<uint8_t> nextCommand();
+
+    static bool busReadyCallback();
+    static void busWriteCallback(const uint8_t byte);
+    static void responseCallback(const std::vector<uint8_t> response);
+
+    void processResponse(const std::vector<uint8_t> vec);
 };
+
+extern Schedule schedule;
 
 #endif
