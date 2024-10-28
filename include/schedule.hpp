@@ -42,7 +42,10 @@ private:
 
     WiFiClient *dummyClient = new WiFiClient();
     ebus::EbusHandler ebusHandler;
-    ebus::Statistics ebusStatistics;
+    ebus::Statistics statistics;
+
+    bool initPublish = true;
+    ebus::Counter lastCounters;
 
     Command *actCommand = nullptr;
 
@@ -50,6 +53,8 @@ private:
     unsigned long lastCommand = 0;
 
     bool initDone = false;
+
+    // void publishMQTTTopic(const char *topic, unsigned long oldValue, unsigned long newValue);
 
     const std::vector<uint8_t> nextCommand();
 

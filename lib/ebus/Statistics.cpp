@@ -26,43 +26,46 @@ void ebus::Statistics::collect(const uint8_t byte)
     {
         if (sequence.size() > 0)
         {
-            countTotal++;
+            counters.total++;
 
             ebus::Telegram tel(sequence);
 
             if (tel.isValid())
             {
-                countSuccess++;
+                counters.success++;
 
                 if (tel.get_type() == ebus::Type::MS)
-                    countSuccessMasterSlave++;
+                    counters.successMS++;
                 else if (tel.get_type() == ebus::Type::MM)
-                    countSuccessMasterMaster++;
+                    counters.successMM++;
                 else if (tel.get_type() == ebus::Type::BC)
-                    countSuccessBroadcast++;
+                    counters.successBC++;
             }
             else
             {
-                countFailure++;
+                counters.failure++;
 
-                masterFailure[tel.getMasterState()]++;
-                slaveFailure[tel.getSlaveState()]++;
+                counters.failureMaster[tel.getMasterState()]++;
+                counters.failureSlave[tel.getSlaveState()]++;
             }
+
+            counters.successPercent = counters.success / (float)counters.total * 100.0f;
+            counters.failurePercent = counters.failure / (float)counters.total * 100.0f;
 
             if (sequence.size() == 1 && sequence[0] == 0x00)
             {
-                count00++;
+                counters.special00++;
             }
             else if (sequence.size() >= 3 && sequence[2] == 0x07 && sequence[3] == 0x04)
             {
                 if (sequence.size() > 6)
                 {
-                    count0704Success++;
+                    counters.special0704Success++;
                     // slaves[sequence[1]] = tel.getSlave();
                 }
                 else
                 {
-                    count0704Failure++;
+                    counters.special0704Failure++;
                 }
             }
 
@@ -77,99 +80,30 @@ void ebus::Statistics::collect(const uint8_t byte)
 
 void ebus::Statistics::reset()
 {
-    countTotal = 0;
-    countSuccess = 0;
-    countFailure = 0;
+    counters.total = 0;
 
-    countSuccessMasterSlave = 0;
-    countSuccessMasterMaster = 0;
-    countSuccessBroadcast = 0;
+    counters.success = 0;
+    counters.successMS = 0;
+    counters.successMM = 0;
+    counters.successBC = 0;
 
-    for (std::pair<const int, unsigned long> &item : masterFailure)
+    counters.failure = 0;
+
+    for (std::pair<const int, unsigned long> &item : counters.failureMaster)
         item.second = 0;
 
-    for (std::pair<const int, unsigned long> &item : slaveFailure)
+    for (std::pair<const int, unsigned long> &item : counters.failureSlave)
         item.second = 0;
 
-    count00 = 0;
-    count0704Success = 0;
-    count0704Failure = 0;
+    counters.special00 = 0;
+    counters.special0704Success = 0;
+    counters.special0704Failure = 0;
 
     // masters.clear();
     // slaves.clear();
 }
 
-unsigned long ebus::Statistics::getTotal() const
+ebus::Counter &ebus::Statistics::getCounters()
 {
-    return countTotal;
+    return counters;
 }
-
-unsigned long ebus::Statistics::getSuccess() const
-{
-    return countSuccess;
-}
-
-unsigned long ebus::Statistics::getFailure() const
-{
-    return countFailure;
-}
-
-float ebus::Statistics::getSuccessPercent() const
-{
-    return countSuccess / (float)countTotal * 100.0f;
-}
-
-float ebus::Statistics::getFailurePercent() const
-{
-    return countFailure / (float)countTotal * 100.0f;
-}
-
-unsigned long ebus::Statistics::getSuccessMasterSlave() const
-{
-    return countSuccessMasterSlave;
-}
-
-unsigned long ebus::Statistics::getSuccessMasterMaster() const
-{
-    return countSuccessMasterMaster;
-}
-
-unsigned long ebus::Statistics::getSuccessBroadcast() const
-{
-    return countSuccessBroadcast;
-}
-
-unsigned long ebus::Statistics::getMasterFailure(const int key) const
-{
-    return masterFailure.at(key);
-}
-
-unsigned long ebus::Statistics::getSlaveFailure(const int key) const
-{
-    return slaveFailure.at(key);
-}
-
-unsigned long ebus::Statistics::get00() const
-{
-    return count00;
-}
-
-unsigned long ebus::Statistics::get0704Success() const
-{
-    return count0704Success;
-}
-
-unsigned long ebus::Statistics::get0704Failure() const
-{
-    return count0704Failure;
-}
-
-// const std::map<uint8_t, ebus::Sequence> ebus::Statistics::getMasters() const
-// {
-//     return masters;
-// }
-
-// const std::map<uint8_t, ebus::Sequence> ebus::Statistics::getSlaves() const
-// {
-//     return slaves;
-// }

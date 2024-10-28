@@ -25,6 +25,13 @@ std::vector<Command> commands;
 
 Schedule schedule;
 
+template <typename T>
+void publishMQTTTopic(bool init, const char *topic, T &oldValue, T &newValue)
+{
+    if (init || oldValue != newValue)
+        mqttClient.publish(topic, 0, true, String(newValue).c_str());
+}
+
 Schedule::Schedule()
 {
     ebusHandler = ebus::EbusHandler(address, &busReadyCallback, &busWriteCallback, &responseCallback);
@@ -79,7 +86,7 @@ void Schedule::processSend()
 bool Schedule::processReceive(bool enhanced, WiFiClient *client, const uint8_t byte)
 {
     if (!enhanced)
-        ebusStatistics.collect(byte);
+        statistics.collect(byte);
 
     if (commands.size() == 0)
         return false;
@@ -104,49 +111,52 @@ bool Schedule::processReceive(bool enhanced, WiFiClient *client, const uint8_t b
 
 void Schedule::resetStatistics()
 {
-    ebusStatistics.reset();
+    statistics.reset();
 }
 
 void Schedule::publishMQTT()
 {
-    mqttClient.publish("ebus/messages/total", 0, true, String(ebusStatistics.getTotal()).c_str());
+    publishMQTTTopic(initPublish, "ebus/messages/total", lastCounters.total, statistics.getCounters().total);
 
-    mqttClient.publish("ebus/messages/success", 0, true, String(ebusStatistics.getSuccess()).c_str());
-    mqttClient.publish("ebus/messages/success/percent", 0, true, String(ebusStatistics.getSuccessPercent()).c_str());
-    mqttClient.publish("ebus/messages/success/master_slave", 0, true, String(ebusStatistics.getSuccessMasterSlave()).c_str());
-    mqttClient.publish("ebus/messages/success/master_master", 0, true, String(ebusStatistics.getSuccessMasterMaster()).c_str());
-    mqttClient.publish("ebus/messages/success/broadcast", 0, true, String(ebusStatistics.getSuccessBroadcast()).c_str());
+    publishMQTTTopic(initPublish, "ebus/messages/success", lastCounters.success, statistics.getCounters().success);
+    publishMQTTTopic(initPublish, "ebus/messages/success/percent", lastCounters.successPercent, statistics.getCounters().successPercent);
+    publishMQTTTopic(initPublish, "ebus/messages/success/master_slave", lastCounters.successMS, statistics.getCounters().successMS);
+    publishMQTTTopic(initPublish, "ebus/messages/success/master_master", lastCounters.successMM, statistics.getCounters().successMM);
+    publishMQTTTopic(initPublish, "ebus/messages/success/broadcast", lastCounters.successBC, statistics.getCounters().successBC);
 
-    mqttClient.publish("ebus/messages/failure", 0, true, String(ebusStatistics.getFailure()).c_str());
-    mqttClient.publish("ebus/messages/failure/percent", 0, true, String(ebusStatistics.getFailurePercent()).c_str());
+    publishMQTTTopic(initPublish, "ebus/messages/failure", lastCounters.failure, statistics.getCounters().failure);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/percent", lastCounters.failurePercent, statistics.getCounters().failurePercent);
 
-    mqttClient.publish("ebus/messages/failure/master/empty", 0, true, String(ebusStatistics.getMasterFailure(SEQ_EMPTY)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/ok", 0, true, String(ebusStatistics.getMasterFailure(SEQ_OK)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/short", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_SHORT)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/long", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_LONG)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/nn", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_NN)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/crc", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_CRC)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/ack", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ACK)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/qq", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_QQ)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/zz", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ZZ)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/ack_miss", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_ACK_MISS)).c_str());
-    mqttClient.publish("ebus/messages/failure/master/invalid", 0, true, String(ebusStatistics.getMasterFailure(SEQ_ERR_INVALID)).c_str());
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/empty", lastCounters.failureMaster[SEQ_EMPTY], statistics.getCounters().failureMaster[SEQ_EMPTY]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/ok", lastCounters.failureMaster[SEQ_OK], statistics.getCounters().failureMaster[SEQ_OK]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/short", lastCounters.failureMaster[SEQ_ERR_SHORT], statistics.getCounters().failureMaster[SEQ_ERR_SHORT]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/long", lastCounters.failureMaster[SEQ_ERR_LONG], statistics.getCounters().failureMaster[SEQ_ERR_LONG]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/nn", lastCounters.failureMaster[SEQ_ERR_NN], statistics.getCounters().failureMaster[SEQ_ERR_NN]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/crc", lastCounters.failureMaster[SEQ_ERR_CRC], statistics.getCounters().failureMaster[SEQ_ERR_CRC]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/ack", lastCounters.failureMaster[SEQ_ERR_ACK], statistics.getCounters().failureMaster[SEQ_ERR_ACK]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/qq", lastCounters.failureMaster[SEQ_ERR_QQ], statistics.getCounters().failureMaster[SEQ_ERR_QQ]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/zz", lastCounters.failureMaster[SEQ_ERR_ZZ], statistics.getCounters().failureMaster[SEQ_ERR_ZZ]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/ack_miss", lastCounters.failureMaster[SEQ_ERR_ACK_MISS], statistics.getCounters().failureMaster[SEQ_ERR_ACK_MISS]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/master/invalid", lastCounters.failureMaster[SEQ_ERR_INVALID], statistics.getCounters().failureMaster[SEQ_ERR_INVALID]);
 
-    mqttClient.publish("ebus/messages/failure/slave/empty", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_EMPTY)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/ok", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_OK)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/short", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_SHORT)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/long", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_LONG)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/nn", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_NN)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/crc", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_CRC)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/ack", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ACK)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/qq", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_QQ)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/zz", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ZZ)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/ack_miss", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_ACK_MISS)).c_str());
-    mqttClient.publish("ebus/messages/failure/slave/invalid", 0, true, String(ebusStatistics.getSlaveFailure(SEQ_ERR_INVALID)).c_str());
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/empty", lastCounters.failureSlave[SEQ_EMPTY], statistics.getCounters().failureSlave[SEQ_EMPTY]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/ok", lastCounters.failureSlave[SEQ_OK], statistics.getCounters().failureSlave[SEQ_OK]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/short", lastCounters.failureSlave[SEQ_ERR_SHORT], statistics.getCounters().failureSlave[SEQ_ERR_SHORT]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/long", lastCounters.failureSlave[SEQ_ERR_LONG], statistics.getCounters().failureSlave[SEQ_ERR_LONG]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/nn", lastCounters.failureSlave[SEQ_ERR_NN], statistics.getCounters().failureSlave[SEQ_ERR_NN]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/crc", lastCounters.failureSlave[SEQ_ERR_CRC], statistics.getCounters().failureSlave[SEQ_ERR_CRC]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/ack", lastCounters.failureSlave[SEQ_ERR_ACK], statistics.getCounters().failureSlave[SEQ_ERR_ACK]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/qq", lastCounters.failureSlave[SEQ_ERR_QQ], statistics.getCounters().failureSlave[SEQ_ERR_QQ]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/zz", lastCounters.failureSlave[SEQ_ERR_ZZ], statistics.getCounters().failureSlave[SEQ_ERR_ZZ]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/ack_miss", lastCounters.failureSlave[SEQ_ERR_ACK_MISS], statistics.getCounters().failureSlave[SEQ_ERR_ACK_MISS]);
+    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/invalid", lastCounters.failureSlave[SEQ_ERR_INVALID], statistics.getCounters().failureSlave[SEQ_ERR_INVALID]);
 
-    mqttClient.publish("ebus/messages/special/00", 0, true, String(ebusStatistics.get00()).c_str());
-    mqttClient.publish("ebus/messages/special/0704_success", 0, true, String(ebusStatistics.get0704Success()).c_str());
-    mqttClient.publish("ebus/messages/special/0704_failure", 0, true, String(ebusStatistics.get0704Failure()).c_str());
+    publishMQTTTopic(initPublish, "ebus/messages/special/00", lastCounters.special00, statistics.getCounters().special00);
+    publishMQTTTopic(initPublish, "ebus/messages/special/0704Success", lastCounters.special0704Success, statistics.getCounters().special0704Success);
+    publishMQTTTopic(initPublish, "ebus/messages/special/0704Failure", lastCounters.special0704Failure, statistics.getCounters().special0704Failure);
+
+    lastCounters = statistics.getCounters();
+    initPublish = false;
 }
 
 // String getLeading(uint8_t byte)
