@@ -29,11 +29,11 @@
 namespace ebus
 {
 
-    class EbusStatistics
+    class Statistics
     {
 
     public:
-        EbusStatistics() = default;
+        Statistics() = default;
 
         void collect(const uint8_t byte);
         void reset();
