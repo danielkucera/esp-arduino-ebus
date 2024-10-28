@@ -17,7 +17,7 @@
  * along with ebus. If not, see http://www.gnu.org/licenses/.
  */
 
-#include "EbusStatistics.h"
+#include "Statistics.h"
 #include "Datatypes.h"
 
 void ebus::Statistics::collect(const uint8_t byte)
