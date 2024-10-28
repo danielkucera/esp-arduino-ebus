@@ -4,7 +4,7 @@
 #include <WiFiClient.h>
 
 #include "EbusHandler.h"
-#include "EbusStatistics.h"
+#include "Statistics.h"
 #include "Datatypes.h"
 
 // Implementation of the perodic sending of predefined commands.
@@ -42,7 +42,7 @@ private:
 
     WiFiClient *dummyClient = new WiFiClient();
     ebus::EbusHandler ebusHandler;
-    ebus::EbusStatistics ebusStatistics;
+    ebus::Statistics ebusStatistics;
 
     Command *actCommand = nullptr;
 
