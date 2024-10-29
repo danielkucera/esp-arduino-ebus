@@ -44,7 +44,7 @@ private:
     ebus::EbusHandler ebusHandler;
     ebus::Statistics statistics;
 
-    bool initPublish = true;
+    bool initCounters = true;
     ebus::Counter lastCounters;
 
     Command *actCommand = nullptr;

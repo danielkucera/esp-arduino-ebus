@@ -60,16 +60,49 @@ WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 
 unsigned long last_comms = 0;
-int last_reset_code = -1;
-
-unsigned long loopDuration = 0;
-unsigned long maxLoopDuration = 0;
-unsigned long lastConnectTime = 0;
-int reconnectCount = 0;
 
 bool needMqttConnect = false;
 unsigned long lastMqttConnectionAttempt = 0;
 unsigned long lastMqttUpdate = 0;
+
+struct MqttValues
+{
+  // ebus/firmware
+  const char* version = AUTO_VERSION;
+  const char* async = USE_ASYNCHRONOUS ? "true" : "false";
+  const char* software_serial = USE_SOFTWARE_SERIAL ? "true" : "false";
+
+  // ebus/device
+  uint32_t pwm_value;
+  long uptime;
+  unsigned long uptime_millis;
+  unsigned long loop_duration;
+  unsigned long loop_duration_max;
+  uint32_t free_heap;
+  int reset_code = -1;
+
+  // ebus/device/wifi
+  unsigned long last_connect;
+  int reconnect_count;
+  int8_t rssi;
+
+  // ebus/arbitration
+  int nbrArbitrations;
+  int nbrRestarts1;
+  int nbrRestarts2;
+  int nbrLost1;
+  int nbrLost2;
+  int nbrWon1;
+  int nbrWon2;
+  int nbrErrors;
+  int nbrLate;
+  float percent_won;
+  float percent_lost;
+};
+
+MqttValues mqttValues;
+MqttValues lastMqttValues;
+bool initMqttValues = true;
 
 bool connectMqtt() {
   if (mqttClient.connected())
@@ -91,8 +124,8 @@ bool connectMqtt() {
 }
 
 void wifiConnected() {
-  lastConnectTime = millis();
-  reconnectCount++;
+  mqttValues.last_connect = millis();
+  mqttValues.reconnect_count++;
   needMqttConnect = true;
 }
 
@@ -175,10 +208,10 @@ void loop_duration() {
 
   lastTime = now;
 
-  loopDuration = ((1 - ALPHA) * loopDuration + (ALPHA * delta));
+  mqttValues.loop_duration = ((1 - ALPHA) * mqttValues.loop_duration + (ALPHA * delta));
 
-  if (delta > maxLoopDuration) {
-    maxLoopDuration = delta;
+  if (delta > mqttValues.loop_duration_max) {
+    mqttValues.loop_duration_max = delta;
   }
 }
 
@@ -275,13 +308,13 @@ char* status_string() {
   pos += sprintf(status + pos, "async_mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
   pos += sprintf(status + pos, "software_serial_mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
-  pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
-  pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
+  pos += sprintf(status + pos, "last_connect_time: %ld ms\n", mqttValues.last_connect);
+  pos += sprintf(status + pos, "reconnect_count: %d \n", mqttValues.reconnect_count);
   pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
-  pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
-  pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
-  pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
+  pos += sprintf(status + pos, "reset_code: %d\n", mqttValues.reset_code);
+  pos += sprintf(status + pos, "loop_duration: %ld us\r\n", mqttValues.loop_duration);
+  pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", mqttValues.loop_duration_max);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
   pos += sprintf(status + pos, "nbr_arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
   pos += sprintf(status + pos, "nbr_restarts1: %i\r\n", (int)Bus._nbrRestarts1);
@@ -302,36 +335,87 @@ void handleStatus() {
   configServer.send(200, "text/plain", status_string());
 }
 
+template <typename T>
+void publishMQTTTopic(bool init, const char *topic, T &oldValue, T &newValue)
+{
+    if (init || oldValue != newValue)
+        mqttClient.publish(topic, 0, true, String(newValue).c_str());
+}
+
 void publishMQTT() {
-  mqttClient.publish("ebus/firmware/version", 0, true, String(AUTO_VERSION).c_str());
-  mqttClient.publish("ebus/firmware/async", 0, true, String(USE_ASYNCHRONOUS ? "true" : "false").c_str());
-  mqttClient.publish("ebus/firmware/software_serial", 0, true, String(USE_SOFTWARE_SERIAL ? "true" : "false").c_str());
+  
+  // ebus/firmware
+  publishMQTTTopic(initMqttValues, "ebus/firmware/version", lastMqttValues.version, mqttValues.version);
+  
+  publishMQTTTopic(initMqttValues, "ebus/firmware/async", lastMqttValues.async, mqttValues.async);
+  
+  publishMQTTTopic(initMqttValues, "ebus/firmware/software_serial", lastMqttValues.software_serial, mqttValues.software_serial);
 
+  // ebus/device
   // TODO ebus address
-  mqttClient.publish("ebus/device/pwm_value", 0, true, String(get_pwm()).c_str());
+  mqttValues.pwm_value = get_pwm();
+  publishMQTTTopic(initMqttValues, "ebus/device/pwm_value", lastMqttValues.pwm_value, mqttValues.pwm_value);
 
-  mqttClient.publish("ebus/device/uptime", 0, true, String(millis() / 1000).c_str());
-  mqttClient.publish("ebus/device/uptime_millis", 0, true, String(millis()).c_str());
+  mqttValues.uptime = millis() / 1000l;
+  publishMQTTTopic(initMqttValues, "ebus/device/uptime", lastMqttValues.uptime, mqttValues.uptime);
+  
+  mqttValues.uptime_millis = millis();
+  publishMQTTTopic(initMqttValues, "ebus/device/uptime_millis", lastMqttValues.uptime_millis, mqttValues.uptime_millis);
 
   // TODO average of duration
-  mqttClient.publish("ebus/device/loop_duration", 0, true, String(loopDuration).c_str());
-  mqttClient.publish("ebus/device/loop_duration_max", 0, true, String(maxLoopDuration).c_str());
-  mqttClient.publish("ebus/device/free_heap", 0, true, String(ESP.getFreeHeap()).c_str());
-  mqttClient.publish("ebus/device/reset_code", 0, true, String(last_reset_code).c_str());
+  publishMQTTTopic(initMqttValues, "ebus/device/loop_duration", lastMqttValues.loop_duration, mqttValues.loop_duration);
+  
+  publishMQTTTopic(initMqttValues, "ebus/device/loop_duration_max", lastMqttValues.loop_duration_max, mqttValues.loop_duration_max);
 
-  mqttClient.publish("ebus/device/wifi/last_connect", 0, true, String(lastConnectTime).c_str());
-  mqttClient.publish("ebus/device/wifi/reconnect_count", 0, true, String(reconnectCount).c_str());
-  mqttClient.publish("ebus/device/wifi/rssi", 0, true, String(WiFi.RSSI()).c_str());
+  mqttValues.free_heap = ESP.getFreeHeap();
+  publishMQTTTopic(initMqttValues, "ebus/device/free_heap", lastMqttValues.free_heap, mqttValues.free_heap);
 
-  mqttClient.publish("ebus/arbitration/total", 0, true, String(Bus._nbrArbitrations).c_str());
-  mqttClient.publish("ebus/arbitration/restarts1", 0, true, String(Bus._nbrRestarts1).c_str());
-  mqttClient.publish("ebus/arbitration/restarts2", 0, true, String(Bus._nbrRestarts2).c_str());
-  mqttClient.publish("ebus/arbitration/lost1", 0, true, String(Bus._nbrLost1).c_str());
-  mqttClient.publish("ebus/arbitration/lost2", 0, true, String(Bus._nbrLost2).c_str());
-  mqttClient.publish("ebus/arbitration/won1", 0, true, String(Bus._nbrWon1).c_str());
-  mqttClient.publish("ebus/arbitration/won2", 0, true, String(Bus._nbrWon2).c_str());
-  mqttClient.publish("ebus/arbitration/late", 0, true, String(Bus._nbrLate).c_str());
-  mqttClient.publish("ebus/arbitration/errors", 0, true, String(Bus._nbrErrors).c_str());
+  publishMQTTTopic(initMqttValues, "ebus/device/reset_code", lastMqttValues.reset_code, mqttValues.reset_code);
+
+  // ebus/device/wifi
+  publishMQTTTopic(initMqttValues, "ebus/device/wifi/last_connect", lastMqttValues.last_connect, mqttValues.last_connect);
+  
+  publishMQTTTopic(initMqttValues, "ebus/device/wifi/reconnect_count", lastMqttValues.reconnect_count, mqttValues.reconnect_count);
+
+  mqttValues.rssi = WiFi.RSSI();
+  publishMQTTTopic(initMqttValues, "ebus/device/wifi/rssi", lastMqttValues.rssi, mqttValues.rssi);
+
+  // ebus/arbitration
+  mqttValues.nbrArbitrations = Bus._nbrArbitrations;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/total", lastMqttValues.nbrArbitrations, mqttValues.nbrArbitrations);
+
+  mqttValues.nbrRestarts1 = Bus._nbrRestarts1;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/restarts1", lastMqttValues.nbrRestarts1, mqttValues.nbrRestarts1);
+
+  mqttValues.nbrRestarts2 = Bus._nbrRestarts2;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/restarts2", lastMqttValues.nbrRestarts2, mqttValues.nbrRestarts2);
+
+  mqttValues.nbrLost1 = Bus._nbrLost1;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost1", lastMqttValues.nbrLost1, mqttValues.nbrLost1);
+
+  mqttValues.nbrLost2 = Bus._nbrLost2;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost2", lastMqttValues.nbrLost2, mqttValues.nbrLost2);
+
+  mqttValues.nbrWon1 = Bus._nbrWon1;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/won1", lastMqttValues.nbrWon1, mqttValues.nbrWon1);
+
+  mqttValues.nbrWon2 = Bus._nbrWon2;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/won2", lastMqttValues.nbrWon2, mqttValues.nbrWon2);
+
+  mqttValues.nbrLate = Bus._nbrLate;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/late", lastMqttValues.nbrLate, mqttValues.nbrLate);
+
+  mqttValues.nbrErrors = Bus._nbrErrors;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/errors", lastMqttValues.nbrErrors, mqttValues.nbrErrors);
+
+  mqttValues.percent_won = (mqttValues.nbrWon1 + mqttValues.nbrWon2) / (float)mqttValues.nbrArbitrations * 100.0f;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/percent_won", lastMqttValues.percent_won, mqttValues.percent_won);
+
+  mqttValues.percent_lost = 100.0f - mqttValues.percent_won;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/percent_lost", lastMqttValues.percent_lost, mqttValues.percent_lost);
+
+  lastMqttValues = mqttValues;
+  initMqttValues = false;
 }
 
 void handleRoot() {
@@ -376,9 +460,9 @@ void setup() {
   check_reset();
 
 #ifdef ESP32
-  last_reset_code = rtc_get_reset_reason(0);
+  mqttValues.reset_code = rtc_get_reset_reason(0);
 #else
-  last_reset_code = (int) ESP.getResetInfoPtr();
+  mqttValues.reset_code = (int) ESP.getResetInfoPtr();
 #endif
 
   Bus.begin();
@@ -513,7 +597,7 @@ void loop() {
     // exclude handleStatusServerRequests from maxLoopDuration calculation
     // as it skews the typical loop duration and set maxLoopDuration to 0
     loop_duration();
-    maxLoopDuration = 0;
+    mqttValues.loop_duration_max = 0;
   }
 
   // Check if there are any new clients on the eBUS servers

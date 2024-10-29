@@ -116,47 +116,49 @@ void Schedule::resetStatistics()
 
 void Schedule::publishMQTT()
 {
-    publishMQTTTopic(initPublish, "ebus/messages/total", lastCounters.total, statistics.getCounters().total);
+    ebus::Counter counters = statistics.getCounters();
 
-    publishMQTTTopic(initPublish, "ebus/messages/success", lastCounters.success, statistics.getCounters().success);
-    publishMQTTTopic(initPublish, "ebus/messages/success/percent", lastCounters.successPercent, statistics.getCounters().successPercent);
-    publishMQTTTopic(initPublish, "ebus/messages/success/master_slave", lastCounters.successMS, statistics.getCounters().successMS);
-    publishMQTTTopic(initPublish, "ebus/messages/success/master_master", lastCounters.successMM, statistics.getCounters().successMM);
-    publishMQTTTopic(initPublish, "ebus/messages/success/broadcast", lastCounters.successBC, statistics.getCounters().successBC);
+    publishMQTTTopic(initCounters, "ebus/messages/total", lastCounters.total, counters.total);
 
-    publishMQTTTopic(initPublish, "ebus/messages/failure", lastCounters.failure, statistics.getCounters().failure);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/percent", lastCounters.failurePercent, statistics.getCounters().failurePercent);
+    publishMQTTTopic(initCounters, "ebus/messages/success", lastCounters.success, counters.success);
+    publishMQTTTopic(initCounters, "ebus/messages/success/percent", lastCounters.successPercent, counters.successPercent);
+    publishMQTTTopic(initCounters, "ebus/messages/success/master_slave", lastCounters.successMS, counters.successMS);
+    publishMQTTTopic(initCounters, "ebus/messages/success/master_master", lastCounters.successMM, counters.successMM);
+    publishMQTTTopic(initCounters, "ebus/messages/success/broadcast", lastCounters.successBC, counters.successBC);
 
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/empty", lastCounters.failureMaster[SEQ_EMPTY], statistics.getCounters().failureMaster[SEQ_EMPTY]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/ok", lastCounters.failureMaster[SEQ_OK], statistics.getCounters().failureMaster[SEQ_OK]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/short", lastCounters.failureMaster[SEQ_ERR_SHORT], statistics.getCounters().failureMaster[SEQ_ERR_SHORT]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/long", lastCounters.failureMaster[SEQ_ERR_LONG], statistics.getCounters().failureMaster[SEQ_ERR_LONG]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/nn", lastCounters.failureMaster[SEQ_ERR_NN], statistics.getCounters().failureMaster[SEQ_ERR_NN]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/crc", lastCounters.failureMaster[SEQ_ERR_CRC], statistics.getCounters().failureMaster[SEQ_ERR_CRC]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/ack", lastCounters.failureMaster[SEQ_ERR_ACK], statistics.getCounters().failureMaster[SEQ_ERR_ACK]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/qq", lastCounters.failureMaster[SEQ_ERR_QQ], statistics.getCounters().failureMaster[SEQ_ERR_QQ]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/zz", lastCounters.failureMaster[SEQ_ERR_ZZ], statistics.getCounters().failureMaster[SEQ_ERR_ZZ]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/ack_miss", lastCounters.failureMaster[SEQ_ERR_ACK_MISS], statistics.getCounters().failureMaster[SEQ_ERR_ACK_MISS]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/master/invalid", lastCounters.failureMaster[SEQ_ERR_INVALID], statistics.getCounters().failureMaster[SEQ_ERR_INVALID]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure", lastCounters.failure, counters.failure);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/percent", lastCounters.failurePercent, counters.failurePercent);
 
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/empty", lastCounters.failureSlave[SEQ_EMPTY], statistics.getCounters().failureSlave[SEQ_EMPTY]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/ok", lastCounters.failureSlave[SEQ_OK], statistics.getCounters().failureSlave[SEQ_OK]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/short", lastCounters.failureSlave[SEQ_ERR_SHORT], statistics.getCounters().failureSlave[SEQ_ERR_SHORT]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/long", lastCounters.failureSlave[SEQ_ERR_LONG], statistics.getCounters().failureSlave[SEQ_ERR_LONG]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/nn", lastCounters.failureSlave[SEQ_ERR_NN], statistics.getCounters().failureSlave[SEQ_ERR_NN]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/crc", lastCounters.failureSlave[SEQ_ERR_CRC], statistics.getCounters().failureSlave[SEQ_ERR_CRC]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/ack", lastCounters.failureSlave[SEQ_ERR_ACK], statistics.getCounters().failureSlave[SEQ_ERR_ACK]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/qq", lastCounters.failureSlave[SEQ_ERR_QQ], statistics.getCounters().failureSlave[SEQ_ERR_QQ]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/zz", lastCounters.failureSlave[SEQ_ERR_ZZ], statistics.getCounters().failureSlave[SEQ_ERR_ZZ]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/ack_miss", lastCounters.failureSlave[SEQ_ERR_ACK_MISS], statistics.getCounters().failureSlave[SEQ_ERR_ACK_MISS]);
-    publishMQTTTopic(initPublish, "ebus/messages/failure/slave/invalid", lastCounters.failureSlave[SEQ_ERR_INVALID], statistics.getCounters().failureSlave[SEQ_ERR_INVALID]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/empty", lastCounters.failureMaster[SEQ_EMPTY], counters.failureMaster[SEQ_EMPTY]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/ok", lastCounters.failureMaster[SEQ_OK], counters.failureMaster[SEQ_OK]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/short", lastCounters.failureMaster[SEQ_ERR_SHORT], counters.failureMaster[SEQ_ERR_SHORT]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/long", lastCounters.failureMaster[SEQ_ERR_LONG], counters.failureMaster[SEQ_ERR_LONG]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/nn", lastCounters.failureMaster[SEQ_ERR_NN], counters.failureMaster[SEQ_ERR_NN]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/crc", lastCounters.failureMaster[SEQ_ERR_CRC], counters.failureMaster[SEQ_ERR_CRC]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/ack", lastCounters.failureMaster[SEQ_ERR_ACK], counters.failureMaster[SEQ_ERR_ACK]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/qq", lastCounters.failureMaster[SEQ_ERR_QQ], counters.failureMaster[SEQ_ERR_QQ]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/zz", lastCounters.failureMaster[SEQ_ERR_ZZ], counters.failureMaster[SEQ_ERR_ZZ]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/ack_miss", lastCounters.failureMaster[SEQ_ERR_ACK_MISS], counters.failureMaster[SEQ_ERR_ACK_MISS]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/master/invalid", lastCounters.failureMaster[SEQ_ERR_INVALID], counters.failureMaster[SEQ_ERR_INVALID]);
 
-    publishMQTTTopic(initPublish, "ebus/messages/special/00", lastCounters.special00, statistics.getCounters().special00);
-    publishMQTTTopic(initPublish, "ebus/messages/special/0704Success", lastCounters.special0704Success, statistics.getCounters().special0704Success);
-    publishMQTTTopic(initPublish, "ebus/messages/special/0704Failure", lastCounters.special0704Failure, statistics.getCounters().special0704Failure);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/empty", lastCounters.failureSlave[SEQ_EMPTY], counters.failureSlave[SEQ_EMPTY]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/ok", lastCounters.failureSlave[SEQ_OK], counters.failureSlave[SEQ_OK]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/short", lastCounters.failureSlave[SEQ_ERR_SHORT], counters.failureSlave[SEQ_ERR_SHORT]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/long", lastCounters.failureSlave[SEQ_ERR_LONG], counters.failureSlave[SEQ_ERR_LONG]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/nn", lastCounters.failureSlave[SEQ_ERR_NN], counters.failureSlave[SEQ_ERR_NN]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/crc", lastCounters.failureSlave[SEQ_ERR_CRC], counters.failureSlave[SEQ_ERR_CRC]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/ack", lastCounters.failureSlave[SEQ_ERR_ACK], counters.failureSlave[SEQ_ERR_ACK]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/qq", lastCounters.failureSlave[SEQ_ERR_QQ], counters.failureSlave[SEQ_ERR_QQ]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/zz", lastCounters.failureSlave[SEQ_ERR_ZZ], counters.failureSlave[SEQ_ERR_ZZ]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/ack_miss", lastCounters.failureSlave[SEQ_ERR_ACK_MISS], counters.failureSlave[SEQ_ERR_ACK_MISS]);
+    publishMQTTTopic(initCounters, "ebus/messages/failure/slave/invalid", lastCounters.failureSlave[SEQ_ERR_INVALID], counters.failureSlave[SEQ_ERR_INVALID]);
 
-    lastCounters = statistics.getCounters();
-    initPublish = false;
+    publishMQTTTopic(initCounters, "ebus/messages/special/00", lastCounters.special00, counters.special00);
+    publishMQTTTopic(initCounters, "ebus/messages/special/0704Success", lastCounters.special0704Success, counters.special0704Success);
+    publishMQTTTopic(initCounters, "ebus/messages/special/0704Failure", lastCounters.special0704Failure, counters.special0704Failure);
+
+    lastCounters = counters;
+    initCounters = false;
 }
 
 // String getLeading(uint8_t byte)
