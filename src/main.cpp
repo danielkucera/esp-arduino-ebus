@@ -68,11 +68,11 @@ unsigned long lastMqttUpdate = 0;
 struct MqttValues
 {
   // ebus/device
-  uint32_t pwm_value;
-  unsigned long uptime;
-  unsigned long loop_duration;
-  unsigned long loop_duration_max;
-  uint32_t free_heap;
+  uint32_t pwm_value = 0;
+  unsigned long uptime = 0;
+  unsigned long loop_duration = 0;
+  unsigned long loop_duration_max = 0;
+  uint32_t free_heap = 0;
   int reset_code = -1;
 
   // ebus/device/firmware
@@ -81,24 +81,26 @@ struct MqttValues
   const char* software_serial = USE_SOFTWARE_SERIAL ? "true" : "false";
 
   // ebus/device/wifi
-  unsigned long last_connect;
-  int reconnect_count;
-  int8_t rssi;
+  unsigned long last_connect = 0;
+  int reconnect_count = 0;
+  int8_t rssi = 0;
 
   // ebus/arbitration
-  int total;
-  int won;
-  float wonPercent;
-  int lost;
-  float lostPercent;
-  int restarts1;
+  int total = 0;
+
+  int won = 0;
+  float wonPercent = 0;
+  int restarts1 = 0;
   int restarts2;
-  int lost1;
-  int lost2;
-  int won1;
+  int won1 = 0;
   int won2;
-  int errors;
-  int late;
+
+  int lost = 0;
+  float lostPercent = 0;
+  int lost1 = 0;
+  int lost2 = 0;
+  int errors = 0;
+  int late = 0;
 
 };
 
@@ -382,35 +384,35 @@ void publishMQTT() {
   mqttValues.wonPercent = mqttValues.won / (float)mqttValues.total * 100.0f;
   publishMQTTTopic(initMqttValues, "ebus/arbitration/won/percent", lastMqttValues.wonPercent, mqttValues.wonPercent);
 
+  mqttValues.restarts1 = Bus._nbrRestarts1;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/won/restarts1", lastMqttValues.restarts1, mqttValues.restarts1);
+
+  mqttValues.restarts2 = Bus._nbrRestarts2;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/won/restarts2", lastMqttValues.restarts2, mqttValues.restarts2);
+
+  mqttValues.won1 = Bus._nbrWon1;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/won/won1", lastMqttValues.won1, mqttValues.won1);
+
+  mqttValues.won2 = Bus._nbrWon2;
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/won/won2", lastMqttValues.won2, mqttValues.won2);
+
   mqttValues.lost = mqttValues.total - mqttValues.won;
   publishMQTTTopic(initMqttValues, "ebus/arbitration/lost", lastMqttValues.lost, mqttValues.lost);
 
   mqttValues.lostPercent = 100.0f - mqttValues.wonPercent;
   publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/percent", lastMqttValues.lostPercent, mqttValues.lostPercent);
 
-  mqttValues.restarts1 = Bus._nbrRestarts1;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/detail/restarts1", lastMqttValues.restarts1, mqttValues.restarts1);
-
-  mqttValues.restarts2 = Bus._nbrRestarts2;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/detail/restarts2", lastMqttValues.restarts2, mqttValues.restarts2);
-
   mqttValues.lost1 = Bus._nbrLost1;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/detail/lost1", lastMqttValues.lost1, mqttValues.lost1);
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/lost1", lastMqttValues.lost1, mqttValues.lost1);
 
   mqttValues.lost2 = Bus._nbrLost2;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/detail/lost2", lastMqttValues.lost2, mqttValues.lost2);
-
-  mqttValues.won1 = Bus._nbrWon1;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/detail/won1", lastMqttValues.won1, mqttValues.won1);
-
-  mqttValues.won2 = Bus._nbrWon2;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/detail/won2", lastMqttValues.won2, mqttValues.won2);
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/lost2", lastMqttValues.lost2, mqttValues.lost2);
 
   mqttValues.late = Bus._nbrLate;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/detail/late", lastMqttValues.late, mqttValues.late);
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/late", lastMqttValues.late, mqttValues.late);
 
   mqttValues.errors = Bus._nbrErrors;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/detail/errors", lastMqttValues.errors, mqttValues.errors);
+  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/errors", lastMqttValues.errors, mqttValues.errors);
 
   lastMqttValues = mqttValues;
   initMqttValues = false;
