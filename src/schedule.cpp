@@ -25,13 +25,6 @@ std::vector<Command> commands;
 
 Schedule schedule;
 
-template <typename T>
-void publishMQTTTopic(bool init, const char *topic, T &oldValue, T &newValue)
-{
-    if (init || oldValue != newValue)
-        mqttClient.publish(topic, 0, true, String(newValue).c_str());
-}
-
 Schedule::Schedule()
 {
     ebusHandler = ebus::EbusHandler(address, &busReadyCallback, &busWriteCallback, &responseCallback);
