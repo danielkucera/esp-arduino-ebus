@@ -8,17 +8,16 @@
 #include "Datatypes.h"
 
 // Implementation of the perodic sending of predefined commands.
-// The results are provided as a json string.
 
 struct Command
 {
-    const char *command;          // ebus command as ZZ PB SB NN DBx
-    const char *unit;             // unit of the received data
-    const unsigned long interval; // minimum interval between two commands in seconds
-    unsigned long last;           // last time of the successful command
-    const size_t position;        // starting position of the value in the response
-    const ebus::type datatype;    // ebus datatype
-    const char *topic;            // mqtt topic
+    std::string command;     // ebus command as ZZ PB SB NN DBx
+    std::string unit;        // unit of the received data
+    unsigned long interval;  // minimum interval between two commands in seconds
+    unsigned long last;      // last time of the successful command
+    size_t position;         // starting position of the value in the response
+    ebus::Datatype datatype; // ebus datatype
+    std::string topic;       // mqtt topic
 };
 
 class Schedule
@@ -29,16 +28,22 @@ public:
 
     void setAddress(const uint8_t source);
 
+    void insertCommand(const char *payload);
+    void removeCommand(const char *payload);
+    void publishCommands() const;
+
     bool needTX();
 
     void processSend();
     bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte);
 
     void resetStatistics();
-    void publishMQTT();
+    void publishCounters();
 
 private:
     uint8_t address = 0xff; // TODO 0xff Systemparameter ?
+
+    std::map<std::string, Command> commands;
 
     WiFiClient *dummyClient = new WiFiClient();
     ebus::EbusHandler ebusHandler;
@@ -53,8 +58,6 @@ private:
     unsigned long lastCommand = 0;
 
     bool initDone = false;
-
-    // void publishMQTTTopic(const char *topic, unsigned long oldValue, unsigned long newValue);
 
     const std::vector<uint8_t> nextCommand();
 

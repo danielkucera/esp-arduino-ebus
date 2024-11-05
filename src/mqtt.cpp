@@ -1,38 +1,38 @@
 #include "mqtt.hpp"
-// #include "main.hpp"
+#include "schedule.hpp"
 
 AsyncMqttClient mqttClient;
 
 void onMqttConnect(bool sessionPresent)
 {
-    // DEBUG_LOG("Connected to MQTT");
+    mqttClient.subscribe("ebus/config/commands/#", 0);
+    mqttClient.subscribe("ebus/config/remove", 0);
+    mqttClient.subscribe("ebus/config/list", 0);
 }
 
-void onMqttDisconnect(AsyncMqttClientDisconnectReason reason)
-{
-    // DEBUG_LOG("Disconnected from MQTT");
-}
+// void onMqttDisconnect(AsyncMqttClientDisconnectReason reason)
+// {
+// }
 
-void onMqttSubscribe(uint16_t packetId, uint8_t qos)
-{
-    // String tmp = "Subscribe acknowledged packetId: " + String(packetId) + " qos: " + String(qos);
-    // DEBUG_LOG(tmp.c_str());
-}
+// void onMqttSubscribe(uint16_t packetId, uint8_t qos)
+// {
+// }
 
-void onMqttUnsubscribe(uint16_t packetId)
-{
-    // String tmp = "Unsubscribe acknowledged packetId: " + String(packetId);
-    // DEBUG_LOG(tmp.c_str());
-}
+// void onMqttUnsubscribe(uint16_t packetId)
+// {
+// }
 
 void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
 {
-    // String tmp = "Message received topic: " + String(topic);
-    // DEBUG_LOG(tmp.c_str());
+    String tmp = String(topic);
+    if (tmp.startsWith("ebus/config/commands"))
+        schedule.insertCommand(payload);
+    else if (tmp.startsWith("ebus/config/remove"))
+        schedule.removeCommand(payload);
+    else if (tmp.startsWith("ebus/config/list"))
+        schedule.publishCommands();
 }
 
-void onMqttPublish(uint16_t packetId)
-{
-    // String tmp = "Publish acknowledged packetId: " + String(packetId);
-    // DEBUG_LOG(tmp.c_str());
-}
+// void onMqttPublish(uint16_t packetId)
+// {
+// }

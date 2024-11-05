@@ -49,7 +49,7 @@ char pwm_value_string[8];
 char mqtt_server[MQTT_SERVER_LEN];
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
 IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value_string, 8, "130", "1..255", "min='1' max='255' step='1'");
-IotWebConfTextParameter mqtt_server_param = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server,  MQTT_SERVER_LEN, "", "hostname");
+IotWebConfTextParameter mqtt_server_param = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server, MQTT_SERVER_LEN, "", "hostname");
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -339,80 +339,80 @@ void handleStatus() {
   configServer.send(200, "text/plain", status_string());
 }
 
-void publishMQTT() {
-  
+void publishValues() {
+
   // ebus/device
   // TODO ebus address
   mqttValues.pwm_value = get_pwm();
-  publishMQTTTopic(initMqttValues, "ebus/device/pwm_value", lastMqttValues.pwm_value, mqttValues.pwm_value);
+  publishTopic(initMqttValues, "ebus/device/pwm_value", lastMqttValues.pwm_value, mqttValues.pwm_value);
 
   mqttValues.uptime = millis();
-  publishMQTTTopic(initMqttValues, "ebus/device/uptime", lastMqttValues.uptime, mqttValues.uptime);
+  publishTopic(initMqttValues, "ebus/device/uptime", lastMqttValues.uptime, mqttValues.uptime);
 
   // TODO average of duration
-  publishMQTTTopic(initMqttValues, "ebus/device/loop_duration", lastMqttValues.loop_duration, mqttValues.loop_duration);
-  
-  publishMQTTTopic(initMqttValues, "ebus/device/loop_duration_max", lastMqttValues.loop_duration_max, mqttValues.loop_duration_max);
+  publishTopic(initMqttValues, "ebus/device/loop_duration", lastMqttValues.loop_duration, mqttValues.loop_duration);
+
+  publishTopic(initMqttValues, "ebus/device/loop_duration_max", lastMqttValues.loop_duration_max, mqttValues.loop_duration_max);
 
   mqttValues.free_heap = ESP.getFreeHeap();
-  publishMQTTTopic(initMqttValues, "ebus/device/free_heap", lastMqttValues.free_heap, mqttValues.free_heap);
+  publishTopic(initMqttValues, "ebus/device/free_heap", lastMqttValues.free_heap, mqttValues.free_heap);
 
-  publishMQTTTopic(initMqttValues, "ebus/device/reset_code", lastMqttValues.reset_code, mqttValues.reset_code);
+  publishTopic(initMqttValues, "ebus/device/reset_code", lastMqttValues.reset_code, mqttValues.reset_code);
 
   // ebus/device/firmware
-  publishMQTTTopic(initMqttValues, "ebus/device/firmware/version", lastMqttValues.version, mqttValues.version);
-  
-  publishMQTTTopic(initMqttValues, "ebus/device/firmware/async", lastMqttValues.async, mqttValues.async);
-  
-  publishMQTTTopic(initMqttValues, "ebus/device/firmware/software_serial", lastMqttValues.software_serial, mqttValues.software_serial);
+  publishTopic(initMqttValues, "ebus/device/firmware/version", lastMqttValues.version, mqttValues.version);
+
+  publishTopic(initMqttValues, "ebus/device/firmware/async", lastMqttValues.async, mqttValues.async);
+
+  publishTopic(initMqttValues, "ebus/device/firmware/software_serial", lastMqttValues.software_serial, mqttValues.software_serial);
 
   // ebus/device/wifi
-  publishMQTTTopic(initMqttValues, "ebus/device/wifi/last_connect", lastMqttValues.last_connect, mqttValues.last_connect);
-  
-  publishMQTTTopic(initMqttValues, "ebus/device/wifi/reconnect_count", lastMqttValues.reconnect_count, mqttValues.reconnect_count);
+  publishTopic(initMqttValues, "ebus/device/wifi/last_connect", lastMqttValues.last_connect, mqttValues.last_connect);
+
+  publishTopic(initMqttValues, "ebus/device/wifi/reconnect_count", lastMqttValues.reconnect_count, mqttValues.reconnect_count);
 
   mqttValues.rssi = WiFi.RSSI();
-  publishMQTTTopic(initMqttValues, "ebus/device/wifi/rssi", lastMqttValues.rssi, mqttValues.rssi);
+  publishTopic(initMqttValues, "ebus/device/wifi/rssi", lastMqttValues.rssi, mqttValues.rssi);
 
   // ebus/arbitration
   mqttValues.total = Bus._nbrArbitrations;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/total", lastMqttValues.total, mqttValues.total);
+  publishTopic(initMqttValues, "ebus/arbitration/total", lastMqttValues.total, mqttValues.total);
 
   mqttValues.won = Bus._nbrWon1 + Bus._nbrWon2;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/won", lastMqttValues.won, mqttValues.won);
+  publishTopic(initMqttValues, "ebus/arbitration/won", lastMqttValues.won, mqttValues.won);
 
   mqttValues.wonPercent = mqttValues.won / (float)mqttValues.total * 100.0f;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/won/percent", lastMqttValues.wonPercent, mqttValues.wonPercent);
+  publishTopic(initMqttValues, "ebus/arbitration/won/percent", lastMqttValues.wonPercent, mqttValues.wonPercent);
 
   mqttValues.restarts1 = Bus._nbrRestarts1;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/won/restarts1", lastMqttValues.restarts1, mqttValues.restarts1);
+  publishTopic(initMqttValues, "ebus/arbitration/won/restarts1", lastMqttValues.restarts1, mqttValues.restarts1);
 
   mqttValues.restarts2 = Bus._nbrRestarts2;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/won/restarts2", lastMqttValues.restarts2, mqttValues.restarts2);
+  publishTopic(initMqttValues, "ebus/arbitration/won/restarts2", lastMqttValues.restarts2, mqttValues.restarts2);
 
   mqttValues.won1 = Bus._nbrWon1;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/won/won1", lastMqttValues.won1, mqttValues.won1);
+  publishTopic(initMqttValues, "ebus/arbitration/won/won1", lastMqttValues.won1, mqttValues.won1);
 
   mqttValues.won2 = Bus._nbrWon2;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/won/won2", lastMqttValues.won2, mqttValues.won2);
+  publishTopic(initMqttValues, "ebus/arbitration/won/won2", lastMqttValues.won2, mqttValues.won2);
 
   mqttValues.lost = mqttValues.total - mqttValues.won;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost", lastMqttValues.lost, mqttValues.lost);
+  publishTopic(initMqttValues, "ebus/arbitration/lost", lastMqttValues.lost, mqttValues.lost);
 
   mqttValues.lostPercent = 100.0f - mqttValues.wonPercent;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/percent", lastMqttValues.lostPercent, mqttValues.lostPercent);
+  publishTopic(initMqttValues, "ebus/arbitration/lost/percent", lastMqttValues.lostPercent, mqttValues.lostPercent);
 
   mqttValues.lost1 = Bus._nbrLost1;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/lost1", lastMqttValues.lost1, mqttValues.lost1);
+  publishTopic(initMqttValues, "ebus/arbitration/lost/lost1", lastMqttValues.lost1, mqttValues.lost1);
 
   mqttValues.lost2 = Bus._nbrLost2;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/lost2", lastMqttValues.lost2, mqttValues.lost2);
+  publishTopic(initMqttValues, "ebus/arbitration/lost/lost2", lastMqttValues.lost2, mqttValues.lost2);
 
   mqttValues.late = Bus._nbrLate;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/late", lastMqttValues.late, mqttValues.late);
+  publishTopic(initMqttValues, "ebus/arbitration/lost/late", lastMqttValues.late, mqttValues.late);
 
   mqttValues.errors = Bus._nbrErrors;
-  publishMQTTTopic(initMqttValues, "ebus/arbitration/lost/errors", lastMqttValues.errors, mqttValues.errors);
+  publishTopic(initMqttValues, "ebus/arbitration/lost/errors", lastMqttValues.errors, mqttValues.errors);
 
   lastMqttValues = mqttValues;
   initMqttValues = false;
@@ -527,11 +527,11 @@ void setup() {
   }
 
   mqttClient.onConnect(onMqttConnect);
-  mqttClient.onDisconnect(onMqttDisconnect);
-  mqttClient.onSubscribe(onMqttSubscribe);
-  mqttClient.onUnsubscribe(onMqttUnsubscribe);
+  // mqttClient.onDisconnect(onMqttDisconnect);
+  // mqttClient.onSubscribe(onMqttSubscribe);
+  // mqttClient.onUnsubscribe(onMqttUnsubscribe);
   mqttClient.onMessage(onMqttMessage);
-  mqttClient.onPublish(onMqttPublish);
+  // mqttClient.onPublish(onMqttPublish);
 
   if (mqtt_server[0] != '\0')
     mqttClient.setServer(mqtt_server, MQTT_PORT);
@@ -584,8 +584,11 @@ void loop() {
   if (mqttClient.connected() && millis() > lastMqttUpdate + 60 * 1000)
   {
     lastMqttUpdate = millis();
-    publishMQTT();
-    schedule.publishMQTT();
+    publishValues();
+    schedule.publishCounters();
+
+    if (schedule.needTX())
+      enableTX();
   }
 
   if (millis() > last_comms + 200*1000) {

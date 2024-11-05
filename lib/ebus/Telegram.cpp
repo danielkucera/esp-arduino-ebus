@@ -23,7 +23,7 @@
 #include <map>
 #include <sstream>
 
-std::map<int, std::string> SequenceErrors =
+std::map<int, const char *> SequenceErrors =
 	{
 
 		{SEQ_EMPTY, "sequence is empty"},

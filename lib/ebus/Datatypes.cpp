@@ -19,7 +19,40 @@
 
 #include "Datatypes.h"
 
+#include <map>
+#include <cstring>
 #include <sstream>
+
+std::map<ebus::Datatype, const char*> DatatypeName =
+	{
+		{ebus::Datatype::ERROR, "ERROR"},
+		{ebus::Datatype::BCD, "BCD"},
+		{ebus::Datatype::UINT8, "UINT8"},
+		{ebus::Datatype::INT8, "INT8"},
+		{ebus::Datatype::UINT16, "UINT16"},
+		{ebus::Datatype::INT16, "INT16"},
+		{ebus::Datatype::UINT32, "UINT32"},
+		{ebus::Datatype::INT32, "INT32"},
+		{ebus::Datatype::DATA1b, "DATA1b"},
+		{ebus::Datatype::DATA1c, "DATA1c"},
+		{ebus::Datatype::DATA2b, "DATA2b"},
+		{ebus::Datatype::DATA2c, "DATA2c"},
+		{ebus::Datatype::FLOAT, "FLOAT"},
+		{ebus::Datatype::STRING, "STRING"}};
+
+const char* ebus::datatype2string(ebus::Datatype datatype)
+{
+	return DatatypeName[datatype];
+}
+
+ebus::Datatype ebus::string2datatype(const char* str)
+{
+	for (std::pair<ebus::Datatype, const char*> item : DatatypeName)
+		if (strcmp(str, item.second) == 0)
+			return item.first;
+
+	return ebus::Datatype::ERROR;
+}
 
 // helper functions
 uint ebus::convert_base(uint value, const uint &oldBase, const uint &newBase)

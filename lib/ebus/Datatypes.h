@@ -32,8 +32,9 @@
 namespace ebus
 {
 	// available data types
-	enum class type
+	enum class Datatype
 	{
+		ERROR = -1,
 		BCD,
 		UINT8,
 		INT8,
@@ -48,6 +49,9 @@ namespace ebus
 		FLOAT,
 		STRING
 	};
+
+	const char* datatype2string(Datatype datatype);
+	Datatype string2datatype(const char* str);
 
 	// templates for byte / integer conversion
 	template <typename T>
