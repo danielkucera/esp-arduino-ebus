@@ -557,11 +557,11 @@ void setup() {
   }
 
   mqttClient.onConnect(onMqttConnect);
-  // mqttClient.onDisconnect(onMqttDisconnect);
-  // mqttClient.onSubscribe(onMqttSubscribe);
-  // mqttClient.onUnsubscribe(onMqttUnsubscribe);
+  mqttClient.onDisconnect(onMqttDisconnect);
+  mqttClient.onSubscribe(onMqttSubscribe);
+  mqttClient.onUnsubscribe(onMqttUnsubscribe);
   mqttClient.onMessage(onMqttMessage);
-  // mqttClient.onPublish(onMqttPublish);
+  mqttClient.onPublish(onMqttPublish);
 
   if (mqtt_server[0] != '\0')
     mqttClient.setServer(mqtt_server, 1883);
