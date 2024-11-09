@@ -30,12 +30,14 @@ ESP8266HTTPUpdateServer httpUpdater;
 #define PWM_CHANNEL 0
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
+#define PWM_DEFAULT 130
 
 #define DEFAULT_AP "ebus-test"
 #define DEFAULT_PASS "lectronz"
 #define DEFAULT_APMODE_PASS "ebusebus"
 
-#define STRING_LEN 128
+#define STRING_LEN 64
+#define NUMBER_LEN 8
 
 #ifdef ESP32
 TaskHandle_t Task1;
@@ -45,14 +47,14 @@ TaskHandle_t Task1;
 DNSServer dnsServer;
 WebServer configServer(80);
 
-char pwm_value_string[8];
+char pwm_value[NUMBER_LEN];
 
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
 
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
-IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value_string, 8, "130", "1..255", "min='1' max='255' step='1'");
+IotWebConfNumberParameter pwmValueParam = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN, "130", "1..255", "min='1' max='255' step='1'");
 
 IotWebConfParameterGroup mqttGroup = IotWebConfParameterGroup("mqtt", "MQTT configuration");
 IotWebConfTextParameter mqttServerParam = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "text", nullptr, "server.lan");
@@ -282,9 +284,7 @@ void data_loop(void *pvParameters) {
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   bool valid = true;
 
-  int l = webRequestWrapper->arg(mqttServerParam.getId()).length();
-
-  if (l > STRING_LEN - 1) {
+  if (webRequestWrapper->arg(mqttServerParam.getId()).length() > STRING_LEN - 1) {
     String tmp = "max. ";
     tmp += String(STRING_LEN);
     tmp += " characters allowed";
@@ -296,34 +296,13 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
 }
 
 void saveParamsCallback () {
+  set_pwm(atoi(pwm_value));
 
-  uint8_t new_pwm_value = atoi(pwm_value_string);
-  if (new_pwm_value > 0) {
-    set_pwm(new_pwm_value);
-    preferences.putUInt("pwm_value", new_pwm_value);
-  }
-  DebugSer.printf("pwm_value set: %s %d\n", pwm_value_string, new_pwm_value);
+  if (mqtt_server[0] != '\0')
+    mqttClient.setServer(mqtt_server, 1883);
 
-  String mqtt_server_tmp = String(mqtt_server);
-  mqtt_server_tmp.trim();
-  if (mqtt_server_tmp.length() > 0)
-    preferences.putString("mqtt_server", mqtt_server_tmp.c_str());
-  else
-    preferences.putString("mqtt_server", "\0");
-
-  String mqtt_user_tmp = String(mqtt_user);
-  mqtt_user_tmp.trim();
-  if (mqtt_user_tmp.length() > 0)
-    preferences.putString("mqtt_user", mqtt_user_tmp.c_str());
-  else
-    preferences.putString("mqtt_user", "\0");
-
-  String mqtt_pass_tmp = String(mqtt_pass);
-  mqtt_pass_tmp.trim();
-  if (mqtt_pass_tmp.length() > 0)
-    preferences.putString("mqtt_pass", mqtt_pass_tmp.c_str());
-  else
-    preferences.putString("mqtt_pass", "\0");
+  if (mqtt_user[0] != '\0')
+    mqttClient.setCredentials(mqtt_user, mqtt_pass);
 }
 
 char* status_string() {
@@ -354,7 +333,6 @@ char* status_string() {
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
   pos += sprintf(status + pos, "mqtt_server: %s\r\n", mqtt_server);
   pos += sprintf(status + pos, "mqtt_user: %s\r\n", mqtt_user);
-  pos += sprintf(status + pos, "mqtt_pass: %s\r\n", mqtt_pass[0] != '\0' ? "YES" : "NO");
 
   return status;
 }
@@ -501,32 +479,25 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  set_pwm(preferences.getUInt("pwm_value", 130));
-
-  if (preferences.getBool("firstboot", true)){
+  if (preferences.getBool("firstboot", true)) {
     preferences.putBool("firstboot", false);
+    
     iotWebConf.init();
     strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz", IOTWEBCONF_WORD_LEN);
-    preferences.putString("mqtt_server", "\0");
-    preferences.putString("mqtt_user", "\0");
-    preferences.putString("mqtt_pass", "\0");
-
     iotWebConf.saveConfig();
+
+    WiFi.channel(random_ch()); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
   } else {
     iotWebConf.skipApStartup();
   }
-
-  int wifi_ch = random_ch();
-  DebugSer.printf("Channel for AP mode: %d\n", wifi_ch);
-  WiFi.channel(wifi_ch); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
 
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
 
-  iotWebConf.addSystemParameter(&pwm_value_param);
+  iotWebConf.addSystemParameter(&pwmValueParam);
   iotWebConf.addParameterGroup(&mqttGroup);
   iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
@@ -552,6 +523,8 @@ void setup() {
     [](const char* updatePath) { httpUpdater.setup(&configServer, updatePath); },
     [](const char* userName, char* password) { httpUpdater.updateCredentials(userName, password); });
 
+  set_pwm(atoi(pwm_value));
+
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
     iotWebConf.doLoop();
   }
@@ -566,10 +539,8 @@ void setup() {
   if (mqtt_server[0] != '\0')
     mqttClient.setServer(mqtt_server, 1883);
 
-  if (mqtt_user[0] != '\0' && mqtt_pass[0] != '\0')
+  if (mqtt_user[0] != '\0')
     mqttClient.setCredentials(mqtt_user, mqtt_pass);
-  else if (mqtt_user[0] != '\0')
-    mqttClient.setCredentials(mqtt_user);
 
   wifiServer.begin();
   wifiServerRO.begin();
