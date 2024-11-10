@@ -27,6 +27,7 @@ public:
     Schedule();
 
     void setAddress(const uint8_t source);
+    void setDistance(const uint8_t distance);
 
     void insertCommand(const char *payload);
     void removeCommand(const char *payload);
@@ -41,7 +42,7 @@ public:
     void publishCounters();
 
 private:
-    uint8_t address = 0xff; // TODO 0xff Systemparameter ?
+    uint8_t address = 0xff;
 
     std::map<std::string, Command> commands;
 
@@ -54,7 +55,7 @@ private:
 
     Command *actCommand = nullptr;
 
-    unsigned long distanceCommands = 5 * 1000; // TODO Systemparameter ?
+    unsigned long distanceCommands = 0;
     unsigned long lastCommand = 0;
 
     bool initDone = false;

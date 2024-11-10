@@ -49,12 +49,26 @@ WebServer configServer(80);
 
 char pwm_value[NUMBER_LEN];
 
+char ebus_address[NUMBER_LEN];
+static char ebus_address_values[][NUMBER_LEN] = {
+    "00", "10", "30", "70", "F0", "01", "11", "31", "71", "F1", "03", "13",
+    "33", "73", "F3", "07", "17", "37", "77", "F7", "0F", "1F", "3F", "7F", "FF"};
+static char ebus_address_names[][NUMBER_LEN] = {
+    "0x00 0", "0x10 0", "0x30 0", "0x70 0", "0xF0 0", "0x01 1", "0x11 1", "0x31 1", "0x71 1", "0xF1 1", "0x03 2", "0x13 2",
+    "0x33 2", "0x73 2", "0xF3 2", "0x07 3", "0x17 3", "0x37 3", "0x77 3", "0xF7 3", "0x0F 4", "0x1F 4", "0x3F 4", "0x7F 4", "0xFF 4"};
+
+char comand_distance[NUMBER_LEN];
+
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
 
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
+
+IotWebConfParameterGroup ebusGroup = IotWebConfParameterGroup("ebus", "EBUS configuration");
 IotWebConfNumberParameter pwmValueParam = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN, "130", "1..255", "min='1' max='255' step='1'");
+IotWebConfSelectParameter ebusAddressParam = IotWebConfSelectParameter("EBUS address", "ebus_address", ebus_address, NUMBER_LEN, (char*)ebus_address_values, (char*)ebus_address_names, sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
+IotWebConfNumberParameter commandDistanceParam = IotWebConfNumberParameter("Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1", "0..60", "min='1' max='60' step='1'");
 
 IotWebConfParameterGroup mqttGroup = IotWebConfParameterGroup("mqtt", "MQTT configuration");
 IotWebConfTextParameter mqttServerParam = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "text", nullptr, "server.lan");
@@ -78,15 +92,20 @@ unsigned long lastMqttUpdate = 0;
 struct MqttValues
 {
   // ebus/device
-  uint32_t pwm_value = 0;
   unsigned long uptime = 0;
   unsigned long loop_duration = 0;
   unsigned long loop_duration_max = 0;
   uint32_t free_heap = 0;
   int reset_code = -1;
 
+  // ebus/device/ebus
+  uint32_t pwm_value = 0;
+  String ebus_address = "";
+  uint8_t comand_distance = 0;
+
   // ebus/device/firmware
   const char* version = AUTO_VERSION;
+  const char* sdk = ESP.getSdkVersion();
   const char* async = USE_ASYNCHRONOUS ? "true" : "false";
   const char* software_serial = USE_SOFTWARE_SERIAL ? "true" : "false";
 
@@ -145,7 +164,7 @@ void wifiConnected() {
 
 int random_ch() {
 #ifdef ESP32
-  return esp_random() % 13 + 1 ;
+  return esp_random() % 13 + 1;
 #else
   return ESP8266TrueRandom.random(1, 13);
 #endif
@@ -297,6 +316,8 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
 
 void saveParamsCallback () {
   set_pwm(atoi(pwm_value));
+  schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  schedule.setDistance(atoi(comand_distance));
 
   if (mqtt_server[0] != '\0')
     mqttClient.setServer(mqtt_server, 1883);
@@ -331,6 +352,8 @@ char* status_string() {
   pos += sprintf(status + pos, "nbr_late: %i\r\n", (int)Bus._nbrLate);
   pos += sprintf(status + pos, "nbr_errors: %i\r\n", (int)Bus._nbrErrors);
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
+  pos += sprintf(status + pos, "ebus_address: %s\r\n", ebus_address);
+  pos += sprintf(status + pos, "command_distance: %i\r\n", atoi(comand_distance));
   pos += sprintf(status + pos, "mqtt_server: %s\r\n", mqtt_server);
   pos += sprintf(status + pos, "mqtt_user: %s\r\n", mqtt_user);
 
@@ -344,10 +367,6 @@ void handleStatus() {
 void publishValues() {
 
   // ebus/device
-  // TODO ebus address
-  mqttValues.pwm_value = get_pwm();
-  publishTopic(initMqttValues, "ebus/device/pwm_value", lastMqttValues.pwm_value, mqttValues.pwm_value);
-
   mqttValues.uptime = millis();
   publishTopic(initMqttValues, "ebus/device/uptime", lastMqttValues.uptime, mqttValues.uptime);
 
@@ -361,7 +380,19 @@ void publishValues() {
 
   publishTopic(initMqttValues, "ebus/device/reset_code", lastMqttValues.reset_code, mqttValues.reset_code);
 
+  // ebus/device/ebus
+  mqttValues.pwm_value = get_pwm();
+  publishTopic(initMqttValues, "ebus/device/ebus/pwm_value", lastMqttValues.pwm_value, mqttValues.pwm_value);
+
+  mqttValues.ebus_address = String(ebus_address);
+  publishTopic(initMqttValues, "ebus/device/ebus/ebus_address", lastMqttValues.ebus_address, mqttValues.ebus_address);
+
+  mqttValues.comand_distance = atoi(comand_distance);
+  publishTopic(initMqttValues, "ebus/device/ebus/comand_distance", lastMqttValues.comand_distance, mqttValues.comand_distance);
+
   // ebus/device/firmware
+  publishTopic(initMqttValues, "ebus/device/firmware/sdk", lastMqttValues.sdk, mqttValues.sdk);
+
   publishTopic(initMqttValues, "ebus/device/firmware/version", lastMqttValues.version, mqttValues.version);
 
   publishTopic(initMqttValues, "ebus/device/firmware/async", lastMqttValues.async, mqttValues.async);
@@ -493,11 +524,15 @@ void setup() {
     iotWebConf.skipApStartup();
   }
 
+  ebusGroup.addItem(&pwmValueParam);
+  ebusGroup.addItem(&ebusAddressParam);
+  ebusGroup.addItem(&commandDistanceParam);
+
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
 
-  iotWebConf.addSystemParameter(&pwmValueParam);
+  iotWebConf.addParameterGroup(&ebusGroup);
   iotWebConf.addParameterGroup(&mqttGroup);
   iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
@@ -524,6 +559,8 @@ void setup() {
     [](const char* userName, char* password) { httpUpdater.updateCredentials(userName, password); });
 
   set_pwm(atoi(pwm_value));
+  schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  schedule.setDistance(atoi(comand_distance));
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
     iotWebConf.doLoop();

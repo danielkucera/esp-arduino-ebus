@@ -18,6 +18,11 @@ void Schedule::setAddress(const uint8_t source)
     ebusHandler.setAddress(source);
 }
 
+void Schedule::setDistance(const uint8_t distance)
+{
+    distanceCommands = distance * 1000;
+}
+
 // payload {"command":"08b509030d0600","unit":"°C","interval":60,"position":1,"datatype":"DATA2c","topic":"ebus/values/Aussentemperatur"}
 void Schedule::insertCommand(const char *payload)
 {
@@ -127,18 +132,7 @@ void Schedule::processSend()
                 // start arbitration
                 WiFiClient *client = dummyClient;
                 uint8_t address = ebusHandler.getAddress();
-
-                if (!setArbitrationClient(client, address))
-                {
-                    if (client != dummyClient)
-                    {
-                        DEBUG_LOG("ARBITRATION ONGOING 0x%02 0x%02x\n", address, ebusHandler.getAddress());
-                    }
-                }
-                else
-                {
-                    DEBUG_LOG("ARBITRATION START 0x%02x\n", address);
-                }
+                setArbitrationClient(client, address);
             }
         }
     }
