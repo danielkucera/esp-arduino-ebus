@@ -242,6 +242,9 @@ const std::vector<uint8_t> Schedule::nextCommand()
                                         [](const std::pair<std::string, Command> &i, const std::pair<std::string, Command> &j)
                                         { return (i.second.last + i.second.interval * 1000) < (j.second.last + j.second.interval * 1000); }))
                           ->second;
+
+        if (millis() < actCommand->last + actCommand->interval * 1000)
+            return ebus::Sequence::to_vector("");
     }
 
     return ebus::Sequence::to_vector(actCommand->command);

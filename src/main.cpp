@@ -68,7 +68,7 @@ IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
 IotWebConfParameterGroup ebusGroup = IotWebConfParameterGroup("ebus", "EBUS configuration");
 IotWebConfNumberParameter pwmValueParam = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN, "130", "1..255", "min='1' max='255' step='1'");
 IotWebConfSelectParameter ebusAddressParam = IotWebConfSelectParameter("EBUS address", "ebus_address", ebus_address, NUMBER_LEN, (char*)ebus_address_values, (char*)ebus_address_names, sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
-IotWebConfNumberParameter commandDistanceParam = IotWebConfNumberParameter("Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1", "0..60", "min='1' max='60' step='1'");
+IotWebConfNumberParameter commandDistanceParam = IotWebConfNumberParameter("Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1", "0..60", "min='0' max='60' step='1'");
 
 IotWebConfParameterGroup mqttGroup = IotWebConfParameterGroup("mqtt", "MQTT configuration");
 IotWebConfTextParameter mqttServerParam = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "text", nullptr, "server.lan");
