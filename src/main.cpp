@@ -9,18 +9,18 @@
 Preferences preferences;
 
 #ifdef ESP32
-  #include <esp_task_wdt.h>
-  #include <ESPmDNS.h>
-  #include "esp32c3/rom/rtc.h"
-  #include <IotWebConfESP32HTTPUpdateServer.h>
+#include <esp_task_wdt.h>
+#include <ESPmDNS.h>
+#include "esp32c3/rom/rtc.h"
+#include <IotWebConfESP32HTTPUpdateServer.h>
 
-  HTTPUpdateServer httpUpdater;
+HTTPUpdateServer httpUpdater;
 #else
-  #include <ESP8266mDNS.h>
-  #include <ESP8266TrueRandom.h>
-  #include <ESP8266HTTPUpdateServer.h>
+#include <ESP8266mDNS.h>
+#include <ESP8266TrueRandom.h>
+#include <ESP8266HTTPUpdateServer.h>
 
-  ESP8266HTTPUpdateServer httpUpdater;
+ESP8266HTTPUpdateServer httpUpdater;
 #endif
 
 #define ALPHA 0.3
@@ -33,6 +33,9 @@ Preferences preferences;
 #define DEFAULT_PASS "lectronz"
 #define DEFAULT_APMODE_PASS "ebusebus"
 
+#define STRING_LEN 64
+#define NUMBER_LEN 8
+
 #ifdef ESP32
 TaskHandle_t Task1;
 #endif
@@ -40,9 +43,30 @@ TaskHandle_t Task1;
 #define CONFIG_VERSION "eea"
 DNSServer dnsServer;
 WebServer configServer(80);
-char pwm_value_string[8];
+
+char pwm_value[NUMBER_LEN];
+
+char static_value[STRING_LEN];
+char ip_value[STRING_LEN];
+char netmask_value[STRING_LEN];
+char gateway_value[STRING_LEN];
+char dns_value[STRING_LEN];
+
+
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
-IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value_string, 8, "130", "1..255", "min='1' max='255' step='1'");
+IotWebConfNumberParameter pwmValueParam = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN, "130", "1..255", "min='1' max='255' step='1'");
+
+IotWebConfParameterGroup netGroup = IotWebConfParameterGroup("net", "Network");
+IotWebConfCheckboxParameter staticParam = IotWebConfCheckboxParameter("Static IP", "static_value", static_value, STRING_LEN,  false);
+IotWebConfTextParameter ipParam = IotWebConfTextParameter("IP address", "ip_value", ip_value, STRING_LEN, nullptr, "192.168.1.9");
+IotWebConfTextParameter netmaskParam = IotWebConfTextParameter("Subnet mask", "netmask_value", netmask_value, STRING_LEN, nullptr, "255.255.255.0");
+IotWebConfTextParameter gatewayParam = IotWebConfTextParameter("Gateway", "gateway_value", gateway_value, STRING_LEN, nullptr, "192.168.1.1");
+IotWebConfTextParameter dnsParam = IotWebConfTextParameter("DNS Server", "dns_value", dns_value, STRING_LEN, nullptr, "192.168.1.1");
+
+IPAddress ipAddress;
+IPAddress netmask;
+IPAddress gateway;
+IPAddress dns;
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -60,25 +84,18 @@ unsigned long maxLoopDuration = 0;
 unsigned long lastConnectTime = 0;
 int reconnectCount = 0;
 
-int random_ch(){
+int random_ch() {
 #ifdef ESP32
-  return esp_random() % 13 + 1 ;
-#elif defined(ESP8266)
+  return esp_random() % 13 + 1;
+#else
   return ESP8266TrueRandom.random(1, 13);
 #endif
 }
 
-#ifdef ESP32
-void on_connected(WiFiEvent_t event, WiFiEventInfo_t info){
-  lastConnectTime = millis();
-  reconnectCount++;
-}
-#endif
-
 void wdt_start() {
 #ifdef ESP32
   esp_task_wdt_init(6, true);
-#elif defined(ESP8266)
+#else
   ESP.wdtDisable();
 #endif
 }
@@ -86,10 +103,8 @@ void wdt_start() {
 void wdt_feed() {
 #ifdef ESP32
   esp_task_wdt_reset();
-#elif defined(ESP8266)
-  ESP.wdtFeed();
 #else
-#error UNKNOWN PLATFORM
+  ESP.wdtFeed();
 #endif
 }
 
@@ -106,20 +121,20 @@ inline void enableTX() {
 #endif
 }
 
-void set_pwm(uint8_t value){
+void set_pwm(uint8_t value) {
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
 #endif
 }
 
-uint32_t get_pwm(){
+uint32_t get_pwm() {
 #ifdef PWM_PIN
   return ledcRead(PWM_CHANNEL);
 #endif
   return 0;
 }
 
-void reset(){
+void reset() {
   disableTX();
   ESP.restart();
 }
@@ -133,8 +148,8 @@ void check_reset() {
   // check if RESET_PIN being hold low and reset
   pinMode(RESET_PIN, INPUT_PULLUP);
   unsigned long resetStart = millis();
-  while(digitalRead(RESET_PIN) == 0){
-    if (millis() > resetStart + RESET_MS){
+  while (digitalRead(RESET_PIN) == 0) {
+    if (millis() > resetStart + RESET_MS) {
       reset_config();
     }
   }
@@ -154,19 +169,19 @@ void loop_duration() {
   }
 }
 
-void data_process(){
+void data_process() {
   loop_duration();
 
-  //check clients for data
-  for (int i = 0; i < MAX_SRV_CLIENTS; i++){
+  // check clients for data
+  for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
     handleClient(&serverClients[i]);
     handleEnhClient(&enhClients[i]);
   }
 
-  //check queue for data
+  // check queue for data
   BusType::data d;
   if (Bus.read(d)) {
-    for (int i = 0; i < MAX_SRV_CLIENTS; i++){
+    for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
           if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
@@ -175,14 +190,14 @@ void data_process(){
         }
       }
       else {
-        if (pushClient(&serverClients[i], d._d)){
+        if (pushClient(&serverClients[i], d._d)) {
           last_comms = millis();
         }
-        if (pushClient(&serverClientsRO[i], d._d)){
+        if (pushClient(&serverClientsRO[i], d._d)) {
           last_comms = millis();
         }
         if (d._client != &enhClients[i]) {
-          if (pushEnhClient(&enhClients[i], d._c, d._d, d._logtoclient == &enhClients[i])){
+          if (pushEnhClient(&enhClients[i], d._c, d._d, d._logtoclient == &enhClients[i])) {
             last_comms = millis();
           }
         }
@@ -191,22 +206,64 @@ void data_process(){
   }
 }
 
-void data_loop(void * pvParameters){
-  while(1){
+void data_loop(void * pvParameters) {
+  while (1) {
     data_process();
   }
 }
 
+bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
+  bool valid = true;
+
+  if (staticParam.isChecked()) {
+    if (!ipAddress.fromString(webRequestWrapper->arg(ipParam.getId()))) {
+      ipParam.errorMessage = "Please provide a valid IP address!";
+      valid = false;
+    }
+    if (!netmask.fromString(webRequestWrapper->arg(netmaskParam.getId()))) {
+      netmaskParam.errorMessage = "Please provide a valid Subnet mask!";
+      valid = false;
+    }
+    if (!gateway.fromString(webRequestWrapper->arg(gatewayParam.getId()))) {
+      gatewayParam.errorMessage = "Please provide a valid Gateway address!";
+      valid = false;
+    }
+    if (!dns.fromString(webRequestWrapper->arg(dnsParam.getId()))) {
+      dnsParam.errorMessage = "Please provide a valid DNS address!";
+      valid = false;
+    }
+  }
+
+  return valid;
+}
 
 void saveParamsCallback () {
+  set_pwm(atoi(pwm_value));
+}
 
-  uint8_t new_pwm_value = atoi(pwm_value_string);
-  if (new_pwm_value > 0){
-    set_pwm(new_pwm_value);
-    preferences.putUInt("pwm_value", new_pwm_value);
+void connectWifi(const char* ssid, const char* password) {
+  bool needMDNS = false;
+
+  if (staticParam.isChecked()) {
+    ipAddress.fromString(String(ip_value));
+    netmask.fromString(String(netmask_value));
+    gateway.fromString(String(gateway_value));
+    dns.fromString(String(dns_value));
+
+    needMDNS = !WiFi.config(ipAddress, gateway, netmask, dns);
   }
-  DebugSer.printf("pwm_value set: %s %d\n", pwm_value_string, new_pwm_value);
 
+  if (!staticParam.isChecked() || needMDNS) {
+    MDNS.end();
+    MDNS.begin(HOSTNAME);
+  }
+  
+  WiFi.begin(ssid, password);
+}
+
+void wifiConnected() {
+  lastConnectTime = millis();
+  reconnectCount++;
 }
 
 char* status_string(){
@@ -239,14 +296,11 @@ char* status_string(){
   return status;
 }
 
-void handleStatus()
-{
+void handleStatus() {
   configServer.send(200, "text/plain", status_string());
 }
 
-
-void handleRoot()
-{
+void handleRoot() {
   // -- Let IotWebConf test and handle captive portal requests.
   if (iotWebConf.handleCaptivePortal())
   {
@@ -268,6 +322,20 @@ void handleRoot()
   configServer.send(200, "text/html", s);
 }
 
+bool handleStatusServerRequests() {
+  if (!statusServer.hasClient())
+    return false;
+
+  WiFiClient client = statusServer.accept();
+
+  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.print(status_string());
+    client.flush();
+    client.stop();
+  }
+  return true;
+}
+
 void setup() {
   preferences.begin("esp-ebus", false);
 
@@ -275,7 +343,7 @@ void setup() {
 
 #ifdef ESP32
   last_reset_code = rtc_get_reset_reason(0);
-#elif defined(ESP8266)
+#else
   last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
   Bus.begin();
@@ -290,35 +358,35 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  set_pwm(preferences.getUInt("pwm_value", 130));
-
-  if (preferences.getBool("firstboot", true)){
+  if (preferences.getBool("firstboot", true)) {
     preferences.putBool("firstboot", false);
+    
     iotWebConf.init();
     strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz", IOTWEBCONF_WORD_LEN);
     iotWebConf.saveConfig();
-  } else {
+
+    WiFi.channel(random_ch()); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
+  } 
+  else {
     iotWebConf.skipApStartup();
   }
 
-#ifdef ESP32
-  WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
-#endif
+  netGroup.addItem(&staticParam);
+  netGroup.addItem(&ipParam);
+  netGroup.addItem(&netmaskParam);
+  netGroup.addItem(&gatewayParam);
+  netGroup.addItem(&dnsParam);
 
-#ifdef ESP8266
-  WiFi.setAutoReconnect(true);
-#endif  
-
-  int wifi_ch = random_ch();
-  DebugSer.printf("Channel for AP mode: %d\n", wifi_ch);
-  WiFi.channel(wifi_ch); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
-
-  iotWebConf.addSystemParameter(&pwm_value_param);
+  iotWebConf.addSystemParameter(&pwmValueParam);
+  iotWebConf.addParameterGroup(&netGroup);
+  iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
   iotWebConf.setWifiConnectionTimeoutMs(7000);
+  iotWebConf.setWifiConnectionHandler(&connectWifi);
+  iotWebConf.setWifiConnectionCallback(&wifiConnected);
 
 #ifdef STATUS_LED_PIN
   iotWebConf.setStatusPin(STATUS_LED_PIN);
@@ -338,8 +406,10 @@ void setup() {
     [](const char* updatePath) { httpUpdater.setup(&configServer, updatePath); },
     [](const char* userName, char* password) { httpUpdater.updateCredentials(userName, password); });
 
+  set_pwm(atoi(pwm_value));
+
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
-      iotWebConf.doLoop();
+    iotWebConf.doLoop();
   }
 
   wifiServer.begin();
@@ -348,9 +418,6 @@ void setup() {
   statusServer.begin();
 
   ArduinoOTA.begin();
-
-  MDNS.end();
-  MDNS.begin(HOSTNAME);
 
   wdt_start();
 
@@ -361,44 +428,20 @@ void setup() {
 #endif
 }
 
-bool handleStatusServerRequests() {
-  if (!statusServer.hasClient())
-    return false;
-
-  WiFiClient client = statusServer.accept();
-
-  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.print(status_string());
-    client.flush();
-    client.stop();
-  }
-  return true;
-}
-
 void loop() {
   ArduinoOTA.handle();
 
 #ifdef ESP8266
-  MDNS.update();
-
+  if (!staticParam.isChecked())
+    MDNS.update();
+  
   data_process();
 #endif
 
   wdt_feed();
 
-#ifdef ESP32
+  // this should be called on all platforms
   iotWebConf.doLoop();
-#endif
-
-  if (WiFi.status() != WL_CONNECTED) {
-    lastConnectTime = 0;
-  }
-  else {
-    if (lastConnectTime == 0) {
-      lastConnectTime = millis();
-      reconnectCount++;
-    }
-  }
 
   if (millis() > last_comms + 200*1000 ) {
     reset();
@@ -413,13 +456,13 @@ void loop() {
   }
 
   // Check if there are any new clients on the eBUS servers
-  if (handleNewClient(wifiServer, serverClients)){
+  if (handleNewClient(wifiServer, serverClients)) {
     enableTX();
   }
-  if (handleNewClient(wifiServerEnh, enhClients)){
+
+  if (handleNewClient(wifiServerEnh, enhClients)) {
     enableTX();
   }
 
   handleNewClient(wifiServerRO, serverClientsRO);
-
 }
