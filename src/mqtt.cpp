@@ -6,7 +6,6 @@ AsyncMqttClient mqttClient;
 void onMqttConnect(bool sessionPresent)
 {
     mqttClient.subscribe("ebus/config/commands/#", 0);
-    mqttClient.subscribe("ebus/config/remove", 0);
     mqttClient.subscribe("ebus/config/list", 0);
 }
 
@@ -26,11 +25,16 @@ void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties 
 {
     String tmp = String(topic);
     if (tmp.startsWith("ebus/config/commands/"))
-        schedule.insertCommand(payload);
-    else if (tmp.equals("ebus/config/remove"))
-        schedule.removeCommand(payload);
+    {
+        if (String(payload).length() > 0)
+            schedule.insertCommand(payload);
+        else
+            schedule.removeCommand(topic);
+    }
     else if (tmp.equals("ebus/config/list"))
+    {
         schedule.publishCommands();
+    }
 }
 
 void onMqttPublish(uint16_t packetId)

@@ -18,6 +18,8 @@ struct Command
     size_t position;         // starting position of the value in the response
     ebus::Datatype datatype; // ebus datatype
     std::string topic;       // mqtt topic
+    bool ha;                 // home assistant support for auto discovery
+    std::string ha_class;    // home assistant device_class
 };
 
 class Schedule
@@ -30,7 +32,8 @@ public:
     void setDistance(const uint8_t distance);
 
     void insertCommand(const char *payload);
-    void removeCommand(const char *payload);
+    void removeCommand(const char *topic);
+
     void publishCommands() const;
 
     bool needTX();
@@ -59,6 +62,9 @@ private:
     unsigned long lastCommand = 0;
 
     bool initDone = false;
+
+    void publishCommand(const char *key, bool remove) const;
+    void publishHomeAssistant(const char *key, bool remove) const;
 
     const std::vector<uint8_t> nextCommand();
 

@@ -23,7 +23,19 @@ void Schedule::setDistance(const uint8_t distance)
     distanceCommands = distance * 1000;
 }
 
-// payload {"command":"08b509030d0600","unit":"°C","interval":60,"position":1,"datatype":"DATA2c","topic":"ebus/values/Aussentemperatur"}
+// payload - optional parameter: unit, ha_class
+//
+// example:
+// {
+//   "command": "08b509030d0600",
+//   "unit": "°C",
+//   "interval": 60,
+//   "position": 1,
+//   "datatype": "DATA2c",
+//   "topic": "Aussentemperatur",
+//   "ha": true,
+//   "ha_class": "temperature"
+// }
 void Schedule::insertCommand(const char *payload)
 {
     JsonDocument doc;
@@ -46,39 +58,38 @@ void Schedule::insertCommand(const char *payload)
         command.position = doc["position"].as<size_t>();
         command.datatype = ebus::string2datatype(doc["datatype"].as<const char *>());
         command.topic = doc["topic"].as<std::string>();
+        command.ha = doc["ha"].as<bool>();
+        command.ha_class = doc["ha_class"].as<std::string>();
 
         commands[command.command] = command;
 
-        publishCommands();
+        publishCommand(command.command.c_str(), false);
+
+        if (command.ha)
+            publishHomeAssistant(command.command.c_str(), false);
     }
 }
 
-// payload {"command":"08b509030d0600"}
-void Schedule::removeCommand(const char *payload)
+void Schedule::removeCommand(const char *topic)
 {
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, payload);
+    std::string tmp = topic;
+    std::string key(tmp.substr(tmp.rfind("/") + 1));
 
-    if (error)
+    const auto command = commands.find(key);
+    if (command != commands.end())
     {
-        std::string err = "DeserializationError ";
-        err += error.c_str();
-        mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+        publishCommand(key.c_str(), true);
+
+        if (command->second.ha)
+            publishHomeAssistant(key.c_str(), true);
+
+        if (commands.erase(key))
+            publishCommands();
     }
     else
     {
-        std::string command = doc["command"].as<std::string>();
-        if (commands.erase(command))
-        {
-            std::string topic = "ebus/config/installed/" + command;
-            mqttClient.publish(topic.c_str(), 0, false, "");
-            publishCommands();
-        }
-        else
-        {
-            std::string err = command + " not found";
-            mqttClient.publish("ebus/config/error", 0, false, err.c_str());
-        }
+        std::string err = key + " not found";
+        mqttClient.publish("ebus/config/error", 0, false, err.c_str());
     }
 }
 
@@ -87,23 +98,7 @@ void Schedule::publishCommands() const
     if (commands.size() > 0)
     {
         for (const auto &command : commands)
-        {
-            JsonDocument doc;
-
-            doc["command"] = command.second.command;
-            doc["unit"] = command.second.unit;
-            doc["interval"] = command.second.interval;
-            doc["position"] = command.second.position;
-            doc["datatype"] = ebus::datatype2string(command.second.datatype);
-            doc["topic"] = command.second.topic;
-
-            std::string payload;
-            serializeJson(doc, payload);
-
-            std::string topic = "ebus/config/installed/" + command.first;
-
-            mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
-        }
+            publishCommand(command.first.c_str(), false);
     }
     else
     {
@@ -218,6 +213,67 @@ void Schedule::publishCounters()
     initCounters = false;
 }
 
+void Schedule::publishCommand(const char *key, bool remove) const
+{
+    const auto command = commands.find(std::string(key));
+    if (command != commands.end())
+    {
+        std::string topic = "ebus/config/installed/" + command->first;
+
+        std::string payload;
+
+        if (!remove)
+        {
+            JsonDocument doc;
+
+            doc["command"] = command->second.command;
+            doc["unit"] = command->second.unit;
+            doc["interval"] = command->second.interval;
+            doc["position"] = command->second.position;
+            doc["datatype"] = ebus::datatype2string(command->second.datatype);
+            doc["topic"] = command->second.topic;
+            doc["ha"] = command->second.ha;
+            doc["ha_class"] = command->second.ha_class;
+
+            serializeJson(doc, payload);
+        }
+
+        mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
+    }
+}
+
+void Schedule::publishHomeAssistant(const char *key, bool remove) const
+{
+    const auto command = commands.find(std::string(key));
+    if (command != commands.end())
+    {
+        std::string name = command->second.topic;
+        std::replace(name.begin(), name.end(), '/', '_');
+
+        std::string topic = "homeassistant/sensor/ebus/" + name + "/config";
+
+        std::string payload;
+
+        if (!remove)
+        {
+            JsonDocument doc;
+
+            doc["name"] = name;
+            if (command->second.ha_class.compare("null") != 0 && command->second.ha_class.length() > 0)
+                doc["device_class"] = command->second.ha_class;
+            doc["state_topic"] = "ebus/values/" + command->second.topic;
+            if (command->second.unit.compare("null") != 0 && command->second.unit.length() > 0)
+                doc["unit_of_measurement"] = command->second.unit;
+            doc["unique_id"] = command->first;
+            doc["value_template"] = "{{value_json.value}}";
+
+            serializeJson(doc, payload);
+        }
+
+        mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+    }
+}
+
 const std::vector<uint8_t> Schedule::nextCommand()
 {
     if (!initDone)
@@ -313,12 +369,10 @@ void Schedule::processResponse(const std::vector<uint8_t> vec)
         break;
     }
 
-    doc["unit"] = actCommand->unit;
-    doc["interval"] = actCommand->interval;
-    doc["last"] = actCommand->last / 1000;
-
     std::string payload;
     serializeJson(doc, payload);
 
-    mqttClient.publish(actCommand->topic.c_str(), 0, true, payload.c_str());
+    std::string topic = "ebus/values/" + actCommand->topic;
+
+    mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 }
