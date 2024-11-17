@@ -36,6 +36,10 @@ ESP8266HTTPUpdateServer httpUpdater;
 #define DEFAULT_PASS "lectronz"
 #define DEFAULT_APMODE_PASS "ebusebus"
 
+#define DEFAULT_STATIC_IP "192.168.1.180"
+#define DEFAULT_GATEWAY "192.168.1.1"
+#define DEFAULT_NETMASK "255.255.255.0"
+
 #define STRING_LEN 64
 #define NUMBER_LEN 8
 
@@ -48,6 +52,11 @@ DNSServer dnsServer;
 WebServer configServer(80);
 
 char pwm_value[NUMBER_LEN];
+
+char staticIPValue[STRING_LEN];
+char ipAddressValue[STRING_LEN];
+char gatewayValue[STRING_LEN];
+char netmaskValue[STRING_LEN];
 
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
@@ -65,8 +74,14 @@ char mqtt_pass[STRING_LEN];
 
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
 
+IotWebConfParameterGroup connGroup = IotWebConfParameterGroup("conn", "Connection parameters");
+IotWebConfCheckboxParameter staticIPParam = IotWebConfCheckboxParameter("Enable Static IP", "staticIPParam", staticIPValue, STRING_LEN);
+IotWebConfTextParameter ipAddressParam = IotWebConfTextParameter("IP address", "ipAddress", ipAddressValue, STRING_LEN, "", DEFAULT_STATIC_IP);
+IotWebConfTextParameter gatewayParam = IotWebConfTextParameter("Gateway", "gateway", gatewayValue, STRING_LEN, "", DEFAULT_GATEWAY);
+IotWebConfTextParameter netmaskParam = IotWebConfTextParameter("Subnet mask", "netmask", netmaskValue, STRING_LEN, DEFAULT_NETMASK, DEFAULT_NETMASK);
+
 IotWebConfParameterGroup ebusGroup = IotWebConfParameterGroup("ebus", "EBUS configuration");
-IotWebConfNumberParameter pwmValueParam = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN, "130", "1..255", "min='1' max='255' step='1'");
+IotWebConfNumberParameter pwmParam = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN, "130", "1..255", "min='1' max='255' step='1'");
 IotWebConfSelectParameter ebusAddressParam = IotWebConfSelectParameter("EBUS address", "ebus_address", ebus_address, NUMBER_LEN, (char*)ebus_address_values, (char*)ebus_address_names, sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
 IotWebConfNumberParameter commandDistanceParam = IotWebConfNumberParameter("Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1", "0..60", "min='0' max='60' step='1'");
 
@@ -74,6 +89,10 @@ IotWebConfParameterGroup mqttGroup = IotWebConfParameterGroup("mqtt", "MQTT conf
 IotWebConfTextParameter mqttServerParam = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "", "server.lan");
 IotWebConfTextParameter mqttUserParam = IotWebConfTextParameter("MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", "roger");
 IotWebConfPasswordParameter mqttPasswordParam = IotWebConfPasswordParameter("MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", "password");
+
+IPAddress ipAddress;
+IPAddress gateway;
+IPAddress netmask;
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -303,6 +322,21 @@ void data_loop(void *pvParameters) {
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   bool valid = true;
 
+  if (staticIPParam.isChecked()) {  
+    if (!ipAddress.fromString(webRequestWrapper->arg(ipAddressParam.getId()))) {
+      ipAddressParam.errorMessage = "Please provide a valid IP address!";
+      valid = false;
+    }
+    if (!netmask.fromString(webRequestWrapper->arg(netmaskParam.getId()))) {
+      netmaskParam.errorMessage = "Please provide a valid netmask!";
+      valid = false;
+    }
+    if (!gateway.fromString(webRequestWrapper->arg(gatewayParam.getId()))) {
+      gatewayParam.errorMessage = "Please provide a valid gateway address!";
+      valid = false;
+    }
+  } 
+
   if (webRequestWrapper->arg(mqttServerParam.getId()).length() > STRING_LEN - 1) {
     String tmp = "max. ";
     tmp += String(STRING_LEN);
@@ -324,6 +358,20 @@ void saveParamsCallback () {
 
   if (mqtt_user[0] != '\0')
     mqttClient.setCredentials(mqtt_user, mqtt_pass);
+}
+
+void connectWifi(const char* ssid, const char* password) {
+  if (staticIPParam.isChecked()) {
+    bool valid = true;
+    valid = valid && ipAddress.fromString(String(ipAddressValue));
+    valid = valid && netmask.fromString(String(netmaskValue));
+    valid = valid && gateway.fromString(String(gatewayValue));
+    
+    if (valid)  
+      WiFi.config(ipAddress, gateway, netmask);
+  }
+ 
+  WiFi.begin(ssid, password);
 }
 
 char* status_string() {
@@ -513,6 +561,7 @@ void setup() {
   if (preferences.getBool("firstboot", true)) {
     preferences.putBool("firstboot", false);
     
+    
     iotWebConf.init();
     strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
@@ -524,7 +573,12 @@ void setup() {
     iotWebConf.skipApStartup();
   }
 
-  ebusGroup.addItem(&pwmValueParam);
+  connGroup.addItem(&staticIPParam);  
+  connGroup.addItem(&ipAddressParam);
+  connGroup.addItem(&gatewayParam);
+  connGroup.addItem(&netmaskParam);
+
+  ebusGroup.addItem(&pwmParam);
   ebusGroup.addItem(&ebusAddressParam);
   ebusGroup.addItem(&commandDistanceParam);
 
@@ -532,12 +586,14 @@ void setup() {
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
 
+  iotWebConf.addParameterGroup(&connGroup);
   iotWebConf.addParameterGroup(&ebusGroup);
   iotWebConf.addParameterGroup(&mqttGroup);
   iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
   iotWebConf.setWifiConnectionTimeoutMs(7000);
+  iotWebConf.setWifiConnectionHandler(&connectWifi);
   iotWebConf.setWifiConnectionCallback(&wifiConnected);
 
 #ifdef STATUS_LED_PIN
@@ -586,7 +642,6 @@ void setup() {
 
   ArduinoOTA.begin();
 
-  MDNS.end();
   MDNS.begin(HOSTNAME);
 
   wdt_start();
