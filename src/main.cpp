@@ -33,6 +33,13 @@ Preferences preferences;
 #define DEFAULT_PASS "lectronz"
 #define DEFAULT_APMODE_PASS "ebusebus"
 
+#define DEFAULT_STATIC_IP "192.168.1.180"
+#define DEFAULT_GATEWAY "192.168.1.1"
+#define DEFAULT_NETMASK "255.255.255.0"
+
+#define STRING_LEN 64
+#define NUMBER_LEN 8
+
 #ifdef ESP32
 TaskHandle_t Task1;
 #endif
@@ -40,9 +47,26 @@ TaskHandle_t Task1;
 #define CONFIG_VERSION "eea"
 DNSServer dnsServer;
 WebServer configServer(80);
-char pwm_value_string[8];
+
+char pwm_value[NUMBER_LEN];
+
+char staticIPValue[STRING_LEN];
+char ipAddressValue[STRING_LEN];
+char gatewayValue[STRING_LEN];
+char netmaskValue[STRING_LEN];
+
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
-IotWebConfNumberParameter pwm_value_param = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value_string, 8, "130", "1..255", "min='1' max='255' step='1'");
+IotWebConfNumberParameter pwmParam = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN, "130", "1..255", "min='1' max='255' step='1'");
+
+IotWebConfParameterGroup connGroup = IotWebConfParameterGroup("conn", "Connection parameters");
+IotWebConfCheckboxParameter staticIPParam = IotWebConfCheckboxParameter("Enable Static IP", "staticIPParam", staticIPValue, STRING_LEN);
+IotWebConfTextParameter ipAddressParam = IotWebConfTextParameter("IP address", "ipAddress", ipAddressValue, STRING_LEN, "", DEFAULT_STATIC_IP);
+IotWebConfTextParameter gatewayParam = IotWebConfTextParameter("Gateway", "gateway", gatewayValue, STRING_LEN, "", DEFAULT_GATEWAY);
+IotWebConfTextParameter netmaskParam = IotWebConfTextParameter("Subnet mask", "netmask", netmaskValue, STRING_LEN, DEFAULT_NETMASK, DEFAULT_NETMASK);
+
+IPAddress ipAddress;
+IPAddress gateway;
+IPAddress netmask;
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -67,13 +91,6 @@ int random_ch(){
   return ESP8266TrueRandom.random(1, 13);
 #endif
 }
-
-#ifdef ESP32
-void on_connected(WiFiEvent_t event, WiFiEventInfo_t info){
-  lastConnectTime = millis();
-  reconnectCount++;
-}
-#endif
 
 void wdt_start() {
 #ifdef ESP32
@@ -197,16 +214,48 @@ void data_loop(void * pvParameters){
   }
 }
 
+bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
+  bool valid = true;
+
+  if (staticIPParam.isChecked()) {  
+    if (!ipAddress.fromString(webRequestWrapper->arg(ipAddressParam.getId()))) {
+      ipAddressParam.errorMessage = "Please provide a valid IP address!";
+      valid = false;
+    }
+    if (!netmask.fromString(webRequestWrapper->arg(netmaskParam.getId()))) {
+      netmaskParam.errorMessage = "Please provide a valid netmask!";
+      valid = false;
+    }
+    if (!gateway.fromString(webRequestWrapper->arg(gatewayParam.getId()))) {
+      gatewayParam.errorMessage = "Please provide a valid gateway address!";
+      valid = false;
+    }
+  } 
+
+  return valid;
+}
 
 void saveParamsCallback () {
+  set_pwm(atoi(pwm_value));
+}
 
-  uint8_t new_pwm_value = atoi(pwm_value_string);
-  if (new_pwm_value > 0){
-    set_pwm(new_pwm_value);
-    preferences.putUInt("pwm_value", new_pwm_value);
+void connectWifi(const char* ssid, const char* password) {
+  if (staticIPParam.isChecked()) {
+    bool valid = true;
+    valid = valid && ipAddress.fromString(String(ipAddressValue));
+    valid = valid && netmask.fromString(String(netmaskValue));
+    valid = valid && gateway.fromString(String(gatewayValue));
+    
+    if (valid)  
+      WiFi.config(ipAddress, gateway, netmask);
   }
-  DebugSer.printf("pwm_value set: %s %d\n", pwm_value_string, new_pwm_value);
+ 
+  WiFi.begin(ssid, password);
+}
 
+void wifiConnected() {
+  lastConnectTime = millis();
+  reconnectCount++;
 }
 
 char* status_string(){
@@ -290,35 +339,34 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  set_pwm(preferences.getUInt("pwm_value", 130));
-
   if (preferences.getBool("firstboot", true)){
     preferences.putBool("firstboot", false);
+    
     iotWebConf.init();
     strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz", IOTWEBCONF_WORD_LEN);
     iotWebConf.saveConfig();
-  } else {
+
+    WiFi.channel(random_ch()); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
+  } 
+  else {
     iotWebConf.skipApStartup();
   }
 
-#ifdef ESP32
-  WiFi.onEvent(on_connected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
-#endif
+  connGroup.addItem(&staticIPParam);  
+  connGroup.addItem(&ipAddressParam);
+  connGroup.addItem(&gatewayParam);
+  connGroup.addItem(&netmaskParam);
 
-#ifdef ESP8266
-  WiFi.setAutoReconnect(true);
-#endif  
-
-  int wifi_ch = random_ch();
-  DebugSer.printf("Channel for AP mode: %d\n", wifi_ch);
-  WiFi.channel(wifi_ch); // doesn't work, https://github.com/prampec/IotWebConf/issues/286
-
-  iotWebConf.addSystemParameter(&pwm_value_param);
+  iotWebConf.addSystemParameter(&pwmParam);
+  iotWebConf.addParameterGroup(&connGroup);
+  iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
   iotWebConf.setWifiConnectionTimeoutMs(7000);
+  iotWebConf.setWifiConnectionHandler(&connectWifi);
+  iotWebConf.setWifiConnectionCallback(&wifiConnected);
 
 #ifdef STATUS_LED_PIN
   iotWebConf.setStatusPin(STATUS_LED_PIN);
@@ -338,6 +386,8 @@ void setup() {
     [](const char* updatePath) { httpUpdater.setup(&configServer, updatePath); },
     [](const char* userName, char* password) { httpUpdater.updateCredentials(userName, password); });
 
+  set_pwm(atoi(pwm_value));
+
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
       iotWebConf.doLoop();
   }
@@ -349,7 +399,6 @@ void setup() {
 
   ArduinoOTA.begin();
 
-  MDNS.end();
   MDNS.begin(HOSTNAME);
 
   wdt_start();
@@ -389,16 +438,6 @@ void loop() {
 #ifdef ESP32
   iotWebConf.doLoop();
 #endif
-
-  if (WiFi.status() != WL_CONNECTED) {
-    lastConnectTime = 0;
-  }
-  else {
-    if (lastConnectTime == 0) {
-      lastConnectTime = millis();
-      reconnectCount++;
-    }
-  }
 
   if (millis() > last_comms + 200*1000 ) {
     reset();
