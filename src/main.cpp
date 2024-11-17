@@ -71,9 +71,9 @@ IotWebConfSelectParameter ebusAddressParam = IotWebConfSelectParameter("EBUS add
 IotWebConfNumberParameter commandDistanceParam = IotWebConfNumberParameter("Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1", "0..60", "min='0' max='60' step='1'");
 
 IotWebConfParameterGroup mqttGroup = IotWebConfParameterGroup("mqtt", "MQTT configuration");
-IotWebConfTextParameter mqttServerParam = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "text", nullptr, "server.lan");
-IotWebConfTextParameter mqttUserParam = IotWebConfTextParameter("MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "text", nullptr, "roger");
-IotWebConfPasswordParameter mqttPasswordParam = IotWebConfPasswordParameter("MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "text", nullptr, "password");
+IotWebConfTextParameter mqttServerParam = IotWebConfTextParameter("MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "", "server.lan");
+IotWebConfTextParameter mqttUserParam = IotWebConfTextParameter("MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", "roger");
+IotWebConfPasswordParameter mqttPasswordParam = IotWebConfPasswordParameter("MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", "password");
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
