@@ -46,27 +46,23 @@ WebServer configServer(80);
 
 char pwm_value[NUMBER_LEN];
 
-char static_value[STRING_LEN];
-char ip_value[STRING_LEN];
-char netmask_value[STRING_LEN];
-char gateway_value[STRING_LEN];
-char dns_value[STRING_LEN];
-
+char staticIPValue[STRING_LEN];
+char ipAddressValue[STRING_LEN];
+char gatewayValue[STRING_LEN];
+char netmaskValue[STRING_LEN];
 
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
-IotWebConfNumberParameter pwmValueParam = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN, "130", "1..255", "min='1' max='255' step='1'");
+IotWebConfNumberParameter pwmParam = IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN, "130", "1..255", "min='1' max='255' step='1'");
 
-IotWebConfParameterGroup netGroup = IotWebConfParameterGroup("net", "Network");
-IotWebConfCheckboxParameter staticParam = IotWebConfCheckboxParameter("Static IP", "static_value", static_value, STRING_LEN,  false);
-IotWebConfTextParameter ipParam = IotWebConfTextParameter("IP address", "ip_value", ip_value, STRING_LEN, nullptr, "192.168.1.9");
-IotWebConfTextParameter netmaskParam = IotWebConfTextParameter("Subnet mask", "netmask_value", netmask_value, STRING_LEN, nullptr, "255.255.255.0");
-IotWebConfTextParameter gatewayParam = IotWebConfTextParameter("Gateway", "gateway_value", gateway_value, STRING_LEN, nullptr, "192.168.1.1");
-IotWebConfTextParameter dnsParam = IotWebConfTextParameter("DNS Server", "dns_value", dns_value, STRING_LEN, nullptr, "192.168.1.1");
+IotWebConfParameterGroup connGroup = IotWebConfParameterGroup("conn", "Connection parameters");
+IotWebConfCheckboxParameter staticIPParam = IotWebConfCheckboxParameter("Enable Static IP", "staticIPParam", staticIPValue, STRING_LEN);
+IotWebConfTextParameter ipAddressParam = IotWebConfTextParameter("IP address", "ipAddress", ipAddressValue, STRING_LEN, "", "192.168.1.180");
+IotWebConfTextParameter gatewayParam = IotWebConfTextParameter("Gateway", "gateway", gatewayValue, STRING_LEN, "", "192.168.1.1");
+IotWebConfTextParameter netmaskParam = IotWebConfTextParameter("Subnet mask", "netmask", netmaskValue, STRING_LEN, "255.255.255.0", "255.255.255.0");
 
 IPAddress ipAddress;
-IPAddress netmask;
 IPAddress gateway;
-IPAddress dns;
+IPAddress netmask;
 
 WiFiServer wifiServer(3333);
 WiFiServer wifiServerRO(3334);
@@ -215,24 +211,20 @@ void data_loop(void * pvParameters) {
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   bool valid = true;
 
-  if (staticParam.isChecked()) {
-    if (!ipAddress.fromString(webRequestWrapper->arg(ipParam.getId()))) {
-      ipParam.errorMessage = "Please provide a valid IP address!";
+  if (staticIPParam.isChecked()) {  
+    if (!ipAddress.fromString(webRequestWrapper->arg(ipAddressParam.getId()))) {
+      ipAddressParam.errorMessage = "Please provide a valid IP address!";
       valid = false;
     }
     if (!netmask.fromString(webRequestWrapper->arg(netmaskParam.getId()))) {
-      netmaskParam.errorMessage = "Please provide a valid Subnet mask!";
+      netmaskParam.errorMessage = "Please provide a valid netmask!";
       valid = false;
     }
     if (!gateway.fromString(webRequestWrapper->arg(gatewayParam.getId()))) {
-      gatewayParam.errorMessage = "Please provide a valid Gateway address!";
+      gatewayParam.errorMessage = "Please provide a valid gateway address!";
       valid = false;
     }
-    if (!dns.fromString(webRequestWrapper->arg(dnsParam.getId()))) {
-      dnsParam.errorMessage = "Please provide a valid DNS address!";
-      valid = false;
-    }
-  }
+  } 
 
   return valid;
 }
@@ -242,22 +234,16 @@ void saveParamsCallback () {
 }
 
 void connectWifi(const char* ssid, const char* password) {
-  bool needMDNS = false;
-
-  if (staticParam.isChecked()) {
-    ipAddress.fromString(String(ip_value));
-    netmask.fromString(String(netmask_value));
-    gateway.fromString(String(gateway_value));
-    dns.fromString(String(dns_value));
-
-    needMDNS = !WiFi.config(ipAddress, gateway, netmask, dns);
+  if (staticIPParam.isChecked()) {
+    bool valid = true;
+    valid = valid && ipAddress.fromString(String(ipAddressValue));
+    valid = valid && netmask.fromString(String(netmaskValue));
+    valid = valid && gateway.fromString(String(gatewayValue));
+    
+    if (valid)  
+      WiFi.config(ipAddress, gateway, netmask);
   }
-
-  if (!staticParam.isChecked() || needMDNS) {
-    MDNS.end();
-    MDNS.begin(HOSTNAME);
-  }
-  
+ 
   WiFi.begin(ssid, password);
 }
 
@@ -373,14 +359,13 @@ void setup() {
     iotWebConf.skipApStartup();
   }
 
-  netGroup.addItem(&staticParam);
-  netGroup.addItem(&ipParam);
-  netGroup.addItem(&netmaskParam);
-  netGroup.addItem(&gatewayParam);
-  netGroup.addItem(&dnsParam);
+  connGroup.addItem(&staticIPParam);  
+  connGroup.addItem(&ipAddressParam);
+  connGroup.addItem(&gatewayParam);
+  connGroup.addItem(&netmaskParam);
 
-  iotWebConf.addSystemParameter(&pwmValueParam);
-  iotWebConf.addParameterGroup(&netGroup);
+  iotWebConf.addSystemParameter(&pwmParam);
+  iotWebConf.addParameterGroup(&connGroup);
   iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
@@ -419,6 +404,8 @@ void setup() {
 
   ArduinoOTA.begin();
 
+  MDNS.begin(HOSTNAME);
+
   wdt_start();
 
   last_comms = millis();
@@ -432,9 +419,7 @@ void loop() {
   ArduinoOTA.handle();
 
 #ifdef ESP8266
-  if (!staticParam.isChecked())
-    MDNS.update();
-  
+  MDNS.update();
   data_process();
 #endif
 
