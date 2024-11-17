@@ -33,6 +33,10 @@ ESP8266HTTPUpdateServer httpUpdater;
 #define DEFAULT_PASS "lectronz"
 #define DEFAULT_APMODE_PASS "ebusebus"
 
+#define DEFAULT_STATIC_IP "192.168.1.180"
+#define DEFAULT_GATEWAY "192.168.1.1"
+#define DEFAULT_NETMASK "255.255.255.0"
+
 #define STRING_LEN 64
 #define NUMBER_LEN 8
 
@@ -56,9 +60,9 @@ IotWebConfNumberParameter pwmParam = IotWebConfNumberParameter("PWM value", "pwm
 
 IotWebConfParameterGroup connGroup = IotWebConfParameterGroup("conn", "Connection parameters");
 IotWebConfCheckboxParameter staticIPParam = IotWebConfCheckboxParameter("Enable Static IP", "staticIPParam", staticIPValue, STRING_LEN);
-IotWebConfTextParameter ipAddressParam = IotWebConfTextParameter("IP address", "ipAddress", ipAddressValue, STRING_LEN, "", "192.168.1.180");
-IotWebConfTextParameter gatewayParam = IotWebConfTextParameter("Gateway", "gateway", gatewayValue, STRING_LEN, "", "192.168.1.1");
-IotWebConfTextParameter netmaskParam = IotWebConfTextParameter("Subnet mask", "netmask", netmaskValue, STRING_LEN, "255.255.255.0", "255.255.255.0");
+IotWebConfTextParameter ipAddressParam = IotWebConfTextParameter("IP address", "ipAddress", ipAddressValue, STRING_LEN, "", DEFAULT_STATIC_IP);
+IotWebConfTextParameter gatewayParam = IotWebConfTextParameter("Gateway", "gateway", gatewayValue, STRING_LEN, "", DEFAULT_GATEWAY);
+IotWebConfTextParameter netmaskParam = IotWebConfTextParameter("Subnet mask", "netmask", netmaskValue, STRING_LEN, DEFAULT_NETMASK, DEFAULT_NETMASK);
 
 IPAddress ipAddress;
 IPAddress gateway;
