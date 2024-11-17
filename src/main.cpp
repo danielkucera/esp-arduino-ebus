@@ -9,18 +9,18 @@
 Preferences preferences;
 
 #ifdef ESP32
-#include <esp_task_wdt.h>
-#include <ESPmDNS.h>
-#include "esp32c3/rom/rtc.h"
-#include <IotWebConfESP32HTTPUpdateServer.h>
+  #include <esp_task_wdt.h>
+  #include <ESPmDNS.h>
+  #include "esp32c3/rom/rtc.h"
+  #include <IotWebConfESP32HTTPUpdateServer.h>
 
-HTTPUpdateServer httpUpdater;
+  HTTPUpdateServer httpUpdater;
 #else
-#include <ESP8266mDNS.h>
-#include <ESP8266TrueRandom.h>
-#include <ESP8266HTTPUpdateServer.h>
+  #include <ESP8266mDNS.h>
+  #include <ESP8266TrueRandom.h>
+  #include <ESP8266HTTPUpdateServer.h>
 
-ESP8266HTTPUpdateServer httpUpdater;
+  ESP8266HTTPUpdateServer httpUpdater;
 #endif
 
 #define ALPHA 0.3
@@ -84,10 +84,10 @@ unsigned long maxLoopDuration = 0;
 unsigned long lastConnectTime = 0;
 int reconnectCount = 0;
 
-int random_ch() {
+int random_ch(){
 #ifdef ESP32
-  return esp_random() % 13 + 1;
-#else
+  return esp_random() % 13 + 1 ;
+#elif defined(ESP8266)
   return ESP8266TrueRandom.random(1, 13);
 #endif
 }
@@ -95,7 +95,7 @@ int random_ch() {
 void wdt_start() {
 #ifdef ESP32
   esp_task_wdt_init(6, true);
-#else
+#elif defined(ESP8266)
   ESP.wdtDisable();
 #endif
 }
@@ -103,8 +103,10 @@ void wdt_start() {
 void wdt_feed() {
 #ifdef ESP32
   esp_task_wdt_reset();
-#else
+#elif defined(ESP8266)
   ESP.wdtFeed();
+#else
+#error UNKNOWN PLATFORM
 #endif
 }
 
@@ -121,20 +123,20 @@ inline void enableTX() {
 #endif
 }
 
-void set_pwm(uint8_t value) {
+void set_pwm(uint8_t value){
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
 #endif
 }
 
-uint32_t get_pwm() {
+uint32_t get_pwm(){
 #ifdef PWM_PIN
   return ledcRead(PWM_CHANNEL);
 #endif
   return 0;
 }
 
-void reset() {
+void reset(){
   disableTX();
   ESP.restart();
 }
@@ -148,8 +150,8 @@ void check_reset() {
   // check if RESET_PIN being hold low and reset
   pinMode(RESET_PIN, INPUT_PULLUP);
   unsigned long resetStart = millis();
-  while (digitalRead(RESET_PIN) == 0) {
-    if (millis() > resetStart + RESET_MS) {
+  while(digitalRead(RESET_PIN) == 0){
+    if (millis() > resetStart + RESET_MS){
       reset_config();
     }
   }
@@ -169,19 +171,19 @@ void loop_duration() {
   }
 }
 
-void data_process() {
+void data_process(){
   loop_duration();
 
-  // check clients for data
-  for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+  //check clients for data
+  for (int i = 0; i < MAX_SRV_CLIENTS; i++){
     handleClient(&serverClients[i]);
     handleEnhClient(&enhClients[i]);
   }
 
-  // check queue for data
+  //check queue for data
   BusType::data d;
   if (Bus.read(d)) {
-    for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+    for (int i = 0; i < MAX_SRV_CLIENTS; i++){
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
           if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
@@ -190,14 +192,14 @@ void data_process() {
         }
       }
       else {
-        if (pushClient(&serverClients[i], d._d)) {
+        if (pushClient(&serverClients[i], d._d)){
           last_comms = millis();
         }
-        if (pushClient(&serverClientsRO[i], d._d)) {
+        if (pushClient(&serverClientsRO[i], d._d)){
           last_comms = millis();
         }
         if (d._client != &enhClients[i]) {
-          if (pushEnhClient(&enhClients[i], d._c, d._d, d._logtoclient == &enhClients[i])) {
+          if (pushEnhClient(&enhClients[i], d._c, d._d, d._logtoclient == &enhClients[i])){
             last_comms = millis();
           }
         }
@@ -206,8 +208,8 @@ void data_process() {
   }
 }
 
-void data_loop(void * pvParameters) {
-  while (1) {
+void data_loop(void * pvParameters){
+  while(1){
     data_process();
   }
 }
@@ -286,11 +288,14 @@ char* status_string(){
   return status;
 }
 
-void handleStatus() {
+void handleStatus()
+{
   configServer.send(200, "text/plain", status_string());
 }
 
-void handleRoot() {
+
+void handleRoot()
+{
   // -- Let IotWebConf test and handle captive portal requests.
   if (iotWebConf.handleCaptivePortal())
   {
@@ -312,20 +317,6 @@ void handleRoot() {
   configServer.send(200, "text/html", s);
 }
 
-bool handleStatusServerRequests() {
-  if (!statusServer.hasClient())
-    return false;
-
-  WiFiClient client = statusServer.accept();
-
-  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.print(status_string());
-    client.flush();
-    client.stop();
-  }
-  return true;
-}
-
 void setup() {
   preferences.begin("esp-ebus", false);
 
@@ -333,7 +324,7 @@ void setup() {
 
 #ifdef ESP32
   last_reset_code = rtc_get_reset_reason(0);
-#else
+#elif defined(ESP8266)
   last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
   Bus.begin();
@@ -348,7 +339,7 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  if (preferences.getBool("firstboot", true)) {
+  if (preferences.getBool("firstboot", true)){
     preferences.putBool("firstboot", false);
     
     iotWebConf.init();
@@ -398,7 +389,7 @@ void setup() {
   set_pwm(atoi(pwm_value));
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine){
-    iotWebConf.doLoop();
+      iotWebConf.doLoop();
   }
 
   wifiServer.begin();
@@ -419,11 +410,26 @@ void setup() {
 #endif
 }
 
+bool handleStatusServerRequests() {
+  if (!statusServer.hasClient())
+    return false;
+
+  WiFiClient client = statusServer.accept();
+
+  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.print(status_string());
+    client.flush();
+    client.stop();
+  }
+  return true;
+}
+
 void loop() {
   ArduinoOTA.handle();
 
 #ifdef ESP8266
   MDNS.update();
+
   data_process();
 #endif
 
@@ -446,13 +452,13 @@ void loop() {
   }
 
   // Check if there are any new clients on the eBUS servers
-  if (handleNewClient(wifiServer, serverClients)) {
+  if (handleNewClient(wifiServer, serverClients)){
     enableTX();
   }
-
-  if (handleNewClient(wifiServerEnh, enhClients)) {
+  if (handleNewClient(wifiServerEnh, enhClients)){
     enableTX();
   }
 
   handleNewClient(wifiServerRO, serverClientsRO);
+
 }
