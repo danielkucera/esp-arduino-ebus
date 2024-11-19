@@ -99,7 +99,7 @@ This section lists adapter hardware revisions together with specifics for each o
 - RESET_PIN: TO-EBUS (GPIO20)
 - trimmer is replaced by PWM setting in web interface
 
-### v6.1
+### v6.1 and newer
 - firmware file: firmware-HW_v5.x.bin
 - RESET_PIN: TO-EBUS (GPIO20)
 - added missing via in v6.0
