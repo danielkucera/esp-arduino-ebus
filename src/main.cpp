@@ -382,13 +382,13 @@ char* status_string() {
   pos += sprintf(status + pos, "async_mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
   pos += sprintf(status + pos, "software_serial_mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
-  pos += sprintf(status + pos, "last_connect_time: %ld ms\n", mqttValues.last_connect);
+  pos += sprintf(status + pos, "last_connect_time: %lu ms\n", mqttValues.last_connect);
   pos += sprintf(status + pos, "reconnect_count: %d \n", mqttValues.reconnect_count);
   pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
   pos += sprintf(status + pos, "reset_code: %d\n", mqttValues.reset_code);
-  pos += sprintf(status + pos, "loop_duration: %ld us\r\n", mqttValues.loop_duration);
-  pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", mqttValues.loop_duration_max);
+  pos += sprintf(status + pos, "loop_duration: %lu us\r\n", mqttValues.loop_duration);
+  pos += sprintf(status + pos, "max_loop_duration: %lu us\r\n", mqttValues.loop_duration_max);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
   pos += sprintf(status + pos, "nbr_arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
   pos += sprintf(status + pos, "nbr_restarts1: %i\r\n", (int)Bus._nbrRestarts1);
@@ -399,7 +399,7 @@ char* status_string() {
   pos += sprintf(status + pos, "nbr_won2: %i\r\n", (int)Bus._nbrWon2);
   pos += sprintf(status + pos, "nbr_late: %i\r\n", (int)Bus._nbrLate);
   pos += sprintf(status + pos, "nbr_errors: %i\r\n", (int)Bus._nbrErrors);
-  pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
+  pos += sprintf(status + pos, "pwm_value: %u\r\n", get_pwm());
   pos += sprintf(status + pos, "ebus_address: %s\r\n", ebus_address);
   pos += sprintf(status + pos, "command_distance: %i\r\n", atoi(comand_distance));
   pos += sprintf(status + pos, "mqtt_server: %s\r\n", mqtt_server);
