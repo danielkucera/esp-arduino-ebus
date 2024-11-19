@@ -217,7 +217,7 @@ void data_loop(void * pvParameters){
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   bool valid = true;
 
-  if (staticIPParam.isChecked()) {  
+  if (webRequestWrapper->arg(staticIPParam.getId()).equals("selected")) {  
     if (!ipAddress.fromString(webRequestWrapper->arg(ipAddressParam.getId()))) {
       ipAddressParam.errorMessage = "Please provide a valid IP address!";
       valid = false;
