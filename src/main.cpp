@@ -561,7 +561,6 @@ void setup() {
   if (preferences.getBool("firstboot", true)) {
     preferences.putBool("firstboot", false);
     
-    
     iotWebConf.init();
     strncpy(iotWebConf.getApPasswordParameter()->valueBuffer, DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
     strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test", IOTWEBCONF_WORD_LEN);
