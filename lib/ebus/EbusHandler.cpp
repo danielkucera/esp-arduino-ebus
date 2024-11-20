@@ -28,11 +28,8 @@ ebus::EbusHandler::EbusHandler(const uint8_t source,
                                std::function<bool()> busReadyFunction,
                                std::function<void(const uint8_t byte)> busWriteFunction,
                                std::function<void(const std::vector<uint8_t> response)> responseFunction)
+    : address(source), busReadyCallback(busReadyFunction), busWriteCallback(busWriteFunction), responseCallback(responseFunction)
 {
-    address = source;
-    busReadyCallback = busReadyFunction;
-    busWriteCallback = busWriteFunction;
-    responseCallback = responseFunction;
 }
 
 void ebus::EbusHandler::setAddress(const uint8_t source)
