@@ -35,6 +35,7 @@ public:
     void removeCommand(const char *topic);
 
     void publishCommands() const;
+    const char *printCommands() const;
 
     bool needTX();
 

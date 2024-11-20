@@ -106,6 +106,34 @@ void Schedule::publishCommands() const
     }
 }
 
+const char *Schedule::printCommands() const
+{
+    std::string payload;
+
+    if (commands.size() > 0)
+    {
+        JsonDocument doc;
+
+        for (const auto &command : commands)
+        {
+            JsonObject obj = doc.add<JsonObject>();
+            obj["command"] = command.second.command;
+            obj["unit"] = command.second.unit;
+            obj["interval"] = command.second.interval;
+            obj["position"] = command.second.position;
+            obj["datatype"] = ebus::datatype2string(command.second.datatype);
+            obj["topic"] = command.second.topic;
+            obj["ha"] = command.second.ha;
+            obj["ha_class"] = command.second.ha_class;
+        }
+
+        doc.shrinkToFit();
+        serializeJson(doc, payload);
+    }
+
+    return payload.c_str();
+}
+
 bool Schedule::needTX()
 {
     return commands.size() > 0;

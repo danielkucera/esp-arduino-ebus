@@ -412,6 +412,10 @@ void handleStatus() {
   configServer.send(200, "text/plain", status_string());
 }
 
+void handleCommands() {
+  configServer.send(200, "application/json;charset=utf-8", schedule.printCommands());
+}
+
 void publishValues() {
 
   // ebus/device
@@ -510,6 +514,7 @@ void handleRoot() {
   s += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
+  s += "<a href='/commands'>Installed commands</a><br>";
   s += "<a href='/config'>Configuration</a> - user: admin password: your configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
   s += "<br>";
@@ -604,9 +609,10 @@ void setup() {
 
   // -- Set up required URL handlers on the web server.
   configServer.on("/", []{ handleRoot(); });
-  configServer.on("/config", []{ iotWebConf.handleConfig(); });
-  configServer.on("/param", []{ iotWebConf.handleConfig(); });
   configServer.on("/status", []{ handleStatus(); });
+  configServer.on("/commands", []{ handleCommands(); });
+  configServer.on("/config", []{ iotWebConf.handleConfig(); });
+
   configServer.onNotFound([](){ iotWebConf.handleNotFound(); });
 
   iotWebConf.setupUpdateServer(
