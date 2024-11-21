@@ -13,6 +13,7 @@ Preferences preferences;
   #include <ESPmDNS.h>
   #include "esp32c3/rom/rtc.h"
   #include <IotWebConfESP32HTTPUpdateServer.h>
+  #include <esp32-hal.h>
 
   HTTPUpdateServer httpUpdater;
 #else
@@ -258,39 +259,85 @@ void wifiConnected() {
   reconnectCount++;
 }
 
-char* status_string(){
-  static char status[1024];
+String get_last_error_str() {
+  String result;
+#ifdef ESP32
+  switch (last_reset_code)
+  {
+    case 0  : result = "Normal power On";break;
+    case 1  : result = "Vbat power on reset";break;
+    case 3  : result = "Software reset digital core";break;
+    case 4  : result = "Legacy watch dog reset digital core";break;
+    case 5  : result = "Deep Sleep reset digital core";break;
+    case 6  : result = "Reset by SLC module, reset digital core";break;
+    case 7  : result = "Timer Group0 Watch dog reset digital core";break;
+    case 8  : result = "Timer Group1 Watch dog reset digital core";break;
+    case 9  : result = "RTC Watch dog Reset digital core";break;
+    case 10 : result = "Intrusion tested to reset CPU";break;
+    case 11 : result = "Time Group0 reset CPU";break;
+    case 12 : result = "Software reset CPU";break;
+    case 13 : result = "RTC Watch dog Reset CPU";break;
+    case 14 : result = "for APP CPU, reseted by PRO CPU";break;
+    case 15 : result = "Reset when the vdd voltage is not stable";break;
+    case 16 : result = "RTC Watch dog reset digital core and rtc module";break;
+    case 17 : result = "Time Group1 reset CPU";break;
+    case 18 : result = "Super watchdog reset digital core and rtc module";break;
+    case 19 : result = "Glitch reset digital core and rtc module";break;
+    case 20 : result = "Efuse reset digital core";break;
+    case 21 : result = "USB uart reset digital core";break;
+    case 22 : result = "USB jtag reset digital core";break;
+    case 23 : result = "Power glitch reset digital core and rtc module";break;
+    default : result = "Unknown";
+  }
+#elif defined(ESP8266)
+  result = ESP.getResetReason();
+#endif
+  return result;
+}
 
-  int pos = 0;
+String status_string() {
+  String result;
 
-  pos += sprintf(status + pos, "async mode: %s\n", USE_ASYNCHRONOUS ? "true" : "false");
-  pos += sprintf(status + pos, "software serial mode: %s\n", USE_SOFTWARE_SERIAL ? "true" : "false");
-  pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
-  pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
-  pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
-  pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
-  pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
-  pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
-  pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
-  pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
-  pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
-  pos += sprintf(status + pos, "nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
-  pos += sprintf(status + pos, "nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
-  pos += sprintf(status + pos, "nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
-  pos += sprintf(status + pos, "nbr lost1: %i\r\n", (int)Bus._nbrLost1);
-  pos += sprintf(status + pos, "nbr lost2: %i\r\n", (int)Bus._nbrLost2);
-  pos += sprintf(status + pos, "nbr won1: %i\r\n", (int)Bus._nbrWon1);
-  pos += sprintf(status + pos, "nbr won2: %i\r\n", (int)Bus._nbrWon2);
-  pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
-  pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
-  pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
+  result += "firmware_version: " + String(AUTO_VERSION) + "\r\n";
+#ifdef ESP32
+  result += "esp32_chip_model: " + String(ESP.getChipModel()) + " Rev " + String(ESP.getChipRevision()) + "\r\n";
+  result += "esp32_chip_cores: " + String(ESP.getChipCores()) + "\r\n";
+  result += "esp32_chip_temperature: " + String(temperatureRead()) + " °C\r\n";
+#endif
+  result += "cpu_chip_speed: " + String(ESP.getCpuFreqMHz()) + " MHz\r\n";
+  result += "flash_chip_speed: " + String(ESP.getFlashChipSpeed()/1000000) + " MHz\r\n";
+  result += "flash_size: " + String(ESP.getFlashChipSize()/1024/1024) + " MB\r\n";
+  result += "free_heap: " + String(ESP.getFreeHeap()) + " B\r\n";
+  result += "sdk_version: " + String(ESP.getSdkVersion()) + "\r\n";
+  result += "wifi_sid: " + String(WiFi.SSID()) + "\r\n";
+  result += "wifi_ip_address: " + String(WiFi.localIP().toString()) + "\r\n";
+  result += "wifi_rssi: " + String(WiFi.RSSI()) + " dBm\r\n";
+  result += "async_mode: " + String(USE_ASYNCHRONOUS ? "true" : "false") + "\r\n";
+  result += "software_serial_mode: " + String(USE_SOFTWARE_SERIAL ? "true" : "false") + "\r\n";
+  result += "uptime: " + String(millis()/1000) + " s\r\n";
+  result += "last_connect_time: " + String(lastConnectTime) + " ms\r\n";
+  result += "reconnect_count: " + String(reconnectCount) + " \r\n";
+  result += "reset_code: " + String(last_reset_code) + "\r\n";
+  result += "reset_reason: " + String(get_last_error_str()) + "\r\n";
+  result += "loop_duration: " + String(loopDuration) + " µs\r\n";
+  result += "max_loop_duration: " + String(maxLoopDuration) + " µs\r\n";
+  result += "nbr_arbitrations: " + String((int)Bus._nbrArbitrations) + "\r\n";
+  result += "nbr_restarts1: " + String((int)Bus._nbrRestarts1) + "\r\n";
+  result += "nbr_restarts2: " + String((int)Bus._nbrRestarts2) + "\r\n";
+  result += "nbr_lost1: " + String((int)Bus._nbrLost1) + "\r\n";
+  result += "nbr_lost2: " + String((int)Bus._nbrLost2) + "\r\n";
+  result += "nbr_won1: " + String((int)Bus._nbrWon1) + "\r\n";
+  result += "nbr_won2: " + String((int)Bus._nbrWon2) + "\r\n";
+  result += "nbr_late: " + String((int)Bus._nbrLate) + "\r\n";
+  result += "nbr_errors: " + String((int)Bus._nbrErrors) + "\r\n";
+  result += "pwm_value: " + String(get_pwm()) + "\r\n";
 
-  return status;
+  return result;
 }
 
 void handleStatus()
 {
-  configServer.send(200, "text/plain", status_string());
+  configServer.send(200, "text/plain; charset=utf-8", status_string());
 }
 
 
@@ -325,7 +372,10 @@ void setup() {
 #ifdef ESP32
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
-  last_reset_code = (int) ESP.getResetInfoPtr();
+  struct rst_info *last_reset_ptr = ESP.getResetInfoPtr();
+  if (last_reset_ptr != NULL) {
+    last_reset_code = last_reset_ptr->reason;
+  }
 #endif
   Bus.begin();
 
