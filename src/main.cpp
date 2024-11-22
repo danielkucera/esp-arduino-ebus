@@ -140,7 +140,7 @@ struct MqttValues {
   uint32_t loop_duration = 0;
   uint32_t loop_duration_max = 0;
   uint32_t free_heap = 0;
-  int reset_code = -1;
+  uint32_t reset_code = -1;
 
   // ebus/device/ebus
   uint32_t pwm_value = 0;
@@ -617,7 +617,7 @@ void setup() {
 #ifdef ESP32
   mqttValues.reset_code = rtc_get_reset_reason(0);
 #else
-  mqttValues.reset_code = static_cast<int>(ESP.getResetInfoPtr());
+  mqttValues.reset_code = ESP.getResetInfoPtr()->reason;
 #endif
 
   Bus.begin();
