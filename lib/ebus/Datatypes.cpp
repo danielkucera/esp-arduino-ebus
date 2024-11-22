@@ -48,10 +48,6 @@ ebus::Datatype ebus::string2datatype(const char *str) {
                    })
           ->first;
 
-  // for (std::pair<ebus::Datatype, const char*> item : DatatypeName)
-  //    if (strcmp(str, item.second) == 0)
-  //       return item.first;
-
   return datatype;
 }
 
