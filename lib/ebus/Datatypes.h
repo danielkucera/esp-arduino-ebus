@@ -70,7 +70,7 @@ template <typename T>
 typename templateType<T>::type byte2int(const std::vector<uint8_t> &bytes) {
   T t;
   byte2int(t, bytes);
-  return (t);
+  return t;
 }
 
 template <typename T>
@@ -82,7 +82,7 @@ template <typename T>
 std::vector<uint8_t> int2byte(const T &t) {
   std::vector<uint8_t> bytes;
   int2byte(t, bytes);
-  return (bytes);
+  return bytes;
 }
 
 // helper functions
