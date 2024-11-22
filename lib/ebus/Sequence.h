@@ -17,69 +17,69 @@
  * along with ebus. If not, see http://www.gnu.org/licenses/.
  */
 
-// This class implements basic routines for sequence handling in accordance with the ebus specification,
-// in particular the reduction, extension and crc-calculation.
+// This class implements basic routines for sequence handling in accordance with
+// the ebus specification, in particular the reduction, extension and
+// crc-calculation.
 //
 // (reduced) 0xaa <-> 0xa9 0x01 (expanded)
 // (reduced) 0xa9 <-> 0xa9 0x00 (expanded)
 
-#ifndef EBUS_SEQUENCE_H
-#define EBUS_SEQUENCE_H
+#ifndef LIB_EBUS_SEQUENCE_H_
+#define LIB_EBUS_SEQUENCE_H_
 
 #include <stdint.h>
+
 #include <cstddef>
 #include <string>
 #include <vector>
 
-namespace ebus
-{
+namespace ebus {
 
-	static const uint8_t sym_zero = 0x00;	// zero byte
-	static const uint8_t sym_syn = 0xaa;	// synchronization byte
-	static const uint8_t sym_exp = 0xa9;	// expand byte
-	static const uint8_t sym_synexp = 0x01; // expanded synchronization byte
-	static const uint8_t sym_expexp = 0x00; // expanded expand byte
+static const uint8_t sym_zero = 0x00;    // zero byte
+static const uint8_t sym_syn = 0xaa;     // synchronization byte
+static const uint8_t sym_exp = 0xa9;     // expand byte
+static const uint8_t sym_synexp = 0x01;  // expanded synchronization byte
+static const uint8_t sym_expexp = 0x00;  // expanded expand byte
 
-	class Sequence
-	{
+class Sequence {
+ public:
+  Sequence() = default;
+  Sequence(const Sequence &seq, const size_t index, size_t len = 0);
 
-	public:
-		Sequence() = default;
-		Sequence(const Sequence &seq, const size_t index, size_t len = 0);
+  void assign(const std::vector<uint8_t> &vec, const bool extended = true);
 
-		void assign(const std::vector<uint8_t> &vec, const bool extended = true);
+  void push_back(const uint8_t byte, const bool extended = true);
 
-		void push_back(const uint8_t byte, const bool extended = true);
+  const uint8_t &operator[](const size_t index) const;
+  const std::vector<uint8_t> range(const size_t index, const size_t len) const;
 
-		const uint8_t &operator[](const size_t index) const;
-		const std::vector<uint8_t> range(const size_t index, const size_t len);
+  size_t size() const;
 
-		size_t size() const;
+  void clear();
 
-		void clear();
+  uint8_t crc();
 
-		uint8_t crc();
+  void extend();
+  void reduce();
 
-		void extend();
-		void reduce();
+  const std::string to_string() const;
+  const std::vector<uint8_t> &to_vector() const;
 
-		const std::string to_string() const;
-		const std::vector<uint8_t> to_vector() const;
+  static const std::vector<uint8_t> range(const std::vector<uint8_t> &vec,
+                                          const size_t index, const size_t len);
 
-		static const std::vector<uint8_t> range(const std::vector<uint8_t> &seq, const size_t index, const size_t len);
+  static const std::vector<uint8_t> to_vector(const std::string &str);
 
-		static const std::vector<uint8_t> to_vector(const std::string &str);
+  static const std::string to_string(const std::vector<uint8_t> &vec);
 
-		static const std::string to_string(const std::vector<uint8_t> &vec);
+ private:
+  std::vector<uint8_t> m_seq;
 
-	private:
-		std::vector<uint8_t> m_seq;
+  bool m_extended = false;
 
-		bool m_extended = false;
+  static uint8_t calc_crc(const uint8_t byte, const uint8_t init);
+};
 
-		uint8_t calc_crc(const uint8_t byte, const uint8_t init);
-	};
+}  // namespace ebus
 
-} // namespace ebus
-
-#endif // EBUS_SEQUENCE_H
+#endif  // LIB_EBUS_SEQUENCE_H_

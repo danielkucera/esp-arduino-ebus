@@ -18,92 +18,80 @@
  */
 
 #include "Statistics.h"
+
+#include <utility>
+
 #include "Datatypes.h"
 
-void ebus::Statistics::collect(const uint8_t byte)
-{
-    if (byte == ebus::sym_syn)
-    {
-        if (sequence.size() > 0)
-        {
-            counters.total++;
+void ebus::Statistics::collect(const uint8_t byte) {
+  if (byte == ebus::sym_syn) {
+    if (sequence.size() > 0) {
+      counters.total++;
 
-            ebus::Telegram tel(sequence);
+      ebus::Telegram tel(sequence);
 
-            if (tel.isValid())
-            {
-                counters.success++;
+      if (tel.isValid()) {
+        counters.success++;
 
-                if (tel.get_type() == ebus::Type::MS)
-                    counters.successMS++;
-                else if (tel.get_type() == ebus::Type::MM)
-                    counters.successMM++;
-                else if (tel.get_type() == ebus::Type::BC)
-                    counters.successBC++;
-            }
-            else
-            {
-                counters.failure++;
+        if (tel.get_type() == ebus::Type::MS)
+          counters.successMS++;
+        else if (tel.get_type() == ebus::Type::MM)
+          counters.successMM++;
+        else if (tel.get_type() == ebus::Type::BC)
+          counters.successBC++;
+      } else {
+        counters.failure++;
 
-                counters.failureMaster[tel.getMasterState()]++;
-                counters.failureSlave[tel.getSlaveState()]++;
-            }
+        counters.failureMaster[tel.getMasterState()]++;
+        counters.failureSlave[tel.getSlaveState()]++;
+      }
 
-            counters.successPercent = counters.success / (float)counters.total * 100.0f;
-            counters.failurePercent = counters.failure / (float)counters.total * 100.0f;
+      counters.successPercent =
+          counters.success / static_cast<float>(counters.total) * 100.0f;
+      counters.failurePercent =
+          counters.failure / static_cast<float>(counters.total) * 100.0f;
 
-            if (sequence.size() == 1 && sequence[0] == 0x00)
-            {
-                counters.special00++;
-            }
-            else if (sequence.size() >= 3 && sequence[2] == 0x07 && sequence[3] == 0x04)
-            {
-                if (sequence.size() > 6)
-                {
-                    counters.special0704Success++;
-                    // slaves[sequence[1]] = tel.getSlave();
-                }
-                else
-                {
-                    counters.special0704Failure++;
-                }
-            }
-
-            sequence.clear();
+      if (sequence.size() == 1 && sequence[0] == 0x00) {
+        counters.special00++;
+      } else if (sequence.size() >= 3 && sequence[2] == 0x07 &&
+                 sequence[3] == 0x04) {
+        if (sequence.size() > 6) {
+          counters.special0704Success++;
+          // slaves[sequence[1]] = tel.getSlave();
+        } else {
+          counters.special0704Failure++;
         }
+      }
+
+      sequence.clear();
     }
-    else
-    {
-        sequence.push_back(byte);
-    }
+  } else {
+    sequence.push_back(byte);
+  }
 }
 
-void ebus::Statistics::reset()
-{
-    counters.total = 0;
+void ebus::Statistics::reset() {
+  counters.total = 0;
 
-    counters.success = 0;
-    counters.successMS = 0;
-    counters.successMM = 0;
-    counters.successBC = 0;
+  counters.success = 0;
+  counters.successMS = 0;
+  counters.successMM = 0;
+  counters.successBC = 0;
 
-    counters.failure = 0;
+  counters.failure = 0;
 
-    for (std::pair<const int, unsigned long> &item : counters.failureMaster)
-        item.second = 0;
+  for (std::pair<const int, uint32_t> &item : counters.failureMaster)
+    item.second = 0;
 
-    for (std::pair<const int, unsigned long> &item : counters.failureSlave)
-        item.second = 0;
+  for (std::pair<const int, uint32_t> &item : counters.failureSlave)
+    item.second = 0;
 
-    counters.special00 = 0;
-    counters.special0704Success = 0;
-    counters.special0704Failure = 0;
+  counters.special00 = 0;
+  counters.special0704Success = 0;
+  counters.special0704Failure = 0;
 
-    // masters.clear();
-    // slaves.clear();
+  // masters.clear();
+  // slaves.clear();
 }
 
-ebus::Counter &ebus::Statistics::getCounters()
-{
-    return counters;
-}
+ebus::Counter &ebus::Statistics::getCounters() { return counters; }

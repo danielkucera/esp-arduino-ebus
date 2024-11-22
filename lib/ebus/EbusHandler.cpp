@@ -19,200 +19,168 @@
 
 #include "EbusHandler.h"
 
+#include <iomanip>
+#include <sstream>
+#include <vector>
+
 #include "Telegram.h"
 
-#include <sstream>
-#include <iomanip>
+ebus::EbusHandler::EbusHandler(
+    const uint8_t source, std::function<bool()> busReadyFunction,
+    std::function<void(const uint8_t byte)> busWriteFunction,
+    std::function<void(const std::vector<uint8_t> response)> responseFunction)
+    : address(source),
+      busReadyCallback(busReadyFunction),
+      busWriteCallback(busWriteFunction),
+      responseCallback(responseFunction) {}
 
-ebus::EbusHandler::EbusHandler(const uint8_t source,
-                               std::function<bool()> busReadyFunction,
-                               std::function<void(const uint8_t byte)> busWriteFunction,
-                               std::function<void(const std::vector<uint8_t> response)> responseFunction)
-    : address(source), busReadyCallback(busReadyFunction), busWriteCallback(busWriteFunction), responseCallback(responseFunction)
-{
+void ebus::EbusHandler::setAddress(const uint8_t source) { address = source; }
+
+uint8_t ebus::EbusHandler::getAddress() const { return address; }
+
+ebus::State ebus::EbusHandler::getState() const { return state; }
+
+void ebus::EbusHandler::reset() {
+  state = State::MonitorBus;
+
+  telegram.clear();
+
+  master.clear();
+  sendIndex = 0;
+  receiveIndex = 0;
+  masterRepeated = false;
+
+  slave.clear();
+  slaveIndex = 0;
+  slaveNN = 0;
+  slaveRepeated = false;
+
+  sendAcknowledge = true;
+  sendSyn = true;
 }
 
-void ebus::EbusHandler::setAddress(const uint8_t source)
-{
-    address = source;
-}
-
-uint8_t ebus::EbusHandler::getAddress() const
-{
-    return address;
-}
-
-ebus::State ebus::EbusHandler::getState() const
-{
-    return state;
-}
-
-void ebus::EbusHandler::reset()
-{
-    state = State::MonitorBus;
-
-    telegram.clear();
-
-    master.clear();
-    sendIndex = 0;
-    receiveIndex = 0;
-    masterRepeated = false;
-
-    slave.clear();
-    slaveIndex = 0;
-    slaveNN = 0;
-    slaveRepeated = false;
-
-    sendAcknowledge = true;
-    sendSyn = true;
-}
-
-bool ebus::EbusHandler::enque(const std::vector<uint8_t> &message)
-{
-    reset();
-    telegram.createMaster(address, message);
-    if (telegram.getMasterState() == SEQ_OK)
-    {
-        master = telegram.getMaster();
-        master.push_back(telegram.getMasterCRC(), false);
-        master.extend();
-        state = State::Arbitration;
-        return true;
-    }
-    return false;
-}
-
-void ebus::EbusHandler::send()
-{
-    switch (state)
-    {
-    case State::MonitorBus:
-        break;
-    case State::Arbitration:
-        break;
-    case State::SendMessage:
-        if (busReadyCallback() && sendIndex == receiveIndex)
-        {
-            busWriteCallback(master[sendIndex]);
-            sendIndex++;
-        }
-        break;
-    case State::ReceiveAcknowledge:
-        break;
-    case State::ReceiveResponse:
-        break;
-    case State::SendPositiveAcknowledge:
-        if (busReadyCallback() && sendAcknowledge)
-        {
-            sendAcknowledge = false;
-            busWriteCallback(ebus::sym_ack);
-        }
-        break;
-    case State::SendNegativeAcknowledge:
-        if (busReadyCallback() && sendAcknowledge)
-        {
-            sendAcknowledge = false;
-            busWriteCallback(ebus::sym_nak);
-        }
-        break;
-    case State::FreeBus:
-        if (busReadyCallback() && sendSyn)
-        {
-            sendSyn = false;
-            busWriteCallback(ebus::sym_syn);
-        }
-        break;
-    default:
-        break;
-    }
-}
-
-bool ebus::EbusHandler::receive(const uint8_t byte)
-{
-    switch (state)
-    {
-    case State::MonitorBus:
-        break;
-    case State::Arbitration:
-        if (byte == address)
-        {
-            sendIndex = 1;
-            receiveIndex = 1;
-            state = State::SendMessage;
-        }
-        break;
-    case State::SendMessage:
-        receiveIndex++;
-        if (receiveIndex >= master.size())
-            state = State::ReceiveAcknowledge;
-        break;
-    case State::ReceiveAcknowledge:
-        if (byte == ebus::sym_ack)
-        {
-            state = State::ReceiveResponse;
-        }
-        else if (!masterRepeated)
-        {
-            masterRepeated = true;
-            sendIndex = 1;
-            receiveIndex = 1;
-            state = State::SendMessage;
-        }
-        else
-        {
-            state = State::FreeBus;
-        }
-        break;
-    case State::ReceiveResponse:
-        slaveIndex++;
-        slave.push_back(byte);
-
-        if (slave.size() == 1)
-            slaveNN = 1 + int(byte) + 1; // NN + DBx + CRC
-
-        if (byte == ebus::sym_exp) // AA >> A9 + 01 || A9 >> A9 + 00
-            slaveNN++;
-
-        if (slave.size() >= slaveNN)
-        {
-            telegram.createSlave(slave);
-            if (telegram.getSlaveState() == SEQ_OK)
-            {
-                sendAcknowledge = true;
-                state = State::SendPositiveAcknowledge;
-
-                responseCallback(telegram.getSlave().to_vector());
-            }
-            else
-            {
-                slaveIndex = 0;
-                slave.clear();
-                sendAcknowledge = true;
-                state = State::SendNegativeAcknowledge;
-            }
-        }
-
-        break;
-    case State::SendPositiveAcknowledge:
-        state = State::FreeBus;
-        break;
-    case State::SendNegativeAcknowledge:
-        if (!slaveRepeated)
-        {
-            slaveRepeated = true;
-            state = State::ReceiveResponse;
-        }
-        else
-        {
-            state = State::FreeBus;
-        }
-        break;
-    case State::FreeBus:
-        state = State::MonitorBus;
-        break;
-    default:
-        break;
-    }
-
+bool ebus::EbusHandler::enque(const std::vector<uint8_t> &message) {
+  reset();
+  telegram.createMaster(address, message);
+  if (telegram.getMasterState() == SEQ_OK) {
+    master = telegram.getMaster();
+    master.push_back(telegram.getMasterCRC(), false);
+    master.extend();
+    state = State::Arbitration;
     return true;
+  }
+  return false;
+}
+
+void ebus::EbusHandler::send() {
+  switch (state) {
+    case State::MonitorBus:
+      break;
+    case State::Arbitration:
+      break;
+    case State::SendMessage:
+      if (busReadyCallback() && sendIndex == receiveIndex) {
+        busWriteCallback(master[sendIndex]);
+        sendIndex++;
+      }
+      break;
+    case State::ReceiveAcknowledge:
+      break;
+    case State::ReceiveResponse:
+      break;
+    case State::SendPositiveAcknowledge:
+      if (busReadyCallback() && sendAcknowledge) {
+        sendAcknowledge = false;
+        busWriteCallback(ebus::sym_ack);
+      }
+      break;
+    case State::SendNegativeAcknowledge:
+      if (busReadyCallback() && sendAcknowledge) {
+        sendAcknowledge = false;
+        busWriteCallback(ebus::sym_nak);
+      }
+      break;
+    case State::FreeBus:
+      if (busReadyCallback() && sendSyn) {
+        sendSyn = false;
+        busWriteCallback(ebus::sym_syn);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+bool ebus::EbusHandler::receive(const uint8_t byte) {
+  switch (state) {
+    case State::MonitorBus:
+      break;
+    case State::Arbitration:
+      if (byte == address) {
+        sendIndex = 1;
+        receiveIndex = 1;
+        state = State::SendMessage;
+      }
+      break;
+    case State::SendMessage:
+      receiveIndex++;
+      if (receiveIndex >= master.size()) state = State::ReceiveAcknowledge;
+      break;
+    case State::ReceiveAcknowledge:
+      if (byte == ebus::sym_ack) {
+        state = State::ReceiveResponse;
+      } else if (!masterRepeated) {
+        masterRepeated = true;
+        sendIndex = 1;
+        receiveIndex = 1;
+        state = State::SendMessage;
+      } else {
+        state = State::FreeBus;
+      }
+      break;
+    case State::ReceiveResponse:
+      slaveIndex++;
+      slave.push_back(byte);
+
+      if (slave.size() == 1)
+        slaveNN = 1 + static_cast<int>(byte) + 1;  // NN + DBx + CRC
+
+      if (byte == ebus::sym_exp)  // AA >> A9 + 01 || A9 >> A9 + 00
+        slaveNN++;
+
+      if (slave.size() >= slaveNN) {
+        telegram.createSlave(slave);
+        if (telegram.getSlaveState() == SEQ_OK) {
+          sendAcknowledge = true;
+          state = State::SendPositiveAcknowledge;
+
+          responseCallback(telegram.getSlave().to_vector());
+        } else {
+          slaveIndex = 0;
+          slave.clear();
+          sendAcknowledge = true;
+          state = State::SendNegativeAcknowledge;
+        }
+      }
+
+      break;
+    case State::SendPositiveAcknowledge:
+      state = State::FreeBus;
+      break;
+    case State::SendNegativeAcknowledge:
+      if (!slaveRepeated) {
+        slaveRepeated = true;
+        state = State::ReceiveResponse;
+      } else {
+        state = State::FreeBus;
+      }
+      break;
+    case State::FreeBus:
+      state = State::MonitorBus;
+      break;
+    default:
+      break;
+  }
+
+  return true;
 }

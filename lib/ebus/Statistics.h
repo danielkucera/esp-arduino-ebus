@@ -17,85 +17,68 @@
  * along with ebus. If not, see http://www.gnu.org/licenses/.
  */
 
-// This file collects and provides statistical data based on the ebus classes Telegram and Sequence.
+// This file collects and provides statistical data based on the ebus classes
+// Telegram and Sequence.
 
-#ifndef EBUS_STATISTICS_H
-#define EBUS_STATISTICS_H
-
-#include "Telegram.h"
+#ifndef LIB_EBUS_STATISTICS_H_
+#define LIB_EBUS_STATISTICS_H_
 
 #include <map>
 
-namespace ebus
-{
+#include "Telegram.h"
 
-    struct Counter
-    {
-        unsigned long total = 0;
+namespace ebus {
 
-        unsigned long success = 0;
-        float successPercent = 0;
+struct Counter {
+  uint32_t total = 0;
 
-        unsigned long successMS = 0;
-        unsigned long successMM = 0;
-        unsigned long successBC = 0;
+  uint32_t success = 0;
+  float successPercent = 0;
 
-        unsigned long failure = 0;
-        float failurePercent = 0;
+  uint32_t successMS = 0;
+  uint32_t successMM = 0;
+  uint32_t successBC = 0;
 
-        std::map<int, unsigned long> failureMaster =
-            {{SEQ_EMPTY, 0},
-             {SEQ_OK, 0},
-             {SEQ_ERR_SHORT, 0},
-             {SEQ_ERR_LONG, 0},
-             {SEQ_ERR_NN, 0},
-             {SEQ_ERR_CRC, 0},
-             {SEQ_ERR_ACK, 0},
-             {SEQ_ERR_QQ, 0},
-             {SEQ_ERR_ZZ, 0},
-             {SEQ_ERR_ACK_MISS, 0},
-             {SEQ_ERR_INVALID, 0}};
+  uint32_t failure = 0;
+  float failurePercent = 0;
 
-        std::map<int, unsigned long> failureSlave =
-            {{SEQ_EMPTY, 0},
-             {SEQ_OK, 0},
-             {SEQ_ERR_SHORT, 0},
-             {SEQ_ERR_LONG, 0},
-             {SEQ_ERR_NN, 0},
-             {SEQ_ERR_CRC, 0},
-             {SEQ_ERR_ACK, 0},
-             {SEQ_ERR_QQ, 0},
-             {SEQ_ERR_ZZ, 0},
-             {SEQ_ERR_ACK_MISS, 0},
-             {SEQ_ERR_INVALID, 0}};
+  std::map<int, uint32_t> failureMaster = {
+      {SEQ_EMPTY, 0},        {SEQ_OK, 0},         {SEQ_ERR_SHORT, 0},
+      {SEQ_ERR_LONG, 0},     {SEQ_ERR_NN, 0},     {SEQ_ERR_CRC, 0},
+      {SEQ_ERR_ACK, 0},      {SEQ_ERR_QQ, 0},     {SEQ_ERR_ZZ, 0},
+      {SEQ_ERR_ACK_MISS, 0}, {SEQ_ERR_INVALID, 0}};
 
-        unsigned long special00 = 0;
-        unsigned long special0704Success = 0;
-        unsigned long special0704Failure = 0;
+  std::map<int, uint32_t> failureSlave = {
+      {SEQ_EMPTY, 0},        {SEQ_OK, 0},         {SEQ_ERR_SHORT, 0},
+      {SEQ_ERR_LONG, 0},     {SEQ_ERR_NN, 0},     {SEQ_ERR_CRC, 0},
+      {SEQ_ERR_ACK, 0},      {SEQ_ERR_QQ, 0},     {SEQ_ERR_ZZ, 0},
+      {SEQ_ERR_ACK_MISS, 0}, {SEQ_ERR_INVALID, 0}};
 
-        // std::map<uint8_t, ebus::Sequence> masters;
-        // std::map<uint8_t, ebus::Sequence> slaves;
-    };
+  uint32_t special00 = 0;
+  uint32_t special0704Success = 0;
+  uint32_t special0704Failure = 0;
 
-    class Statistics
-    {
+  // std::map<uint8_t, ebus::Sequence> masters;
+  // std::map<uint8_t, ebus::Sequence> slaves;
+};
 
-    public:
-        Statistics() = default;
+class Statistics {
+ public:
+  Statistics() = default;
 
-        void collect(const uint8_t byte);
-        void reset();
+  void collect(const uint8_t byte);
+  void reset();
 
-        Counter &getCounters();
+  Counter &getCounters();
 
-        // const std::map<uint8_t, ebus::Sequence> getMasters() const;
-        // const std::map<uint8_t, ebus::Sequence> getSlaves() const;
+  // const std::map<uint8_t, ebus::Sequence> getMasters() const;
+  // const std::map<uint8_t, ebus::Sequence> getSlaves() const;
 
-    private:
-        Sequence sequence;
-        Counter counters;
-    };
+ private:
+  Sequence sequence;
+  Counter counters;
+};
 
-} // namespace ebus
+}  // namespace ebus
 
-#endif // EBUS_STATISTICS_H
+#endif  // LIB_EBUS_STATISTICS_H_

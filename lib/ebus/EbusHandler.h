@@ -17,76 +17,75 @@
  * along with ebus. If not, see http://www.gnu.org/licenses/.
  */
 
-// Implementation of the sending routines for Master-Slave telegrams based on the ebus classes Telegram and Sequence.
+// Implementation of the sending routines for Master-Slave telegrams based on
+// the ebus classes Telegram and Sequence.
 
-#ifndef EBUS_EBUSHANDLER_H
-#define EBUS_EBUSHANDLER_H
+#ifndef LIB_EBUS_EBUSHANDLER_H_
+#define LIB_EBUS_EBUSHANDLER_H_
+
+#include <functional>
+#include <vector>
 
 #include "Telegram.h"
 
-#include <functional>
+namespace ebus {
 
-namespace ebus
-{
+enum class State {
+  MonitorBus,
+  Arbitration,
+  SendMessage,
+  ReceiveAcknowledge,
+  ReceiveResponse,
+  SendPositiveAcknowledge,
+  SendNegativeAcknowledge,
+  FreeBus
+};
 
-    enum class State
-    {
-        MonitorBus,
-        Arbitration,
-        SendMessage,
-        ReceiveAcknowledge,
-        ReceiveResponse,
-        SendPositiveAcknowledge,
-        SendNegativeAcknowledge,
-        FreeBus
-    };
+class EbusHandler {
+ public:
+  EbusHandler() = default;
+  EbusHandler(const uint8_t source, std::function<bool()> busReadyFunction,
+              std::function<void(const uint8_t byte)> busWriteFunction,
+              std::function<void(const std::vector<uint8_t> response)>
+                  responseFunction);
 
-    class EbusHandler
-    {
+  void setAddress(const uint8_t source);
+  uint8_t getAddress() const;
 
-    public:
-        EbusHandler() = default;
-        EbusHandler(const uint8_t source,
-                    std::function<bool()> busReadyFunction,
-                    std::function<void(const uint8_t byte)> busWriteFunction,
-                    std::function<void(const std::vector<uint8_t> response)> responseFunction);
+  State getState() const;
 
-        void setAddress(const uint8_t source);
-        uint8_t getAddress() const;
+  void reset();
+  bool enque(const std::vector<uint8_t> &message);
 
-        State getState() const;
+  void send();
+  bool receive(const uint8_t byte);
 
-        void reset();
-        bool enque(const std::vector<uint8_t> &message);
+ private:
+  uint8_t address = 0;
 
-        void send();
-        bool receive(const uint8_t byte);
+  std::function<bool()> busReadyCallback = nullptr;
+  std::function<void(const uint8_t byte)> busWriteCallback = nullptr;
+  std::function<void(const std::vector<uint8_t> response)> responseCallback =
+      nullptr;
 
-    private:
-        uint8_t address;
+  State state = State::MonitorBus;
 
-        std::function<bool()> busReadyCallback = nullptr;
-        std::function<void(const uint8_t byte)> busWriteCallback = nullptr;
-        std::function<void(const std::vector<uint8_t> response)> responseCallback = nullptr;
+  ebus::Telegram telegram;
 
-        State state = State::MonitorBus;
+  ebus::Sequence master;
+  size_t sendIndex = 0;
+  size_t receiveIndex = 0;
+  bool masterRepeated = false;
 
-        ebus::Telegram telegram;
+  ebus::Sequence slave;
+  size_t slaveIndex = 0;
+  size_t slaveNN = 0;
+  bool slaveRepeated = false;
 
-        ebus::Sequence master;
-        size_t sendIndex = 0;
-        size_t receiveIndex = 0;
-        bool masterRepeated = false;
+  bool sendAcknowledge = true;
+  bool sendSyn = true;
+};
 
-        ebus::Sequence slave;
-        size_t slaveIndex = 0;
-        size_t slaveNN = 0;
-        bool slaveRepeated = false;
+}  // namespace ebus
 
-        bool sendAcknowledge = true;
-        bool sendSyn = true;
-    };
-
-} // namespace ebus
-
-#endif // EBUS_EBUSHANDLER_H
+#endif  // LIB_EBUS_EBUSHANDLER_H_
