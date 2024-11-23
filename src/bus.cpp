@@ -78,9 +78,9 @@ bool setArbitrationClient(WiFiClient*& client, uint8_t& address) {
 
 void arbitrationDone() { clearArbitrationClient(); }
 
-WiFiClient* arbitrationRequested(uint8_t& aa) {
+WiFiClient* arbitrationRequested(uint8_t& arbitration_client) {
   WiFiClient* client = NULL;
-  getArbitrationClient(client, aa);
+  getArbitrationClient(client, arbitration_client);
   return client;
 }
 
