@@ -18,17 +18,52 @@
  */
 
 // Implementation of the sending routines for Master-Slave telegrams based on
-// the ebus classes Telegram and Sequence.
+// the ebus classes Telegram and Sequence. It also collects statistical data
+// about the ebus system.
 
 #ifndef LIB_EBUS_EBUSHANDLER_H_
 #define LIB_EBUS_EBUSHANDLER_H_
 
 #include <functional>
+#include <map>
 #include <vector>
 
 #include "Telegram.h"
 
 namespace ebus {
+
+struct Counter {
+  uint32_t total = 0;
+
+  uint32_t success = 0;
+  float successPercent = 0;
+
+  uint32_t successMS = 0;
+  uint32_t successMM = 0;
+  uint32_t successBC = 0;
+
+  uint32_t failure = 0;
+  float failurePercent = 0;
+
+  std::map<int, uint32_t> failureMaster = {
+      {SEQ_EMPTY, 0},        {SEQ_OK, 0},         {SEQ_ERR_SHORT, 0},
+      {SEQ_ERR_LONG, 0},     {SEQ_ERR_NN, 0},     {SEQ_ERR_CRC, 0},
+      {SEQ_ERR_ACK, 0},      {SEQ_ERR_QQ, 0},     {SEQ_ERR_ZZ, 0},
+      {SEQ_ERR_ACK_MISS, 0}, {SEQ_ERR_INVALID, 0}};
+
+  std::map<int, uint32_t> failureSlave = {
+      {SEQ_EMPTY, 0},        {SEQ_OK, 0},         {SEQ_ERR_SHORT, 0},
+      {SEQ_ERR_LONG, 0},     {SEQ_ERR_NN, 0},     {SEQ_ERR_CRC, 0},
+      {SEQ_ERR_ACK, 0},      {SEQ_ERR_QQ, 0},     {SEQ_ERR_ZZ, 0},
+      {SEQ_ERR_ACK_MISS, 0}, {SEQ_ERR_INVALID, 0}};
+
+  uint32_t special00 = 0;
+  uint32_t special0704Success = 0;
+  uint32_t special0704Failure = 0;
+
+  // std::map<uint8_t, ebus::Sequence> masters;
+  // std::map<uint8_t, ebus::Sequence> slaves;
+};
 
 enum class State {
   MonitorBus,
@@ -60,6 +95,11 @@ class EbusHandler {
   void send();
   bool receive(const uint8_t byte);
 
+  void monitor(const uint8_t byte);
+
+  void resetCounters();
+  Counter &getCounters();
+
  private:
   uint8_t address = 0;
 
@@ -69,6 +109,9 @@ class EbusHandler {
       nullptr;
 
   State state = State::MonitorBus;
+
+  Sequence sequence;
+  Counter counters;
 
   ebus::Telegram telegram;
 

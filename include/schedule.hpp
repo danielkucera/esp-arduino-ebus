@@ -9,7 +9,6 @@
 
 #include "Datatypes.h"
 #include "EbusHandler.h"
-#include "Statistics.h"
 
 // Implementation of the perodic sending of predefined commands.
 
@@ -53,7 +52,7 @@ class Schedule {
 
   WiFiClient *dummyClient = new WiFiClient();
   ebus::EbusHandler ebusHandler;
-  ebus::Statistics statistics;
+  // ebus::Statistics statistics;
 
   bool initCounters = true;
   ebus::Counter lastCounters;

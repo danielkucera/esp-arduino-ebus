@@ -138,7 +138,7 @@ void Schedule::processSend() {
 
 bool Schedule::processReceive(bool enhanced, WiFiClient *client,
                               const uint8_t byte) {
-  if (!enhanced) statistics.collect(byte);
+  if (!enhanced) ebusHandler.monitor(byte);
 
   if (commands.size() == 0) return false;
 
@@ -156,10 +156,10 @@ bool Schedule::processReceive(bool enhanced, WiFiClient *client,
   return true;
 }
 
-void Schedule::resetStatistics() { statistics.reset(); }
+void Schedule::resetStatistics() { ebusHandler.resetCounters(); }
 
 void Schedule::publishCounters() {
-  ebus::Counter counters = statistics.getCounters();
+  ebus::Counter counters = ebusHandler.getCounters();
 
   publishTopic(initCounters, "ebus/messages/total", lastCounters.total,
                counters.total);
