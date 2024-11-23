@@ -18,7 +18,7 @@ void onMqttUnsubscribe(uint16_t packetId) {}
 void onMqttMessage(char *topic, char *payload,
                    AsyncMqttClientMessageProperties properties, size_t len,
                    size_t index, size_t total) {
-    String tmp = String(topic);
+  String tmp = String(topic);
   if (tmp.startsWith("ebus/config/commands/")) {
     if (String(payload).length() > 0)
       schedule.insertCommand(payload);

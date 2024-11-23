@@ -411,7 +411,7 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "rssi: %d dBm\n", WiFi.RSSI());
   pos += snprintf(status + pos, sizeof(status), "free_heap: %d B\n",
                   ESP.getFreeHeap());
-  pos += snprintf(status + pos, sizeof(status), "reset_code: %d\n",
+  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n",
                   mqttValues.reset_code);
   pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
                   mqttValues.loop_duration);
