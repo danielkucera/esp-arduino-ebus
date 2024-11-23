@@ -413,9 +413,9 @@ char* status_string() {
                   ESP.getFreeHeap());
   pos += snprintf(status + pos, sizeof(status), "reset_code: %d\n",
                   mqttValues.reset_code);
-  pos += snprintf(status + pos, sizeof(status), "loop_duration: %ud us\r\n",
+  pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
                   mqttValues.loop_duration);
-  pos += snprintf(status + pos, sizeof(status), "max_loop_duration: %ud us\r\n",
+  pos += snprintf(status + pos, sizeof(status), "max_loop_duration: %u us\r\n",
                   mqttValues.loop_duration_max);
   pos +=
       snprintf(status + pos, sizeof(status), "version: %s\r\n", AUTO_VERSION);
