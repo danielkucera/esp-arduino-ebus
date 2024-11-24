@@ -37,7 +37,7 @@
 // PB...Primary command
 // SB...Secondary command
 // NN...Number of databytes (0 < NN < 16)
-// DBx..Data bytes
+// DBx..Data bytes (payload)
 // CRC..8-Bit CRC byte
 // ACK..Acknowledgement byte (0x00 OK, 0xff NOK)
 // SYN..Synchronisation byte (0xaa)

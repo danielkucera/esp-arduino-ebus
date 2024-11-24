@@ -29,6 +29,7 @@ void Schedule::setDistance(const uint8_t distance) {
 //   "unit": "°C",
 //   "active": true,
 //   "interval": 60,
+//   "master": false,
 //   "position": 1,
 //   "datatype": "DATA2c",
 //   "topic": "Aussentemperatur",
@@ -53,6 +54,7 @@ void Schedule::insertCommand(const char *payload) {
     command.active = doc["active"].as<bool>();
     command.interval = doc["interval"].as<uint32_t>();
     command.last = 0;
+    command.master = doc["master"].as<bool>();
     command.position = doc["position"].as<size_t>();
     command.datatype =
         ebus::string2datatype(doc["datatype"].as<const char *>());
@@ -108,6 +110,7 @@ const char *Schedule::printCommands() const {
       obj["unit"] = command.second.unit;
       obj["active"] = command.second.active;
       obj["interval"] = command.second.interval;
+      obj["master"] = command.second.master;
       obj["position"] = command.second.position;
       obj["datatype"] = ebus::datatype2string(command.second.datatype);
       obj["topic"] = command.second.topic;
@@ -282,6 +285,7 @@ void Schedule::publishCommand(const char *key, bool remove) const {
       doc["unit"] = command->second.unit;
       doc["active"] = command->second.active;
       doc["interval"] = command->second.interval;
+      doc["master"] = command->second.master;
       doc["position"] = command->second.position;
       doc["datatype"] = ebus::datatype2string(command->second.datatype);
       doc["topic"] = command->second.topic;
@@ -379,58 +383,82 @@ void Schedule::telegramCallback(const std::vector<uint8_t> master,
 }
 
 void Schedule::processResponse(const std::vector<uint8_t> slave) {
-  actCommand->last = millis();
+  publishValue(actCommand, slave, actCommand->position);
+}
+
+void Schedule::processTelegram(const std::vector<uint8_t> master,
+                               const std::vector<uint8_t> slave) {
+  Command *curCommand =
+      &(std::find_if(commands.begin(), commands.end(),
+                     [&master](const std::pair<std::string, Command> &command) {
+                       return !command.second.active &&
+                              ebus::Sequence::contains(master,
+                                                       command.second.command);
+                     }))
+           ->second;
+
+  if (curCommand != nullptr) {
+    if (curCommand->master)
+      publishValue(curCommand, master, curCommand->position + 4);
+    else
+      publishValue(curCommand, slave, curCommand->position);
+  }
+}
+
+void Schedule::publishValue(Command *command, const std::vector<uint8_t> value,
+                            const size_t position) {
+  command->last = millis();
 
   JsonDocument doc;
 
-  switch (actCommand->datatype) {
+  switch (command->datatype) {
     case ebus::Datatype::BCD:
-      doc["value"] = ebus::byte_2_bcd(
-          ebus::Sequence::range(slave, actCommand->position, 1));
+      doc["value"] =
+          ebus::byte_2_bcd(ebus::Sequence::range(value, position, 1));
       break;
     case ebus::Datatype::UINT8:
-      doc["value"] = ebus::byte_2_uint8(
-          ebus::Sequence::range(slave, actCommand->position, 1));
+      doc["value"] =
+          ebus::byte_2_uint8(ebus::Sequence::range(value, position, 1));
       break;
     case ebus::Datatype::INT8:
-      doc["value"] = ebus::byte_2_int8(
-          ebus::Sequence::range(slave, actCommand->position, 1));
+      doc["value"] =
+          ebus::byte_2_int8(ebus::Sequence::range(value, position, 1));
       break;
     case ebus::Datatype::UINT16:
-      doc["value"] = ebus::byte_2_uint16(
-          ebus::Sequence::range(slave, actCommand->position, 2));
+      doc["value"] =
+          ebus::byte_2_uint16(ebus::Sequence::range(value, position, 2));
       break;
     case ebus::Datatype::INT16:
-      doc["value"] = ebus::byte_2_int16(
-          ebus::Sequence::range(slave, actCommand->position, 2));
+      doc["value"] =
+          ebus::byte_2_int16(ebus::Sequence::range(value, position, 2));
       break;
     case ebus::Datatype::UINT32:
-      doc["value"] = ebus::byte_2_uint32(
-          ebus::Sequence::range(slave, actCommand->position, 4));
+      doc["value"] =
+          ebus::byte_2_uint32(ebus::Sequence::range(value, position, 4));
       break;
     case ebus::Datatype::INT32:
-      doc["value"] = ebus::byte_2_int32(
-          ebus::Sequence::range(slave, actCommand->position, 4));
+      doc["value"] =
+          ebus::byte_2_int32(ebus::Sequence::range(value, position, 4));
       break;
     case ebus::Datatype::DATA1b:
-      doc["value"] = ebus::byte_2_data1b(
-          ebus::Sequence::range(slave, actCommand->position, 1));
+      doc["value"] =
+          ebus::byte_2_data1b(ebus::Sequence::range(value, position, 1));
       break;
     case ebus::Datatype::DATA1c:
-      doc["value"] = ebus::byte_2_data1c(
-          ebus::Sequence::range(slave, actCommand->position, 1));
+      doc["value"] =
+          ebus::byte_2_data1c(ebus::Sequence::range(value, position, 1));
       break;
     case ebus::Datatype::DATA2b:
-      doc["value"] = ebus::byte_2_data2b(
-          ebus::Sequence::range(slave, actCommand->position, 2));
+      doc["value"] =
+          ebus::byte_2_data2b(ebus::Sequence::range(value, position, 2));
       break;
     case ebus::Datatype::DATA2c:
-      doc["value"] = ebus::byte_2_data2c(
-          ebus::Sequence::range(slave, actCommand->position, 2));
+      doc["value"] =
+          ebus::byte_2_data2c(ebus::Sequence::range(value, position, 2));
       break;
     case ebus::Datatype::FLOAT:
-      doc["value"] = ebus::byte_2_float(
-          ebus::Sequence::range(slave, actCommand->position, 2));
+      doc["value"] =
+          ebus::byte_2_float(ebus::Sequence::range(value, position, 2));
       break;
     default:
       break;
@@ -439,18 +467,7 @@ void Schedule::processResponse(const std::vector<uint8_t> slave) {
   std::string payload;
   serializeJson(doc, payload);
 
-  std::string topic = "ebus/values/" + actCommand->topic;
+  std::string topic = "ebus/values/" + command->topic;
 
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
-}
-
-void Schedule::processTelegram(const std::vector<uint8_t> master,
-                               const std::vector<uint8_t> slave) {
-  // Command *curCommand =
-  //     &(std::find_if(commands.begin(), commands.end(),
-  //                    [](const std::pair<std::string, Command> &command) {
-  //                      return !command.second.active && command.second.last
-  //                      == 0;
-  //                    }))
-  //          ->second;
 }

@@ -18,7 +18,8 @@ struct Command {
   bool active;                   // active sending of command
   uint32_t interval;        // minimum interval between two commands in seconds
   uint32_t last;            // last time of the successful command
-  size_t position;          // starting position of the value in the response
+  bool master;              // true..master false..slave
+  size_t position;          // starting byte in payload (DBx)
   ebus::Datatype datatype;  // ebus datatype
   std::string topic;        // mqtt topic
   bool ha;                  // home assistant support for auto discovery
@@ -53,7 +54,6 @@ class Schedule {
 
   WiFiClient *dummyClient = new WiFiClient();
   ebus::EbusHandler ebusHandler;
-  // ebus::Statistics statistics;
 
   bool initCounters = true;
   ebus::Counter lastCounters;
@@ -79,6 +79,9 @@ class Schedule {
   void processResponse(const std::vector<uint8_t> slave);
   void processTelegram(const std::vector<uint8_t> master,
                        const std::vector<uint8_t> slave);
+
+  void publishValue(Command *command, const std::vector<uint8_t> value,
+                    const size_t position);
 };
 
 extern Schedule schedule;
