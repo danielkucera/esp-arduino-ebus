@@ -29,11 +29,15 @@
 ebus::EbusHandler::EbusHandler(
     const uint8_t source, std::function<bool()> busReadyFunction,
     std::function<void(const uint8_t byte)> busWriteFunction,
-    std::function<void(const std::vector<uint8_t> response)> responseFunction)
+    std::function<void(const std::vector<uint8_t> slave)> responseFunction,
+    std::function<void(const std::vector<uint8_t> master,
+                       const std::vector<uint8_t> slave)>
+        telegramFunction)
     : address(source),
       busReadyCallback(busReadyFunction),
       busWriteCallback(busWriteFunction),
-      responseCallback(responseFunction) {}
+      responseCallback(responseFunction),
+      telegramCallback(telegramFunction) {}
 
 void ebus::EbusHandler::setAddress(const uint8_t source) { address = source; }
 
@@ -92,19 +96,19 @@ void ebus::EbusHandler::send() {
     case State::SendPositiveAcknowledge:
       if (busReadyCallback() && sendAcknowledge) {
         sendAcknowledge = false;
-        busWriteCallback(ebus::sym_ack);
+        busWriteCallback(sym_ack);
       }
       break;
     case State::SendNegativeAcknowledge:
       if (busReadyCallback() && sendAcknowledge) {
         sendAcknowledge = false;
-        busWriteCallback(ebus::sym_nak);
+        busWriteCallback(sym_nak);
       }
       break;
     case State::FreeBus:
       if (busReadyCallback() && sendSyn) {
         sendSyn = false;
-        busWriteCallback(ebus::sym_syn);
+        busWriteCallback(sym_syn);
       }
       break;
     default:
@@ -128,7 +132,7 @@ bool ebus::EbusHandler::receive(const uint8_t byte) {
       if (receiveIndex >= master.size()) state = State::ReceiveAcknowledge;
       break;
     case State::ReceiveAcknowledge:
-      if (byte == ebus::sym_ack) {
+      if (byte == sym_ack) {
         state = State::ReceiveResponse;
       } else if (!masterRepeated) {
         masterRepeated = true;
@@ -146,7 +150,7 @@ bool ebus::EbusHandler::receive(const uint8_t byte) {
       if (slave.size() == 1)
         slaveNN = 1 + static_cast<int>(byte) + 1;  // NN + DBx + CRC
 
-      if (byte == ebus::sym_exp)  // AA >> A9 + 01 || A9 >> A9 + 00
+      if (byte == sym_exp)  // AA >> A9 + 01 || A9 >> A9 + 00
         slaveNN++;
 
       if (slave.size() >= slaveNN) {
@@ -187,20 +191,22 @@ bool ebus::EbusHandler::receive(const uint8_t byte) {
 }
 
 void ebus::EbusHandler::monitor(const uint8_t byte) {
-  if (byte == ebus::sym_syn) {
+  if (byte == sym_syn) {
     if (sequence.size() > 0) {
       counters.total++;
 
-      ebus::Telegram tel(sequence);
+      Telegram tel(sequence);
 
       if (tel.isValid()) {
+        telegramCallback(tel.getMaster().to_vector(),
+                         tel.getSlave().to_vector());
         counters.success++;
 
-        if (tel.get_type() == ebus::Type::MS)
+        if (tel.get_type() == Type::MS)
           counters.successMS++;
-        else if (tel.get_type() == ebus::Type::MM)
+        else if (tel.get_type() == Type::MM)
           counters.successMM++;
-        else if (tel.get_type() == ebus::Type::BC)
+        else if (tel.get_type() == Type::BC)
           counters.successBC++;
       } else {
         counters.failure++;

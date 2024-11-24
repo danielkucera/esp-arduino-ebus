@@ -19,6 +19,7 @@
 
 #include "Sequence.h"
 
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 
@@ -157,6 +158,12 @@ const std::string ebus::Sequence::to_string(const std::vector<uint8_t> &vec) {
          << static_cast<unsigned>(vec[i]);
 
   return ostr.str();
+}
+
+bool ebus::Sequence::contains(const std::vector<uint8_t> &vec,
+                              const std::vector<uint8_t> &search) {
+  return std::search(vec.begin(), vec.end(), search.begin(), search.end()) !=
+         vec.end();
 }
 
 // CRC8 table of the polynom 0x9b = x^8 + x^7 + x^4 + x^3 + x^1 + 1.

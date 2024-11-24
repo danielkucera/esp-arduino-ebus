@@ -15,6 +15,7 @@
 struct Command {
   std::string command;      // ebus command as ZZ PB SB NN DBx
   std::string unit;         // unit of the received data
+  bool active;              // active sending of command
   uint32_t interval;        // minimum interval between two commands in seconds
   uint32_t last;            // last time of the successful command
   size_t position;          // starting position of the value in the response
@@ -42,7 +43,7 @@ class Schedule {
   void processSend();
   bool processReceive(bool enhanced, WiFiClient *client, const uint8_t byte);
 
-  void resetStatistics();
+  void resetCounters();
   void publishCounters();
 
  private:
@@ -71,9 +72,13 @@ class Schedule {
 
   static bool busReadyCallback();
   static void busWriteCallback(const uint8_t byte);
-  static void responseCallback(const std::vector<uint8_t> response);
+  static void responseCallback(const std::vector<uint8_t> slave);
+  static void telegramCallback(const std::vector<uint8_t> master,
+                               const std::vector<uint8_t> slave);
 
-  void processResponse(const std::vector<uint8_t> vec);
+  void processResponse(const std::vector<uint8_t> slave);
+  void processTelegram(const std::vector<uint8_t> master,
+                       const std::vector<uint8_t> slave);
 };
 
 extern Schedule schedule;

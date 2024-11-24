@@ -98,12 +98,14 @@ class Telegram {
   uint8_t getSourceAddress() const;
   uint8_t getTargetAddress() const;
 
+  // returns the master sequence [QQ ZZ PB SB NN DBx] without CRC byte
   const Sequence &getMaster() const;
   uint8_t getMasterCRC() const;
   int getMasterState() const;
 
   void setSlaveACK(const uint8_t byte);
 
+  // returns the slave sequence [NN DBx] without CRC byte
   const Sequence &getSlave() const;
   uint8_t getSlaveCRC() const;
   int getSlaveState() const;

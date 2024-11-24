@@ -79,10 +79,13 @@ enum class State {
 class EbusHandler {
  public:
   EbusHandler() = default;
-  EbusHandler(const uint8_t source, std::function<bool()> busReadyFunction,
-              std::function<void(const uint8_t byte)> busWriteFunction,
-              std::function<void(const std::vector<uint8_t> response)>
-                  responseFunction);
+  EbusHandler(
+      const uint8_t source, std::function<bool()> busReadyFunction,
+      std::function<void(const uint8_t byte)> busWriteFunction,
+      std::function<void(const std::vector<uint8_t> slave)> responseFunction,
+      std::function<void(const std::vector<uint8_t> master,
+                         const std::vector<uint8_t> slave)>
+          telegramFunction);
 
   void setAddress(const uint8_t source);
   uint8_t getAddress() const;
@@ -105,22 +108,25 @@ class EbusHandler {
 
   std::function<bool()> busReadyCallback = nullptr;
   std::function<void(const uint8_t byte)> busWriteCallback = nullptr;
-  std::function<void(const std::vector<uint8_t> response)> responseCallback =
+  std::function<void(const std::vector<uint8_t> slave)> responseCallback =
       nullptr;
+  std::function<void(const std::vector<uint8_t> master,
+                     const std::vector<uint8_t> slave)>
+      telegramCallback = nullptr;
 
   State state = State::MonitorBus;
 
   Sequence sequence;
   Counter counters;
 
-  ebus::Telegram telegram;
+  Telegram telegram;
 
-  ebus::Sequence master;
+  Sequence master;
   size_t sendIndex = 0;
   size_t receiveIndex = 0;
   bool masterRepeated = false;
 
-  ebus::Sequence slave;
+  Sequence slave;
   size_t slaveIndex = 0;
   size_t slaveNN = 0;
   bool slaveRepeated = false;

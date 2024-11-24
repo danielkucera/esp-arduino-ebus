@@ -243,7 +243,7 @@ inline void enableTX() {
 void set_pwm(uint8_t value) {
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
-  schedule.resetStatistics();
+  schedule.resetCounters();
 #endif
 }
 
@@ -404,7 +404,7 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "software_serial_mode: %s\n",
                   USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "uptime: %ld ms\n", millis());
-  pos += snprintf(status + pos, sizeof(status), "last_connect_time: %ud ms\n",
+  pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
                   mqttValues.last_connect);
   pos += snprintf(status + pos, sizeof(status), "reconnect_count: %d \n",
                   mqttValues.reconnect_count);
