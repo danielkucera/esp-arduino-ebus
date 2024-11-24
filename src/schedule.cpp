@@ -46,7 +46,9 @@ void Schedule::insertCommand(const char *payload) {
   } else {
     Command command;
 
-    command.command = doc["command"].as<std::string>();
+    std::string key = doc["command"].as<std::string>();
+
+    command.command = ebus::Sequence::to_vector(key);
     command.unit = doc["unit"].as<std::string>();
     command.active = doc["active"].as<bool>();
     command.interval = doc["interval"].as<uint32_t>();
@@ -58,11 +60,11 @@ void Schedule::insertCommand(const char *payload) {
     command.ha = doc["ha"].as<bool>();
     command.ha_class = doc["ha_class"].as<std::string>();
 
-    commands[command.command] = command;
+    commands[key] = command;
 
-    publishCommand(command.command.c_str(), false);
+    publishCommand(key.c_str(), false);
 
-    if (command.ha) publishHomeAssistant(command.command.c_str(), false);
+    if (command.ha) publishHomeAssistant(key.c_str(), false);
   }
 }
 
@@ -102,7 +104,7 @@ const char *Schedule::printCommands() const {
 
     for (const std::pair<std::string, Command> &command : commands) {
       JsonObject obj = doc.add<JsonObject>();
-      obj["command"] = command.second.command;
+      obj["command"] = ebus::Sequence::to_string(command.second.command);
       obj["unit"] = command.second.unit;
       obj["active"] = command.second.active;
       obj["interval"] = command.second.interval;
@@ -276,7 +278,7 @@ void Schedule::publishCommand(const char *key, bool remove) const {
     if (!remove) {
       JsonDocument doc;
 
-      doc["command"] = command->second.command;
+      doc["command"] = ebus::Sequence::to_string(command->second.command);
       doc["unit"] = command->second.unit;
       doc["active"] = command->second.active;
       doc["interval"] = command->second.interval;
@@ -359,7 +361,7 @@ const std::vector<uint8_t> Schedule::nextCommand() {
       return ebus::Sequence::to_vector("");
   }
 
-  return ebus::Sequence::to_vector(actCommand->command);
+  return actCommand->command;
 }
 
 bool Schedule::busReadyCallback() { return Bus.availableForWrite(); }

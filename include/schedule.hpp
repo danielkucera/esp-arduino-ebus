@@ -13,9 +13,9 @@
 // Implementation of the perodic sending of predefined commands.
 
 struct Command {
-  std::string command;      // ebus command as ZZ PB SB NN DBx
-  std::string unit;         // unit of the received data
-  bool active;              // active sending of command
+  std::vector<uint8_t> command;  // ebus command as ZZ PB SB NN DBx
+  std::string unit;              // unit of the received data
+  bool active;                   // active sending of command
   uint32_t interval;        // minimum interval between two commands in seconds
   uint32_t last;            // last time of the successful command
   size_t position;          // starting position of the value in the response
