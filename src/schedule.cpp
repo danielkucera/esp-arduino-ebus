@@ -49,6 +49,7 @@ void Schedule::insertCommand(const char *payload) {
 
     std::string key = doc["command"].as<std::string>();
 
+    command.key = key;
     command.command = ebus::Sequence::to_vector(key);
     command.unit = doc["unit"].as<std::string>();
     command.active = doc["active"].as<bool>();
@@ -62,11 +63,17 @@ void Schedule::insertCommand(const char *payload) {
     command.ha = doc["ha"].as<bool>();
     command.ha_class = doc["ha_class"].as<std::string>();
 
-    commands[key] = command;
+    const std::vector<Command>::const_iterator it =
+        std::find_if(commands.begin(), commands.end(),
+                     [&key](const Command &cmd) { return cmd.key == key; });
 
-    publishCommand(key.c_str(), false);
+    if (it != commands.end()) commands.erase(it);
 
-    if (command.ha) publishHomeAssistant(key.c_str(), false);
+    commands.push_back(command);
+
+    publishCommand(command.key, false);
+
+    if (command.ha) publishHomeAssistant(command.key, false);
   }
 }
 
@@ -74,15 +81,17 @@ void Schedule::removeCommand(const char *topic) {
   std::string tmp = topic;
   std::string key(tmp.substr(tmp.rfind("/") + 1));
 
-  const std::map<std::string, Command>::const_iterator command =
-      commands.find(key);
+  const std::vector<Command>::const_iterator it =
+      std::find_if(commands.begin(), commands.end(),
+                   [&key](const Command &cmd) { return cmd.key == key; });
 
-  if (command != commands.end()) {
-    publishCommand(key.c_str(), true);
+  if (it != commands.end()) {
+    publishCommand(key, true);
 
-    if (command->second.ha) publishHomeAssistant(key.c_str(), true);
+    if (it->ha) publishHomeAssistant(key, true);
 
-    if (commands.erase(key)) publishCommands();
+    commands.erase(it);
+    publishCommands();
   } else {
     std::string err = key + " not found";
     mqttClient.publish("ebus/config/error", 0, false, err.c_str());
@@ -91,8 +100,8 @@ void Schedule::removeCommand(const char *topic) {
 
 void Schedule::publishCommands() const {
   if (commands.size() > 0) {
-    for (const std::pair<std::string, Command> &command : commands)
-      publishCommand(command.first.c_str(), false);
+    for (const Command &command : commands)
+      publishCommand(command.key, false);
   } else {
     mqttClient.publish("ebus/config/installed", 0, false, "");
   }
@@ -104,18 +113,18 @@ const char *Schedule::printCommands() const {
   if (commands.size() > 0) {
     JsonDocument doc;
 
-    for (const std::pair<std::string, Command> &command : commands) {
+    for (const Command &command : commands) {
       JsonObject obj = doc.add<JsonObject>();
-      obj["command"] = ebus::Sequence::to_string(command.second.command);
-      obj["unit"] = command.second.unit;
-      obj["active"] = command.second.active;
-      obj["interval"] = command.second.interval;
-      obj["master"] = command.second.master;
-      obj["position"] = command.second.position;
-      obj["datatype"] = ebus::datatype2string(command.second.datatype);
-      obj["topic"] = command.second.topic;
-      obj["ha"] = command.second.ha;
-      obj["ha_class"] = command.second.ha_class;
+      obj["command"] = command.key;
+      obj["unit"] = command.unit;
+      obj["active"] = command.active;
+      obj["interval"] = command.interval;
+      obj["master"] = command.master;
+      obj["position"] = command.position;
+      obj["datatype"] = ebus::datatype2string(command.datatype);
+      obj["topic"] = command.topic;
+      obj["ha"] = command.ha;
+      obj["ha_class"] = command.ha_class;
     }
 
     doc.shrinkToFit();
@@ -269,28 +278,29 @@ void Schedule::publishCounters() {
   initCounters = false;
 }
 
-void Schedule::publishCommand(const char *key, bool remove) const {
-  const std::map<std::string, Command>::const_iterator command =
-      commands.find(std::string(key));
+void Schedule::publishCommand(const std::string key, bool remove) const {
+  const std::vector<Command>::const_iterator it =
+      std::find_if(commands.begin(), commands.end(),
+                   [&key](const Command &cmd) { return cmd.key == key; });
 
-  if (command != commands.end()) {
-    std::string topic = "ebus/config/installed/" + command->first;
+  if (it != commands.end()) {
+    std::string topic = "ebus/config/installed/" + it->key;
 
     std::string payload;
 
     if (!remove) {
       JsonDocument doc;
 
-      doc["command"] = ebus::Sequence::to_string(command->second.command);
-      doc["unit"] = command->second.unit;
-      doc["active"] = command->second.active;
-      doc["interval"] = command->second.interval;
-      doc["master"] = command->second.master;
-      doc["position"] = command->second.position;
-      doc["datatype"] = ebus::datatype2string(command->second.datatype);
-      doc["topic"] = command->second.topic;
-      doc["ha"] = command->second.ha;
-      doc["ha_class"] = command->second.ha_class;
+      doc["command"] = it->key;
+      doc["unit"] = it->unit;
+      doc["active"] = it->active;
+      doc["interval"] = it->interval;
+      doc["master"] = it->master;
+      doc["position"] = it->position;
+      doc["datatype"] = ebus::datatype2string(it->datatype);
+      doc["topic"] = it->topic;
+      doc["ha"] = it->ha;
+      doc["ha_class"] = it->ha_class;
 
       serializeJson(doc, payload);
     }
@@ -299,12 +309,13 @@ void Schedule::publishCommand(const char *key, bool remove) const {
   }
 }
 
-void Schedule::publishHomeAssistant(const char *key, bool remove) const {
-  const std::map<std::string, Command>::const_iterator command =
-      commands.find(std::string(key));
+void Schedule::publishHomeAssistant(const std::string key, bool remove) const {
+  const std::vector<Command>::const_iterator it =
+      std::find_if(commands.begin(), commands.end(),
+                   [&key](const Command &cmd) { return cmd.key == key; });
 
-  if (command != commands.end()) {
-    std::string name = command->second.topic;
+  if (it != commands.end()) {
+    std::string name = it->topic;
     std::replace(name.begin(), name.end(), '/', '_');
 
     std::string topic = "homeassistant/sensor/ebus/" + name + "/config";
@@ -315,14 +326,12 @@ void Schedule::publishHomeAssistant(const char *key, bool remove) const {
       JsonDocument doc;
 
       doc["name"] = name;
-      if (command->second.ha_class.compare("null") != 0 &&
-          command->second.ha_class.length() > 0)
-        doc["device_class"] = command->second.ha_class;
-      doc["state_topic"] = "ebus/values/" + command->second.topic;
-      if (command->second.unit.compare("null") != 0 &&
-          command->second.unit.length() > 0)
-        doc["unit_of_measurement"] = command->second.unit;
-      doc["unique_id"] = command->first;
+      if (it->ha_class.compare("null") != 0 && it->ha_class.length() > 0)
+        doc["device_class"] = it->ha_class;
+      doc["state_topic"] = "ebus/values/" + it->topic;
+      if (it->unit.compare("null") != 0 && it->unit.length() > 0)
+        doc["unit_of_measurement"] = it->unit;
+      doc["unique_id"] = it->key;
       doc["value_template"] = "{{value_json.value}}";
 
       serializeJson(doc, payload);
@@ -336,30 +345,22 @@ const std::vector<uint8_t> Schedule::nextCommand() {
   if (!initDone) {
     size_t count = std::count_if(
         commands.begin(), commands.end(),
-        [](const std::pair<std::string, Command> &command) {
-          return command.second.active && command.second.last == 0;
-        });
+        [](const Command &cmd) { return cmd.active && cmd.last == 0; });
+
     if (count == 0) {
       initDone = true;
     } else {
-      actCommand =
-          &(std::find_if(commands.begin(), commands.end(),
-                         [](const std::pair<std::string, Command> &command) {
-                           return command.second.active &&
-                                  command.second.last == 0;
-                         }))
-               ->second;
+      actCommand = &(*std::find_if(
+          commands.begin(), commands.end(),
+          [](const Command &cmd) { return cmd.active && cmd.last == 0; }));
     }
   } else {
-    actCommand = &(std::min_element(
-                       commands.begin(), commands.end(),
-                       [](const std::pair<std::string, Command> &i,
-                          const std::pair<std::string, Command> &j) {
-                         return i.second.active && j.second.active &&
-                                (i.second.last + i.second.interval * 1000) <
-                                    (j.second.last + j.second.interval * 1000);
-                       }))
-                      ->second;
+    actCommand = &(*std::min_element(commands.begin(), commands.end(),
+                                     [](const Command &i, const Command &j) {
+                                       return i.active && j.active &&
+                                              (i.last + i.interval * 1000) <
+                                                  (j.last + j.interval * 1000);
+                                     }));
 
     if (millis() < actCommand->last + actCommand->interval * 1000)
       return ebus::Sequence::to_vector("");
@@ -388,21 +389,17 @@ void Schedule::processResponse(const std::vector<uint8_t> slave) {
 
 void Schedule::processTelegram(const std::vector<uint8_t> master,
                                const std::vector<uint8_t> slave) {
-  Command *curCommand =
-      &(std::find_if(commands.begin(), commands.end(),
-                     [&master](const std::pair<std::string, Command> &command) {
-                       return !command.second.active &&
-                              ebus::Sequence::contains(master,
-                                                       command.second.command);
-                     }))
-           ->second;
+  // Command *curCommand = &(*std::find_if(
+  //     commands.begin(), commands.end(), [&master](const Command &cmd) {
+  //       return !cmd.active && ebus::Sequence::contains(master, cmd.command);
+  //     }));
 
-  if (curCommand != nullptr) {
-    if (curCommand->master)
-      publishValue(curCommand, master, curCommand->position + 4);
-    else
-      publishValue(curCommand, slave, curCommand->position);
-  }
+  // if (curCommand != nullptr) {
+  //   if (curCommand->master)
+  //     publishValue(curCommand, master, curCommand->position + 4);
+  //   else
+  //     publishValue(curCommand, slave, curCommand->position);
+  // }
 }
 
 void Schedule::publishValue(Command *command, const std::vector<uint8_t> value,

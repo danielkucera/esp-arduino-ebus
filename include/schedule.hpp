@@ -3,7 +3,6 @@
 
 #include <WiFiClient.h>
 
-#include <map>
 #include <string>
 #include <vector>
 
@@ -13,7 +12,8 @@
 // Implementation of the perodic sending of predefined commands.
 
 struct Command {
-  std::vector<uint8_t> command;  // ebus command as ZZ PB SB NN DBx
+  std::string key;               // ebus command as string
+  std::vector<uint8_t> command;  // ebus command as vector ZZ PB SB NN DBx
   std::string unit;              // unit of the received data
   bool active;                   // active sending of command
   uint32_t interval;        // minimum interval between two commands in seconds
@@ -50,7 +50,7 @@ class Schedule {
  private:
   uint8_t address = 0xff;
 
-  std::map<std::string, Command> commands;
+  std::vector<Command> commands;
 
   WiFiClient *dummyClient = new WiFiClient();
   ebus::EbusHandler ebusHandler;
@@ -65,8 +65,8 @@ class Schedule {
 
   bool initDone = false;
 
-  void publishCommand(const char *key, bool remove) const;
-  void publishHomeAssistant(const char *key, bool remove) const;
+  void publishCommand(const std::string key, bool remove) const;
+  void publishHomeAssistant(const std::string key, bool remove) const;
 
   const std::vector<uint8_t> nextCommand();
 
