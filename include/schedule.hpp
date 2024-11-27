@@ -50,7 +50,8 @@ class Schedule {
  private:
   uint8_t address = 0xff;
 
-  std::vector<Command> commands;
+  std::vector<Command> activeCommands;
+  std::vector<Command> passiveCommands;
 
   WiFiClient *dummyClient = new WiFiClient();
   ebus::EbusHandler ebusHandler;
@@ -65,10 +66,12 @@ class Schedule {
 
   bool initDone = false;
 
-  void publishCommand(const std::string key, bool remove) const;
-  void publishHomeAssistant(const std::string key, bool remove) const;
+  void publishCommand(const std::vector<Command> *command,
+                      const std::string key, bool remove) const;
+  void publishHomeAssistant(const std::vector<Command> *command,
+                            const std::string key, bool remove) const;
 
-  const std::vector<uint8_t> nextCommand();
+  const std::vector<uint8_t> nextActiveCommand();
 
   static bool busReadyCallback();
   static void busWriteCallback(const uint8_t byte);
@@ -80,8 +83,7 @@ class Schedule {
   void processTelegram(const std::vector<uint8_t> master,
                        const std::vector<uint8_t> slave);
 
-  void publishValue(Command *command, const std::vector<uint8_t> value,
-                    const size_t position);
+  void publishValue(Command *command, const std::vector<uint8_t> value);
 };
 
 extern Schedule schedule;
