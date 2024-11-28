@@ -78,7 +78,7 @@ void Schedule::insertCommand(const char *payload) {
     usedCommands->push_back(command);
     publishCommand(usedCommands, command.key, false);
 
-    if (command.ha) publishHomeAssistant(usedCommands, command.key, false);
+    publishHomeAssistant(usedCommands, command.key, !command.ha);
 
     initDone = false;
   }
