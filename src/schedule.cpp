@@ -78,8 +78,6 @@ void Schedule::insertCommand(const char *payload) {
     usedCommands->push_back(command);
     publishCommand(usedCommands, command.key, false);
 
-    publishHomeAssistant(usedCommands, command.key, !command.ha);
-
     initDone = false;
   }
 }
@@ -95,8 +93,6 @@ void Schedule::removeCommand(const char *topic) {
   if (it != activeCommands.end()) {
     publishCommand(&activeCommands, key, true);
 
-    if (it->ha) publishHomeAssistant(&activeCommands, key, true);
-
     activeCommands.erase(it);
     publishCommands();
   } else {
@@ -106,8 +102,6 @@ void Schedule::removeCommand(const char *topic) {
 
     if (it != passiveCommands.end()) {
       publishCommand(&passiveCommands, key, true);
-
-      if (it->ha) publishHomeAssistant(&passiveCommands, key, true);
 
       passiveCommands.erase(it);
       publishCommands();
@@ -173,6 +167,45 @@ const char *Schedule::printCommands() const {
   serializeJson(doc, payload);
 
   return payload.c_str();
+}
+
+void Schedule::publishRaw(const char *payload) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, payload);
+
+  if (error) {
+    std::string err = "DeserializationError ";
+    err += error.c_str();
+    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+  } else {
+    raw = doc.as<bool>();
+  }
+}
+
+// payload - optional parameter: unit, ha_class
+//
+// example:
+// [
+//   "0700",
+//   "b509",
+//   "..."
+// ]
+void Schedule::handleFilter(const char *payload) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, payload);
+
+  if (error) {
+    std::string err = "DeserializationError ";
+    err += error.c_str();
+    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+  } else {
+    rawFilters.clear();
+
+    JsonArray arr = doc.as<JsonArray>();
+
+    for (JsonVariant value : arr)
+      rawFilters.push_back(ebus::Sequence::to_vector(value));
+  }
 }
 
 bool Schedule::needTX() { return activeCommands.size() > 0; }
@@ -319,13 +352,13 @@ void Schedule::publishCounters() {
   initCounters = false;
 }
 
-void Schedule::publishCommand(const std::vector<Command> *command,
+void Schedule::publishCommand(const std::vector<Command> *commands,
                               const std::string key, bool remove) const {
   const std::vector<Command>::const_iterator it =
-      std::find_if(command->begin(), command->end(),
+      std::find_if(commands->begin(), commands->end(),
                    [&key](const Command &cmd) { return cmd.key == key; });
 
-  if (it != command->end()) {
+  if (it != commands->end()) {
     std::string topic = "ebus/config/installed/" + it->key;
 
     std::string payload;
@@ -348,40 +381,43 @@ void Schedule::publishCommand(const std::vector<Command> *command,
     }
 
     mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
+
+    if (remove) {
+      topic = "ebus/values/" + it->topic;
+      mqttClient.publish(topic.c_str(), 0, false, "");
+
+      publishHomeAssistant(&(*it), true);
+    } else {
+      publishHomeAssistant(&(*it), !it->ha);
+    }
   }
 }
 
-void Schedule::publishHomeAssistant(const std::vector<Command> *command,
-                                    const std::string key, bool remove) const {
-  const std::vector<Command>::const_iterator it =
-      std::find_if(command->begin(), command->end(),
-                   [&key](const Command &cmd) { return cmd.key == key; });
+void Schedule::publishHomeAssistant(const Command *command, bool remove) const {
+  std::string name = command->topic;
+  std::replace(name.begin(), name.end(), '/', '_');
 
-  if (it != command->end()) {
-    std::string name = it->topic;
-    std::replace(name.begin(), name.end(), '/', '_');
+  std::string topic = "homeassistant/sensor/ebus/" + name + "/config";
 
-    std::string topic = "homeassistant/sensor/ebus/" + name + "/config";
+  std::string payload;
 
-    std::string payload;
+  if (!remove) {
+    JsonDocument doc;
 
-    if (!remove) {
-      JsonDocument doc;
+    doc["name"] = name;
+    if (command->ha_class.compare("null") != 0 &&
+        command->ha_class.length() > 0)
+      doc["device_class"] = command->ha_class;
+    doc["state_topic"] = "ebus/values/" + command->topic;
+    if (command->unit.compare("null") != 0 && command->unit.length() > 0)
+      doc["unit_of_measurement"] = command->unit;
+    doc["unique_id"] = command->key;
+    doc["value_template"] = "{{value_json.value}}";
 
-      doc["name"] = name;
-      if (it->ha_class.compare("null") != 0 && it->ha_class.length() > 0)
-        doc["device_class"] = it->ha_class;
-      doc["state_topic"] = "ebus/values/" + it->topic;
-      if (it->unit.compare("null") != 0 && it->unit.length() > 0)
-        doc["unit_of_measurement"] = it->unit;
-      doc["unique_id"] = it->key;
-      doc["value_template"] = "{{value_json.value}}";
-
-      serializeJson(doc, payload);
-    }
-
-    mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+    serializeJson(doc, payload);
   }
+
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 }
 
 const std::vector<uint8_t> Schedule::nextActiveCommand() {
@@ -432,6 +468,21 @@ void Schedule::processResponse(const std::vector<uint8_t> slave) {
 
 void Schedule::processTelegram(const std::vector<uint8_t> master,
                                const std::vector<uint8_t> slave) {
+  if (raw) {
+    size_t count = std::count_if(rawFilters.begin(), rawFilters.end(),
+                                 [&master](const std::vector<uint8_t> &vec) {
+                                   return ebus::Sequence::contains(master, vec);
+                                 });
+    if (count > 0 || rawFilters.size() == 0) {
+      std::string topic =
+          "ebus/values/raw/" + ebus::Sequence::to_string(master);
+      std::string payload = ebus::Sequence::to_string(slave);
+      if (payload.empty()) payload = "-";
+
+      mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
+    }
+  }
+
   size_t count =
       std::count_if(passiveCommands.begin(), passiveCommands.end(),
                     [&master](const Command &cmd) {

@@ -7,6 +7,8 @@ AsyncMqttClient mqttClient;
 void onMqttConnect(bool sessionPresent) {
   mqttClient.subscribe("ebus/config/commands/#", 0);
   mqttClient.subscribe("ebus/config/list", 0);
+  mqttClient.subscribe("ebus/config/raw", 0);
+  mqttClient.subscribe("ebus/config/filter", 0);
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {}
@@ -26,6 +28,10 @@ void onMqttMessage(char *topic, char *payload,
       schedule.removeCommand(topic);
   } else if (tmp.equals("ebus/config/list")) {
     schedule.publishCommands();
+  } else if (tmp.equals("ebus/config/raw")) {
+    schedule.publishRaw(payload);
+  } else if (tmp.startsWith("ebus/config/filter")) {
+    if (String(payload).length() > 0) schedule.handleFilter(payload);
   }
 }
 

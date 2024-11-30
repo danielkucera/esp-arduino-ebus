@@ -39,6 +39,9 @@ class Schedule {
   void publishCommands() const;
   const char *printCommands() const;
 
+  void publishRaw(const char *payload);
+  void handleFilter(const char*payload);
+
   bool needTX();
 
   void processSend();
@@ -66,10 +69,12 @@ class Schedule {
 
   bool initDone = false;
 
-  void publishCommand(const std::vector<Command> *command,
+  bool raw = false;
+  std::vector<std::vector<uint8_t>> rawFilters;
+
+  void publishCommand(const std::vector<Command> *commands,
                       const std::string key, bool remove) const;
-  void publishHomeAssistant(const std::vector<Command> *command,
-                            const std::string key, bool remove) const;
+  void publishHomeAssistant(const Command *commands, bool remove) const;
 
   const std::vector<uint8_t> nextActiveCommand();
 
