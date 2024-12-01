@@ -40,7 +40,7 @@ class Schedule {
   const char *printCommands() const;
 
   void publishRaw(const char *payload);
-  void handleFilter(const char*payload);
+  void handleFilter(const char *payload);
 
   bool needTX();
 
