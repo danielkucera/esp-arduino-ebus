@@ -2,7 +2,6 @@
 
 #include <ArduinoOTA.h>
 #include <IotWebConf.h>
-#include <IotWebConfUsing.h>
 #include <Preferences.h>
 
 #include "bus.hpp"
@@ -80,40 +79,40 @@ char mqtt_pass[STRING_LEN];
 
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
 
-IotWebConfParameterGroup connGroup =
-    IotWebConfParameterGroup("conn", "Connection parameters");
-IotWebConfCheckboxParameter staticIPParam = IotWebConfCheckboxParameter(
+iotwebconf::ParameterGroup connGroup =
+    iotwebconf::ParameterGroup("conn", "Connection parameters");
+iotwebconf::CheckboxParameter staticIPParam = iotwebconf::CheckboxParameter(
     "Enable Static IP", "staticIPParam", staticIPValue, STRING_LEN);
-IotWebConfTextParameter ipAddressParam =
-    IotWebConfTextParameter("IP address", "ipAddress", ipAddressValue,
+iotwebconf::TextParameter ipAddressParam =
+    iotwebconf::TextParameter("IP address", "ipAddress", ipAddressValue,
                             STRING_LEN, "", DEFAULT_STATIC_IP);
-IotWebConfTextParameter gatewayParam = IotWebConfTextParameter(
+iotwebconf::TextParameter gatewayParam = iotwebconf::TextParameter(
     "Gateway", "gateway", gatewayValue, STRING_LEN, "", DEFAULT_GATEWAY);
-IotWebConfTextParameter netmaskParam =
-    IotWebConfTextParameter("Subnet mask", "netmask", netmaskValue, STRING_LEN,
+iotwebconf::TextParameter netmaskParam =
+    iotwebconf::TextParameter("Subnet mask", "netmask", netmaskValue, STRING_LEN,
                             DEFAULT_NETMASK, DEFAULT_NETMASK);
 
-IotWebConfParameterGroup ebusGroup =
-    IotWebConfParameterGroup("ebus", "EBUS configuration");
-IotWebConfNumberParameter pwmParam =
-    IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
+iotwebconf::ParameterGroup ebusGroup =
+    iotwebconf::ParameterGroup("ebus", "EBUS configuration");
+iotwebconf::NumberParameter pwmParam =
+    iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
                               "130", "1..255", "min='1' max='255' step='1'");
-IotWebConfSelectParameter ebusAddressParam = IotWebConfSelectParameter(
+iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     "EBUS address", "ebus_address", ebus_address, NUMBER_LEN,
     reinterpret_cast<char*>(ebus_address_values),
     reinterpret_cast<char*>(ebus_address_names),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
-IotWebConfNumberParameter commandDistanceParam = IotWebConfNumberParameter(
+iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     "Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1",
     "0..60", "min='0' max='60' step='1'");
 
-IotWebConfParameterGroup mqttGroup =
-    IotWebConfParameterGroup("mqtt", "MQTT configuration");
-IotWebConfTextParameter mqttServerParam = IotWebConfTextParameter(
+iotwebconf::ParameterGroup mqttGroup =
+    iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
+iotwebconf::TextParameter mqttServerParam = iotwebconf::TextParameter(
     "MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "", "server.lan");
-IotWebConfTextParameter mqttUserParam = IotWebConfTextParameter(
+iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
     "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", "roger");
-IotWebConfPasswordParameter mqttPasswordParam = IotWebConfPasswordParameter(
+iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
     "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", "password");
 
 IPAddress ipAddress;
