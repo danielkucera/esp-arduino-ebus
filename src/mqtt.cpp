@@ -30,7 +30,7 @@ void onMqttMessage(char *topic, char *payload,
     schedule.publishCommands();
   } else if (tmp.equals("ebus/config/raw")) {
     schedule.publishRaw(payload);
-  } else if (tmp.startsWith("ebus/config/filter")) {
+  } else if (tmp.equals("ebus/config/filter")) {
     if (String(payload).length() > 0) schedule.handleFilter(payload);
   }
 }
