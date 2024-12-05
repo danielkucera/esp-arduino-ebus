@@ -5,6 +5,47 @@
 #include "bus.hpp"
 #include "mqtt.hpp"
 
+Track<uint32_t> total("ebus/messages/total", 10);
+
+Track<uint32_t> success("ebus/messages/success", 10);
+Track<float> successPercent("ebus/messages/success/percent", 10);
+Track<uint32_t> successMS("ebus/messages/success/master_slave", 10);
+Track<uint32_t> successMM("ebus/messages/success/master_master", 10);
+Track<uint32_t> successBC("ebus/messages/success/broadcast", 10);
+
+Track<uint32_t> failure("ebus/messages/failure", 10);
+Track<float> failurePercent("ebus/messages/failure/percent", 10);
+
+Track<uint32_t> failureMasterEmpty("ebus/messages/failure/master/empty", 10);
+Track<uint32_t> failureMasterOk("ebus/messages/failure/master/ok", 10);
+Track<uint32_t> failureMasterShort("ebus/messages/failure/master/short", 10);
+Track<uint32_t> failureMasterLong("ebus/messages/failure/master/long", 10);
+Track<uint32_t> failureMasterNN("ebus/messages/failure/master/nn", 10);
+Track<uint32_t> failureMasterCRC("ebus/messages/failure/master/crc", 10);
+Track<uint32_t> failureMasterACK("ebus/messages/failure/master/ack", 10);
+Track<uint32_t> failureMasterQQ("ebus/messages/failure/master/qq", 10);
+Track<uint32_t> failureMasterZZ("ebus/messages/failure/master/zz", 10);
+Track<uint32_t> failureMasterAckMiss("ebus/messages/failure/master/ack_miss",
+                                     10);
+Track<uint32_t> failureMasterInvalid("ebus/messages/failure/master/invalid",
+                                     10);
+
+Track<uint32_t> failureSlaveEmpty("ebus/messages/failure/slave/empty", 10);
+Track<uint32_t> failureSlaveOk("ebus/messages/failure/slave/ok", 10);
+Track<uint32_t> failureSlaveShort("ebus/messages/failure/slave/short", 10);
+Track<uint32_t> failureSlaveLong("ebus/messages/failure/slave/long", 10);
+Track<uint32_t> failureSlaveNN("ebus/messages/failure/slave/nn", 10);
+Track<uint32_t> failureSlaveCRC("ebus/messages/failure/slave/crc", 10);
+Track<uint32_t> failureSlaveACK("ebus/messages/failure/slave/ack", 10);
+Track<uint32_t> failureSlaveQQ("ebus/messages/failure/slave/qq", 10);
+Track<uint32_t> failureSlaveZZ("ebus/messages/failure/slave/zz", 10);
+Track<uint32_t> failureSlaveAckMiss("ebus/messages/failure/slave/ack_miss", 10);
+Track<uint32_t> failureSlaveInvalid("ebus/messages/failure/slave/invalid", 10);
+
+Track<uint32_t> special00("ebus/messages/special/00", 10);
+Track<uint32_t> special0704Success("ebus/messages/special/0704Success", 10);
+Track<uint32_t> special0704Failure("ebus/messages/special/0704Failure", 10);
+
 Schedule schedule;
 
 Schedule::Schedule() {
@@ -253,103 +294,44 @@ void Schedule::resetCounters() { ebusHandler.resetCounters(); }
 
 void Schedule::publishCounters() {
   ebus::Counter counters = ebusHandler.getCounters();
+  total = counters.total;
 
-  publishTopic(initCounters, "ebus/messages/total", lastCounters.total,
-               counters.total);
+  success = counters.success;
+  successPercent = counters.successPercent;
+  successMS = counters.successMS;
+  successMM = counters.successMM;
+  successBC, counters.successBC;
 
-  publishTopic(initCounters, "ebus/messages/success", lastCounters.success,
-               counters.success);
-  publishTopic(initCounters, "ebus/messages/success/percent",
-               lastCounters.successPercent, counters.successPercent);
-  publishTopic(initCounters, "ebus/messages/success/master_slave",
-               lastCounters.successMS, counters.successMS);
-  publishTopic(initCounters, "ebus/messages/success/master_master",
-               lastCounters.successMM, counters.successMM);
-  publishTopic(initCounters, "ebus/messages/success/broadcast",
-               lastCounters.successBC, counters.successBC);
+  failure = counters.failure;
+  failurePercent = counters.failurePercent;
 
-  publishTopic(initCounters, "ebus/messages/failure", lastCounters.failure,
-               counters.failure);
-  publishTopic(initCounters, "ebus/messages/failure/percent",
-               lastCounters.failurePercent, counters.failurePercent);
+  failureMasterEmpty = counters.failureMaster[SEQ_EMPTY];
+  failureMasterOk = counters.failureMaster[SEQ_OK];
+  failureMasterShort = counters.failureMaster[SEQ_ERR_SHORT];
+  failureMasterLong = counters.failureMaster[SEQ_ERR_LONG];
+  failureMasterNN = counters.failureMaster[SEQ_ERR_NN];
+  failureMasterCRC = counters.failureMaster[SEQ_ERR_CRC];
+  failureMasterACK = counters.failureMaster[SEQ_ERR_ACK];
+  failureMasterQQ = counters.failureMaster[SEQ_ERR_QQ];
+  failureMasterZZ = counters.failureMaster[SEQ_ERR_ZZ];
+  failureMasterAckMiss = counters.failureMaster[SEQ_ERR_ACK_MISS];
+  failureMasterInvalid = counters.failureMaster[SEQ_ERR_INVALID];
 
-  publishTopic(initCounters, "ebus/messages/failure/master/empty",
-               lastCounters.failureMaster[SEQ_EMPTY],
-               counters.failureMaster[SEQ_EMPTY]);
-  publishTopic(initCounters, "ebus/messages/failure/master/ok",
-               lastCounters.failureMaster[SEQ_OK],
-               counters.failureMaster[SEQ_OK]);
-  publishTopic(initCounters, "ebus/messages/failure/master/short",
-               lastCounters.failureMaster[SEQ_ERR_SHORT],
-               counters.failureMaster[SEQ_ERR_SHORT]);
-  publishTopic(initCounters, "ebus/messages/failure/master/long",
-               lastCounters.failureMaster[SEQ_ERR_LONG],
-               counters.failureMaster[SEQ_ERR_LONG]);
-  publishTopic(initCounters, "ebus/messages/failure/master/nn",
-               lastCounters.failureMaster[SEQ_ERR_NN],
-               counters.failureMaster[SEQ_ERR_NN]);
-  publishTopic(initCounters, "ebus/messages/failure/master/crc",
-               lastCounters.failureMaster[SEQ_ERR_CRC],
-               counters.failureMaster[SEQ_ERR_CRC]);
-  publishTopic(initCounters, "ebus/messages/failure/master/ack",
-               lastCounters.failureMaster[SEQ_ERR_ACK],
-               counters.failureMaster[SEQ_ERR_ACK]);
-  publishTopic(initCounters, "ebus/messages/failure/master/qq",
-               lastCounters.failureMaster[SEQ_ERR_QQ],
-               counters.failureMaster[SEQ_ERR_QQ]);
-  publishTopic(initCounters, "ebus/messages/failure/master/zz",
-               lastCounters.failureMaster[SEQ_ERR_ZZ],
-               counters.failureMaster[SEQ_ERR_ZZ]);
-  publishTopic(initCounters, "ebus/messages/failure/master/ack_miss",
-               lastCounters.failureMaster[SEQ_ERR_ACK_MISS],
-               counters.failureMaster[SEQ_ERR_ACK_MISS]);
-  publishTopic(initCounters, "ebus/messages/failure/master/invalid",
-               lastCounters.failureMaster[SEQ_ERR_INVALID],
-               counters.failureMaster[SEQ_ERR_INVALID]);
+  failureSlaveEmpty = counters.failureSlave[SEQ_EMPTY];
+  failureSlaveOk = counters.failureSlave[SEQ_OK];
+  failureSlaveShort = counters.failureSlave[SEQ_ERR_SHORT];
+  failureSlaveLong = counters.failureSlave[SEQ_ERR_LONG];
+  failureSlaveNN = counters.failureSlave[SEQ_ERR_NN];
+  failureSlaveCRC = counters.failureSlave[SEQ_ERR_CRC];
+  failureSlaveACK = counters.failureSlave[SEQ_ERR_ACK];
+  failureSlaveQQ = counters.failureSlave[SEQ_ERR_QQ];
+  failureSlaveZZ = counters.failureSlave[SEQ_ERR_ZZ];
+  failureSlaveAckMiss = counters.failureSlave[SEQ_ERR_ACK_MISS];
+  failureSlaveInvalid = counters.failureSlave[SEQ_ERR_INVALID];
 
-  publishTopic(initCounters, "ebus/messages/failure/slave/empty",
-               lastCounters.failureSlave[SEQ_EMPTY],
-               counters.failureSlave[SEQ_EMPTY]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/ok",
-               lastCounters.failureSlave[SEQ_OK],
-               counters.failureSlave[SEQ_OK]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/short",
-               lastCounters.failureSlave[SEQ_ERR_SHORT],
-               counters.failureSlave[SEQ_ERR_SHORT]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/long",
-               lastCounters.failureSlave[SEQ_ERR_LONG],
-               counters.failureSlave[SEQ_ERR_LONG]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/nn",
-               lastCounters.failureSlave[SEQ_ERR_NN],
-               counters.failureSlave[SEQ_ERR_NN]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/crc",
-               lastCounters.failureSlave[SEQ_ERR_CRC],
-               counters.failureSlave[SEQ_ERR_CRC]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/ack",
-               lastCounters.failureSlave[SEQ_ERR_ACK],
-               counters.failureSlave[SEQ_ERR_ACK]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/qq",
-               lastCounters.failureSlave[SEQ_ERR_QQ],
-               counters.failureSlave[SEQ_ERR_QQ]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/zz",
-               lastCounters.failureSlave[SEQ_ERR_ZZ],
-               counters.failureSlave[SEQ_ERR_ZZ]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/ack_miss",
-               lastCounters.failureSlave[SEQ_ERR_ACK_MISS],
-               counters.failureSlave[SEQ_ERR_ACK_MISS]);
-  publishTopic(initCounters, "ebus/messages/failure/slave/invalid",
-               lastCounters.failureSlave[SEQ_ERR_INVALID],
-               counters.failureSlave[SEQ_ERR_INVALID]);
-
-  publishTopic(initCounters, "ebus/messages/special/00", lastCounters.special00,
-               counters.special00);
-  publishTopic(initCounters, "ebus/messages/special/0704Success",
-               lastCounters.special0704Success, counters.special0704Success);
-  publishTopic(initCounters, "ebus/messages/special/0704Failure",
-               lastCounters.special0704Failure, counters.special0704Failure);
-
-  lastCounters = counters;
-  initCounters = false;
+  special00 = counters.special00;
+  special0704Success = counters.special0704Success;
+  special0704Failure = counters.special0704Failure;
 }
 
 void Schedule::publishCommand(const std::vector<Command> *commands,

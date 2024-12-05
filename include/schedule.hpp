@@ -59,9 +59,6 @@ class Schedule {
   WiFiClient *dummyClient = new WiFiClient();
   ebus::EbusHandler ebusHandler;
 
-  bool initCounters = true;
-  ebus::Counter lastCounters;
-
   Command *actCommand = nullptr;
 
   uint32_t distanceCommands = 0;

@@ -85,18 +85,18 @@ iotwebconf::CheckboxParameter staticIPParam = iotwebconf::CheckboxParameter(
     "Enable Static IP", "staticIPParam", staticIPValue, STRING_LEN);
 iotwebconf::TextParameter ipAddressParam =
     iotwebconf::TextParameter("IP address", "ipAddress", ipAddressValue,
-                            STRING_LEN, "", DEFAULT_STATIC_IP);
+                              STRING_LEN, "", DEFAULT_STATIC_IP);
 iotwebconf::TextParameter gatewayParam = iotwebconf::TextParameter(
     "Gateway", "gateway", gatewayValue, STRING_LEN, "", DEFAULT_GATEWAY);
 iotwebconf::TextParameter netmaskParam =
-    iotwebconf::TextParameter("Subnet mask", "netmask", netmaskValue, STRING_LEN,
-                            DEFAULT_NETMASK, DEFAULT_NETMASK);
+    iotwebconf::TextParameter("Subnet mask", "netmask", netmaskValue,
+                              STRING_LEN, DEFAULT_NETMASK, DEFAULT_NETMASK);
 
 iotwebconf::ParameterGroup ebusGroup =
     iotwebconf::ParameterGroup("ebus", "EBUS configuration");
 iotwebconf::NumberParameter pwmParam =
     iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
-                              "130", "1..255", "min='1' max='255' step='1'");
+                                "130", "1..255", "min='1' max='255' step='1'");
 iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     "EBUS address", "ebus_address", ebus_address, NUMBER_LEN,
     reinterpret_cast<char*>(ebus_address_values),
@@ -133,51 +133,39 @@ bool needMqttConnect = false;
 uint32_t lastMqttConnectionAttempt = 0;
 uint32_t lastMqttUpdate = 0;
 
-struct MqttValues {
-  // ebus/device
-  uint32_t uptime = 0;
-  uint32_t loop_duration = 0;
-  uint32_t loop_duration_max = 0;
-  uint32_t free_heap = 0;
-  uint32_t reset_code = -1;
+// ebus/device
+Track<uint32_t> uptime("ebus/device/uptime", 10);
+Track<uint32_t> loopDuration("ebus/device/loop_duration", 10);
+Track<uint32_t> maxLoopDuration("ebus/device/loop_duration_max", 10);
+Track<uint32_t> free_heap("ebus/device/free_heap", 10);
+uint32_t reset_code = -1;
 
-  // ebus/device/ebus
-  uint32_t pwm_value = 0;
-  String ebus_address = "";
-  uint8_t comand_distance = 0;
+// ebus/device/ebus
+Track<uint32_t> pwm("ebus/device/ebus/pwm", 0);
+Track<String> ebusAddress("ebus/device/ebus/ebus_address", 0);
+Track<String> commandDistance("ebus/device/ebus/comand_distance", 0);
 
-  // ebus/device/firmware
-  const char* version = AUTO_VERSION;
-  const char* sdk = ESP.getSdkVersion();
-  const char* async = USE_ASYNCHRONOUS ? "true" : "false";
-  const char* software_serial = USE_SOFTWARE_SERIAL ? "true" : "false";
+// ebus/device/wifi
+Track<uint32_t> last_connect("ebus/device/wifi/last_connect", 30);
+Track<int> reconnect_count("ebus/device/wifi/reconnect_count", 30);
+Track<int8_t> rssi("ebus/device/wifi/rssi", 30);
 
-  // ebus/device/wifi
-  uint32_t last_connect = 0;
-  int reconnect_count = 0;
-  int8_t rssi = 0;
+// ebus/arbitration
+Track<int> nbrArbitrations("ebus/arbitration/total", 10);
 
-  // ebus/arbitration
-  int total = 0;
+Track<int> nbrWon("ebus/arbitration/won", 10);
+Track<float> nbrWonPercent("ebus/arbitration/won/percent", 10);
+Track<int> nbrRestarts1("ebus/arbitration/won/restarts1", 10);
+Track<int> nbrRestarts2("ebus/arbitration/won/restarts2", 10);
+Track<int> nbrWon1("ebus/arbitration/won/won1", 10);
+Track<int> nbrWon2("ebus/arbitration/won/won2", 10);
 
-  int won = 0;
-  float wonPercent = 0;
-  int restarts1 = 0;
-  int restarts2;
-  int won1 = 0;
-  int won2;
-
-  int lost = 0;
-  float lostPercent = 0;
-  int lost1 = 0;
-  int lost2 = 0;
-  int errors = 0;
-  int late = 0;
-};
-
-MqttValues mqttValues;
-MqttValues lastMqttValues;
-bool initMqttValues = true;
+Track<int> nbrLost("ebus/arbitration/lost", 10);
+Track<float> nbrLostPercent("ebus/arbitration/lost/percent", 10);
+Track<int> nbrLost1("ebus/arbitration/lost/lost1", 10);
+Track<int> nbrLost2("ebus/arbitration/lost/lost2", 10);
+Track<int> nbrLate("ebus/arbitration/lost/late", 10);
+Track<int> nbrErrors("ebus/arbitration/lost/errors", 10);
 
 bool connectMqtt() {
   if (mqttClient.connected()) return true;
@@ -197,8 +185,8 @@ bool connectMqtt() {
 }
 
 void wifiConnected() {
-  mqttValues.last_connect = millis();
-  mqttValues.reconnect_count++;
+  last_connect = millis();
+  reconnect_count++;
   needMqttConnect = true;
 }
 
@@ -281,11 +269,10 @@ void loop_duration() {
 
   lastTime = now;
 
-  mqttValues.loop_duration =
-      ((1 - ALPHA) * mqttValues.loop_duration + (ALPHA * delta));
+  loopDuration = ((1 - ALPHA) * loopDuration.value() + (ALPHA * delta));
 
-  if (delta > mqttValues.loop_duration_max) {
-    mqttValues.loop_duration_max = delta;
+  if (delta > maxLoopDuration.value()) {
+    maxLoopDuration = delta;
   }
 }
 
@@ -372,8 +359,13 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
 
 void saveParamsCallback() {
   set_pwm(atoi(pwm_value));
+  pwm = get_pwm();
+
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebusAddress = ebus_address;
+
   schedule.setDistance(atoi(comand_distance));
+  commandDistance = comand_distance;
 
   if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
 
@@ -404,18 +396,17 @@ char* status_string() {
                   USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
-                  mqttValues.last_connect);
+                  last_connect.value());
   pos += snprintf(status + pos, sizeof(status), "reconnect_count: %d \n",
-                  mqttValues.reconnect_count);
+                  reconnect_count.value());
   pos += snprintf(status + pos, sizeof(status), "rssi: %d dBm\n", WiFi.RSSI());
   pos += snprintf(status + pos, sizeof(status), "free_heap: %d B\n",
-                  ESP.getFreeHeap());
-  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n",
-                  mqttValues.reset_code);
+                  free_heap.value());
+  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n", reset_code);
   pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
-                  mqttValues.loop_duration);
+                  loopDuration.value());
   pos += snprintf(status + pos, sizeof(status), "max_loop_duration: %u us\r\n",
-                  mqttValues.loop_duration_max);
+                  maxLoopDuration.value());
   pos +=
       snprintf(status + pos, sizeof(status), "version: %s\r\n", AUTO_VERSION);
   pos += snprintf(status + pos, sizeof(status), "nbr_arbitrations: %i\r\n",
@@ -455,118 +446,54 @@ void handleCommands() {
                     schedule.printCommands());
 }
 
-void publishValues() {
+void publishStatus() {
   // ebus/device
-  mqttValues.uptime = millis();
-  publishTopic(initMqttValues, "ebus/device/uptime", lastMqttValues.uptime,
-               mqttValues.uptime);
-
-  publishTopic(initMqttValues, "ebus/device/loop_duration",
-               lastMqttValues.loop_duration, mqttValues.loop_duration);
-
-  publishTopic(initMqttValues, "ebus/device/loop_duration_max",
-               lastMqttValues.loop_duration_max, mqttValues.loop_duration_max);
-
-  mqttValues.free_heap = ESP.getFreeHeap();
-  publishTopic(initMqttValues, "ebus/device/free_heap",
-               lastMqttValues.free_heap, mqttValues.free_heap);
-
-  publishTopic(initMqttValues, "ebus/device/reset_code",
-               lastMqttValues.reset_code, mqttValues.reset_code);
-
-  // ebus/device/ebus
-  mqttValues.pwm_value = get_pwm();
-  publishTopic(initMqttValues, "ebus/device/ebus/pwm_value",
-               lastMqttValues.pwm_value, mqttValues.pwm_value);
-
-  mqttValues.ebus_address = String(ebus_address);
-  publishTopic(initMqttValues, "ebus/device/ebus/ebus_address",
-               lastMqttValues.ebus_address, mqttValues.ebus_address);
-
-  mqttValues.comand_distance = atoi(comand_distance);
-  publishTopic(initMqttValues, "ebus/device/ebus/comand_distance",
-               lastMqttValues.comand_distance, mqttValues.comand_distance);
+  uptime.publish();
+  loopDuration.publish();
+  maxLoopDuration.publish();
+  free_heap.publish();
+  mqttClient.publish("ebus/device/reset_code", 0, true,
+                     String(reset_code).c_str());
 
   // ebus/device/firmware
-  publishTopic(initMqttValues, "ebus/device/firmware/sdk", lastMqttValues.sdk,
-               mqttValues.sdk);
+  mqttClient.publish("ebus/device/firmware/version", 0, true, AUTO_VERSION);
+  mqttClient.publish("ebus/device/firmware/sdk", 0, true, ESP.getSdkVersion());
+  mqttClient.publish("ebus/device/firmware/async", 0, true,
+                     USE_ASYNCHRONOUS ? "true" : "false");
+  mqttClient.publish("ebus/device/firmware/software_serial", 0, true,
+                     USE_SOFTWARE_SERIAL ? "true" : "false");
 
-  publishTopic(initMqttValues, "ebus/device/firmware/version",
-               lastMqttValues.version, mqttValues.version);
+  // ebus/device/ebus
+  pwm = get_pwm();
+  ebusAddress = ebus_address;
+  commandDistance = comand_distance;
+}
 
-  publishTopic(initMqttValues, "ebus/device/firmware/async",
-               lastMqttValues.async, mqttValues.async);
-
-  publishTopic(initMqttValues, "ebus/device/firmware/software_serial",
-               lastMqttValues.software_serial, mqttValues.software_serial);
+void publishValues() {
+  // ebus/device
+  uptime = millis();
+  free_heap = ESP.getFreeHeap();
 
   // ebus/device/wifi
-  publishTopic(initMqttValues, "ebus/device/wifi/last_connect",
-               lastMqttValues.last_connect, mqttValues.last_connect);
-
-  publishTopic(initMqttValues, "ebus/device/wifi/reconnect_count",
-               lastMqttValues.reconnect_count, mqttValues.reconnect_count);
-
-  mqttValues.rssi = WiFi.RSSI();
-  publishTopic(initMqttValues, "ebus/device/wifi/rssi", lastMqttValues.rssi,
-               mqttValues.rssi);
+  rssi = WiFi.RSSI();
 
   // ebus/arbitration
-  mqttValues.total = Bus._nbrArbitrations;
-  publishTopic(initMqttValues, "ebus/arbitration/total", lastMqttValues.total,
-               mqttValues.total);
+  nbrArbitrations = Bus._nbrArbitrations;
 
-  mqttValues.won = Bus._nbrWon1 + Bus._nbrWon2;
-  publishTopic(initMqttValues, "ebus/arbitration/won", lastMqttValues.won,
-               mqttValues.won);
+  nbrWon = Bus._nbrWon1 + Bus._nbrWon2;
+  nbrWonPercent =
+      nbrWon.value() / static_cast<float>(nbrArbitrations.value()) * 100.0f;
+  nbrRestarts1 = Bus._nbrRestarts1;
+  nbrRestarts2 = Bus._nbrRestarts2;
+  nbrWon1 = Bus._nbrWon1;
+  nbrWon2 = Bus._nbrWon2;
 
-  mqttValues.wonPercent =
-      mqttValues.won / static_cast<float>(mqttValues.total) * 100.0f;
-  publishTopic(initMqttValues, "ebus/arbitration/won/percent",
-               lastMqttValues.wonPercent, mqttValues.wonPercent);
-
-  mqttValues.restarts1 = Bus._nbrRestarts1;
-  publishTopic(initMqttValues, "ebus/arbitration/won/restarts1",
-               lastMqttValues.restarts1, mqttValues.restarts1);
-
-  mqttValues.restarts2 = Bus._nbrRestarts2;
-  publishTopic(initMqttValues, "ebus/arbitration/won/restarts2",
-               lastMqttValues.restarts2, mqttValues.restarts2);
-
-  mqttValues.won1 = Bus._nbrWon1;
-  publishTopic(initMqttValues, "ebus/arbitration/won/won1", lastMqttValues.won1,
-               mqttValues.won1);
-
-  mqttValues.won2 = Bus._nbrWon2;
-  publishTopic(initMqttValues, "ebus/arbitration/won/won2", lastMqttValues.won2,
-               mqttValues.won2);
-
-  mqttValues.lost = mqttValues.total - mqttValues.won;
-  publishTopic(initMqttValues, "ebus/arbitration/lost", lastMqttValues.lost,
-               mqttValues.lost);
-
-  mqttValues.lostPercent = 100.0f - mqttValues.wonPercent;
-  publishTopic(initMqttValues, "ebus/arbitration/lost/percent",
-               lastMqttValues.lostPercent, mqttValues.lostPercent);
-
-  mqttValues.lost1 = Bus._nbrLost1;
-  publishTopic(initMqttValues, "ebus/arbitration/lost/lost1",
-               lastMqttValues.lost1, mqttValues.lost1);
-
-  mqttValues.lost2 = Bus._nbrLost2;
-  publishTopic(initMqttValues, "ebus/arbitration/lost/lost2",
-               lastMqttValues.lost2, mqttValues.lost2);
-
-  mqttValues.late = Bus._nbrLate;
-  publishTopic(initMqttValues, "ebus/arbitration/lost/late",
-               lastMqttValues.late, mqttValues.late);
-
-  mqttValues.errors = Bus._nbrErrors;
-  publishTopic(initMqttValues, "ebus/arbitration/lost/errors",
-               lastMqttValues.errors, mqttValues.errors);
-
-  lastMqttValues = mqttValues;
-  initMqttValues = false;
+  nbrLost = nbrArbitrations.value() - nbrWon.value();
+  nbrLostPercent = 100.0f - nbrWonPercent.value();
+  nbrLost1 = Bus._nbrLost1;
+  nbrLost2 = Bus._nbrLost2;
+  nbrLate = Bus._nbrLate;
+  nbrErrors = Bus._nbrErrors;
 }
 
 void handleRoot() {
@@ -614,9 +541,9 @@ void setup() {
   check_reset();
 
 #ifdef ESP32
-  mqttValues.reset_code = rtc_get_reset_reason(0);
+  reset_code = rtc_get_reset_reason(0);
 #else
-  mqttValues.reset_code = ESP.getResetInfoPtr()->reason;
+  reset_code = ESP.getResetInfoPtr()->reason;
 #endif
 
   Bus.begin();
@@ -751,13 +678,14 @@ void loop() {
   if (needMqttConnect) {
     if (connectMqtt()) {
       needMqttConnect = false;
+      publishStatus();
     }
   } else if ((iotWebConf.getState() == iotwebconf::OnLine) &&
              (!mqttClient.connected())) {
     needMqttConnect = true;
   }
 
-  if (mqttClient.connected() && millis() > lastMqttUpdate + 60 * 1000) {
+  if (mqttClient.connected() && millis() > lastMqttUpdate + 5 * 1000) {
     lastMqttUpdate = millis();
     publishValues();
     schedule.publishCounters();
@@ -774,7 +702,7 @@ void loop() {
     // exclude handleStatusServerRequests from maxLoopDuration calculation
     // as it skews the typical loop duration and set maxLoopDuration to 0
     loop_duration();
-    mqttValues.loop_duration_max = 0;
+    maxLoopDuration = 0;
   }
 
   // Check if there are any new clients on the eBUS servers
