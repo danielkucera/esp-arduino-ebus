@@ -300,7 +300,7 @@ void Schedule::publishCounters() {
   successPercent = counters.successPercent;
   successMS = counters.successMS;
   successMM = counters.successMM;
-  successBC, counters.successBC;
+  successBC = counters.successBC;
 
   failure = counters.failure;
   failurePercent = counters.failurePercent;
