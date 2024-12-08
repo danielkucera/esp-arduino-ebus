@@ -9,8 +9,6 @@
 #include "mqtt.hpp"
 #include "schedule.hpp"
 
-Preferences preferences;
-
 #ifdef ESP32
 #include <ESPmDNS.h>
 #include <IotWebConfESP32HTTPUpdateServer.h>
@@ -26,6 +24,8 @@ HTTPUpdateServer httpUpdater;
 
 ESP8266HTTPUpdateServer httpUpdater;
 #endif
+
+Preferences preferences;
 
 #define ALPHA 0.3
 
@@ -443,7 +443,73 @@ void handleStatus() { configServer.send(200, "text/plain", status_string()); }
 
 void handleCommands() {
   configServer.send(200, "application/json;charset=utf-8",
-                    schedule.printCommands());
+                    schedule.getCommands());
+}
+
+void loadCommands() {
+  Preferences commands;
+  commands.begin("commands", true);
+
+  size_t bytes = commands.getBytesLength("ebus");
+  if (bytes > 2) {  // 2 = empty json array "[]"
+    std::vector<char> buffer(bytes);
+    bytes = commands.getBytes("ebus", buffer.data(), bytes);
+    if (bytes > 2) {  // loading was successful
+      std::string payload(buffer.begin(), buffer.end());
+
+      schedule.enqueCommands(payload.c_str());
+      mqttClient.publish("ebus/config/loading", 0, false,
+                         String(bytes).c_str());
+    } else {
+      mqttClient.publish("ebus/config/loading", 0, false, "failed");
+    }
+  } else {
+    mqttClient.publish("ebus/config/loading", 0, false, "no data");
+  }
+
+  mqttClient.publish("ebus/config/load", 0, false, "");
+
+  commands.end();
+}
+
+void saveCommands() {
+  Preferences commands;
+  commands.begin("commands", false);
+
+  const char* payload = schedule.getCommands();
+  size_t bytes = strlen(payload);
+  if (bytes > 2) {  // 2 = empty json array "[]"
+    bytes = commands.putBytes("ebus", payload, bytes);
+    if (bytes > 2)  // saving was successful
+      mqttClient.publish("ebus/config/saving", 0, false, String(bytes).c_str());
+    else
+      mqttClient.publish("ebus/config/saving", 0, false, "failed");
+  } else {
+    mqttClient.publish("ebus/config/saving", 0, false, "no data");
+  }
+
+  mqttClient.publish("ebus/config/save", 0, false, "");
+
+  commands.end();
+}
+
+void wipeCommands() {
+  Preferences commands;
+  commands.begin("commands", false);
+
+  size_t bytes = commands.getBytesLength("ebus");
+  if (bytes > 0) {
+    if (commands.remove("ebus"))  // wiping was successful
+      mqttClient.publish("ebus/config/wiping", 0, false, String(bytes).c_str());
+    else
+      mqttClient.publish("ebus/config/wiping", 0, false, "failed");
+  } else {
+    mqttClient.publish("ebus/config/wiping", 0, false, "no data");
+  }
+
+  mqttClient.publish("ebus/config/wiping", 0, false, "");
+
+  commands.end();
 }
 
 void publishStatus() {
@@ -471,7 +537,6 @@ void publishStatus() {
 
 void publishValues() {
   // ebus/device
-  uptime = millis();
   free_heap = ESP.getFreeHeap();
 
   // ebus/device/wifi
@@ -624,6 +689,7 @@ void setup() {
       });
 
   set_pwm(atoi(pwm_value));
+
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(comand_distance));
 
@@ -657,6 +723,9 @@ void setup() {
 
   if (schedule.needTX()) enableTX();
 
+  // install saved commands
+  loadCommands();
+
 #ifdef ESP32
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
 #endif
@@ -684,6 +753,8 @@ void loop() {
              (!mqttClient.connected())) {
     needMqttConnect = true;
   }
+
+  uptime = millis();
 
   if (mqttClient.connected() && millis() > lastMqttUpdate + 5 * 1000) {
     lastMqttUpdate = millis();

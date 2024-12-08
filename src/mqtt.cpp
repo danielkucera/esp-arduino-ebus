@@ -1,5 +1,6 @@
 #include "mqtt.hpp"
 
+#include "main.hpp"
 #include "schedule.hpp"
 
 AsyncMqttClient mqttClient;
@@ -9,6 +10,10 @@ void onMqttConnect(bool sessionPresent) {
   mqttClient.subscribe("ebus/config/list", 0);
   mqttClient.subscribe("ebus/config/raw", 0);
   mqttClient.subscribe("ebus/config/filter", 0);
+  mqttClient.subscribe("ebus/config/reset", 0);
+  mqttClient.subscribe("ebus/config/load", 0);
+  mqttClient.subscribe("ebus/config/save", 0);
+  mqttClient.subscribe("ebus/config/wipe", 0);
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {}
@@ -23,7 +28,7 @@ void onMqttMessage(char *topic, char *payload,
   String tmp = String(topic);
   if (tmp.startsWith("ebus/config/commands/")) {
     if (String(payload).length() > 0)
-      schedule.insertCommand(payload);
+      schedule.enqueCommand(payload);
     else
       schedule.removeCommand(topic);
   } else if (tmp.equals("ebus/config/list")) {
@@ -32,6 +37,14 @@ void onMqttMessage(char *topic, char *payload,
     schedule.publishRaw(payload);
   } else if (tmp.equals("ebus/config/filter")) {
     if (String(payload).length() > 0) schedule.handleFilter(payload);
+  } else if (tmp.equals("ebus/config/reset")) {
+    if (String(payload).equalsIgnoreCase("true")) reset();
+  } else if (tmp.equals("ebus/config/load")) {
+    if (String(payload).equalsIgnoreCase("true")) loadCommands();
+  } else if (tmp.equals("ebus/config/save")) {
+    if (String(payload).equalsIgnoreCase("true")) saveCommands();
+  } else if (tmp.equals("ebus/config/wipe")) {
+    if (String(payload).equalsIgnoreCase("true")) wipeCommands();
   }
 }
 

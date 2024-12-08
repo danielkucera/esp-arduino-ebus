@@ -3,6 +3,7 @@
 
 #include <WiFiClient.h>
 
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -33,11 +34,14 @@ class Schedule {
   void setAddress(const uint8_t source);
   void setDistance(const uint8_t distance);
 
+  void enqueCommand(const char *payload);
+  void enqueCommands(const char *payload);
+
   void insertCommand(const char *payload);
   void removeCommand(const char *topic);
 
   void publishCommands() const;
-  const char *printCommands() const;
+  const char *getCommands() const;
 
   void publishRaw(const char *payload);
   void handleFilter(const char *payload);
@@ -66,11 +70,16 @@ class Schedule {
 
   bool initDone = false;
 
+  std::deque<std::string> newCommands;
+  uint32_t distanceInsert = 300;
+  uint32_t lastInsert = 0;
+
   bool raw = false;
   std::vector<std::vector<uint8_t>> rawFilters;
 
   void publishCommand(const std::vector<Command> *commands,
                       const std::string key, bool remove) const;
+
   void publishHomeAssistant(const Command *commands, bool remove) const;
 
   const std::vector<uint8_t> nextActiveCommand();

@@ -62,9 +62,26 @@ void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
 }
 
-// payload - optional parameter: unit, ha_class
-//
-// example:
+void Schedule::enqueCommand(const char *payload) {
+  newCommands.push_back(std::string(payload));
+}
+
+void Schedule::enqueCommands(const char *payload) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, payload);
+
+  if (error) {
+    std::string err = "DeserializationError ";
+    err += error.c_str();
+    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+  } else {
+    JsonArray array = doc.as<JsonArray>();
+    for (JsonVariant variant : array)
+      newCommands.push_back(variant.as<std::string>());
+  }
+}
+
+// payload - optional: unit, ha_class
 // {
 //   "command": "08b509030d0600",
 //   "unit": "°C",
@@ -120,6 +137,7 @@ void Schedule::insertCommand(const char *payload) {
     publishCommand(usedCommands, command.key, false);
 
     initDone = false;
+    lastInsert = millis();
   }
 }
 
@@ -164,7 +182,7 @@ void Schedule::publishCommands() const {
     mqttClient.publish("ebus/config/installed", 0, false, "");
 }
 
-const char *Schedule::printCommands() const {
+const char *Schedule::getCommands() const {
   std::string payload;
   JsonDocument doc;
 
@@ -223,9 +241,7 @@ void Schedule::publishRaw(const char *payload) {
   }
 }
 
-// payload - optional parameter: unit, ha_class
-//
-// example:
+// payload
 // [
 //   "0700",
 //   "b509",
@@ -252,6 +268,14 @@ void Schedule::handleFilter(const char *payload) {
 bool Schedule::needTX() { return activeCommands.size() > 0; }
 
 void Schedule::processSend() {
+  if (newCommands.size() > 0) {
+    if (millis() > lastInsert + distanceInsert) {
+      std::string payload = newCommands.front();
+      newCommands.pop_front();
+      insertCommand(payload.c_str());
+    }
+  }
+
   if (activeCommands.size() == 0) return;
 
   if (ebusHandler.getState() == ebus::State::MonitorBus) {

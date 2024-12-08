@@ -15,7 +15,8 @@ void onMqttMessage(char *topic, char *payload,
 void onMqttPublish(uint16_t packetId);
 
 template <typename T>
-void publishTopic(bool force, const char *topic, T &oldValue, T &newValue) {
+void publishTopic(bool force, const char *topic, const T &oldValue,
+                  const T &newValue) {
   if (force || oldValue != newValue)
     mqttClient.publish(topic, 0, true, String(newValue).c_str());
 }
