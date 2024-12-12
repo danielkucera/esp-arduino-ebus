@@ -268,13 +268,7 @@ void Schedule::handleFilter(const char *payload) {
 bool Schedule::needTX() { return activeCommands.size() > 0; }
 
 void Schedule::processSend() {
-  if (newCommands.size() > 0) {
-    if (millis() > lastInsert + distanceInsert) {
-      std::string payload = newCommands.front();
-      newCommands.pop_front();
-      insertCommand(payload.c_str());
-    }
-  }
+  checkNewCommands();
 
   if (activeCommands.size() == 0) return;
 
@@ -315,6 +309,16 @@ bool Schedule::processReceive(bool enhanced, WiFiClient *client,
 }
 
 void Schedule::resetCounters() { ebusHandler.resetCounters(); }
+
+void Schedule::checkNewCommands() {
+  if (newCommands.size() > 0) {
+    if (millis() > lastInsert + distanceInsert) {
+      std::string payload = newCommands.front();
+      newCommands.pop_front();
+      insertCommand(payload.c_str());
+    }
+  }
+}
 
 void Schedule::publishCounters() {
   ebus::Counter counters = ebusHandler.getCounters();

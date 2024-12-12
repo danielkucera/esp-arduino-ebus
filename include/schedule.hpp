@@ -77,6 +77,8 @@ class Schedule {
   bool raw = false;
   std::vector<std::vector<uint8_t>> rawFilters;
 
+  void checkNewCommands();
+
   void publishCommand(const std::vector<Command> *commands,
                       const std::string key, bool remove) const;
 
