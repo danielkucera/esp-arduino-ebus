@@ -190,7 +190,7 @@ bool ebus::EbusHandler::receive(const uint8_t byte) {
   return true;
 }
 
-void ebus::EbusHandler::monitor(const uint8_t byte) {
+void ebus::EbusHandler::feedCounters(const uint8_t byte) {
   if (byte == sym_syn) {
     if (sequence.size() > 0) {
       counters.total++;

@@ -98,8 +98,7 @@ class EbusHandler {
   void send();
   bool receive(const uint8_t byte);
 
-  void monitor(const uint8_t byte);
-
+  void feedCounters(const uint8_t byte);
   void resetCounters();
   Counter &getCounters();
 

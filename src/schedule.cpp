@@ -290,7 +290,7 @@ void Schedule::processSend() {
 
 bool Schedule::processReceive(bool enhanced, WiFiClient *client,
                               const uint8_t byte) {
-  if (!enhanced) ebusHandler.monitor(byte);
+  if (!enhanced) ebusHandler.feedCounters(byte);
 
   if (activeCommands.size() == 0) return false;
 
