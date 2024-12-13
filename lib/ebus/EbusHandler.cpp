@@ -147,8 +147,7 @@ bool ebus::EbusHandler::receive(const uint8_t byte) {
       slaveIndex++;
       slave.push_back(byte);
 
-      if (slave.size() == 1)
-        slaveNN = 1 + byte + 1;  // NN + DBx + CRC
+      if (slave.size() == 1) slaveNN = 1 + byte + 1;  // NN + DBx + CRC
 
       if (byte == sym_exp)  // AA >> A9 + 01 || A9 >> A9 + 00
         slaveNN++;
