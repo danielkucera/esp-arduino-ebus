@@ -228,6 +228,84 @@ const char *Schedule::getCommands() const {
   return payload.c_str();
 }
 
+const char *Schedule::serializeCommands() const {
+  std::string payload;
+  JsonDocument doc;
+
+  if (activeCommands.size() > 0) {
+    for (const Command &command : activeCommands) {
+      JsonArray arr = doc.add<JsonArray>();
+      arr.add(command.key);
+      arr.add(command.unit);
+      arr.add(true);
+      arr.add(command.interval);
+      arr.add(command.master);
+      arr.add(command.position);
+      arr.add(ebus::datatype2string(command.datatype));
+      arr.add(command.topic);
+      arr.add(command.ha);
+      arr.add(command.ha_class);
+    }
+  }
+
+  if (passiveCommands.size() > 0) {
+    for (const Command &command : passiveCommands) {
+      JsonArray arr = doc.add<JsonArray>();
+      arr.add(command.key);
+      arr.add(command.unit);
+      arr.add(false);
+      arr.add(command.interval);
+      arr.add(command.master);
+      arr.add(command.position);
+      arr.add(ebus::datatype2string(command.datatype));
+      arr.add(command.topic);
+      arr.add(command.ha);
+      arr.add(command.ha_class);
+    }
+  }
+
+  if (doc.isNull()) {
+    doc.to<JsonArray>();
+  }
+
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload.c_str();
+}
+
+void Schedule::deserializeCommands(const char *payload) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, payload);
+
+  if (error) {
+    std::string err = "DeserializationError ";
+    err += error.c_str();
+    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+  } else {
+    JsonArray array = doc.as<JsonArray>();
+    for (JsonVariant variant : array) {
+      JsonDocument tmpDoc;
+
+      tmpDoc["command"] = variant[0];
+      tmpDoc["unit"] = variant[1];
+      tmpDoc["active"] = variant[2];
+      tmpDoc["interval"] = variant[3];
+      tmpDoc["master"] = variant[4];
+      tmpDoc["position"] = variant[5];
+      tmpDoc["datatype"] = variant[6];
+      tmpDoc["topic"] = variant[7];
+      tmpDoc["ha"] = variant[8];
+      tmpDoc["ha_class"] = variant[9];
+
+      std::string tmpPayload;
+      serializeJson(tmpDoc, tmpPayload);
+
+      newCommands.push_back(tmpPayload);
+    }
+  }
+}
+
 void Schedule::publishRaw(const char *payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);

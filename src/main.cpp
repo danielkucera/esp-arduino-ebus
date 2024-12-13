@@ -457,7 +457,7 @@ void loadCommands() {
     if (bytes > 2) {  // loading was successful
       std::string payload(buffer.begin(), buffer.end());
 
-      schedule.enqueCommands(payload.c_str());
+      schedule.deserializeCommands(payload.c_str());
       mqttClient.publish("ebus/config/loading", 0, false,
                          String(bytes).c_str());
     } else {
@@ -476,7 +476,7 @@ void saveCommands() {
   Preferences commands;
   commands.begin("commands", false);
 
-  const char* payload = schedule.getCommands();
+  const char* payload = schedule.serializeCommands();
   size_t bytes = strlen(payload);
   if (bytes > 2) {  // 2 = empty json array "[]"
     bytes = commands.putBytes("ebus", payload, bytes);
@@ -507,7 +507,7 @@ void wipeCommands() {
     mqttClient.publish("ebus/config/wiping", 0, false, "no data");
   }
 
-  mqttClient.publish("ebus/config/wiping", 0, false, "");
+  mqttClient.publish("ebus/config/wipe", 0, false, "");
 
   commands.end();
 }

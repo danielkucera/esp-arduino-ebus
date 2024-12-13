@@ -43,6 +43,9 @@ class Schedule {
   void publishCommands() const;
   const char *getCommands() const;
 
+  const char *serializeCommands() const;
+  void deserializeCommands(const char *payload);
+
   void publishRaw(const char *payload);
   void handleFilter(const char *payload);
 
