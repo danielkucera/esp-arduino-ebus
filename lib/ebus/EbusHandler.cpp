@@ -116,7 +116,7 @@ void ebus::EbusHandler::send() {
   }
 }
 
-bool ebus::EbusHandler::receive(const uint8_t byte) {
+void ebus::EbusHandler::receive(const uint8_t byte) {
   switch (state) {
     case State::MonitorBus:
       break;
@@ -185,8 +185,6 @@ bool ebus::EbusHandler::receive(const uint8_t byte) {
     default:
       break;
   }
-
-  return true;
 }
 
 void ebus::EbusHandler::feedCounters(const uint8_t byte) {

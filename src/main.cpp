@@ -32,7 +32,6 @@ Preferences preferences;
 #define PWM_CHANNEL 0
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
-#define PWM_DEFAULT 130
 
 #define DEFAULT_AP "ebus-test"
 #define DEFAULT_PASS "lectronz"

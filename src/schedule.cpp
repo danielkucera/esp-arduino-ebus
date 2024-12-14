@@ -377,8 +377,12 @@ bool Schedule::processReceive(bool enhanced, WiFiClient *client,
     // sequence without "enhanced" flag
     if (!enhanced && client == dummyClient) ebusHandler.receive(byte);
 
-    // reset - if arbitration went wrong
-    if (millis() > lastCommand + 1 * 1000) ebusHandler.reset();
+    // reset - if arbitration last longer than 200ms
+    if (millis() > lastCommand + 200) {
+      ebusHandler.reset();
+      mqttClient.publish("ebus/arbitration/error", 0, false,
+                         "arbitration last longer than 200ms");
+    }
   } else {
     ebusHandler.receive(byte);
   }

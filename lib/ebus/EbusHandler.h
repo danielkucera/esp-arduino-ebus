@@ -96,7 +96,7 @@ class EbusHandler {
   bool enque(const std::vector<uint8_t> &message);
 
   void send();
-  bool receive(const uint8_t byte);
+  void receive(const uint8_t byte);
 
   void feedCounters(const uint8_t byte);
   void resetCounters();
