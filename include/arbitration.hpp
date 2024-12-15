@@ -29,20 +29,19 @@ class Arbitration {
         _restartCount(0) {}
   // Try to start arbitration for the specified master.
   // Return values:
-  // - started    : arbitration started. Make sure to pass all bus data to this
-  // object through the "data" method
+  // - started     : arbitration started. Make sure to pass all bus data to this
+  //                object through the "data" method
   // - not_started : arbitration not started. Possible reasons:
   //                + the bus is not in a state that allows to start arbitration
   //                + another arbitration is already ongoing
   //                + the master address is SYN
-  // - late       : arbitration not started because the start is too late
-  // compared to the SYN symbol received
+  // - late        : arbitration not started because the start is too late
+  //                 compared to the SYN symbol received
   enum result { started, not_started, late };
   result start(BusState& busstate, uint8_t master, unsigned long startBitTime);
 
   // A symbol was received on the bus, what does this do to the arbitration
-  // state? Return values:
-  // - see description of state enum value
+  // state? Return values: see description of state enum value
   Arbitration::state data(BusState& busstate, uint8_t symbol,
                           unsigned long startBitTime);
 
