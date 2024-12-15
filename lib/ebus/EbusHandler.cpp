@@ -221,12 +221,10 @@ void ebus::EbusHandler::feedCounters(const uint8_t byte) {
         counters.special00++;
       } else if (sequence.size() >= 3 && sequence[2] == 0x07 &&
                  sequence[3] == 0x04) {
-        if (sequence.size() > 6) {
+        if (sequence.size() > 6)
           counters.special0704Success++;
-          // slaves[sequence[1]] = tel.getSlave();
-        } else {
+        else
           counters.special0704Failure++;
-        }
       }
 
       sequence.clear();
@@ -255,9 +253,6 @@ void ebus::EbusHandler::resetCounters() {
   counters.special00 = 0;
   counters.special0704Success = 0;
   counters.special0704Failure = 0;
-
-  // masters.clear();
-  // slaves.clear();
 }
 
 ebus::Counter &ebus::EbusHandler::getCounters() { return counters; }

@@ -392,16 +392,6 @@ bool Schedule::processReceive(bool enhanced, WiFiClient *client,
 
 void Schedule::resetCounters() { ebusHandler.resetCounters(); }
 
-void Schedule::checkNewCommands() {
-  if (newCommands.size() > 0) {
-    if (millis() > lastInsert + distanceInsert) {
-      std::string payload = newCommands.front();
-      newCommands.pop_front();
-      insertCommand(payload.c_str());
-    }
-  }
-}
-
 void Schedule::publishCounters() {
   ebus::Counter counters = ebusHandler.getCounters();
   total = counters.total;
@@ -442,6 +432,16 @@ void Schedule::publishCounters() {
   special00 = counters.special00;
   special0704Success = counters.special0704Success;
   special0704Failure = counters.special0704Failure;
+}
+
+void Schedule::checkNewCommands() {
+  if (newCommands.size() > 0) {
+    if (millis() > lastInsert + distanceInsert) {
+      std::string payload = newCommands.front();
+      newCommands.pop_front();
+      insertCommand(payload.c_str());
+    }
+  }
 }
 
 void Schedule::publishCommand(const std::vector<Command> *commands,

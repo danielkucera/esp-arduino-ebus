@@ -60,9 +60,6 @@ struct Counter {
   uint32_t special00 = 0;
   uint32_t special0704Success = 0;
   uint32_t special0704Failure = 0;
-
-  // std::map<uint8_t, ebus::Sequence> masters;
-  // std::map<uint8_t, ebus::Sequence> slaves;
 };
 
 enum class State {

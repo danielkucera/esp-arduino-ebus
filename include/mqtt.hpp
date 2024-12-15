@@ -51,14 +51,14 @@ class Track {
     return lhs;
   }
 
-  // OK xxx++;
+  // OK ++xxx;
   Track &operator++() {
     m_value++;
     publish(false);
     return *this;
   }
 
-  // OK ++xxx;
+  // OK xxx++;
   Track operator++(int) {
     Track old = *this;
     operator++();
