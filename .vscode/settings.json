@@ -27,5 +27,6 @@
         "currentstate",
         "newstate",
         "synerror"
-    ]
+    ],
+    "C_Cpp.clang_format_fallbackStyle": "Google"
 }
