@@ -1,5 +1,6 @@
 #ifndef INCLUDE_BUS_HPP_
 #define INCLUDE_BUS_HPP_
+
 #include <WiFiClient.h>
 
 #include <queue>
