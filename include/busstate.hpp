@@ -105,9 +105,11 @@ class BusState {
 
   void reset() { _state = eStartup; }
 
-  uint32_t microsSinceLastSyn() { return micros() - _SYNtime; }
+  const uint32_t microsSinceLastSyn() { return micros() - _SYNtime; }
 
-  uint32_t microsSincePreviousSyn() { return micros() - _previousSYNtime; }
+  const uint32_t microsSincePreviousSyn() {
+    return micros() - _previousSYNtime;
+  }
 
   eState _state;
   eState _previousState;
