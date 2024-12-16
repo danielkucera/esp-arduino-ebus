@@ -381,6 +381,7 @@ void connectWifi(const char* ssid, const char* password) {
     if (valid) WiFi.config(ipAddress, gateway, netmask);
   }
 
+
   WiFi.begin(ssid, password);
 }
 
@@ -776,13 +777,12 @@ void loop() {
   }
 
   // Check if there are any new clients on the eBUS servers
-  if (handleNewClient(wifiServer, serverClients)) {
+  if (handleNewClient(&wifiServer, serverClients)) {
+    enableTX();
+  }
+  if (handleNewClient(&wifiServerEnh, enhClients)) {
     enableTX();
   }
 
-  if (handleNewClient(wifiServerEnh, enhClients)) {
-    enableTX();
-  }
-
-  handleNewClient(wifiServerRO, serverClientsRO);
+  handleNewClient(&wifiServerRO, serverClientsRO);
 }

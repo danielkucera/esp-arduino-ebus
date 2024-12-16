@@ -11,7 +11,7 @@
 // SYN symbol is 4167 us. If we would receive the symbol immediately,
 // we need to wait (4300 - 4167)=133 us after we received the SYN.
 Arbitration::result Arbitration::start(BusState& busstate, uint8_t master,
-                                       unsigned long startBitTime) {
+                                       uint32_t startBitTime) {
   static int arb = 0;
   if (_arbitrating) {
     return not_started;
@@ -24,9 +24,9 @@ Arbitration::result Arbitration::start(BusState& busstate, uint8_t master,
   }
 
   // too late if we don't have enough time to send our symbol
-  unsigned long now = micros();
-  unsigned long microsSinceLastSyn = busstate.microsSinceLastSyn();
-  unsigned long timeSinceStartBit = now - startBitTime;
+  uint32_t now = micros();
+  uint32_t microsSinceLastSyn = busstate.microsSinceLastSyn();
+  uint32_t timeSinceStartBit = now - startBitTime;
   if (timeSinceStartBit > 4456 || Bus.available()) {
     // if we are too late, don't try to participate and retry next round
     DEBUG_LOG("ARB LATE 0x%02x %lu us\n", BusSer.peek(), timeSinceStartBit);
@@ -61,7 +61,7 @@ Arbitration::result Arbitration::start(BusState& busstate, uint8_t master,
 }
 
 Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol,
-                                     unsigned long startBitTime) {
+                                     uint32_t startBitTime) {
   if (!_arbitrating) {
     return none;
   }
@@ -116,7 +116,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol,
                                         // arbitration?
       if (_participateSecond && Bus.available() == 0) {
         // execute second round of arbitration
-        unsigned long microsSinceLastSyn = busstate.microsSinceLastSyn();
+        uint32_t microsSinceLastSyn = busstate.microsSinceLastSyn();
 #if USE_ASYNCHRONOUS
         // When in async mode, we get immediately interrupted when a symbol is
         // received on the bus The earliest allowed to send is 4300 measured
@@ -125,7 +125,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol,
         // subtract time from the wait to allow the uart to put the byte on the
         // bus. Testing has shown this requires about 700 micros on the
         // esp32-c3.
-        unsigned long timeSinceStartBit = micros() - startBitTime;
+        uint32_t timeSinceStartBit = micros() - startBitTime;
         int delay = 4300 - timeSinceStartBit - 700;
         if (delay > 0) {
           delayMicroseconds(delay);

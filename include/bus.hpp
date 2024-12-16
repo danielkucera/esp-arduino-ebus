@@ -1,6 +1,10 @@
-#ifndef _BUS_H_
-#define _BUS_H_
+#ifndef INCLUDE_BUS_HPP_
+#define INCLUDE_BUS_HPP_
+
 #include <WiFiClient.h>
+
+#include <queue>
+
 
 #include <queue>
 
@@ -18,13 +22,16 @@ enum responses {
 };
 
 enum errors { ERR_FRAMING = 0x00, ERR_OVERRUN = 0x01 };
+enum errors { ERR_FRAMING = 0x00, ERR_OVERRUN = 0x01 };
 
+void getArbitrationClient(WiFiClient*& client, uint8_t& address);
 void getArbitrationClient(WiFiClient*& client, uint8_t& address);
 void clearArbitrationClient();
 bool setArbitrationClient(WiFiClient*& client, uint8_t& address);
+bool setArbitrationClient(WiFiClient*& client, uint8_t& address);
 
 void arbitrationDone();
-WiFiClient* arbitrationRequested(uint8_t& arbitration_client);
+WiFiClient* arbitrationRequested(uint8_t& address);
 
 #ifdef ESP32
 #include "atomic"
@@ -76,7 +83,7 @@ class BusType {
 
  private:
   inline void push(const data& d);
-  void receive(uint8_t symbol, unsigned long startBitTime);
+  void receive(uint8_t symbol, uint32_t startBitTime);
   BusState _busState;
   Arbitration _arbitration;
   WiFiClient* _client;
@@ -100,4 +107,4 @@ class BusType {
 
 extern BusType Bus;
 
-#endif
+#endif  // INCLUDE_BUS_HPP_

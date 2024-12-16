@@ -1,11 +1,11 @@
-#ifndef _MAIN_HPP_
-#define _MAIN_HPP_
+#ifndef INCLUDE_MAIN_HPP_
+#define INCLUDE_MAIN_HPP_
 
 #include <WiFiClient.h>
 #include <WiFiServer.h>
 
 #define MAX_SRV_CLIENTS 4
-// On ESP8266, maximum 512 icw SoftwareSerial, otherwise you run out of  heap
+// On ESP8266, maximum 512 icw SoftwareSerial, otherwise you run out of heap
 #define RXBUFFERSIZE 512
 
 #define QUEUE_SIZE 480
@@ -31,7 +31,7 @@ inline int DEBUG_LOG(const char *format, ...) { return 0; }
 int DEBUG_LOG_IMPL(const char *format, ...);
 // #define DEBUG_LOG DEBUG_LOG_IMPL
 
-bool handleNewClient(WiFiServer &server, WiFiClient clients[]);
+bool handleNewClient(WiFiServer *server, WiFiClient clients[]);
 int pushClient(WiFiClient *client, uint8_t B);
 void handleClient(WiFiClient *client);
 
@@ -41,4 +41,4 @@ void loadCommands();
 void saveCommands();
 void wipeCommands();
 
-#endif
+#endif  // INCLUDE_MAIN_HPP_
