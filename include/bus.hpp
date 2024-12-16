@@ -76,7 +76,7 @@ class BusType {
 
  private:
   inline void push(const data& d);
-  void receive(uint8_t symbol, unsigned long startBitTime);
+  void receive(uint8_t symbol, uint32_t startBitTime);
   BusState _busState;
   Arbitration _arbitration;
   WiFiClient* _client;

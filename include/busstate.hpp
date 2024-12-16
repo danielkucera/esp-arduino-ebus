@@ -104,15 +104,15 @@ class BusState {
 
   void reset() { _state = eStartup; }
 
-  unsigned long microsSinceLastSyn() { return micros() - _SYNtime; }
+  uint32_t microsSinceLastSyn() { return micros() - _SYNtime; }
 
-  unsigned long microsSincePreviousSyn() { return micros() - _previousSYNtime; }
+  uint32_t microsSincePreviousSyn() { return micros() - _previousSYNtime; }
 
   eState _state;
   eState _previousState;
   uint8_t _master;
   uint8_t _symbol;
-  unsigned long _SYNtime;
-  unsigned long _previousSYNtime;
+  uint32_t _SYNtime;
+  uint32_t _previousSYNtime;
 };
 #endif

@@ -128,7 +128,7 @@ void BusType::readDataFromSoftwareSerial(void* args) {
 
         // Validate 1 Tick is 1 MilliSecond with a compile time assert
         static_assert(pdMS_TO_TICKS(1) == 1);
-        static_assert(sizeof(uint32_t) == sizeof(unsigned long));
+        //static_assert(sizeof(uint32_t) == sizeof(unsigned long));
 
         // We need to poll mySerial for availability of a byte. Testing has
         // shown that from 1 millisecond onward we need to check for incoming
@@ -138,12 +138,12 @@ void BusType::readDataFromSoftwareSerial(void* args) {
         // Wait for 500 micros using busy wait with delayMicroseconds 2) Wait
         // the rest of the timeslice, which will be about 500 micros, using
         // vTaskDelay
-        unsigned long begin = micros();
+        uint32_t begin = micros();
         vTaskDelay(pdMS_TO_TICKS(1));
         avail = mySerial.available();
 
         // How was the delay until now?
-        unsigned long delayed = micros() - begin;
+        uint32_t delayed = micros() - begin;
 
         // Loop till the maximum duration of 1 byte (4167 micros from begin)
         // and check every 500 micros, using combination of
@@ -160,7 +160,7 @@ void BusType::readDataFromSoftwareSerial(void* args) {
               vTaskDelay(pdMS_TO_TICKS(1));
             }
           } else {  // Otherwise spend the remaining wait with delayMicroseconds
-            unsigned long delay = 4167 - delayed < 500 ? 4167 - delayed : 500;
+            uint32_t delay = 4167 - delayed < 500 ? 4167 - delayed : 500;
             delayMicroseconds(delay);
           }
           avail = mySerial.available();
@@ -268,7 +268,7 @@ void BusType::push(const data& d) {
 #endif
 }
 
-void BusType::receive(uint8_t symbol, unsigned long startBitTime) {
+void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
   _busState.data(symbol);
   Arbitration::state state = _arbitration.data(_busState, symbol, startBitTime);
   switch (state) {

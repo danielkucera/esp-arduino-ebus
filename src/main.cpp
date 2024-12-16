@@ -88,12 +88,12 @@ WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 
-unsigned long last_comms = 0;
+uint32_t last_comms = 0;
 int last_reset_code = -1;
 
-unsigned long loopDuration = 0;
-unsigned long maxLoopDuration = 0;
-unsigned long lastConnectTime = 0;
+uint32_t loopDuration = 0;
+uint32_t maxLoopDuration = 0;
+uint32_t lastConnectTime = 0;
 int reconnectCount = 0;
 
 int random_ch() {
@@ -161,7 +161,7 @@ void reset_config() {
 void check_reset() {
   // check if RESET_PIN being hold low and reset
   pinMode(RESET_PIN, INPUT_PULLUP);
-  unsigned long resetStart = millis();
+  uint32_t resetStart = millis();
   while (digitalRead(RESET_PIN) == 0) {
     if (millis() > resetStart + RESET_MS) {
       reset_config();
@@ -170,9 +170,9 @@ void check_reset() {
 }
 
 void loop_duration() {
-  static unsigned long lastTime = 0;
-  unsigned long now = micros();
-  unsigned long delta = now - lastTime;
+  static uint32_t lastTime = 0;
+  uint32_t now = micros();
+  uint32_t delta = now - lastTime;
 
   lastTime = now;
 
@@ -277,14 +277,13 @@ char* status_string() {
   pos += sprintf(status + pos, "software serial mode: %s\n",
                  USE_SOFTWARE_SERIAL ? "true" : "false");
   pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
-  pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
+  pos += sprintf(status + pos, "last_connect_time: %u ms\n", lastConnectTime);
   pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
   pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
   pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
-  pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
-  pos +=
-      sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
+  pos += sprintf(status + pos, "loop_duration: %u us\r\n", loopDuration);
+  pos += sprintf(status + pos, "max_loop_duration: %u us\r\n", maxLoopDuration);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
   pos += sprintf(status + pos, "nbr arbitrations: %i\r\n",
                  (int)Bus._nbrArbitrations);
