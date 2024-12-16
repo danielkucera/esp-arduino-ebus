@@ -5,6 +5,9 @@
 
 #include <queue>
 
+
+#include <queue>
+
 #include "arbitration.hpp"
 #include "busstate.hpp"
 
