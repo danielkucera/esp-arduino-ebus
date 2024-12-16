@@ -78,9 +78,9 @@ bool setArbitrationClient(WiFiClient*& client, uint8_t& address) {
 
 void arbitrationDone() { clearArbitrationClient(); }
 
-WiFiClient* arbitrationRequested(uint8_t& aa) {
+WiFiClient* arbitrationRequested(uint8_t& address) {
   WiFiClient* client = NULL;
-  getArbitrationClient(client, aa);
+  getArbitrationClient(client, address);
   return client;
 }
 
@@ -93,6 +93,7 @@ BusType::BusType()
       _nbrWon1(0),
       _nbrWon2(0),
       _nbrErrors(0),
+      _nbrLate(0),
       _client(0) {}
 
 BusType::~BusType() { end(); }
@@ -280,11 +281,10 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
       goto NONE;
     case Arbitration::none:
     NONE:
-      uint8_t arbitration_address;
-      _client = arbitrationRequested(arbitration_address);
+      uint8_t address;
+      _client = arbitrationRequested(address);
       if (_client) {
-        switch (
-            _arbitration.start(_busState, arbitration_address, startBitTime)) {
+        switch (_arbitration.start(_busState, address, startBitTime)) {
           case Arbitration::started:
             _nbrArbitrations++;
             DEBUG_LOG("BUS START SUCC 0x%02x %lu us\n", symbol,
