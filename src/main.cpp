@@ -89,7 +89,7 @@ WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 
 uint32_t last_comms = 0;
-int last_reset_code = -1;
+uint32_t last_reset_code = 0;
 
 uint32_t loopDuration = 0;
 uint32_t maxLoopDuration = 0;
@@ -281,7 +281,7 @@ char* status_string() {
   pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
   pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
-  pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
+  pos += sprintf(status + pos, "reset_code: %u\n", last_reset_code);
   pos += sprintf(status + pos, "loop_duration: %u us\r\n", loopDuration);
   pos += sprintf(status + pos, "max_loop_duration: %u us\r\n", maxLoopDuration);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
@@ -303,7 +303,7 @@ char* status_string() {
       sprintf(status + pos, "nbr late: %i\r\n", static_cast<int>(Bus._nbrLate));
   pos += sprintf(status + pos, "nbr errors: %i\r\n",
                  static_cast<int>(Bus._nbrErrors));
-  pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
+  pos += sprintf(status + pos, "pwm_value: %u\r\n", get_pwm());
 
   return status;
 }
@@ -343,7 +343,7 @@ void setup() {
 #ifdef ESP32
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
-  last_reset_code = static_cast<int>(ESP.getResetInfoPtr());
+  last_reset_code = ESP.getResetInfoPtr()->reason;
 #endif
   Bus.begin();
 
