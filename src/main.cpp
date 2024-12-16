@@ -276,7 +276,8 @@ char* status_string() {
                   USE_ASYNCHRONOUS ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "software serial mode: %s\n",
                   USE_SOFTWARE_SERIAL ? "true" : "false");
-  pos += snprintf(status + pos, sizeof(status), "uptime: %ld ms\n", millis());
+  pos += snprintf(status + pos, sizeof(status), "uptime: %u ms\n",
+                  static_cast<uint32_t>(millis()));
   pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
                   lastConnectTime);
   pos += snprintf(status + pos, sizeof(status), "reconnect_count: %d \n",
