@@ -88,12 +88,12 @@ WiFiClient serverClients[MAX_SRV_CLIENTS];
 WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 
-unsigned long last_comms = 0;
-int last_reset_code = -1;
+uint32_t last_comms = 0;
+uint32_t last_reset_code = 0;
 
-unsigned long loopDuration = 0;
-unsigned long maxLoopDuration = 0;
-unsigned long lastConnectTime = 0;
+uint32_t loopDuration = 0;
+uint32_t maxLoopDuration = 0;
+uint32_t lastConnectTime = 0;
 int reconnectCount = 0;
 
 int random_ch() {
@@ -161,7 +161,7 @@ void reset_config() {
 void check_reset() {
   // check if RESET_PIN being hold low and reset
   pinMode(RESET_PIN, INPUT_PULLUP);
-  unsigned long resetStart = millis();
+  uint32_t resetStart = millis();
   while (digitalRead(RESET_PIN) == 0) {
     if (millis() > resetStart + RESET_MS) {
       reset_config();
@@ -170,9 +170,9 @@ void check_reset() {
 }
 
 void loop_duration() {
-  static unsigned long lastTime = 0;
-  unsigned long now = micros();
-  unsigned long delta = now - lastTime;
+  static uint32_t lastTime = 0;
+  uint32_t now = micros();
+  uint32_t delta = now - lastTime;
 
   lastTime = now;
 
@@ -272,31 +272,46 @@ char* status_string() {
 
   int pos = 0;
 
-  pos += sprintf(status + pos, "async mode: %s\n",
-                 USE_ASYNCHRONOUS ? "true" : "false");
-  pos += sprintf(status + pos, "software serial mode: %s\n",
-                 USE_SOFTWARE_SERIAL ? "true" : "false");
-  pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
-  pos += sprintf(status + pos, "last_connect_time: %ld ms\n", lastConnectTime);
-  pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
-  pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
-  pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
-  pos += sprintf(status + pos, "reset_code: %d\n", last_reset_code);
-  pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
+  pos += snprintf(status + pos, sizeof(status), "async mode: %s\n",
+                  USE_ASYNCHRONOUS ? "true" : "false");
+  pos += snprintf(status + pos, sizeof(status), "software serial mode: %s\n",
+                  USE_SOFTWARE_SERIAL ? "true" : "false");
+  pos += snprintf(status + pos, sizeof(status), "uptime: %u ms\n",
+                  static_cast<uint32_t>(millis()));
+  pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
+                  lastConnectTime);
+  pos += snprintf(status + pos, sizeof(status), "reconnect_count: %d \n",
+                  reconnectCount);
+  pos += snprintf(status + pos, sizeof(status), "rssi: %d dBm\n", WiFi.RSSI());
+  pos += snprintf(status + pos, sizeof(status), "free_heap: %d B\n",
+                  ESP.getFreeHeap());
+  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n",
+                  last_reset_code);
+  pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
+                  loopDuration);
+  pos += snprintf(status + pos, sizeof(status), "max_loop_duration: %u us\r\n",
+                  maxLoopDuration);
   pos +=
-      sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
-  pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
-  pos += sprintf(status + pos, "nbr arbitrations: %i\r\n",
-                 (int)Bus._nbrArbitrations);
-  pos += sprintf(status + pos, "nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
-  pos += sprintf(status + pos, "nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
-  pos += sprintf(status + pos, "nbr lost1: %i\r\n", (int)Bus._nbrLost1);
-  pos += sprintf(status + pos, "nbr lost2: %i\r\n", (int)Bus._nbrLost2);
-  pos += sprintf(status + pos, "nbr won1: %i\r\n", (int)Bus._nbrWon1);
-  pos += sprintf(status + pos, "nbr won2: %i\r\n", (int)Bus._nbrWon2);
-  pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
-  pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
-  pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
+      snprintf(status + pos, sizeof(status), "version: %s\r\n", AUTO_VERSION);
+  pos += snprintf(status + pos, sizeof(status), "nbr arbitrations: %i\r\n",
+                  static_cast<int>(Bus._nbrArbitrations));
+  pos += snprintf(status + pos, sizeof(status), "nbr restarts1: %i\r\n",
+                  static_cast<int>(Bus._nbrRestarts1));
+  pos += snprintf(status + pos, sizeof(status), "nbr restarts2: %i\r\n",
+                  static_cast<int>(Bus._nbrRestarts2));
+  pos += snprintf(status + pos, sizeof(status), "nbr lost1: %i\r\n",
+                  static_cast<int>(Bus._nbrLost1));
+  pos += snprintf(status + pos, sizeof(status), "nbr lost2: %i\r\n",
+                  static_cast<int>(Bus._nbrLost2));
+  pos += snprintf(status + pos, sizeof(status), "nbr won1: %i\r\n",
+                  static_cast<int>(Bus._nbrWon1));
+  pos += snprintf(status + pos, sizeof(status), "nbr won2: %i\r\n",
+                  static_cast<int>(Bus._nbrWon2));
+  pos += snprintf(status + pos, sizeof(status), "nbr late: %i\r\n",
+                  static_cast<int>(Bus._nbrLate));
+  pos += snprintf(status + pos, sizeof(status), "nbr errors: %i\r\n",
+                  static_cast<int>(Bus._nbrErrors));
+  pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
 
   return status;
 }
@@ -336,7 +351,7 @@ void setup() {
 #ifdef ESP32
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
-  last_reset_code = (int)ESP.getResetInfoPtr();
+  last_reset_code = ESP.getResetInfoPtr()->reason;
 #endif
   Bus.begin();
 
@@ -470,12 +485,12 @@ void loop() {
   }
 
   // Check if there are any new clients on the eBUS servers
-  if (handleNewClient(wifiServer, serverClients)) {
+  if (handleNewClient(&wifiServer, serverClients)) {
     enableTX();
   }
-  if (handleNewClient(wifiServerEnh, enhClients)) {
+  if (handleNewClient(&wifiServerEnh, enhClients)) {
     enableTX();
   }
 
-  handleNewClient(wifiServerRO, serverClientsRO);
+  handleNewClient(&wifiServerRO, serverClientsRO);
 }

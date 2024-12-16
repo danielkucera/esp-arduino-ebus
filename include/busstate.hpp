@@ -1,5 +1,6 @@
-#ifndef _BUSSTATE_H_
-#define _BUSSTATE_H_
+#ifndef INCLUDE_BUSSTATE_HPP_
+#define INCLUDE_BUSSTATE_HPP_
+
 #include "main.hpp"
 
 enum symbols { SYN = 0xAA };
@@ -104,15 +105,17 @@ class BusState {
 
   void reset() { _state = eStartup; }
 
-  unsigned long microsSinceLastSyn() { return micros() - _SYNtime; }
+  const uint32_t microsSinceLastSyn() { return micros() - _SYNtime; }
 
-  unsigned long microsSincePreviousSyn() { return micros() - _previousSYNtime; }
+  const uint32_t microsSincePreviousSyn() {
+    return micros() - _previousSYNtime;
+  }
 
   eState _state;
   eState _previousState;
-  uint8_t _master;
-  uint8_t _symbol;
-  unsigned long _SYNtime;
-  unsigned long _previousSYNtime;
+  uint8_t _master = 0;
+  uint8_t _symbol = 0;
+  uint32_t _SYNtime = 0;
+  uint32_t _previousSYNtime = 0;
 };
-#endif
+#endif  // INCLUDE_BUSSTATE_HPP_

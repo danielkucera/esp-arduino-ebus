@@ -1,5 +1,5 @@
-#ifndef _MAIN_HPP_
-#define _MAIN_HPP_
+#ifndef INCLUDE_MAIN_HPP_
+#define INCLUDE_MAIN_HPP_
 
 #include <WiFiClient.h>
 #include <WiFiServer.h>
@@ -31,8 +31,8 @@ inline int DEBUG_LOG(const char *format, ...) { return 0; }
 int DEBUG_LOG_IMPL(const char *format, ...);
 // #define DEBUG_LOG DEBUG_LOG_IMPL
 
-bool handleNewClient(WiFiServer &server, WiFiClient clients[]);
+bool handleNewClient(WiFiServer *server, WiFiClient clients[]);
 int pushClient(WiFiClient *client, uint8_t B);
 void handleClient(WiFiClient *client);
 
-#endif
+#endif  // INCLUDE_MAIN_HPP_

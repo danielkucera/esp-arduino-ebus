@@ -78,9 +78,9 @@ bool setArbitrationClient(WiFiClient*& client, uint8_t& address) {
 
 void arbitrationDone() { clearArbitrationClient(); }
 
-WiFiClient* arbitrationRequested(uint8_t& aa) {
+WiFiClient* arbitrationRequested(uint8_t& address) {
   WiFiClient* client = NULL;
-  getArbitrationClient(client, aa);
+  getArbitrationClient(client, address);
   return client;
 }
 
@@ -93,6 +93,7 @@ BusType::BusType()
       _nbrWon1(0),
       _nbrWon2(0),
       _nbrErrors(0),
+      _nbrLate(0),
       _client(0) {}
 
 BusType::~BusType() { end(); }
@@ -128,7 +129,7 @@ void BusType::readDataFromSoftwareSerial(void* args) {
 
         // Validate 1 Tick is 1 MilliSecond with a compile time assert
         static_assert(pdMS_TO_TICKS(1) == 1);
-        static_assert(sizeof(uint32_t) == sizeof(unsigned long));
+        // static_assert(sizeof(uint32_t) == sizeof(unsigned long));
 
         // We need to poll mySerial for availability of a byte. Testing has
         // shown that from 1 millisecond onward we need to check for incoming
@@ -138,12 +139,12 @@ void BusType::readDataFromSoftwareSerial(void* args) {
         // Wait for 500 micros using busy wait with delayMicroseconds 2) Wait
         // the rest of the timeslice, which will be about 500 micros, using
         // vTaskDelay
-        unsigned long begin = micros();
+        uint32_t begin = micros();
         vTaskDelay(pdMS_TO_TICKS(1));
         avail = mySerial.available();
 
         // How was the delay until now?
-        unsigned long delayed = micros() - begin;
+        uint32_t delayed = micros() - begin;
 
         // Loop till the maximum duration of 1 byte (4167 micros from begin)
         // and check every 500 micros, using combination of
@@ -160,7 +161,7 @@ void BusType::readDataFromSoftwareSerial(void* args) {
               vTaskDelay(pdMS_TO_TICKS(1));
             }
           } else {  // Otherwise spend the remaining wait with delayMicroseconds
-            unsigned long delay = 4167 - delayed < 500 ? 4167 - delayed : 500;
+            uint32_t delay = 4167 - delayed < 500 ? 4167 - delayed : 500;
             delayMicroseconds(delay);
           }
           avail = mySerial.available();
@@ -268,7 +269,7 @@ void BusType::push(const data& d) {
 #endif
 }
 
-void BusType::receive(uint8_t symbol, unsigned long startBitTime) {
+void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
   _busState.data(symbol);
   Arbitration::state state = _arbitration.data(_busState, symbol, startBitTime);
   switch (state) {
@@ -280,11 +281,10 @@ void BusType::receive(uint8_t symbol, unsigned long startBitTime) {
       goto NONE;
     case Arbitration::none:
     NONE:
-      uint8_t arbitration_address;
-      _client = arbitrationRequested(arbitration_address);
+      uint8_t address;
+      _client = arbitrationRequested(address);
       if (_client) {
-        switch (
-            _arbitration.start(_busState, arbitration_address, startBitTime)) {
+        switch (_arbitration.start(_busState, address, startBitTime)) {
           case Arbitration::started:
             _nbrArbitrations++;
             DEBUG_LOG("BUS START SUCC 0x%02x %lu us\n", symbol,
