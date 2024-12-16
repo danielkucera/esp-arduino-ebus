@@ -286,15 +286,23 @@ char* status_string() {
   pos += sprintf(status + pos, "max_loop_duration: %u us\r\n", maxLoopDuration);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
   pos += sprintf(status + pos, "nbr arbitrations: %i\r\n",
-                 (int)Bus._nbrArbitrations);
-  pos += sprintf(status + pos, "nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
-  pos += sprintf(status + pos, "nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
-  pos += sprintf(status + pos, "nbr lost1: %i\r\n", (int)Bus._nbrLost1);
-  pos += sprintf(status + pos, "nbr lost2: %i\r\n", (int)Bus._nbrLost2);
-  pos += sprintf(status + pos, "nbr won1: %i\r\n", (int)Bus._nbrWon1);
-  pos += sprintf(status + pos, "nbr won2: %i\r\n", (int)Bus._nbrWon2);
-  pos += sprintf(status + pos, "nbr late: %i\r\n", (int)Bus._nbrLate);
-  pos += sprintf(status + pos, "nbr errors: %i\r\n", (int)Bus._nbrErrors);
+                 static_cast<int>(Bus._nbrArbitrations));
+  pos += sprintf(status + pos, "nbr restarts1: %i\r\n",
+                 static_cast<int>(Bus._nbrRestarts1));
+  pos += sprintf(status + pos, "nbr restarts2: %i\r\n",
+                 static_cast<int>(Bus._nbrRestarts2));
+  pos += sprintf(status + pos, "nbr lost1: %i\r\n",
+                 static_cast<int>(Bus._nbrLost1));
+  pos += sprintf(status + pos, "nbr lost2: %i\r\n",
+                 static_cast<int>(Bus._nbrLost2));
+  pos +=
+      sprintf(status + pos, "nbr won1: %i\r\n", static_cast<int>(Bus._nbrWon1));
+  pos +=
+      sprintf(status + pos, "nbr won2: %i\r\n", static_cast<int>(Bus._nbrWon2));
+  pos +=
+      sprintf(status + pos, "nbr late: %i\r\n", static_cast<int>(Bus._nbrLate));
+  pos += sprintf(status + pos, "nbr errors: %i\r\n",
+                 static_cast<int>(Bus._nbrErrors));
   pos += sprintf(status + pos, "pwm_value: %i\r\n", get_pwm());
 
   return status;
@@ -335,7 +343,7 @@ void setup() {
 #ifdef ESP32
   last_reset_code = rtc_get_reset_reason(0);
 #elif defined(ESP8266)
-  last_reset_code = (int)ESP.getResetInfoPtr();
+  last_reset_code = static_cast<int>(ESP.getResetInfoPtr());
 #endif
   Bus.begin();
 

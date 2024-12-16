@@ -128,7 +128,7 @@ void BusType::readDataFromSoftwareSerial(void* args) {
 
         // Validate 1 Tick is 1 MilliSecond with a compile time assert
         static_assert(pdMS_TO_TICKS(1) == 1);
-        //static_assert(sizeof(uint32_t) == sizeof(unsigned long));
+        // static_assert(sizeof(uint32_t) == sizeof(unsigned long));
 
         // We need to poll mySerial for availability of a byte. Testing has
         // shown that from 1 millisecond onward we need to check for incoming
