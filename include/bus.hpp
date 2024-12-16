@@ -22,12 +22,9 @@ enum responses {
 };
 
 enum errors { ERR_FRAMING = 0x00, ERR_OVERRUN = 0x01 };
-enum errors { ERR_FRAMING = 0x00, ERR_OVERRUN = 0x01 };
 
 void getArbitrationClient(WiFiClient*& client, uint8_t& address);
-void getArbitrationClient(WiFiClient*& client, uint8_t& address);
 void clearArbitrationClient();
-bool setArbitrationClient(WiFiClient*& client, uint8_t& address);
 bool setArbitrationClient(WiFiClient*& client, uint8_t& address);
 
 void arbitrationDone();
