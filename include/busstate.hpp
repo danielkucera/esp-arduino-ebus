@@ -1,5 +1,6 @@
-#ifndef _BUSSTATE_H_
-#define _BUSSTATE_H_
+#ifndef INCLUDE_BUSSTATE_HPP_
+#define INCLUDE_BUSSTATE_HPP_
+
 #include "main.hpp"
 
 enum symbols { SYN = 0xAA };
@@ -115,4 +116,4 @@ class BusState {
   uint32_t _SYNtime;
   uint32_t _previousSYNtime;
 };
-#endif
+#endif  // INCLUDE_BUSSTATE_HPP_

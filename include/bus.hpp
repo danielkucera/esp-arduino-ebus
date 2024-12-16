@@ -1,5 +1,5 @@
-#ifndef _BUS_H_
-#define _BUS_H_
+#ifndef INCLUDE_BUS_HPP_
+#define INCLUDE_BUS_HPP_
 #include <WiFiClient.h>
 
 #include <queue>
@@ -100,4 +100,4 @@ class BusType {
 
 extern BusType Bus;
 
-#endif
+#endif  // INCLUDE_BUS_HPP_

@@ -1,5 +1,5 @@
-#ifndef _ARBITRATION_H_
-#define _ARBITRATION_H_
+#ifndef INCLUDE_ARBITRATION_HPP_
+#define INCLUDE_ARBITRATION_HPP_
 
 #include "busstate.hpp"
 
@@ -52,4 +52,4 @@ class Arbitration {
   int _restartCount;
 };
 
-#endif
+#endif  // INCLUDE_ARBITRATION_HPP_
