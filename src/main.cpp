@@ -484,12 +484,12 @@ void loop() {
   }
 
   // Check if there are any new clients on the eBUS servers
-  if (handleNewClient(wifiServer, serverClients)) {
+  if (handleNewClient(&wifiServer, serverClients)) {
     enableTX();
   }
-  if (handleNewClient(wifiServerEnh, enhClients)) {
+  if (handleNewClient(&wifiServerEnh, enhClients)) {
     enableTX();
   }
 
-  handleNewClient(wifiServerRO, serverClientsRO);
+  handleNewClient(&wifiServerRO, serverClientsRO);
 }
