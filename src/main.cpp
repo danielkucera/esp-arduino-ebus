@@ -272,38 +272,45 @@ char* status_string() {
 
   int pos = 0;
 
-  pos += sprintf(status + pos, "async mode: %s\n",
-                 USE_ASYNCHRONOUS ? "true" : "false");
-  pos += sprintf(status + pos, "software serial mode: %s\n",
-                 USE_SOFTWARE_SERIAL ? "true" : "false");
-  pos += sprintf(status + pos, "uptime: %ld ms\n", millis());
-  pos += sprintf(status + pos, "last_connect_time: %u ms\n", lastConnectTime);
-  pos += sprintf(status + pos, "reconnect_count: %d \n", reconnectCount);
-  pos += sprintf(status + pos, "rssi: %d dBm\n", WiFi.RSSI());
-  pos += sprintf(status + pos, "free_heap: %d B\n", ESP.getFreeHeap());
-  pos += sprintf(status + pos, "reset_code: %u\n", last_reset_code);
-  pos += sprintf(status + pos, "loop_duration: %u us\r\n", loopDuration);
-  pos += sprintf(status + pos, "max_loop_duration: %u us\r\n", maxLoopDuration);
-  pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
-  pos += sprintf(status + pos, "nbr arbitrations: %i\r\n",
-                 static_cast<int>(Bus._nbrArbitrations));
-  pos += sprintf(status + pos, "nbr restarts1: %i\r\n",
-                 static_cast<int>(Bus._nbrRestarts1));
-  pos += sprintf(status + pos, "nbr restarts2: %i\r\n",
-                 static_cast<int>(Bus._nbrRestarts2));
-  pos += sprintf(status + pos, "nbr lost1: %i\r\n",
-                 static_cast<int>(Bus._nbrLost1));
-  pos += sprintf(status + pos, "nbr lost2: %i\r\n",
-                 static_cast<int>(Bus._nbrLost2));
+  pos += snprintf(status + pos, sizeof(status), "async mode: %s\n",
+                  USE_ASYNCHRONOUS ? "true" : "false");
+  pos += snprintf(status + pos, sizeof(status), "software serial mode: %s\n",
+                  USE_SOFTWARE_SERIAL ? "true" : "false");
+  pos += snprintf(status + pos, sizeof(status), "uptime: %ld ms\n", millis());
+  pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
+                  lastConnectTime);
+  pos += snprintf(status + pos, sizeof(status), "reconnect_count: %d \n",
+                  reconnectCount);
+  pos += snprintf(status + pos, sizeof(status), "rssi: %d dBm\n", WiFi.RSSI());
+  pos += snprintf(status + pos, sizeof(status), "free_heap: %d B\n",
+                  ESP.getFreeHeap());
+  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n",
+                  last_reset_code);
+  pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
+                  loopDuration);
+  pos += snprintf(status + pos, sizeof(status), "max_loop_duration: %u us\r\n",
+                  maxLoopDuration);
   pos +=
-      sprintf(status + pos, "nbr won1: %i\r\n", static_cast<int>(Bus._nbrWon1));
-  pos +=
-      sprintf(status + pos, "nbr won2: %i\r\n", static_cast<int>(Bus._nbrWon2));
-  pos +=
-      sprintf(status + pos, "nbr late: %i\r\n", static_cast<int>(Bus._nbrLate));
-  pos += sprintf(status + pos, "nbr errors: %i\r\n",
-                 static_cast<int>(Bus._nbrErrors));
-  pos += sprintf(status + pos, "pwm_value: %u\r\n", get_pwm());
+      snprintf(status + pos, sizeof(status), "version: %s\r\n", AUTO_VERSION);
+  pos += snprintf(status + pos, sizeof(status), "nbr arbitrations: %i\r\n",
+                  static_cast<int>(Bus._nbrArbitrations));
+  pos += snprintf(status + pos, sizeof(status), "nbr restarts1: %i\r\n",
+                  static_cast<int>(Bus._nbrRestarts1));
+  pos += snprintf(status + pos, sizeof(status), "nbr restarts2: %i\r\n",
+                  static_cast<int>(Bus._nbrRestarts2));
+  pos += snprintf(status + pos, sizeof(status), "nbr lost1: %i\r\n",
+                  static_cast<int>(Bus._nbrLost1));
+  pos += snprintf(status + pos, sizeof(status), "nbr lost2: %i\r\n",
+                  static_cast<int>(Bus._nbrLost2));
+  pos += snprintf(status + pos, sizeof(status), "nbr won1: %i\r\n",
+                  static_cast<int>(Bus._nbrWon1));
+  pos += snprintf(status + pos, sizeof(status), "nbr won2: %i\r\n",
+                  static_cast<int>(Bus._nbrWon2));
+  pos += snprintf(status + pos, sizeof(status), "nbr late: %i\r\n",
+                  static_cast<int>(Bus._nbrLate));
+  pos += snprintf(status + pos, sizeof(status), "nbr errors: %i\r\n",
+                  static_cast<int>(Bus._nbrErrors));
+  pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
 
   return status;
 }
