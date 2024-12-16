@@ -111,9 +111,9 @@ class BusState {
 
   eState _state;
   eState _previousState;
-  uint8_t _master;
-  uint8_t _symbol;
-  uint32_t _SYNtime;
-  uint32_t _previousSYNtime;
+  uint8_t _master = 0;
+  uint8_t _symbol = 0;
+  uint32_t _SYNtime = 0;
+  uint32_t _previousSYNtime = 0;
 };
 #endif  // INCLUDE_BUSSTATE_HPP_
