@@ -99,7 +99,7 @@ int reconnectCount = 0;
 int random_ch() {
 #ifdef ESP32
   return esp_random() % 13 + 1;
-#elif defined(ESP8266)
+#else
   return ESP8266TrueRandom.random(1, 13);
 #endif
 }
@@ -107,7 +107,7 @@ int random_ch() {
 void wdt_start() {
 #ifdef ESP32
   esp_task_wdt_init(6, true);
-#elif defined(ESP8266)
+#else
   ESP.wdtDisable();
 #endif
 }
@@ -115,10 +115,8 @@ void wdt_start() {
 void wdt_feed() {
 #ifdef ESP32
   esp_task_wdt_reset();
-#elif defined(ESP8266)
-  ESP.wdtFeed();
 #else
-#error UNKNOWN PLATFORM
+  ESP.wdtFeed();
 #endif
 }
 
@@ -350,9 +348,10 @@ void setup() {
 
 #ifdef ESP32
   last_reset_code = rtc_get_reset_reason(0);
-#elif defined(ESP8266)
+#else
   last_reset_code = ESP.getResetInfoPtr()->reason;
 #endif
+
   Bus.begin();
 
   DebugSer.begin(115200);
@@ -462,7 +461,6 @@ void loop() {
 
 #ifdef ESP8266
   MDNS.update();
-
   data_process();
 #endif
 
