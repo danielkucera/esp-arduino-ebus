@@ -3,6 +3,9 @@
 
 #include <AsyncMqttClient.h>
 
+// The onMqtt callback functions are the interface to the mqtt sub-system for
+// the user-defined commands.
+
 extern AsyncMqttClient mqttClient;
 
 void onMqttConnect(bool sessionPresent);
@@ -14,6 +17,10 @@ void onMqttMessage(const char *topic, const char *payload,
                    size_t index, size_t total);
 void onMqttPublish(uint16_t packetId);
 
+// This class can sum all kinds of primitive number types. After a minimum time
+// in seconds, the summed data is published under the specified mqtt topic.
+// After a maximum period of time, a publication is always carried out for an
+// order.
 template <class T>
 class Track {
  public:

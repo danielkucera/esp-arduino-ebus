@@ -388,6 +388,8 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "nbr_errors: %i\r\n",
                   static_cast<int>(Bus._nbrErrors));
   pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
+  pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
+                  mqttClient.connected() ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "mqtt_server: %s\r\n",
                   mqtt_server);
   pos += snprintf(status + pos, sizeof(status), "mqtt_user: %s\r\n", mqtt_user);
