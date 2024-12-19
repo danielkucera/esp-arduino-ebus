@@ -2,13 +2,11 @@
 
 #include <ArduinoOTA.h>
 #include <IotWebConf.h>
-#include <IotWebConfUsing.h>
 #include <Preferences.h>
 
 #include "bus.hpp"
 #include "enhanced.hpp"
-
-Preferences preferences;
+#include "mqtt.hpp"
 
 #ifdef ESP32
 #include <ESPmDNS.h>
@@ -25,6 +23,8 @@ HTTPUpdateServer httpUpdater;
 
 ESP8266HTTPUpdateServer httpUpdater;
 #endif
+
+Preferences preferences;
 
 #define ALPHA 0.3
 
@@ -58,23 +58,39 @@ char ipAddressValue[STRING_LEN];
 char gatewayValue[STRING_LEN];
 char netmaskValue[STRING_LEN];
 
-IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
-IotWebConfNumberParameter pwmParam =
-    IotWebConfNumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
-                              "130", "1..255", "min='1' max='255' step='1'");
+char mqtt_server[STRING_LEN];
+char mqtt_user[STRING_LEN];
+char mqtt_pass[STRING_LEN];
 
-IotWebConfParameterGroup connGroup =
-    IotWebConfParameterGroup("conn", "Connection parameters");
-IotWebConfCheckboxParameter staticIPParam = IotWebConfCheckboxParameter(
+IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
+
+iotwebconf::ParameterGroup connGroup =
+    iotwebconf::ParameterGroup("conn", "Connection parameters");
+iotwebconf::CheckboxParameter staticIPParam = iotwebconf::CheckboxParameter(
     "Enable Static IP", "staticIPParam", staticIPValue, STRING_LEN);
-IotWebConfTextParameter ipAddressParam =
-    IotWebConfTextParameter("IP address", "ipAddress", ipAddressValue,
-                            STRING_LEN, "", DEFAULT_STATIC_IP);
-IotWebConfTextParameter gatewayParam = IotWebConfTextParameter(
+iotwebconf::TextParameter ipAddressParam =
+    iotwebconf::TextParameter("IP address", "ipAddress", ipAddressValue,
+                              STRING_LEN, "", DEFAULT_STATIC_IP);
+iotwebconf::TextParameter gatewayParam = iotwebconf::TextParameter(
     "Gateway", "gateway", gatewayValue, STRING_LEN, "", DEFAULT_GATEWAY);
-IotWebConfTextParameter netmaskParam =
-    IotWebConfTextParameter("Subnet mask", "netmask", netmaskValue, STRING_LEN,
-                            DEFAULT_NETMASK, DEFAULT_NETMASK);
+iotwebconf::TextParameter netmaskParam =
+    iotwebconf::TextParameter("Subnet mask", "netmask", netmaskValue,
+                              STRING_LEN, DEFAULT_NETMASK, DEFAULT_NETMASK);
+
+iotwebconf::ParameterGroup ebusGroup =
+    iotwebconf::ParameterGroup("ebus", "EBUS configuration");
+iotwebconf::NumberParameter pwmParam =
+    iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
+                                "130", "1..255", "min='1' max='255' step='1'");
+
+iotwebconf::ParameterGroup mqttGroup =
+    iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
+iotwebconf::TextParameter mqttServerParam = iotwebconf::TextParameter(
+    "MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "", "server.lan");
+iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
+    "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", "roger");
+iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
+    "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", "password");
 
 IPAddress ipAddress;
 IPAddress gateway;
@@ -89,12 +105,65 @@ WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
 WiFiClient enhClients[MAX_SRV_CLIENTS];
 
 uint32_t last_comms = 0;
-uint32_t last_reset_code = 0;
 
-uint32_t loopDuration = 0;
-uint32_t maxLoopDuration = 0;
-uint32_t lastConnectTime = 0;
-int reconnectCount = 0;
+bool needMqttConnect = false;
+uint32_t lastMqttConnectionAttempt = 0;
+uint32_t lastMqttUpdate = 0;
+
+// ebus/device
+Track<uint32_t> uptime("ebus/device/uptime", 10);
+Track<uint32_t> loopDuration("ebus/device/loop_duration", 10);
+Track<uint32_t> maxLoopDuration("ebus/device/loop_duration_max", 10);
+Track<uint32_t> free_heap("ebus/device/free_heap", 10);
+uint32_t reset_code = -1;
+
+// ebus/device/ebus
+Track<uint32_t> pwm("ebus/device/ebus/pwm", 0);
+
+// ebus/device/wifi
+Track<uint32_t> last_connect("ebus/device/wifi/last_connect", 30);
+Track<int> reconnect_count("ebus/device/wifi/reconnect_count", 30);
+Track<int8_t> rssi("ebus/device/wifi/rssi", 30);
+
+// ebus/arbitration
+Track<int> nbrArbitrations("ebus/arbitration/total", 10);
+
+Track<int> nbrWon("ebus/arbitration/won", 10);
+Track<float> nbrWonPercent("ebus/arbitration/won/percent", 10);
+Track<int> nbrRestarts1("ebus/arbitration/won/restarts1", 10);
+Track<int> nbrRestarts2("ebus/arbitration/won/restarts2", 10);
+Track<int> nbrWon1("ebus/arbitration/won/won1", 10);
+Track<int> nbrWon2("ebus/arbitration/won/won2", 10);
+
+Track<int> nbrLost("ebus/arbitration/lost", 10);
+Track<float> nbrLostPercent("ebus/arbitration/lost/percent", 10);
+Track<int> nbrLost1("ebus/arbitration/lost/lost1", 10);
+Track<int> nbrLost2("ebus/arbitration/lost/lost2", 10);
+Track<int> nbrLate("ebus/arbitration/lost/late", 10);
+Track<int> nbrErrors("ebus/arbitration/lost/errors", 10);
+
+bool connectMqtt() {
+  if (mqttClient.connected()) return true;
+
+  uint32_t now = millis();
+
+  if (1000 > now - lastMqttConnectionAttempt) return false;
+
+  mqttClient.connect();
+
+  if (!mqttClient.connected()) {
+    lastMqttConnectionAttempt = now;
+    return false;
+  }
+
+  return true;
+}
+
+void wifiConnected() {
+  last_connect = millis();
+  ++reconnect_count;
+  needMqttConnect = true;
+}
 
 int random_ch() {
 #ifdef ESP32
@@ -174,9 +243,9 @@ void loop_duration() {
 
   lastTime = now;
 
-  loopDuration = ((1 - ALPHA) * loopDuration + (ALPHA * delta));
+  loopDuration = ((1 - ALPHA) * loopDuration.value() + (ALPHA * delta));
 
-  if (delta > maxLoopDuration) {
+  if (delta > maxLoopDuration.value()) {
     maxLoopDuration = delta;
   }
 }
@@ -242,10 +311,26 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
     }
   }
 
+  if (webRequestWrapper->arg(mqttServerParam.getId()).length() >
+      STRING_LEN - 1) {
+    String tmp = "max. ";
+    tmp += String(STRING_LEN);
+    tmp += " characters allowed";
+    mqttServerParam.errorMessage = tmp.c_str();
+    valid = false;
+  }
+
   return valid;
 }
 
-void saveParamsCallback() { set_pwm(atoi(pwm_value)); }
+void saveParamsCallback() {
+  set_pwm(atoi(pwm_value));
+  pwm = get_pwm();
+
+  if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
+
+  if (mqtt_user[0] != '\0') mqttClient.setCredentials(mqtt_user, mqtt_pass);
+}
 
 void connectWifi(const char* ssid, const char* password) {
   if (staticIPParam.isChecked()) {
@@ -260,61 +345,104 @@ void connectWifi(const char* ssid, const char* password) {
   WiFi.begin(ssid, password);
 }
 
-void wifiConnected() {
-  lastConnectTime = millis();
-  reconnectCount++;
-}
-
 char* status_string() {
   static char status[1024];
 
   int pos = 0;
 
-  pos += snprintf(status + pos, sizeof(status), "async mode: %s\n",
+  pos += snprintf(status + pos, sizeof(status), "async_mode: %s\n",
                   USE_ASYNCHRONOUS ? "true" : "false");
-  pos += snprintf(status + pos, sizeof(status), "software serial mode: %s\n",
+  pos += snprintf(status + pos, sizeof(status), "software_serial_mode: %s\n",
                   USE_SOFTWARE_SERIAL ? "true" : "false");
-  pos += snprintf(status + pos, sizeof(status), "uptime: %u ms\n",
-                  static_cast<uint32_t>(millis()));
+  pos += snprintf(status + pos, sizeof(status), "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
-                  lastConnectTime);
+                  last_connect.value());
   pos += snprintf(status + pos, sizeof(status), "reconnect_count: %d \n",
-                  reconnectCount);
+                  reconnect_count.value());
   pos += snprintf(status + pos, sizeof(status), "rssi: %d dBm\n", WiFi.RSSI());
-  pos += snprintf(status + pos, sizeof(status), "free_heap: %d B\n",
-                  ESP.getFreeHeap());
-  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n",
-                  last_reset_code);
+  pos += snprintf(status + pos, sizeof(status), "free_heap: %u B\n",
+                  free_heap.value());
+  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n", reset_code);
   pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
-                  loopDuration);
+                  loopDuration.value());
   pos += snprintf(status + pos, sizeof(status), "max_loop_duration: %u us\r\n",
-                  maxLoopDuration);
+                  maxLoopDuration.value());
   pos +=
       snprintf(status + pos, sizeof(status), "version: %s\r\n", AUTO_VERSION);
-  pos += snprintf(status + pos, sizeof(status), "nbr arbitrations: %i\r\n",
+  pos += snprintf(status + pos, sizeof(status), "nbr_arbitrations: %i\r\n",
                   static_cast<int>(Bus._nbrArbitrations));
-  pos += snprintf(status + pos, sizeof(status), "nbr restarts1: %i\r\n",
+  pos += snprintf(status + pos, sizeof(status), "nbr_restarts1: %i\r\n",
                   static_cast<int>(Bus._nbrRestarts1));
-  pos += snprintf(status + pos, sizeof(status), "nbr restarts2: %i\r\n",
+  pos += snprintf(status + pos, sizeof(status), "nbr_restarts2: %i\r\n",
                   static_cast<int>(Bus._nbrRestarts2));
-  pos += snprintf(status + pos, sizeof(status), "nbr lost1: %i\r\n",
+  pos += snprintf(status + pos, sizeof(status), "nbr_lost1: %i\r\n",
                   static_cast<int>(Bus._nbrLost1));
-  pos += snprintf(status + pos, sizeof(status), "nbr lost2: %i\r\n",
+  pos += snprintf(status + pos, sizeof(status), "nbr_lost2: %i\r\n",
                   static_cast<int>(Bus._nbrLost2));
-  pos += snprintf(status + pos, sizeof(status), "nbr won1: %i\r\n",
+  pos += snprintf(status + pos, sizeof(status), "nbr_won1: %i\r\n",
                   static_cast<int>(Bus._nbrWon1));
-  pos += snprintf(status + pos, sizeof(status), "nbr won2: %i\r\n",
+  pos += snprintf(status + pos, sizeof(status), "nbr_won2: %i\r\n",
                   static_cast<int>(Bus._nbrWon2));
-  pos += snprintf(status + pos, sizeof(status), "nbr late: %i\r\n",
+  pos += snprintf(status + pos, sizeof(status), "nbr_late: %i\r\n",
                   static_cast<int>(Bus._nbrLate));
-  pos += snprintf(status + pos, sizeof(status), "nbr errors: %i\r\n",
+  pos += snprintf(status + pos, sizeof(status), "nbr_errors: %i\r\n",
                   static_cast<int>(Bus._nbrErrors));
   pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
+  pos += snprintf(status + pos, sizeof(status), "mqtt_server: %s\r\n",
+                  mqtt_server);
+  pos += snprintf(status + pos, sizeof(status), "mqtt_user: %s\r\n", mqtt_user);
 
   return status;
 }
 
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
+
+void publishStatus() {
+  // ebus/device
+  uptime.publish();
+  loopDuration.publish();
+  maxLoopDuration.publish();
+  free_heap.publish();
+  mqttClient.publish("ebus/device/reset_code", 0, true,
+                     String(reset_code).c_str());
+
+  // ebus/device/firmware
+  mqttClient.publish("ebus/device/firmware/version", 0, true, AUTO_VERSION);
+  mqttClient.publish("ebus/device/firmware/sdk", 0, true, ESP.getSdkVersion());
+  mqttClient.publish("ebus/device/firmware/async", 0, true,
+                     USE_ASYNCHRONOUS ? "true" : "false");
+  mqttClient.publish("ebus/device/firmware/software_serial", 0, true,
+                     USE_SOFTWARE_SERIAL ? "true" : "false");
+
+  // ebus/device/ebus
+  pwm = get_pwm();
+}
+
+void publishValues() {
+  // ebus/device
+  free_heap = ESP.getFreeHeap();
+
+  // ebus/device/wifi
+  rssi = WiFi.RSSI();
+
+  // ebus/arbitration
+  nbrArbitrations = Bus._nbrArbitrations;
+
+  nbrWon = Bus._nbrWon1 + Bus._nbrWon2;
+  nbrWonPercent =
+      nbrWon.value() / static_cast<float>(nbrArbitrations.value()) * 100.0f;
+  nbrRestarts1 = Bus._nbrRestarts1;
+  nbrRestarts2 = Bus._nbrRestarts2;
+  nbrWon1 = Bus._nbrWon1;
+  nbrWon2 = Bus._nbrWon2;
+
+  nbrLost = nbrArbitrations.value() - nbrWon.value();
+  nbrLostPercent = 100.0f - nbrWonPercent.value();
+  nbrLost1 = Bus._nbrLost1;
+  nbrLost2 = Bus._nbrLost2;
+  nbrLate = Bus._nbrLate;
+  nbrErrors = Bus._nbrErrors;
+}
 
 void handleRoot() {
   // -- Let IotWebConf test and handle captive portal requests.
@@ -341,15 +469,28 @@ void handleRoot() {
   configServer.send(200, "text/html", s);
 }
 
+bool handleStatusServerRequests() {
+  if (!statusServer.hasClient()) return false;
+
+  WiFiClient client = statusServer.accept();
+
+  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.print(status_string());
+    client.flush();
+    client.stop();
+  }
+  return true;
+}
+
 void setup() {
   preferences.begin("esp-ebus", false);
 
   check_reset();
 
 #ifdef ESP32
-  last_reset_code = rtc_get_reset_reason(0);
+  reset_code = rtc_get_reset_reason(0);
 #else
-  last_reset_code = ESP.getResetInfoPtr()->reason;
+  reset_code = ESP.getResetInfoPtr()->reason;
 #endif
 
   Bus.begin();
@@ -388,8 +529,15 @@ void setup() {
   connGroup.addItem(&gatewayParam);
   connGroup.addItem(&netmaskParam);
 
-  iotWebConf.addSystemParameter(&pwmParam);
+  ebusGroup.addItem(&pwmParam);
+
+  mqttGroup.addItem(&mqttServerParam);
+  mqttGroup.addItem(&mqttUserParam);
+  mqttGroup.addItem(&mqttPasswordParam);
+
   iotWebConf.addParameterGroup(&connGroup);
+  iotWebConf.addParameterGroup(&ebusGroup);
+  iotWebConf.addParameterGroup(&mqttGroup);
   iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
@@ -406,9 +554,9 @@ void setup() {
 
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
-  configServer.on("/config", [] { iotWebConf.handleConfig(); });
-  configServer.on("/param", [] { iotWebConf.handleConfig(); });
   configServer.on("/status", [] { handleStatus(); });
+  configServer.on("/config", [] { iotWebConf.handleConfig(); });
+
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
 
   iotWebConf.setupUpdateServer(
@@ -424,6 +572,17 @@ void setup() {
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
     iotWebConf.doLoop();
   }
+
+  mqttClient.onConnect(onMqttConnect);
+  mqttClient.onDisconnect(onMqttDisconnect);
+  mqttClient.onSubscribe(onMqttSubscribe);
+  mqttClient.onUnsubscribe(onMqttUnsubscribe);
+  mqttClient.onMessage(onMqttMessage);
+  mqttClient.onPublish(onMqttPublish);
+
+  if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
+
+  if (mqtt_user[0] != '\0') mqttClient.setCredentials(mqtt_user, mqtt_pass);
 
   wifiServer.begin();
   wifiServerRO.begin();
@@ -443,19 +602,6 @@ void setup() {
 #endif
 }
 
-bool handleStatusServerRequests() {
-  if (!statusServer.hasClient()) return false;
-
-  WiFiClient client = statusServer.accept();
-
-  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.print(status_string());
-    client.flush();
-    client.stop();
-  }
-  return true;
-}
-
 void loop() {
   ArduinoOTA.handle();
 
@@ -469,6 +615,23 @@ void loop() {
 #ifdef ESP32
   iotWebConf.doLoop();
 #endif
+
+  if (needMqttConnect) {
+    if (connectMqtt()) {
+      needMqttConnect = false;
+      publishStatus();
+    }
+  } else if ((iotWebConf.getState() == iotwebconf::OnLine) &&
+             (!mqttClient.connected())) {
+    needMqttConnect = true;
+  }
+
+  uptime = millis();
+
+  if (mqttClient.connected() && millis() > lastMqttUpdate + 5 * 1000) {
+    lastMqttUpdate = millis();
+    publishValues();
+  }
 
   if (millis() > last_comms + 200 * 1000) {
     reset();
