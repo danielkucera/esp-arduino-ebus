@@ -22,7 +22,7 @@ void onMqttSubscribe(uint16_t packetId, uint8_t qos) {}
 
 void onMqttUnsubscribe(uint16_t packetId) {}
 
-void onMqttMessage(char *topic, char *payload,
+void onMqttMessage(const char *topic, const char *payload,
                    AsyncMqttClientMessageProperties properties, size_t len,
                    size_t index, size_t total) {
   String tmp = String(topic);

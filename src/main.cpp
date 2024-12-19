@@ -381,7 +381,6 @@ void connectWifi(const char* ssid, const char* password) {
     if (valid) WiFi.config(ipAddress, gateway, netmask);
   }
 
-
   WiFi.begin(ssid, password);
 }
 
@@ -432,6 +431,8 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
                   atoi(comand_distance));
+  pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
+                  mqttClient.connected() ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "mqtt_server: %s\r\n",
                   mqtt_server);
   pos += snprintf(status + pos, sizeof(status), "mqtt_user: %s\r\n", mqtt_user);
