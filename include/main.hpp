@@ -37,8 +37,4 @@ void handleClient(WiFiClient *client);
 
 void reset();
 
-void loadCommands();
-void saveCommands();
-void wipeCommands();
-
 #endif  // INCLUDE_MAIN_HPP_

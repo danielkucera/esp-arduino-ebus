@@ -2,6 +2,7 @@
 
 #include "main.hpp"
 #include "schedule.hpp"
+#include "store.hpp"
 
 AsyncMqttClient mqttClient;
 
@@ -28,11 +29,11 @@ void onMqttMessage(const char *topic, const char *payload,
   String tmp = String(topic);
   if (tmp.startsWith("ebus/config/commands/")) {
     if (String(payload).length() > 0)
-      schedule.enqueCommand(payload);
+      store.enqueCommand(payload);
     else
-      schedule.removeCommand(topic);
+      store.removeCommand(topic);
   } else if (tmp.equals("ebus/config/list")) {
-    schedule.publishCommands();
+    store.publishCommands();
   } else if (tmp.equals("ebus/config/raw")) {
     schedule.publishRaw(payload);
   } else if (tmp.equals("ebus/config/filter")) {
@@ -40,11 +41,11 @@ void onMqttMessage(const char *topic, const char *payload,
   } else if (tmp.equals("ebus/config/reset")) {
     if (String(payload).equalsIgnoreCase("true")) reset();
   } else if (tmp.equals("ebus/config/load")) {
-    if (String(payload).equalsIgnoreCase("true")) loadCommands();
+    if (String(payload).equalsIgnoreCase("true")) store.loadCommands();
   } else if (tmp.equals("ebus/config/save")) {
-    if (String(payload).equalsIgnoreCase("true")) saveCommands();
+    if (String(payload).equalsIgnoreCase("true")) store.saveCommands();
   } else if (tmp.equals("ebus/config/wipe")) {
-    if (String(payload).equalsIgnoreCase("true")) wipeCommands();
+    if (String(payload).equalsIgnoreCase("true")) store.wipeCommands();
   }
 }
 

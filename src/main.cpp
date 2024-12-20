@@ -185,7 +185,7 @@ bool connectMqtt() {
 
 void wifiConnected() {
   last_connect = millis();
-  reconnect_count++;
+  ++reconnect_count;
   needMqttConnect = true;
 }
 
@@ -399,7 +399,7 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "reconnect_count: %d \n",
                   reconnect_count.value());
   pos += snprintf(status + pos, sizeof(status), "rssi: %d dBm\n", WiFi.RSSI());
-  pos += snprintf(status + pos, sizeof(status), "free_heap: %d B\n",
+  pos += snprintf(status + pos, sizeof(status), "free_heap: %u B\n",
                   free_heap.value());
   pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n", reset_code);
   pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
@@ -443,74 +443,7 @@ char* status_string() {
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
 
 void handleCommands() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    schedule.getCommands());
-}
-
-void loadCommands() {
-  Preferences commands;
-  commands.begin("commands", true);
-
-  size_t bytes = commands.getBytesLength("ebus");
-  if (bytes > 2) {  // 2 = empty json array "[]"
-    std::vector<char> buffer(bytes);
-    bytes = commands.getBytes("ebus", buffer.data(), bytes);
-    if (bytes > 2) {  // loading was successful
-      std::string payload(buffer.begin(), buffer.end());
-
-      schedule.deserializeCommands(payload.c_str());
-      mqttClient.publish("ebus/config/loading", 0, false,
-                         String(bytes).c_str());
-    } else {
-      mqttClient.publish("ebus/config/loading", 0, false, "failed");
-    }
-  } else {
-    mqttClient.publish("ebus/config/loading", 0, false, "no data");
-  }
-
-  mqttClient.publish("ebus/config/load", 0, false, "");
-
-  commands.end();
-}
-
-void saveCommands() {
-  Preferences commands;
-  commands.begin("commands", false);
-
-  const char* payload = schedule.serializeCommands();
-  size_t bytes = strlen(payload);
-  if (bytes > 2) {  // 2 = empty json array "[]"
-    bytes = commands.putBytes("ebus", payload, bytes);
-    if (bytes > 2)  // saving was successful
-      mqttClient.publish("ebus/config/saving", 0, false, String(bytes).c_str());
-    else
-      mqttClient.publish("ebus/config/saving", 0, false, "failed");
-  } else {
-    mqttClient.publish("ebus/config/saving", 0, false, "no data");
-  }
-
-  mqttClient.publish("ebus/config/save", 0, false, "");
-
-  commands.end();
-}
-
-void wipeCommands() {
-  Preferences commands;
-  commands.begin("commands", false);
-
-  size_t bytes = commands.getBytesLength("ebus");
-  if (bytes > 0) {
-    if (commands.remove("ebus"))  // wiping was successful
-      mqttClient.publish("ebus/config/wiping", 0, false, String(bytes).c_str());
-    else
-      mqttClient.publish("ebus/config/wiping", 0, false, "failed");
-  } else {
-    mqttClient.publish("ebus/config/wiping", 0, false, "no data");
-  }
-
-  mqttClient.publish("ebus/config/wipe", 0, false, "");
-
-  commands.end();
+  configServer.send(200, "application/json;charset=utf-8", store.getCommands());
 }
 
 void publishStatus() {
@@ -722,10 +655,10 @@ void setup() {
 
   last_comms = millis();
 
-  if (schedule.needTX()) enableTX();
+  if (store.active()) enableTX();
 
   // install saved commands
-  loadCommands();
+  store.loadCommands();
 
 #ifdef ESP32
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
@@ -755,15 +688,18 @@ void loop() {
     needMqttConnect = true;
   }
 
-  uptime = millis();
-
   if (mqttClient.connected() && millis() > lastMqttUpdate + 5 * 1000) {
     lastMqttUpdate = millis();
     publishValues();
     schedule.publishCounters();
 
-    if (schedule.needTX()) enableTX();
+    if (store.active()) enableTX();
   }
+
+  // Check whether new commands have been added
+  store.checkNewCommands();
+
+  uptime = millis();
 
   if (millis() > last_comms + 200 * 1000) {
     reset();
