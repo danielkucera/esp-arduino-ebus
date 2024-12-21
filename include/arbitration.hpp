@@ -30,7 +30,7 @@ class Arbitration {
   // Try to start arbitration for the specified master.
   // Return values:
   // - started     : arbitration started. Make sure to pass all bus data to this
-  //                object through the "data" method
+  //                 object through the "data" method
   // - not_started : arbitration not started. Possible reasons:
   //                + the bus is not in a state that allows to start arbitration
   //                + another arbitration is already ongoing
@@ -38,7 +38,7 @@ class Arbitration {
   // - late        : arbitration not started because the start is too late
   //                 compared to the SYN symbol received
   enum result { started, not_started, late };
-  result start(BusState& busstate, uint8_t master, uint32_t startBitTime);
+  result start(const BusState& busstate, uint8_t master, uint32_t startBitTime);
 
   // A symbol was received on the bus, what does this do to the arbitration
   // state? Return values: see description of state enum value

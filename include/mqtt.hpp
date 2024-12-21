@@ -77,7 +77,7 @@ class Track {
   void publish() { publish(true); }
 
  private:
-  T m_value = 0;
+  T m_value;
   const char *m_topic;
   const uint16_t m_seconds = 0;
   const uint16_t m_maxage = 0;
