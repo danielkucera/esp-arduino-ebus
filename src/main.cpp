@@ -443,7 +443,8 @@ char* status_string() {
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
 
 void handleCommands() {
-  configServer.send(200, "application/json;charset=utf-8", store.getCommands());
+  configServer.send(200, "application/json;charset=utf-8",
+                    store.getCommands().c_str());
 }
 
 void publishStatus() {

@@ -38,7 +38,7 @@ class Store {
   void removeCommand(const char *topic);
 
   void publishCommands() const;
-  const char *getCommands() const;
+  const std::string getCommands() const;
 
   void checkNewCommands();
 
@@ -60,7 +60,7 @@ class Store {
 
   bool init = true;
 
-  const char *serializeCommands() const;
+  const std::string serializeCommands() const;
   void deserializeCommands(const char *payload);
 
   static void publishCommand(const std::vector<Command> *commands,

@@ -129,7 +129,7 @@ void Store::publishCommands() const {
     mqttClient.publish("ebus/config/installed", 0, false, "");
 }
 
-const char *Store::getCommands() const {
+const std::string Store::getCommands() const {
   std::string payload;
   JsonDocument doc;
 
@@ -172,7 +172,7 @@ const char *Store::getCommands() const {
   doc.shrinkToFit();
   serializeJson(doc, payload);
 
-  return payload.c_str();
+  return payload;
 }
 
 void Store::checkNewCommands() {
@@ -265,10 +265,9 @@ void Store::saveCommands() const {
   Preferences commands;
   commands.begin("commands", false);
 
-  const char *payload = serializeCommands();
-  size_t bytes = strlen(payload);
+  size_t bytes = strlen(serializeCommands().c_str());
   if (bytes > 2) {  // 2 = empty json array "[]"
-    bytes = commands.putBytes("ebus", payload, bytes);
+    bytes = commands.putBytes("ebus", serializeCommands().c_str(), bytes);
     if (bytes > 2)  // saving was successful
       mqttClient.publish("ebus/config/saving", 0, false, String(bytes).c_str());
     else
@@ -301,7 +300,7 @@ void Store::wipeCommands() {
   commands.end();
 }
 
-const char *Store::serializeCommands() const {
+const std::string Store::serializeCommands() const {
   std::string payload;
   JsonDocument doc;
 
@@ -344,7 +343,7 @@ const char *Store::serializeCommands() const {
   doc.shrinkToFit();
   serializeJson(doc, payload);
 
-  return payload.c_str();
+  return payload;
 }
 
 void Store::deserializeCommands(const char *payload) {
