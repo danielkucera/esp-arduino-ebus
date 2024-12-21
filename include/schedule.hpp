@@ -14,6 +14,7 @@
 // This class sends time-controlled active commands to the ebus. All valid
 // received messages are compared with passively defined commands and evaluated
 // if they match. Raw data (including filter function) can also be output.
+// Individual commands are transmitted and the results reported back.
 
 class Schedule {
  public:
@@ -24,6 +25,8 @@ class Schedule {
 
   void publishRaw(const char *payload);
   void handleFilter(const char *payload);
+
+  void handleSend(const char *payload);
 
   void processSend();
   bool processReceive(bool enhanced, const WiFiClient *client,
@@ -36,13 +39,17 @@ class Schedule {
   WiFiClient *dummyClient = new WiFiClient();
   ebus::EbusHandler ebusHandler;
 
-  Command *actCommand = nullptr;
+  Command *activeCommand = nullptr;
 
   uint32_t distanceCommands = 0;
   uint32_t lastCommand = 0;
 
   bool raw = false;
   std::vector<std::vector<uint8_t>> rawFilters;
+
+  bool send = false;
+  std::deque<std::vector<uint8_t>> sendCommands;
+  std::vector<uint8_t> sendCommand;
 
   static bool busReadyCallback();
   static void busWriteCallback(const uint8_t byte);
@@ -53,6 +60,9 @@ class Schedule {
   void processResponse(const std::vector<uint8_t> &slave);
   void processTelegram(const std::vector<uint8_t> &master,
                        const std::vector<uint8_t> &slave);
+
+  static void publishSend(const std::vector<uint8_t> &master,
+                          const std::vector<uint8_t> &slave);
 
   static void publishValue(Command *command, const std::vector<uint8_t> &value);
 };

@@ -507,7 +507,7 @@ void handleRoot() {
        "user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
-  s += "<a href='/commands'>Installed commands</a><br>";
+  s += "<a href='/commands'>Commands</a><br>";
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
@@ -656,10 +656,9 @@ void setup() {
 
   last_comms = millis();
 
-  if (store.active()) enableTX();
-
   // install saved commands
   store.loadCommands();
+  if (store.active()) enableTX();
 
 #ifdef ESP32
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
@@ -689,16 +688,16 @@ void loop() {
     needMqttConnect = true;
   }
 
-  if (mqttClient.connected() && millis() > lastMqttUpdate + 5 * 1000) {
-    lastMqttUpdate = millis();
-    publishValues();
-    schedule.publishCounters();
-
+  if (mqttClient.connected()) {
+    if (millis() > lastMqttUpdate + 5 * 1000) {
+      lastMqttUpdate = millis();
+      publishValues();
+      schedule.publishCounters();
+    }
+    // Check whether new commands have been added
+    store.doLoop();
     if (store.active()) enableTX();
   }
-
-  // Check whether new commands have been added
-  store.checkNewCommands();
 
   uptime = millis();
 

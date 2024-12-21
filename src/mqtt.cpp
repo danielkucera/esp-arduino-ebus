@@ -15,6 +15,7 @@ void onMqttConnect(bool sessionPresent) {
   mqttClient.subscribe("ebus/config/load", 0);
   mqttClient.subscribe("ebus/config/save", 0);
   mqttClient.subscribe("ebus/config/wipe", 0);
+  mqttClient.subscribe("ebus/config/send", 0);
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {}
@@ -33,7 +34,7 @@ void onMqttMessage(const char *topic, const char *payload,
     else
       store.removeCommand(topic);
   } else if (tmp.equals("ebus/config/list")) {
-    store.publishCommands();
+    if (String(payload).equalsIgnoreCase("true")) store.publishCommands();
   } else if (tmp.equals("ebus/config/raw")) {
     schedule.publishRaw(payload);
   } else if (tmp.equals("ebus/config/filter")) {
@@ -46,6 +47,8 @@ void onMqttMessage(const char *topic, const char *payload,
     if (String(payload).equalsIgnoreCase("true")) store.saveCommands();
   } else if (tmp.equals("ebus/config/wipe")) {
     if (String(payload).equalsIgnoreCase("true")) store.wipeCommands();
+  } else if (tmp.equals("ebus/config/send")) {
+    if (String(payload).length() > 0) schedule.handleSend(payload);
   }
 }
 

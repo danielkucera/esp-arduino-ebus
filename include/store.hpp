@@ -32,15 +32,13 @@ class Store {
   Store() = default;
 
   void enqueCommand(const char *payload);
-  void enqueCommands(const char *payload);
-
   void insertCommand(const char *payload);
   void removeCommand(const char *topic);
 
-  void publishCommands() const;
+  void publishCommands();
   const std::string getCommands() const;
 
-  void checkNewCommands();
+  void doLoop();
 
   const bool active() const;
   Command *nextActiveCommand();
@@ -58,7 +56,14 @@ class Store {
   uint32_t distanceInsert = 300;
   uint32_t lastInsert = 0;
 
+  std::deque<std::string> pubCommands;
+  uint32_t distancePublish = 100;
+  uint32_t lastPublish = 0;
+
   bool init = true;
+
+  void checkNewCommands();
+  void checkPubCommands();
 
   const std::string serializeCommands() const;
   void deserializeCommands(const char *payload);

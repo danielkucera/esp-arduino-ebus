@@ -209,7 +209,7 @@ void ebus::Telegram::createMaster(Sequence &seq) {
   seq.reduce();
 
   // sequence is too short
-  if (seq.size() < 6) {
+  if (seq.size() < 5) {
     m_masterState = SEQ_ERR_SHORT;
     return;
   }
@@ -447,7 +447,7 @@ bool ebus::Telegram::isAddressValid(const uint8_t byte) {
 
 int ebus::Telegram::checkMasterSequence(const Sequence &seq) {
   // sequence is too short
-  if (seq.size() < static_cast<size_t>(6)) return SEQ_ERR_SHORT;
+  if (seq.size() < static_cast<size_t>(5)) return SEQ_ERR_SHORT;
 
   // source address is invalid
   if (!isMaster(seq[0])) return SEQ_ERR_QQ;

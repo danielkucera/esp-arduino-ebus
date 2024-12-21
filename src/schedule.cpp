@@ -90,22 +90,50 @@ void Schedule::handleFilter(const char *payload) {
   } else {
     rawFilters.clear();
     JsonArray array = doc.as<JsonArray>();
-    std::transform(
-        array.begin(), array.end(), rawFilters.begin(),
-        [](JsonVariant variant) { return ebus::Sequence::to_vector(variant); });
+    for (JsonVariant variant : array)
+      rawFilters.push_back(ebus::Sequence::to_vector(variant));
+  }
+}
+
+// payload ZZ PB SB NN Dx
+// [
+//   "08070400",
+//   "..."
+// ]
+void Schedule::handleSend(const char *payload) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, payload);
+
+  if (error) {
+    std::string err = "DeserializationError ";
+    err += error.c_str();
+    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+  } else {
+    sendCommands.clear();
+    JsonArray array = doc.as<JsonArray>();
+    for (JsonVariant variant : array)
+      sendCommands.push_back(ebus::Sequence::to_vector(variant));
   }
 }
 
 void Schedule::processSend() {
-  if (!store.active()) return;
+  if (!send && sendCommands.size() == 0 && !store.active()) return;
 
   if (ebusHandler.getState() == ebus::State::MonitorBus) {
     if (millis() > lastCommand + distanceCommands) {
       lastCommand = millis();
 
       std::vector<uint8_t> command;
-      actCommand = store.nextActiveCommand();
-      if (actCommand != nullptr) command = actCommand->command;
+      if (sendCommands.size() > 0) {
+        send = true;
+        sendCommand = sendCommands.front();
+        command = sendCommand;
+        sendCommands.pop_front();
+      } else {
+        send = false;
+        activeCommand = store.nextActiveCommand();
+        if (activeCommand != nullptr) command = activeCommand->command;
+      }
 
       if (ebusHandler.enque(command)) {
         // start arbitration
@@ -122,8 +150,6 @@ void Schedule::processSend() {
 bool Schedule::processReceive(bool enhanced, const WiFiClient *client,
                               const uint8_t byte) {
   if (!enhanced) ebusHandler.feedCounters(byte);
-
-  if (!store.active()) return false;
 
   if (ebusHandler.getState() == ebus::State::Arbitration) {
     // workaround - master sequence comes twice - waiting for second master
@@ -202,7 +228,10 @@ void Schedule::telegramCallback(const std::vector<uint8_t> &master,
 }
 
 void Schedule::processResponse(const std::vector<uint8_t> &slave) {
-  publishValue(actCommand, slave);
+  if (send)
+    publishSend(sendCommand, slave);
+  else
+    publishValue(activeCommand, slave);
 }
 
 void Schedule::processTelegram(const std::vector<uint8_t> &master,
@@ -213,8 +242,7 @@ void Schedule::processTelegram(const std::vector<uint8_t> &master,
                                    return ebus::Sequence::contains(master, vec);
                                  });
     if (count > 0 || rawFilters.size() == 0) {
-      std::string topic =
-          "ebus/values/raw/" + ebus::Sequence::to_string(master);
+      std::string topic = "ebus/raw/" + ebus::Sequence::to_string(master);
       std::string payload = ebus::Sequence::to_string(slave);
       if (payload.empty()) payload = "-";
 
@@ -230,6 +258,14 @@ void Schedule::processTelegram(const std::vector<uint8_t> &master,
     else
       publishValue(pasCommand, slave);
   }
+}
+
+void Schedule::publishSend(const std::vector<uint8_t> &master,
+                           const std::vector<uint8_t> &slave) {
+  std::string topic = "ebus/sent/" + ebus::Sequence::to_string(master);
+  std::string payload = ebus::Sequence::to_string(slave);
+
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 }
 
 void Schedule::publishValue(Command *command,

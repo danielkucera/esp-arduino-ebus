@@ -12,22 +12,6 @@ void Store::enqueCommand(const char *payload) {
   newCommands.push_back(std::string(payload));
 }
 
-void Store::enqueCommands(const char *payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
-  } else {
-    JsonArray array = doc.as<JsonArray>();
-    std::transform(
-        array.begin(), array.end(), newCommands.begin(),
-        [](JsonVariant variant) { return variant.as<std::string>(); });
-  }
-}
-
 // payload - optional: unit, ha_class
 // {
 //   "command": "08b509030d0600",
@@ -100,7 +84,6 @@ void Store::removeCommand(const char *topic) {
     publishCommand(&activeCommands, key, true);
 
     activeCommands.erase(actIt);
-    publishCommands();
   } else {
     const std::vector<Command>::const_iterator pasIt =
         std::find_if(passiveCommands.begin(), passiveCommands.end(),
@@ -110,7 +93,6 @@ void Store::removeCommand(const char *topic) {
       publishCommand(&passiveCommands, key, true);
 
       passiveCommands.erase(pasIt);
-      publishCommands();
     } else {
       std::string err = key + " not found";
       mqttClient.publish("ebus/config/error", 0, false, err.c_str());
@@ -118,15 +100,15 @@ void Store::removeCommand(const char *topic) {
   }
 }
 
-void Store::publishCommands() const {
+void Store::publishCommands() {
   for (const Command &command : activeCommands)
-    publishCommand(&activeCommands, command.key, false);
+    pubCommands.push_back(command.key);
 
   for (const Command &command : passiveCommands)
-    publishCommand(&passiveCommands, command.key, false);
+    pubCommands.push_back(command.key);
 
   if (activeCommands.size() + passiveCommands.size() == 0)
-    mqttClient.publish("ebus/config/installed", 0, false, "");
+    mqttClient.publish("ebus/commands", 0, false, "");
 }
 
 const std::string Store::getCommands() const {
@@ -175,13 +157,10 @@ const std::string Store::getCommands() const {
   return payload;
 }
 
-void Store::checkNewCommands() {
-  if (newCommands.size() > 0) {
-    if (millis() > lastInsert + distanceInsert) {
-      std::string payload = newCommands.front();
-      newCommands.pop_front();
-      insertCommand(payload.c_str());
-    }
+void Store::doLoop() {
+  if (millis() > 2 * 1000) {
+    checkNewCommands();
+    checkPubCommands();
   }
 }
 
@@ -256,8 +235,6 @@ void Store::loadCommands() {
     mqttClient.publish("ebus/config/loading", 0, false, "no data");
   }
 
-  mqttClient.publish("ebus/config/load", 0, false, "");
-
   commands.end();
 }
 
@@ -276,8 +253,6 @@ void Store::saveCommands() const {
     mqttClient.publish("ebus/config/saving", 0, false, "no data");
   }
 
-  mqttClient.publish("ebus/config/save", 0, false, "");
-
   commands.end();
 }
 
@@ -295,9 +270,28 @@ void Store::wipeCommands() {
     mqttClient.publish("ebus/config/wiping", 0, false, "no data");
   }
 
-  mqttClient.publish("ebus/config/wipe", 0, false, "");
-
   commands.end();
+}
+
+void Store::checkNewCommands() {
+  if (newCommands.size() > 0) {
+    if (millis() > lastInsert + distanceInsert) {
+      std::string payload = newCommands.front();
+      newCommands.pop_front();
+      insertCommand(payload.c_str());
+    }
+  }
+}
+
+void Store::checkPubCommands() {
+  if (pubCommands.size() > 0) {
+    if (millis() > lastPublish + distancePublish) {
+      std::string payload = pubCommands.front();
+      pubCommands.pop_front();
+      publishCommand(&activeCommands, payload, false);
+      publishCommand(&passiveCommands, payload, false);
+    }
+  }
 }
 
 const std::string Store::serializeCommands() const {
@@ -385,7 +379,7 @@ void Store::publishCommand(const std::vector<Command> *commands,
                    [&key](const Command &cmd) { return cmd.key == key; });
 
   if (it != commands->end()) {
-    std::string topic = "ebus/config/installed/" + it->key;
+    std::string topic = "ebus/commands/" + it->key;
 
     std::string payload;
 
