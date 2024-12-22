@@ -10,7 +10,7 @@
 //   bus permission must be in the range of 4300 us - 4456,24 us ."
 // SYN symbol is 4167 us. If we would receive the symbol immediately,
 // we need to wait (4300 - 4167)=133 us after we received the SYN.
-Arbitration::result Arbitration::start(BusState& busstate, uint8_t master,
+Arbitration::result Arbitration::start(const BusState& busstate, uint8_t master,
                                        uint32_t startBitTime) {
   static int arb = 0;
   if (_arbitrating) {

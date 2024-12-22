@@ -7,6 +7,7 @@
 #include "bus.hpp"
 #include "enhanced.hpp"
 #include "mqtt.hpp"
+#include "schedule.hpp"
 
 #ifdef ESP32
 #include <ESPmDNS.h>
@@ -58,6 +59,19 @@ char ipAddressValue[STRING_LEN];
 char gatewayValue[STRING_LEN];
 char netmaskValue[STRING_LEN];
 
+char ebus_address[NUMBER_LEN];
+static char ebus_address_values[][NUMBER_LEN] = {
+    "00", "10", "30", "70", "F0", "01", "11", "31", "71",
+    "F1", "03", "13", "33", "73", "F3", "07", "17", "37",
+    "77", "F7", "0F", "1F", "3F", "7F", "FF"};
+static char ebus_address_names[][NUMBER_LEN] = {
+    "0x00 0", "0x10 0", "0x30 0", "0x70 0", "0xF0 0", "0x01 1", "0x11 1",
+    "0x31 1", "0x71 1", "0xF1 1", "0x03 2", "0x13 2", "0x33 2", "0x73 2",
+    "0xF3 2", "0x07 3", "0x17 3", "0x37 3", "0x77 3", "0xF7 3", "0x0F 4",
+    "0x1F 4", "0x3F 4", "0x7F 4", "0xFF 4"};
+
+char comand_distance[NUMBER_LEN];
+
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
@@ -82,6 +96,14 @@ iotwebconf::ParameterGroup ebusGroup =
 iotwebconf::NumberParameter pwmParam =
     iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
                                 "130", "1..255", "min='1' max='255' step='1'");
+iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
+    "EBUS address", "ebus_address", ebus_address, NUMBER_LEN,
+    reinterpret_cast<char*>(ebus_address_values),
+    reinterpret_cast<char*>(ebus_address_names),
+    sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
+iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
+    "Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1",
+    "0..60", "min='0' max='60' step='1'");
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
@@ -119,6 +141,8 @@ uint32_t reset_code = -1;
 
 // ebus/device/ebus
 Track<uint32_t> pwm("ebus/device/ebus/pwm", 0);
+Track<String> ebusAddress("ebus/device/ebus/ebus_address", 0);
+Track<String> commandDistance("ebus/device/ebus/comand_distance", 0);
 
 // ebus/device/wifi
 Track<uint32_t> last_connect("ebus/device/wifi/last_connect", 30);
@@ -205,6 +229,7 @@ inline void enableTX() {
 void set_pwm(uint8_t value) {
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
+  schedule.resetCounters();
 #endif
 }
 
@@ -259,9 +284,17 @@ void data_process() {
     handleEnhClient(&enhClients[i]);
   }
 
+  // check schedule for data
+  schedule.processSend();
+
   // check queue for data
   BusType::data d;
   if (Bus.read(d)) {
+    // push data to schedule
+    if (schedule.processReceive(d._enhanced, d._client, d._d)) {
+      last_comms = millis();
+    }
+
     for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
@@ -327,6 +360,12 @@ void saveParamsCallback() {
   set_pwm(atoi(pwm_value));
   pwm = get_pwm();
 
+  schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebusAddress = ebus_address;
+
+  schedule.setDistance(atoi(comand_distance));
+  commandDistance = comand_distance;
+
   if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
 
   if (mqtt_user[0] != '\0') mqttClient.setCredentials(mqtt_user, mqtt_pass);
@@ -388,6 +427,10 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "nbr_errors: %i\r\n",
                   static_cast<int>(Bus._nbrErrors));
   pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
+  pos += snprintf(status + pos, sizeof(status), "ebus_address: %s\r\n",
+                  ebus_address);
+  pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
+                  atoi(comand_distance));
   pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
                   mqttClient.connected() ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "mqtt_server: %s\r\n",
@@ -398,6 +441,11 @@ char* status_string() {
 }
 
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
+
+void handleCommands() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    store.getCommands().c_str());
+}
 
 void publishStatus() {
   // ebus/device
@@ -418,6 +466,8 @@ void publishStatus() {
 
   // ebus/device/ebus
   pwm = get_pwm();
+  ebusAddress = ebus_address;
+  commandDistance = comand_distance;
 }
 
 void publishValues() {
@@ -457,6 +507,7 @@ void handleRoot() {
        "user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
+  s += "<a href='/commands'>Commands</a><br>";
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
@@ -532,6 +583,8 @@ void setup() {
   connGroup.addItem(&netmaskParam);
 
   ebusGroup.addItem(&pwmParam);
+  ebusGroup.addItem(&ebusAddressParam);
+  ebusGroup.addItem(&commandDistanceParam);
 
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
@@ -557,6 +610,7 @@ void setup() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
+  configServer.on("/commands", [] { handleCommands(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
 
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
@@ -570,6 +624,9 @@ void setup() {
       });
 
   set_pwm(atoi(pwm_value));
+
+  schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  schedule.setDistance(atoi(comand_distance));
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
     iotWebConf.doLoop();
@@ -599,6 +656,10 @@ void setup() {
 
   last_comms = millis();
 
+  // install saved commands
+  store.loadCommands();
+  if (store.active()) enableTX();
+
 #ifdef ESP32
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
 #endif
@@ -614,9 +675,10 @@ void loop() {
 
   wdt_feed();
 
-#ifdef ESP32
+  // this should be called on all platforms
+  #ifdef ESP32
   iotWebConf.doLoop();
-#endif
+  #endif
 
   if (needMqttConnect) {
     if (connectMqtt()) {
@@ -628,12 +690,18 @@ void loop() {
     needMqttConnect = true;
   }
 
-  uptime = millis();
-
-  if (mqttClient.connected() && millis() > lastMqttUpdate + 5 * 1000) {
-    lastMqttUpdate = millis();
-    publishValues();
+  if (mqttClient.connected()) {
+    if (millis() > lastMqttUpdate + 5 * 1000) {
+      lastMqttUpdate = millis();
+      publishValues();
+      schedule.publishCounters();
+    }
+    // Check whether new commands have been added
+    store.doLoop();
+    if (store.active()) enableTX();
   }
+
+  uptime = millis();
 
   if (millis() > last_comms + 200 * 1000) {
     reset();
