@@ -676,7 +676,9 @@ void loop() {
   wdt_feed();
 
   // this should be called on all platforms
+#ifdef ESP32
   iotWebConf.doLoop();
+#endif
 
   if (needMqttConnect) {
     if (connectMqtt()) {
