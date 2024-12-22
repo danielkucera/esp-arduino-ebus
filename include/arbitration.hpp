@@ -30,7 +30,7 @@ class Arbitration {
   // Try to start arbitration for the specified master.
   // Return values:
   // - started     : arbitration started. Make sure to pass all bus data to this
-  //                object through the "data" method
+  //                 object through the "data" method
   // - not_started : arbitration not started. Possible reasons:
   //                + the bus is not in a state that allows to start arbitration
   //                + another arbitration is already ongoing
