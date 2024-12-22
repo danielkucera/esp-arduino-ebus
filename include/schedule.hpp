@@ -14,7 +14,8 @@
 // This class sends time-controlled active commands to the ebus. All valid
 // received messages are compared with passively defined commands and evaluated
 // if they match. Raw data (including filter function) can also be output.
-// Individual commands are transmitted and the results reported back.
+// Individual commands are transmitted and the results reported back. The scan
+// results are also published.
 
 class Schedule {
  public:
