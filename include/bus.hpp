@@ -59,8 +59,8 @@ class BusType {
 
   // Is there a value available that should be send to a client?
   bool read(data& d);
-  static size_t write(uint8_t symbol);
-  static int availableForWrite();
+  size_t write(uint8_t symbol);
+  int availableForWrite();
   int available();
 
   // std::atomic seems not well supported on esp12e, besides it is also not
