@@ -21,8 +21,7 @@
 // the ebus classes Telegram and Sequence. It also collects statistical data
 // about the ebus system.
 
-#ifndef LIB_EBUS_EBUSHANDLER_H_
-#define LIB_EBUS_EBUSHANDLER_H_
+#pragma once
 
 #include <functional>
 #include <map>
@@ -132,5 +131,3 @@ class EbusHandler {
 };
 
 }  // namespace ebus
-
-#endif  // LIB_EBUS_EBUSHANDLER_H_

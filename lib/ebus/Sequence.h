@@ -24,8 +24,7 @@
 // (reduced) 0xaa <-> 0xa9 0x01 (expanded)
 // (reduced) 0xa9 <-> 0xa9 0x00 (expanded)
 
-#ifndef LIB_EBUS_SEQUENCE_H_
-#define LIB_EBUS_SEQUENCE_H_
+#pragma once
 
 #include <stdint.h>
 
@@ -84,5 +83,3 @@ class Sequence {
 };
 
 }  // namespace ebus
-
-#endif  // LIB_EBUS_SEQUENCE_H_

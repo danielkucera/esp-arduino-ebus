@@ -20,8 +20,7 @@
 // This file offers various functions for decoding/encoding in accordance with
 // the ebus data types and beyond.
 
-#ifndef LIB_EBUS_DATATYPES_H_
-#define LIB_EBUS_DATATYPES_H_
+#pragma once
 
 #include <stdint.h>
 #include <sys/types.h>
@@ -156,5 +155,3 @@ const std::string byte_2_string(const std::vector<uint8_t> &vec);
 const std::vector<uint8_t> string_2_byte(const std::string &str);
 
 }  // namespace ebus
-
-#endif  // LIB_EBUS_DATATYPES_H_
