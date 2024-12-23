@@ -31,7 +31,7 @@
 
 namespace ebus {
 
-struct Counter {
+struct Counters {
   uint32_t total = 0;
 
   uint32_t success = 0;
@@ -96,7 +96,7 @@ class EbusHandler {
 
   void feedCounters(const uint8_t byte);
   void resetCounters();
-  Counter &getCounters();
+  Counters &getCounters();
 
  private:
   uint8_t address = 0;
@@ -112,7 +112,7 @@ class EbusHandler {
   State state = State::MonitorBus;
 
   Sequence sequence;
-  Counter counters;
+  Counters counters;
 
   Telegram telegram;
 

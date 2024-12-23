@@ -255,4 +255,4 @@ void ebus::EbusHandler::resetCounters() {
   counters.special0704Failure = 0;
 }
 
-ebus::Counter &ebus::EbusHandler::getCounters() { return counters; }
+ebus::Counters &ebus::EbusHandler::getCounters() { return counters; }
