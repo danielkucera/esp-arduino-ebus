@@ -1,5 +1,4 @@
-#ifndef INCLUDE_STORE_HPP_
-#define INCLUDE_STORE_HPP_
+#pragma once
 
 #include <deque>
 #include <string>
@@ -75,5 +74,3 @@ class Store {
 };
 
 extern Store store;
-
-#endif  // INCLUDE_STORE_HPP_
