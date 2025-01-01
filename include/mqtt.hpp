@@ -1,5 +1,4 @@
-#ifndef INCLUDE_MQTT_HPP_
-#define INCLUDE_MQTT_HPP_
+#pragma once
 
 #include <AsyncMqttClient.h>
 
@@ -90,5 +89,3 @@ class Track {
     }
   }
 };
-
-#endif  // INCLUDE_MQTT_HPP_
