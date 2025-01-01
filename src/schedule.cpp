@@ -173,7 +173,7 @@ bool Schedule::processReceive(bool enhanced, const WiFiClient *client,
 void Schedule::resetCounters() { ebusHandler.resetCounters(); }
 
 void Schedule::publishCounters() {
-  ebus::Counter counters = ebusHandler.getCounters();
+  ebus::Counters counters = ebusHandler.getCounters();
   total = counters.total;
 
   success = counters.success;
