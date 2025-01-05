@@ -7,7 +7,10 @@
 #include "bus.hpp"
 #include "enhanced.hpp"
 #include "mqtt.hpp"
+
+#ifdef EBUS_INTERNAL
 #include "schedule.hpp"
+#endif
 
 #ifdef ESP32
 #include <ESPmDNS.h>
@@ -229,7 +232,9 @@ inline void enableTX() {
 void set_pwm(uint8_t value) {
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
+#ifdef EBUS_INTERNAL
   schedule.resetCounters();
+#endif
 #endif
 }
 
@@ -284,16 +289,20 @@ void data_process() {
     handleEnhClient(&enhClients[i]);
   }
 
+#ifdef EBUS_INTERNAL
   // check schedule for data
   schedule.processSend();
+#endif
 
   // check queue for data
   BusType::data d;
   if (Bus.read(d)) {
+#ifdef EBUS_INTERNAL
     // push data to schedule
     if (schedule.processReceive(d._enhanced, d._client, d._d)) {
       last_comms = millis();
     }
+#endif
 
     for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
       if (d._enhanced) {
@@ -360,10 +369,14 @@ void saveParamsCallback() {
   set_pwm(atoi(pwm_value));
   pwm = get_pwm();
 
+#ifdef EBUS_INTERNAL
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+#endif
   ebusAddress = ebus_address;
 
+#ifdef EBUS_INTERNAL
   schedule.setDistance(atoi(comand_distance));
+#endif
   commandDistance = comand_distance;
 
   if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
@@ -442,10 +455,12 @@ char* status_string() {
 
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
 
+#ifdef EBUS_INTERNAL
 void handleCommands() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getCommands().c_str());
 }
+#endif
 
 void publishStatus() {
   // ebus/device
@@ -610,7 +625,9 @@ void setup() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
+#ifdef EBUS_INTERNAL
   configServer.on("/commands", [] { handleCommands(); });
+#endif
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
 
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
@@ -625,8 +642,10 @@ void setup() {
 
   set_pwm(atoi(pwm_value));
 
+#ifdef EBUS_INTERNAL
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(comand_distance));
+#endif
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
     iotWebConf.doLoop();
@@ -656,9 +675,11 @@ void setup() {
 
   last_comms = millis();
 
+#ifdef EBUS_INTERNAL
   // install saved commands
   store.loadCommands();
   if (store.active()) enableTX();
+#endif
 
 #ifdef ESP32
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
@@ -694,11 +715,15 @@ void loop() {
     if (millis() > lastMqttUpdate + 5 * 1000) {
       lastMqttUpdate = millis();
       publishValues();
+#ifdef EBUS_INTERNAL
       schedule.publishCounters();
+#endif
     }
+#ifdef EBUS_INTERNAL
     // Check whether new commands have been added
     store.doLoop();
     if (store.active()) enableTX();
+#endif
   }
 
   uptime = millis();
