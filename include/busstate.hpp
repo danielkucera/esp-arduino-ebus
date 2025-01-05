@@ -1,5 +1,4 @@
-#ifndef INCLUDE_BUSSTATE_HPP_
-#define INCLUDE_BUSSTATE_HPP_
+#pragma once
 
 #include "main.hpp"
 
@@ -118,4 +117,3 @@ class BusState {
   uint32_t _SYNtime = 0;
   uint32_t _previousSYNtime = 0;
 };
-#endif  // INCLUDE_BUSSTATE_HPP_
