@@ -92,13 +92,13 @@ iotwebconf::TextParameter netmaskParam =
                               STRING_LEN, DEFAULT_NETMASK, DEFAULT_NETMASK);
 
 iotwebconf::ParameterGroup ebusGroup =
-    iotwebconf::ParameterGroup("ebus", "EBUS configuration");
+    iotwebconf::ParameterGroup("ebus", "eBUS configuration");
 iotwebconf::NumberParameter pwmParam =
     iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
                                 "130", "1..255", "min='1' max='255' step='1'");
 #ifdef EBUS_INTERNAL
 iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
-    "EBUS address", "ebus_address", ebus_address, NUMBER_LEN,
+    "eBUS address", "ebus_address", ebus_address, NUMBER_LEN,
     reinterpret_cast<char*>(ebus_address_values),
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
@@ -528,7 +528,9 @@ void handleRoot() {
        "user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
+#ifdef EBUS_INTERNAL
   s += "<a href='/commands'>Commands</a><br>";
+#endif
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
