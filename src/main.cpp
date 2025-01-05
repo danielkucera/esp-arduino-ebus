@@ -62,18 +62,15 @@ char netmaskValue[STRING_LEN];
 
 char pwm_value[NUMBER_LEN];
 
+#ifdef EBUS_INTERNAL
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
     "00", "10", "30", "70", "F0", "01", "11", "31", "71",
     "F1", "03", "13", "33", "73", "F3", "07", "17", "37",
     "77", "F7", "0F", "1F", "3F", "7F", "FF"};
-static char ebus_address_names[][NUMBER_LEN] = {
-    "0x00 0", "0x10 0", "0x30 0", "0x70 0", "0xF0 0", "0x01 1", "0x11 1",
-    "0x31 1", "0x71 1", "0xF1 1", "0x03 2", "0x13 2", "0x33 2", "0x73 2",
-    "0xF3 2", "0x07 3", "0x17 3", "0x37 3", "0x77 3", "0xF7 3", "0x0F 4",
-    "0x1F 4", "0x3F 4", "0x7F 4", "0xFF 4"};
 
 char comand_distance[NUMBER_LEN];
+#endif
 
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
@@ -99,14 +96,16 @@ iotwebconf::ParameterGroup ebusGroup =
 iotwebconf::NumberParameter pwmParam =
     iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
                                 "130", "1..255", "min='1' max='255' step='1'");
+#ifdef EBUS_INTERNAL
 iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     "EBUS address", "ebus_address", ebus_address, NUMBER_LEN,
     reinterpret_cast<char*>(ebus_address_values),
-    reinterpret_cast<char*>(ebus_address_names),
+    reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     "Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1",
     "0..60", "min='0' max='60' step='1'");
+#endif
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
@@ -144,8 +143,10 @@ uint32_t reset_code = -1;
 
 // ebus/device/ebus
 Track<uint32_t> pwm("ebus/device/ebus/pwm", 0);
+#ifdef EBUS_INTERNAL
 Track<String> ebusAddress("ebus/device/ebus/ebus_address", 0);
 Track<String> commandDistance("ebus/device/ebus/comand_distance", 0);
+#endif
 
 // ebus/device/wifi
 Track<uint32_t> last_connect("ebus/device/wifi/last_connect", 30);
@@ -371,13 +372,11 @@ void saveParamsCallback() {
 
 #ifdef EBUS_INTERNAL
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
-#endif
   ebusAddress = ebus_address;
 
-#ifdef EBUS_INTERNAL
   schedule.setDistance(atoi(comand_distance));
-#endif
   commandDistance = comand_distance;
+#endif
 
   if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
 
@@ -440,10 +439,14 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "nbr_errors: %i\r\n",
                   static_cast<int>(Bus._nbrErrors));
   pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
+
+#ifdef EBUS_INTERNAL
   pos += snprintf(status + pos, sizeof(status), "ebus_address: %s\r\n",
                   ebus_address);
   pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
                   atoi(comand_distance));
+#endif
+
   pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
                   mqttClient.connected() ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "mqtt_server: %s\r\n",
@@ -481,8 +484,11 @@ void publishStatus() {
 
   // ebus/device/ebus
   pwm = get_pwm();
+
+#ifdef EBUS_INTERNAL
   ebusAddress = ebus_address;
   commandDistance = comand_distance;
+#endif
 }
 
 void publishValues() {
@@ -598,8 +604,11 @@ void setup() {
   connGroup.addItem(&netmaskParam);
 
   ebusGroup.addItem(&pwmParam);
+
+#ifdef EBUS_INTERNAL
   ebusGroup.addItem(&ebusAddressParam);
   ebusGroup.addItem(&commandDistanceParam);
+#endif
 
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
@@ -629,7 +638,6 @@ void setup() {
   configServer.on("/commands", [] { handleCommands(); });
 #endif
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
-
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
 
   iotWebConf.setupUpdateServer(
