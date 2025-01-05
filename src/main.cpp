@@ -52,12 +52,12 @@ TaskHandle_t Task1;
 DNSServer dnsServer;
 WebServer configServer(80);
 
-char pwm_value[NUMBER_LEN];
-
 char staticIPValue[STRING_LEN];
 char ipAddressValue[STRING_LEN];
 char gatewayValue[STRING_LEN];
 char netmaskValue[STRING_LEN];
+
+char pwm_value[NUMBER_LEN];
 
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
