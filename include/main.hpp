@@ -1,5 +1,4 @@
-#ifndef INCLUDE_MAIN_HPP_
-#define INCLUDE_MAIN_HPP_
+#pragma once
 
 #include <WiFiClient.h>
 #include <WiFiServer.h>
@@ -36,5 +35,3 @@ int pushClient(WiFiClient *client, uint8_t B);
 void handleClient(WiFiClient *client);
 
 void reset();
-
-#endif  // INCLUDE_MAIN_HPP_

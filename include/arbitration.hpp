@@ -1,5 +1,4 @@
-#ifndef INCLUDE_ARBITRATION_HPP_
-#define INCLUDE_ARBITRATION_HPP_
+#pragma once
 
 #include "busstate.hpp"
 
@@ -51,5 +50,3 @@ class Arbitration {
   uint8_t _arbitrationAddress;
   int _restartCount;
 };
-
-#endif  // INCLUDE_ARBITRATION_HPP_
