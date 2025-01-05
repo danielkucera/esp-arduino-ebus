@@ -1,5 +1,4 @@
-#ifndef INCLUDE_SCHEDULE_HPP_
-#define INCLUDE_SCHEDULE_HPP_
+#pragma once
 
 #include <WiFiClient.h>
 
@@ -69,5 +68,3 @@ class Schedule {
 };
 
 extern Schedule schedule;
-
-#endif  // INCLUDE_SCHEDULE_HPP_
