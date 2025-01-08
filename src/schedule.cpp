@@ -73,12 +73,6 @@ void Schedule::publishRaw(const char *payload) {
   }
 }
 
-// payload
-// [
-//   "0700",
-//   "b509",
-//   "..."
-// ]
 void Schedule::handleFilter(const char *payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);
@@ -95,11 +89,6 @@ void Schedule::handleFilter(const char *payload) {
   }
 }
 
-// payload ZZ PB SB NN Dx
-// [
-//   "08070400",
-//   "..."
-// ]
 void Schedule::handleSend(const char *payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);
@@ -117,30 +106,30 @@ void Schedule::handleSend(const char *payload) {
 }
 
 void Schedule::processSend() {
-  if (!send && sendCommands.size() == 0 && !store.active()) return;
-
   if (ebusHandler.getState() == ebus::State::MonitorBus) {
-    if (millis() > lastCommand + distanceCommands) {
-      lastCommand = millis();
+    if (sendCommands.size() > 0 || store.active()) {
+      if (millis() > lastCommand + distanceCommands) {
+        lastCommand = millis();
 
-      std::vector<uint8_t> command;
-      if (sendCommands.size() > 0) {
-        send = true;
-        command = sendCommands.front();
-        sendCommands.pop_front();
-        sendCommand = {ebusHandler.getAddress()};
-        sendCommand.insert(sendCommand.end(), command.begin(), command.end());
-      } else {
-        send = false;
-        activeCommand = store.nextActiveCommand();
-        if (activeCommand != nullptr) command = activeCommand->command;
-      }
+        std::vector<uint8_t> command;
+        if (sendCommands.size() > 0) {
+          send = true;
+          command = sendCommands.front();
+          sendCommands.pop_front();
+          sendCommand = {ebusHandler.getAddress()};
+          sendCommand.insert(sendCommand.end(), command.begin(), command.end());
+        } else {
+          send = false;
+          activeCommand = store.nextActiveCommand();
+          if (activeCommand != nullptr) command = activeCommand->command;
+        }
 
-      if (ebusHandler.enque(command)) {
-        // start arbitration
-        WiFiClient *client = dummyClient;
-        uint8_t address = ebusHandler.getAddress();
-        setArbitrationClient(client, address);
+        if (ebusHandler.enque(command)) {
+          // start arbitration
+          WiFiClient *client = dummyClient;
+          uint8_t address = ebusHandler.getAddress();
+          setArbitrationClient(client, address);
+        }
       }
     }
   }
