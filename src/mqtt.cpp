@@ -63,7 +63,7 @@ void onMqttConnect(bool sessionPresent) {
 
   mqttClient.subscribe("ebus/config/wipe", 0);
   // Wiping saved commands
-  // topic  : ebus/config/load
+  // topic  : ebus/config/wipe
   // payload: true
 
   mqttClient.subscribe("ebus/config/send", 0);
