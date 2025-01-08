@@ -73,12 +73,6 @@ void Schedule::publishRaw(const char *payload) {
   }
 }
 
-// payload
-// [
-//   "0700",
-//   "b509",
-//   "..."
-// ]
 void Schedule::handleFilter(const char *payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);
@@ -95,11 +89,6 @@ void Schedule::handleFilter(const char *payload) {
   }
 }
 
-// payload ZZ PB SB NN Dx
-// [
-//   "08070400",
-//   "..."
-// ]
 void Schedule::handleSend(const char *payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);

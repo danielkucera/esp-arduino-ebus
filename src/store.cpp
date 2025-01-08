@@ -12,19 +12,6 @@ void Store::enqueCommand(const char *payload) {
   newCommands.push_back(std::string(payload));
 }
 
-// payload - optional: unit, ha_class
-// {
-//   "command": "08b509030d0600",
-//   "unit": "°C",
-//   "active": true,
-//   "interval": 60,
-//   "master": false,
-//   "position": 1,
-//   "datatype": "DATA2c",
-//   "topic": "Aussentemperatur",
-//   "ha": true,
-//   "ha_class": "temperature"
-// }
 void Store::insertCommand(const char *payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);
