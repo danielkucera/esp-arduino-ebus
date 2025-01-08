@@ -709,7 +709,6 @@ void loop() {
 
   wdt_feed();
 
-  // this should be called on all platforms
 #ifdef ESP32
   // this should be called on all platforms
   iotWebConf.doLoop();
