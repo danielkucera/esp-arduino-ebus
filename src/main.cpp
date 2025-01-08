@@ -234,7 +234,9 @@ inline void enableTX() {
 void set_pwm(uint8_t value) {
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
+#ifdef EBUS_INTERNAL
   schedule.resetCounters();
+#endif
 #endif
 }
 
@@ -707,8 +709,8 @@ void loop() {
 
   wdt_feed();
 
-// this should be called on all platforms
 #ifdef ESP32
+  // this should be called on all platforms
   iotWebConf.doLoop();
 #endif
 
