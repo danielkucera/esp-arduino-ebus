@@ -143,6 +143,7 @@ uint32_t reset_code = -1;
 
 // ebus/device/ebus
 Track<uint32_t> pwm("ebus/device/ebus/pwm", 0);
+
 #ifdef EBUS_INTERNAL
 Track<String> ebusAddress("ebus/device/ebus/ebus_address", 0);
 Track<String> commandDistance("ebus/device/ebus/comand_distance", 0);
@@ -636,9 +637,11 @@ void setup() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
+
 #ifdef EBUS_INTERNAL
   configServer.on("/commands", [] { handleCommands(); });
 #endif
+
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
 
@@ -708,6 +711,7 @@ void loop() {
 
   // this should be called on all platforms
 #ifdef ESP32
+  // this should be called on all platforms
   iotWebConf.doLoop();
 #endif
 
@@ -725,6 +729,7 @@ void loop() {
     if (millis() > lastMqttUpdate + 5 * 1000) {
       lastMqttUpdate = millis();
       publishValues();
+
 #ifdef EBUS_INTERNAL
       schedule.publishCounters();
 #endif

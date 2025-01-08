@@ -59,8 +59,7 @@
         "streambuf": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp",
-        "queue": "cpp"
+        "variant": "cpp"
     },
     "cSpell.words": [
         "ARBITRATIN",
@@ -69,5 +68,6 @@
         "newstate",
         "synerror"
     ],
-    "C_Cpp.clang_format_fallbackStyle": "Google"
+    "C_Cpp.clang_format_fallbackStyle": "Google",
+    "C_Cpp.autoAddFileAssociations": true
 }

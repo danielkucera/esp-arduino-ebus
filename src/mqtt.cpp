@@ -7,6 +7,12 @@
 AsyncMqttClient mqttClient;
 
 void onMqttConnect(bool sessionPresent) {
+  mqttClient.subscribe("ebus/config/restart", 0);
+  // Restart the device
+  // topic  : ebus/config/restart
+  // payload: true
+
+#ifdef EBUS_INTERNAL
   mqttClient.subscribe("ebus/config/insert/#", 0);
   // Insert new command
   // topic  : ebus/config/insert/08b509030d0600
@@ -45,11 +51,6 @@ void onMqttConnect(bool sessionPresent) {
   // payload: array of sequences
   // for e.g. ["0700","b509"]
 
-  mqttClient.subscribe("ebus/config/restart", 0);
-  // Restart the device
-  // topic  : ebus/config/restart
-  // payload: true
-
   mqttClient.subscribe("ebus/config/load", 0);
   // Loading saved commands
   // topic  : ebus/config/load
@@ -70,6 +71,7 @@ void onMqttConnect(bool sessionPresent) {
   // topic  : ebus/config/send
   // payload: array of ebus command(s) in form of "ZZPBSBNNDx"
   // for e.g. ["08070400","08b509030d0600"]}
+#endif
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {}
@@ -82,7 +84,11 @@ void onMqttMessage(const char *topic, const char *payload,
                    AsyncMqttClientMessageProperties properties, size_t len,
                    size_t index, size_t total) {
   String tmp = String(topic);
-  if (tmp.startsWith("ebus/config/insert/")) {
+  if (tmp.equals("ebus/config/restart")) {
+    if (String(payload).equalsIgnoreCase("true")) reset();
+  }
+#ifdef EBUS_INTERNAL
+  else if (tmp.startsWith("ebus/config/insert/")) {
     if (String(payload).length() > 0) store.enqueCommand(payload);
   } else if (tmp.startsWith("ebus/config/remove/")) {
     if (String(payload).equalsIgnoreCase("true")) store.removeCommand(topic);
@@ -92,8 +98,6 @@ void onMqttMessage(const char *topic, const char *payload,
     schedule.publishRaw(payload);
   } else if (tmp.equals("ebus/config/filter")) {
     if (String(payload).length() > 0) schedule.handleFilter(payload);
-  } else if (tmp.equals("ebus/config/restart")) {
-    if (String(payload).equalsIgnoreCase("true")) reset();
   } else if (tmp.equals("ebus/config/load")) {
     if (String(payload).equalsIgnoreCase("true")) store.loadCommands();
   } else if (tmp.equals("ebus/config/save")) {
@@ -103,6 +107,7 @@ void onMqttMessage(const char *topic, const char *payload,
   } else if (tmp.equals("ebus/config/send")) {
     if (String(payload).length() > 0) schedule.handleSend(payload);
   }
+#endif
 }
 
 void onMqttPublish(uint16_t packetId) {}
