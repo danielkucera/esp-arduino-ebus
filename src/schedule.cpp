@@ -7,47 +7,74 @@
 
 Track<uint32_t> total("ebus/messages/total", 10);
 
+// passive + reactive
 Track<uint32_t> passive("ebus/messages/passive", 10);
 Track<float> passivePercent("ebus/messages/passive/percent", 10);
 
-Track<uint32_t> passiveMS("ebus/messages/passive/MS", 10);
-Track<uint32_t> passiveMM("ebus/messages/passive/MM", 10);
-Track<uint32_t> passiveBC("ebus/messages/passive/BC", 10);
+Track<uint32_t> passiveMS("ebus/messages/passive/passiveMS", 10);
+Track<uint32_t> passiveMM("ebus/messages/passive/passiveMM", 10);
 
-Track<uint32_t> passiveMMAtMe("ebus/messages/passive/MMAtMe", 10);
-Track<uint32_t> passiveMSAtMe("ebus/messages/passive/MSAtMe", 10);
+Track<uint32_t> reactiveMS("ebus/messages/passive/reactiveMS", 10);
+Track<uint32_t> reactiveMM("ebus/messages/passive/reactiveMM", 10);
+Track<uint32_t> reactiveBC("ebus/messages/passive/reactiveBC", 10);
 
+// active
 Track<uint32_t> active("ebus/messages/active", 10);
 Track<float> activePercent("ebus/messages/active/percent", 10);
 
-Track<uint32_t> activeMS("ebus/messages/active/MS", 10);
-Track<uint32_t> activeMM("ebus/messages/active/MM", 10);
-Track<uint32_t> activeBC("ebus/messages/active/BC", 10);
+Track<uint32_t> activeMS("ebus/messages/active/activeMS", 10);
+Track<uint32_t> activeMM("ebus/messages/active/activeMM", 10);
+Track<uint32_t> activeBC("ebus/messages/active/activeBC", 10);
 
-Track<uint32_t> failure("ebus/messages/failure", 10);
-Track<float> failurePercent("ebus/messages/failure/percent", 10);
+// error
+Track<uint32_t> error("ebus/messages/error", 10);
+Track<float> errorPercent("ebus/messages/error/percent", 10);
 
-Track<uint32_t> requestTotal("ebus/request/total", 10);
+Track<uint32_t> errorPassive("ebus/messages/error/passive", 10);
+Track<float> errorPassivePercent("ebus/messages/error/passive/percent", 10);
 
-Track<uint32_t> requestWon("ebus/request/won", 10);
-Track<float> requestWonPercent("ebus/request/won/percent", 10);
-Track<uint32_t> requestWon1("ebus/request/won/won1", 10);
-Track<uint32_t> requestWon2("ebus/request/won/won2", 10);
-Track<uint32_t> requestRetry("ebus/request/won/retry", 10);
+Track<uint32_t> errorPassiveMaster("ebus/messages/error/passive/master", 10);
+Track<uint32_t> errorPassiveMasterACK("ebus/messages/error/passive/masterACK",
+                                      10);
+Track<uint32_t> errorPassiveSlaveACK("ebus/messages/error/passive/slaveACK",
+                                     10);
 
-Track<uint32_t> requestLost("ebus/request/lost", 10);
-Track<float> requestLostPercent("ebus/request/lost/percent", 10);
-Track<uint32_t> requestLost1("ebus/request/lost/lost1", 10);
-Track<uint32_t> requestLost2("ebus/request/lost/lost2", 10);
+Track<uint32_t> errorReactiveSlaveACK(
+    "ebus/messages/error/passive/reactiveSlaveACK", 10);
 
-Track<uint32_t> requestError("ebus/request/error", 10);
-Track<float> requestErrorPercent("ebus/request/error/percent", 10);
+Track<uint32_t> errorActive("ebus/messages/error/active", 10);
+Track<float> errorActivePercent("ebus/messages/error/active/percent", 10);
+
+Track<uint32_t> errorActiveMasterACK("ebus/messages/error/active/masterACK",
+                                     10);
+Track<uint32_t> errorActiveSlaveACK("ebus/messages/error/active/slaveACK", 10);
+
+// reset
+Track<uint32_t> resetAll("ebus/messages/reset", 10);
+
+Track<uint32_t> resetPassive("ebus/messages/reset/passive", 10);
+Track<uint32_t> resetActive("ebus/messages/reset/active", 10);
+
+// request
+Track<uint32_t> requestTotal("ebus/requests/total", 10);
+
+Track<uint32_t> requestWon("ebus/requests/won", 10);
+Track<float> requestWonPercent("ebus/requests/won/percent", 10);
+
+Track<uint32_t> requestLost("ebus/requests/lost", 10);
+Track<float> requestLostPercent("ebus/requests/lost/percent", 10);
+
+Track<uint32_t> requestRetry("ebus/requests/retry", 10);
+Track<uint32_t> requestError("ebus/requests/error", 10);
 
 Schedule schedule;
 
 Schedule::Schedule()
     : ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &activeCallback,
-                  &passiveCallback, &reactiveCallback) {}
+                  &passiveCallback, &reactiveCallback) {
+  ebusHandler.setMaxLockCounter(3);
+  ebusHandler.setErrorCallback(errorCallback);
+}
 
 void Schedule::setAddress(const uint8_t source) {
   ebusHandler.setAddress(source);
@@ -132,10 +159,9 @@ void Schedule::nextCommand() {
   }
 }
 
-// TODO(yuhu-) rework signature ?
-bool Schedule::processData(const WiFiClient *client, const uint8_t byte) {
+bool Schedule::processData(const uint8_t byte) {
   ebusHandler.run(byte);
-  return true;
+  return ebusHandler.isActive();
 }
 
 void Schedule::resetCounters() { ebusHandler.resetCounters(); }
@@ -144,16 +170,18 @@ void Schedule::publishCounters() {
   ebus::Counters counters = ebusHandler.getCounters();
   total = counters.total;
 
+  // passive + reactive
   passive = counters.passive;
   passivePercent = counters.passivePercent;
 
   passiveMS = counters.passiveMS;
   passiveMM = counters.passiveMM;
-  passiveBC = counters.passiveBC;
 
-  passiveMMAtMe = counters.passiveMMAtMe;
-  passiveMSAtMe = counters.passiveMSAtMe;
+  reactiveMS = counters.reactiveMS;
+  reactiveMM = counters.reactiveMM;
+  reactiveBC = counters.reactiveBC;
 
+  // active
   active = counters.active;
   activePercent = counters.activePercent;
 
@@ -161,24 +189,41 @@ void Schedule::publishCounters() {
   activeMM = counters.activeMM;
   activeBC = counters.activeBC;
 
-  failure = counters.failure;
-  failurePercent = counters.failurePercent;
+  // error
+  error = counters.error;
+  errorPercent = counters.errorPercent;
 
+  errorPassive = counters.errorPassive;
+  errorPassivePercent = counters.errorPassivePercent;
+
+  errorPassiveMaster = counters.errorPassiveMaster;
+  errorPassiveMasterACK = counters.errorPassiveMasterACK;
+  errorPassiveSlaveACK = counters.errorPassiveSlaveACK;
+
+  errorReactiveSlaveACK = counters.errorReactiveSlaveACK;
+
+  errorActive = counters.errorActive;
+  errorActivePercent = counters.errorActivePercent;
+
+  errorActiveMasterACK = counters.errorActiveMasterACK;
+  errorActiveSlaveACK = counters.errorActiveSlaveACK;
+
+  // reset
+  resetAll = counters.reset;
+  resetPassive = counters.resetPassive;
+  resetActive = counters.resetActive;
+
+  // request
   requestTotal = counters.requestTotal;
 
   requestWon = counters.requestWon;
   requestWonPercent = counters.requestWonPercent;
-  requestWon1 = counters.requestWon1;
-  requestWon2 = counters.requestWon2;
-  requestRetry = counters.requestRetry;
 
   requestLost = counters.requestLost;
   requestLostPercent = counters.requestLostPercent;
-  requestLost1 = counters.requestLost1;
-  requestLost2 = counters.requestLost2;
 
+  requestRetry = counters.requestRetry;
   requestError = counters.requestError;
-  requestErrorPercent = counters.requestErrorPercent;
 }
 
 bool Schedule::busReadyCallback() { return Bus.availableForWrite(); }
@@ -222,6 +267,12 @@ void Schedule::reactiveCallback(const std::vector<uint8_t> &master,
     default:
       break;
   }
+}
+
+void Schedule::errorCallback(const std::string &str) {
+  std::string topic = "ebus/messages/reset/last";
+  std::string payload = str;
+  mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
 }
 
 void Schedule::processActive(const std::vector<uint8_t>(master),

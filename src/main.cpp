@@ -302,9 +302,8 @@ void data_process() {
 #ifdef EBUS_INTERNAL
     // push data to schedule
     if (!d._enhanced) {
-      if (schedule.processData(d._client, d._d)) {
-        last_comms = millis();
-      }
+      schedule.processData(d._d);
+      last_comms = millis();
     }
 #endif
 

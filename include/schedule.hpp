@@ -29,13 +29,12 @@ class Schedule {
   void handleSend(const char *payload);
 
   void nextCommand();
-  bool processData(const WiFiClient *client, const uint8_t byte);
+  bool processData(const uint8_t byte);
 
   void resetCounters();
   void publishCounters();
 
  private:
-  WiFiClient *dummyClient = new WiFiClient();
   ebus::EbusHandler ebusHandler;
 
   Command *scheduleCommand = nullptr;
@@ -59,6 +58,8 @@ class Schedule {
                               const std::vector<uint8_t> &slave);
   static void reactiveCallback(const std::vector<uint8_t> &master,
                                std::vector<uint8_t> *const slave);
+
+  static void errorCallback(const std::string &str);
 
   void processActive(const std::vector<uint8_t>(master),
                      const std::vector<uint8_t> &slave);
