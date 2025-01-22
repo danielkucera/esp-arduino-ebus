@@ -293,7 +293,7 @@ void data_process() {
 
 #ifdef EBUS_INTERNAL
   // check schedule for data
-  schedule.processSend();
+  schedule.nextCommand();
 #endif
 
   // check queue for data
@@ -301,7 +301,8 @@ void data_process() {
   if (Bus.read(d)) {
 #ifdef EBUS_INTERNAL
     // push data to schedule
-    if (schedule.processReceive(d._enhanced, d._client, d._d)) {
+    if (!d._enhanced) {
+      schedule.processData(d._d);
       last_comms = millis();
     }
 #endif

@@ -7,50 +7,74 @@
 
 Track<uint32_t> total("ebus/messages/total", 10);
 
-Track<uint32_t> success("ebus/messages/success", 10);
-Track<float> successPercent("ebus/messages/success/percent", 10);
-Track<uint32_t> successMS("ebus/messages/success/master_slave", 10);
-Track<uint32_t> successMM("ebus/messages/success/master_master", 10);
-Track<uint32_t> successBC("ebus/messages/success/broadcast", 10);
+// passive + reactive
+Track<uint32_t> passive("ebus/messages/passive", 10);
+Track<float> passivePercent("ebus/messages/passive/percent", 10);
 
-Track<uint32_t> failure("ebus/messages/failure", 10);
-Track<float> failurePercent("ebus/messages/failure/percent", 10);
+Track<uint32_t> passiveMS("ebus/messages/passive/passiveMS", 10);
+Track<uint32_t> passiveMM("ebus/messages/passive/passiveMM", 10);
 
-Track<uint32_t> failureMasterEmpty("ebus/messages/failure/master/empty", 10);
-Track<uint32_t> failureMasterOk("ebus/messages/failure/master/ok", 10);
-Track<uint32_t> failureMasterShort("ebus/messages/failure/master/short", 10);
-Track<uint32_t> failureMasterLong("ebus/messages/failure/master/long", 10);
-Track<uint32_t> failureMasterNN("ebus/messages/failure/master/nn", 10);
-Track<uint32_t> failureMasterCRC("ebus/messages/failure/master/crc", 10);
-Track<uint32_t> failureMasterACK("ebus/messages/failure/master/ack", 10);
-Track<uint32_t> failureMasterQQ("ebus/messages/failure/master/qq", 10);
-Track<uint32_t> failureMasterZZ("ebus/messages/failure/master/zz", 10);
-Track<uint32_t> failureMasterAckMiss("ebus/messages/failure/master/ack_miss",
+Track<uint32_t> reactiveMS("ebus/messages/passive/reactiveMS", 10);
+Track<uint32_t> reactiveMM("ebus/messages/passive/reactiveMM", 10);
+Track<uint32_t> reactiveBC("ebus/messages/passive/reactiveBC", 10);
+
+// active
+Track<uint32_t> active("ebus/messages/active", 10);
+Track<float> activePercent("ebus/messages/active/percent", 10);
+
+Track<uint32_t> activeMS("ebus/messages/active/activeMS", 10);
+Track<uint32_t> activeMM("ebus/messages/active/activeMM", 10);
+Track<uint32_t> activeBC("ebus/messages/active/activeBC", 10);
+
+// error
+Track<uint32_t> error("ebus/messages/error", 10);
+Track<float> errorPercent("ebus/messages/error/percent", 10);
+
+Track<uint32_t> errorPassive("ebus/messages/error/passive", 10);
+Track<float> errorPassivePercent("ebus/messages/error/passive/percent", 10);
+
+Track<uint32_t> errorPassiveMaster("ebus/messages/error/passive/master", 10);
+Track<uint32_t> errorPassiveMasterACK("ebus/messages/error/passive/masterACK",
+                                      10);
+Track<uint32_t> errorPassiveSlaveACK("ebus/messages/error/passive/slaveACK",
                                      10);
-Track<uint32_t> failureMasterInvalid("ebus/messages/failure/master/invalid",
+
+Track<uint32_t> errorReactiveSlaveACK(
+    "ebus/messages/error/passive/reactiveSlaveACK", 10);
+
+Track<uint32_t> errorActive("ebus/messages/error/active", 10);
+Track<float> errorActivePercent("ebus/messages/error/active/percent", 10);
+
+Track<uint32_t> errorActiveMasterACK("ebus/messages/error/active/masterACK",
                                      10);
+Track<uint32_t> errorActiveSlaveACK("ebus/messages/error/active/slaveACK", 10);
 
-Track<uint32_t> failureSlaveEmpty("ebus/messages/failure/slave/empty", 10);
-Track<uint32_t> failureSlaveOk("ebus/messages/failure/slave/ok", 10);
-Track<uint32_t> failureSlaveShort("ebus/messages/failure/slave/short", 10);
-Track<uint32_t> failureSlaveLong("ebus/messages/failure/slave/long", 10);
-Track<uint32_t> failureSlaveNN("ebus/messages/failure/slave/nn", 10);
-Track<uint32_t> failureSlaveCRC("ebus/messages/failure/slave/crc", 10);
-Track<uint32_t> failureSlaveACK("ebus/messages/failure/slave/ack", 10);
-Track<uint32_t> failureSlaveQQ("ebus/messages/failure/slave/qq", 10);
-Track<uint32_t> failureSlaveZZ("ebus/messages/failure/slave/zz", 10);
-Track<uint32_t> failureSlaveAckMiss("ebus/messages/failure/slave/ack_miss", 10);
-Track<uint32_t> failureSlaveInvalid("ebus/messages/failure/slave/invalid", 10);
+// reset
+Track<uint32_t> resetAll("ebus/messages/reset", 10);
 
-Track<uint32_t> special00("ebus/messages/special/00", 10);
-Track<uint32_t> special0704Success("ebus/messages/special/0704Success", 10);
-Track<uint32_t> special0704Failure("ebus/messages/special/0704Failure", 10);
+Track<uint32_t> resetPassive("ebus/messages/reset/passive", 10);
+Track<uint32_t> resetActive("ebus/messages/reset/active", 10);
+
+// request
+Track<uint32_t> requestTotal("ebus/requests/total", 10);
+
+Track<uint32_t> requestWon("ebus/requests/won", 10);
+Track<float> requestWonPercent("ebus/requests/won/percent", 10);
+
+Track<uint32_t> requestLost("ebus/requests/lost", 10);
+Track<float> requestLostPercent("ebus/requests/lost/percent", 10);
+
+Track<uint32_t> requestRetry("ebus/requests/retry", 10);
+Track<uint32_t> requestError("ebus/requests/error", 10);
 
 Schedule schedule;
 
 Schedule::Schedule()
-    : ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &responseCallback,
-                  &telegramCallback) {}
+    : ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &activeCallback,
+                  &passiveCallback, &reactiveCallback) {
+  ebusHandler.setMaxLockCounter(3);
+  ebusHandler.setErrorCallback(errorCallback);
+}
 
 void Schedule::setAddress(const uint8_t source) {
   ebusHandler.setAddress(source);
@@ -105,9 +129,9 @@ void Schedule::handleSend(const char *payload) {
   }
 }
 
-void Schedule::processSend() {
-  if (ebusHandler.getState() == ebus::State::MonitorBus) {
-    if (sendCommands.size() > 0 || store.active()) {
+void Schedule::nextCommand() {
+  if (sendCommands.size() > 0 || store.active()) {
+    if (!ebusHandler.isActive()) {
       if (millis() > lastCommand + distanceCommands) {
         lastCommand = millis();
 
@@ -120,43 +144,24 @@ void Schedule::processSend() {
           sendCommand.insert(sendCommand.end(), command.begin(), command.end());
         } else {
           send = false;
-          activeCommand = store.nextActiveCommand();
-          if (activeCommand != nullptr) command = activeCommand->command;
+          scheduleCommand = store.nextActiveCommand();
+          if (scheduleCommand != nullptr) command = scheduleCommand->command;
         }
 
-        if (ebusHandler.enque(command)) {
-          // start arbitration
-          WiFiClient *client = dummyClient;
-          uint8_t address = ebusHandler.getAddress();
-          setArbitrationClient(client, address);
-        }
+        ebusHandler.enque(command);
+        // TODO(yuhu-) handle arbitration external ?
+        // start arbitration
+        // WiFiClient *client = dummyClient;
+        // uint8_t address = ebusHandler.getAddress();
+        // setArbitrationClient(client, address);
       }
     }
   }
-
-  ebusHandler.send();
 }
 
-bool Schedule::processReceive(bool enhanced, const WiFiClient *client,
-                              const uint8_t byte) {
-  if (!enhanced) ebusHandler.feedCounters(byte);
-
-  if (ebusHandler.getState() == ebus::State::Arbitration) {
-    // workaround - master sequence comes twice - waiting for second master
-    // sequence without "enhanced" flag
-    if (!enhanced && client == dummyClient) ebusHandler.receive(byte);
-
-    // reset - if arbitration last longer than 200ms
-    if (millis() > lastCommand + 200) {
-      ebusHandler.reset();
-      mqttClient.publish("ebus/arbitration/error", 0, false,
-                         "arbitration last longer than 200ms");
-    }
-  } else {
-    ebusHandler.receive(byte);
-  }
-
-  return true;
+bool Schedule::processData(const uint8_t byte) {
+  ebusHandler.run(byte);
+  return ebusHandler.isActive();
 }
 
 void Schedule::resetCounters() { ebusHandler.resetCounters(); }
@@ -165,67 +170,121 @@ void Schedule::publishCounters() {
   ebus::Counters counters = ebusHandler.getCounters();
   total = counters.total;
 
-  success = counters.success;
-  successPercent = counters.successPercent;
-  successMS = counters.successMS;
-  successMM = counters.successMM;
-  successBC = counters.successBC;
+  // passive + reactive
+  passive = counters.passive;
+  passivePercent = counters.passivePercent;
 
-  failure = counters.failure;
-  failurePercent = counters.failurePercent;
+  passiveMS = counters.passiveMS;
+  passiveMM = counters.passiveMM;
 
-  failureMasterEmpty = counters.failureMaster[SEQ_EMPTY];
-  failureMasterOk = counters.failureMaster[SEQ_OK];
-  failureMasterShort = counters.failureMaster[SEQ_ERR_SHORT];
-  failureMasterLong = counters.failureMaster[SEQ_ERR_LONG];
-  failureMasterNN = counters.failureMaster[SEQ_ERR_NN];
-  failureMasterCRC = counters.failureMaster[SEQ_ERR_CRC];
-  failureMasterACK = counters.failureMaster[SEQ_ERR_ACK];
-  failureMasterQQ = counters.failureMaster[SEQ_ERR_QQ];
-  failureMasterZZ = counters.failureMaster[SEQ_ERR_ZZ];
-  failureMasterAckMiss = counters.failureMaster[SEQ_ERR_ACK_MISS];
-  failureMasterInvalid = counters.failureMaster[SEQ_ERR_INVALID];
+  reactiveMS = counters.reactiveMS;
+  reactiveMM = counters.reactiveMM;
+  reactiveBC = counters.reactiveBC;
 
-  failureSlaveEmpty = counters.failureSlave[SEQ_EMPTY];
-  failureSlaveOk = counters.failureSlave[SEQ_OK];
-  failureSlaveShort = counters.failureSlave[SEQ_ERR_SHORT];
-  failureSlaveLong = counters.failureSlave[SEQ_ERR_LONG];
-  failureSlaveNN = counters.failureSlave[SEQ_ERR_NN];
-  failureSlaveCRC = counters.failureSlave[SEQ_ERR_CRC];
-  failureSlaveACK = counters.failureSlave[SEQ_ERR_ACK];
-  failureSlaveQQ = counters.failureSlave[SEQ_ERR_QQ];
-  failureSlaveZZ = counters.failureSlave[SEQ_ERR_ZZ];
-  failureSlaveAckMiss = counters.failureSlave[SEQ_ERR_ACK_MISS];
-  failureSlaveInvalid = counters.failureSlave[SEQ_ERR_INVALID];
+  // active
+  active = counters.active;
+  activePercent = counters.activePercent;
 
-  special00 = counters.special00;
-  special0704Success = counters.special0704Success;
-  special0704Failure = counters.special0704Failure;
+  activeMS = counters.activeMS;
+  activeMM = counters.activeMM;
+  activeBC = counters.activeBC;
+
+  // error
+  error = counters.error;
+  errorPercent = counters.errorPercent;
+
+  errorPassive = counters.errorPassive;
+  errorPassivePercent = counters.errorPassivePercent;
+
+  errorPassiveMaster = counters.errorPassiveMaster;
+  errorPassiveMasterACK = counters.errorPassiveMasterACK;
+  errorPassiveSlaveACK = counters.errorPassiveSlaveACK;
+
+  errorReactiveSlaveACK = counters.errorReactiveSlaveACK;
+
+  errorActive = counters.errorActive;
+  errorActivePercent = counters.errorActivePercent;
+
+  errorActiveMasterACK = counters.errorActiveMasterACK;
+  errorActiveSlaveACK = counters.errorActiveSlaveACK;
+
+  // reset
+  resetAll = counters.reset;
+  resetPassive = counters.resetPassive;
+  resetActive = counters.resetActive;
+
+  // request
+  requestTotal = counters.requestTotal;
+
+  requestWon = counters.requestWon;
+  requestWonPercent = counters.requestWonPercent;
+
+  requestLost = counters.requestLost;
+  requestLostPercent = counters.requestLostPercent;
+
+  requestRetry = counters.requestRetry;
+  requestError = counters.requestError;
 }
 
 bool Schedule::busReadyCallback() { return Bus.availableForWrite(); }
 
 void Schedule::busWriteCallback(const uint8_t byte) { Bus.write(byte); }
 
-void Schedule::responseCallback(const std::vector<uint8_t> &slave) {
-  schedule.processResponse(std::vector<uint8_t>(slave));
+void Schedule::activeCallback(const std::vector<uint8_t> &master,
+                              const std::vector<uint8_t> &slave) {
+  schedule.processActive(std::vector<uint8_t>(master),
+                         std::vector<uint8_t>(slave));
 }
 
-void Schedule::telegramCallback(const std::vector<uint8_t> &master,
-                                const std::vector<uint8_t> &slave) {
-  schedule.processTelegram(std::vector<uint8_t>(master),
-                           std::vector<uint8_t>(slave));
+void Schedule::passiveCallback(const std::vector<uint8_t> &master,
+                               const std::vector<uint8_t> &slave) {
+  schedule.processPassive(std::vector<uint8_t>(master),
+                          std::vector<uint8_t>(slave));
 }
 
-void Schedule::processResponse(const std::vector<uint8_t> &slave) {
+void Schedule::reactiveCallback(const std::vector<uint8_t> &master,
+                                std::vector<uint8_t> *const slave) {
+  std::vector<uint8_t> search;
+  switch (ebus::Telegram::typeOf(master[1])) {
+    case ebus::Type::BC:
+      schedule.processPassive(std::vector<uint8_t>(master),
+                              std::vector<uint8_t>());
+      break;
+    case ebus::Type::MM:
+      schedule.processPassive(std::vector<uint8_t>(master),
+                              std::vector<uint8_t>());
+      break;
+    case ebus::Type::MS:
+      // TODO(yuhu-) - fill with thing data
+      // 0004070400
+      search = {0x07, 0x04};
+      if (ebus::Sequence::contains(master, search))
+        *slave = ebus::Sequence::to_vector("0acc454255533006010602");
+
+      schedule.processPassive(std::vector<uint8_t>(master),
+                              std::vector<uint8_t>(*slave));
+      break;
+    default:
+      break;
+  }
+}
+
+void Schedule::errorCallback(const std::string &str) {
+  std::string topic = "ebus/messages/reset/last";
+  std::string payload = str;
+  mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
+}
+
+void Schedule::processActive(const std::vector<uint8_t>(master),
+                             const std::vector<uint8_t> &slave) {
   if (send)
     publishSend(sendCommand, slave);
   else
-    publishValue(activeCommand, slave);
+    publishValue(scheduleCommand, slave);
 }
 
-void Schedule::processTelegram(const std::vector<uint8_t> &master,
-                               const std::vector<uint8_t> &slave) {
+void Schedule::processPassive(const std::vector<uint8_t> &master,
+                              const std::vector<uint8_t> &slave) {
   if (raw) {
     size_t count = std::count_if(rawFilters.begin(), rawFilters.end(),
                                  [&master](const std::vector<uint8_t> &vec) {

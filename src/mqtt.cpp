@@ -15,8 +15,8 @@ void onMqttConnect(bool sessionPresent) {
 #ifdef EBUS_INTERNAL
   mqttClient.subscribe("ebus/config/insert/#", 0);
   // Insert new command
-  // topic  : ebus/config/insert/08b509030d0600
-  // payload:
+  // topic  : ebus/config/insert/NAME_OF_COMMAND
+  // payload: ebus command in form of "ZZPBSBNNDBx" for e.g.
   // {
   //   "command": "08b509030d0600",
   //   "unit": "°C",
@@ -32,7 +32,7 @@ void onMqttConnect(bool sessionPresent) {
 
   mqttClient.subscribe("ebus/config/remove/#", 0);
   // Remove loaded command
-  // topic  : ebus/config/remove/08b509030d0600
+  // topic  : ebus/config/remove/NAME_OF_COMMAND
   // payload: true
 
   mqttClient.subscribe("ebus/config/list", 0);
@@ -48,8 +48,11 @@ void onMqttConnect(bool sessionPresent) {
   mqttClient.subscribe("ebus/config/filter", 0);
   // Insert raw data filter
   // topic  : ebus/config/filter
-  // payload: array of sequences
-  // for e.g. ["0700","b509"]
+  // payload: array of sequences for e.g.
+  // [
+  //   "0700",
+  //   "b509"
+  // ]
 
   mqttClient.subscribe("ebus/config/load", 0);
   // Loading saved commands
@@ -69,8 +72,11 @@ void onMqttConnect(bool sessionPresent) {
   mqttClient.subscribe("ebus/config/send", 0);
   // Sending of given ebus command(s) once
   // topic  : ebus/config/send
-  // payload: array of ebus command(s) in form of "ZZPBSBNNDx"
-  // for e.g. ["08070400","08b509030d0600"]}
+  // payload: array of ebus command(s) in form of "ZZPBSBNNDBx" for e.g.
+  // [
+  //   "08070400",
+  //   "08b509030d0600"
+  // ]
 #endif
 }
 

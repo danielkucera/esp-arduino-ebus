@@ -28,18 +28,16 @@ class Schedule {
 
   void handleSend(const char *payload);
 
-  void processSend();
-  bool processReceive(bool enhanced, const WiFiClient *client,
-                      const uint8_t byte);
+  void nextCommand();
+  bool processData(const uint8_t byte);
 
   void resetCounters();
   void publishCounters();
 
  private:
-  WiFiClient *dummyClient = new WiFiClient();
   ebus::EbusHandler ebusHandler;
 
-  Command *activeCommand = nullptr;
+  Command *scheduleCommand = nullptr;
 
   uint32_t distanceCommands = 0;
   uint32_t lastCommand = 0;
@@ -53,13 +51,20 @@ class Schedule {
 
   static bool busReadyCallback();
   static void busWriteCallback(const uint8_t byte);
-  static void responseCallback(const std::vector<uint8_t> &slave);
-  static void telegramCallback(const std::vector<uint8_t> &master,
-                               const std::vector<uint8_t> &slave);
 
-  void processResponse(const std::vector<uint8_t> &slave);
-  void processTelegram(const std::vector<uint8_t> &master,
-                       const std::vector<uint8_t> &slave);
+  static void activeCallback(const std::vector<uint8_t> &master,
+                             const std::vector<uint8_t> &slave);
+  static void passiveCallback(const std::vector<uint8_t> &master,
+                              const std::vector<uint8_t> &slave);
+  static void reactiveCallback(const std::vector<uint8_t> &master,
+                               std::vector<uint8_t> *const slave);
+
+  static void errorCallback(const std::string &str);
+
+  void processActive(const std::vector<uint8_t>(master),
+                     const std::vector<uint8_t> &slave);
+  void processPassive(const std::vector<uint8_t> &master,
+                      const std::vector<uint8_t> &slave);
 
   static void publishSend(const std::vector<uint8_t> &master,
                           const std::vector<uint8_t> &slave);
