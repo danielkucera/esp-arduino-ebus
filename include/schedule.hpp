@@ -29,18 +29,26 @@ class Schedule {
   void handleSend(const char *payload);
 
   void nextCommand();
-  bool processData(const uint8_t byte);
+  void processData(const uint8_t byte);
+
+  const WiFiClient *getClient();
+
+  void setExternalArbitration(const bool external);
+  void wonExternalArbitration(const bool won);
 
   void resetCounters();
   void publishCounters();
 
  private:
   ebus::EbusHandler ebusHandler;
+  WiFiClient *dummyClient = new WiFiClient();
 
   Command *scheduleCommand = nullptr;
 
   uint32_t distanceCommands = 0;
   uint32_t lastCommand = 0;
+
+  bool external = false;
 
   bool raw = false;
   std::vector<std::vector<uint8_t>> rawFilters;

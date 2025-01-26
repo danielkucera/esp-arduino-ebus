@@ -134,6 +134,9 @@ bool needMqttConnect = false;
 uint32_t lastMqttConnectionAttempt = 0;
 uint32_t lastMqttUpdate = 0;
 
+// TODO(yuhu-): system parameter
+bool externalArbitration = false;
+
 // ebus/device
 Track<uint32_t> uptime("ebus/device/uptime", 10);
 Track<uint32_t> loopDuration("ebus/device/loop_duration", 10);
@@ -301,10 +304,19 @@ void data_process() {
   if (Bus.read(d)) {
 #ifdef EBUS_INTERNAL
     // push data to schedule
-    if (!d._enhanced) {
-      schedule.processData(d._d);
-      last_comms = millis();
+    if (externalArbitration) {
+      // d._enhanced is perhaps the wrong term - arbitrating seems to fit better
+      if (d._enhanced && d._client == schedule.getClient()) {
+        bool won = d._c == STARTED;
+        Bus.read(d);
+        schedule.wonExternalArbitration(won);
+      } else {
+        schedule.processData(d._d);
+      }
+    } else {
+      if (!d._enhanced) schedule.processData(d._d);
     }
+    last_comms = millis();
 #endif
 
     for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
@@ -659,6 +671,7 @@ void setup() {
 #ifdef EBUS_INTERNAL
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(comand_distance));
+  schedule.setExternalArbitration(externalArbitration);
 #endif
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
