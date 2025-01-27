@@ -33,8 +33,9 @@ class Schedule {
 
   const WiFiClient *getClient();
 
-  void setExternalArbitration(const bool external);
-  void wonExternalArbitration(const bool won);
+  // void setExternalBusRequest(const bool external);
+  // const bool getExternalBusRequest() const;
+  // void pokeExternalBusRequest(const bool won);
 
   void resetCounters();
   void publishCounters();
@@ -47,8 +48,6 @@ class Schedule {
 
   uint32_t distanceCommands = 0;
   uint32_t lastCommand = 0;
-
-  bool external = false;
 
   bool raw = false;
   std::vector<std::vector<uint8_t>> rawFilters;
