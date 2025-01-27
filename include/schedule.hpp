@@ -29,13 +29,20 @@ class Schedule {
   void handleSend(const char *payload);
 
   void nextCommand();
-  bool processData(const uint8_t byte);
+  void processData(const uint8_t byte);
+
+  const WiFiClient *getClient();
+
+  // void setExternalBusRequest(const bool external);
+  // const bool getExternalBusRequest() const;
+  // void pokeExternalBusRequest(const bool won);
 
   void resetCounters();
   void publishCounters();
 
  private:
   ebus::EbusHandler ebusHandler;
+  WiFiClient *dummyClient = new WiFiClient();
 
   Command *scheduleCommand = nullptr;
 

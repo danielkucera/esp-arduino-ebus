@@ -297,15 +297,14 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
                       _busState.microsSinceLastSyn());
         }
       }
-      push({false, RECEIVED, symbol, 0,
-            _client});  // send to everybody. ebusd needs the SYN to get in the
-                        // right mood
+      // send to everybody. ebusd needs the SYN to get in the right mood
+      push({false, RECEIVED, symbol, 0, _client});
       break;
     case Arbitration::arbitrating:
       DEBUG_LOG("BUS ARBITRATIN 0x%02x %lu us\n", symbol,
                 _busState.microsSinceLastSyn());
-      push({false, RECEIVED, symbol, _client,
-            _client});  // do not send to arbitration client
+      // do not send to arbitration client
+      push({false, RECEIVED, symbol, _client, _client});
       break;
     case Arbitration::won1:
       _nbrWon1++;
@@ -316,10 +315,10 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
       arbitrationDone();
       DEBUG_LOG("BUS SEND WON   0x%02x %lu us\n", _busState._master,
                 _busState.microsSinceLastSyn());
-      push({true, STARTED, _busState._master, _client,
-            _client});  // send only to the arbitrating client
-      push({false, RECEIVED, symbol, _client,
-            _client});  // do not send to arbitrating client
+      // send only to the arbitrating client
+      push({true, STARTED, _busState._master, _client, _client});
+      // do not send to arbitrating client
+      push({false, RECEIVED, symbol, _client, _client});
       _client = 0;
       break;
     case Arbitration::lost1:
@@ -331,17 +330,19 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
       arbitrationDone();
       DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %lu us\n", _busState._master,
                 _busState._symbol, _busState.microsSinceLastSyn());
-      push({true, FAILED, _busState._master, _client,
-            _client});  // send only to the arbitrating client
-      push({false, RECEIVED, symbol, 0, _client});  // send to everybody
+      // send only to the arbitrating client
+      push({true, FAILED, _busState._master, _client, _client});
+      // send to everybody
+      push({false, RECEIVED, symbol, 0, _client});
       _client = 0;
       break;
     case Arbitration::error:
       _nbrErrors++;
       arbitrationDone();
-      push({true, ERROR_EBUS, ERR_FRAMING, _client,
-            _client});  // send only to the arbitrating client
-      push({false, RECEIVED, symbol, 0, _client});  // send to everybody
+      // send only to the arbitrating client
+      push({true, ERROR_EBUS, ERR_FRAMING, _client, _client});
+      // send to everybody
+      push({false, RECEIVED, symbol, 0, _client});
       _client = 0;
       break;
   }
