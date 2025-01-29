@@ -27,8 +27,13 @@ Track<uint32_t> errorsPassiveMaster("ebus/errors/passive/master", 10);
 Track<uint32_t> errorsPassiveMasterACK("ebus/errors/passive/masterACK", 10);
 Track<uint32_t> errorsPassiveSlave("ebus/errors/passive/slave", 10);
 Track<uint32_t> errorsPassiveSlaveACK("ebus/errors/passive/slaveACK", 10);
-Track<uint32_t> errorsReactiveSlave("ebus/errors/passive/reactiveSlave", 10);
-Track<uint32_t> errorsReactiveSlaveACK("ebus/errors/passive/reactiveSlaveACK",
+
+Track<uint32_t> errorsReactive("ebus/errors/reactive", 10);
+Track<uint32_t> errorsReactiveMaster("ebus/errors/reactive/master", 10);
+Track<uint32_t> errorsReactiveMasterACK("ebus/errors/reactive/masterACK",
+                                        10);
+Track<uint32_t> errorsReactiveSlave("ebus/errors/reactive/slave", 10);
+Track<uint32_t> errorsReactiveSlaveACK("ebus/errors/reactive/slaveACK",
                                        10);
 
 Track<uint32_t> errorsActive("ebus/errors/active", 10);
@@ -189,6 +194,10 @@ void Schedule::publishCounters() {
   errorsPassiveMasterACK = counters.errorsPassiveMasterACK;
   errorsPassiveSlave = counters.errorsPassiveSlave;
   errorsPassiveSlaveACK = counters.errorsPassiveSlaveACK;
+
+  errorsReactive = counters.errorsReactive;
+  errorsReactiveMaster = counters.errorsReactiveMaster;
+  errorsReactiveMasterACK = counters.errorsReactiveMasterACK;
   errorsReactiveSlave = counters.errorsReactiveSlave;
   errorsReactiveSlaveACK = counters.errorsReactiveSlaveACK;
 
