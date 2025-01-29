@@ -319,7 +319,7 @@ void data_process() {
       schedule.processData(d._d);
       last_comms = millis();
       // if (statusBusRequest != INFO) {
-      //   schedule.pokeExternalBusRequest(statusBusRequest == STARTED);
+      //   schedule.stateExternalBusRequest(statusBusRequest == STARTED);
       //   statusBusRequest = INFO;
       // }
     }
