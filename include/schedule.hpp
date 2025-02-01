@@ -31,7 +31,7 @@ class Schedule {
   void nextCommand();
   void processData(const uint8_t byte);
 
-  const WiFiClient *getClient();
+  // const WiFiClient *getClient();
 
   // void setExternalBusRequest(const bool external);
   // const bool getExternalBusRequest() const;
@@ -42,7 +42,7 @@ class Schedule {
 
  private:
   ebus::EbusHandler ebusHandler;
-  WiFiClient *dummyClient = new WiFiClient();
+  // WiFiClient *dummyClient = new WiFiClient();
 
   Command *scheduleCommand = nullptr;
 
