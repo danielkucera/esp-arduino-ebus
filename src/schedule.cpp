@@ -30,11 +30,9 @@ Track<uint32_t> errorsPassiveSlaveACK("ebus/errors/passive/slaveACK", 10);
 
 Track<uint32_t> errorsReactive("ebus/errors/reactive", 10);
 Track<uint32_t> errorsReactiveMaster("ebus/errors/reactive/master", 10);
-Track<uint32_t> errorsReactiveMasterACK("ebus/errors/reactive/masterACK",
-                                        10);
+Track<uint32_t> errorsReactiveMasterACK("ebus/errors/reactive/masterACK", 10);
 Track<uint32_t> errorsReactiveSlave("ebus/errors/reactive/slave", 10);
-Track<uint32_t> errorsReactiveSlaveACK("ebus/errors/reactive/slaveACK",
-                                       10);
+Track<uint32_t> errorsReactiveSlaveACK("ebus/errors/reactive/slaveACK", 10);
 
 Track<uint32_t> errorsActive("ebus/errors/active", 10);
 Track<uint32_t> errorsActiveMaster("ebus/errors/active/master", 10);
@@ -153,7 +151,7 @@ void Schedule::nextCommand() {
 
 void Schedule::processData(const uint8_t byte) { ebusHandler.run(byte); }
 
-const WiFiClient *Schedule::getClient() { return dummyClient; }
+// const WiFiClient *Schedule::getClient() { return dummyClient; }
 
 // void Schedule::setExternalBusRequest(const bool external) {
 //   ebusHandler.setExternalBusRequest(external);
