@@ -313,20 +313,15 @@ void Schedule::publishSend(const std::vector<uint8_t> &master,
   std::string topic = "ebus/";
   std::string payload;
   if (master[2] == 0x07 && master[3] == 0x04) {
-    topic += "nodes/" + ebus::Sequence::to_string(master);
-    std::string t;
-    t += "Address: 0x" +
-         ebus::Sequence::to_string(ebus::Sequence::range(master, 1, 1));
-    t += " Manufacturer: 0x" +
-         ebus::Sequence::to_string(ebus::Sequence::range(slave, 1, 1));
-    t += " Type: " + ebus::byte_2_string(ebus::Sequence::range(slave, 2, 5));
-    t +=
-        " SW: " + ebus::Sequence::to_string(ebus::Sequence::range(slave, 7, 1));
-    t += "." + ebus::Sequence::to_string(ebus::Sequence::range(slave, 8, 1));
-    t +=
-        " HW: " + ebus::Sequence::to_string(ebus::Sequence::range(slave, 9, 1));
-    t += "." + ebus::Sequence::to_string(ebus::Sequence::range(slave, 10, 1));
-    payload = t;
+    topic += "nodes/" + ebus::Sequence::to_string(master[1]);
+    payload += "MF=";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 1, 1));
+    payload += ";ID=";
+    payload += ebus::byte_2_string(ebus::Sequence::range(slave, 2, 5));
+    payload += ";SW=";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 7, 2));
+    payload += ";HW=";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 9, 2));
   } else {
     topic += "sent/" + ebus::Sequence::to_string(master);
     payload = ebus::Sequence::to_string(slave);
