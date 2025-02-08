@@ -59,11 +59,6 @@ Schedule::Schedule()
     : ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &activeCallback,
                   &passiveCallback, &reactiveCallback) {
   ebusHandler.setErrorCallback(errorCallback);
-<<<<<<< HEAD
-  ebusHandler.setMaxLockCounter(3);
-  ebusHandler.setExternalBusRequest(false);
-=======
->>>>>>> master
 }
 
 void Schedule::setAddress(const uint8_t source) {
@@ -139,17 +134,7 @@ void Schedule::nextCommand() {
         }
 
         if (command.size() > 0) {
-<<<<<<< HEAD
-          if (ebusHandler.enque(command)) {
-            // if (ebusHandler.getExternalBusRequest()) {
-            //   WiFiClient *client = dummyClient;
-            //   uint8_t address = ebusHandler.getAddress();
-            //   setArbitrationClient(client, address);
-            // }
-          }
-=======
           ebusHandler.enque(command);
->>>>>>> master
         }
       }
     }
@@ -158,23 +143,6 @@ void Schedule::nextCommand() {
 
 void Schedule::processData(const uint8_t byte) { ebusHandler.run(byte); }
 
-<<<<<<< HEAD
-// const WiFiClient *Schedule::getClient() { return dummyClient; }
-
-// void Schedule::setExternalBusRequest(const bool external) {
-//   ebusHandler.setExternalBusRequest(external);
-// }
-
-// const bool Schedule::getExternalBusRequest() const {
-//   ebusHandler.getExternalBusRequest();
-// }
-
-// void Schedule::pokeExternalBusRequest(const bool won) {
-//   ebusHandler.pokeExternalBusRequest(won);
-// }
-
-=======
->>>>>>> master
 void Schedule::resetCounters() { ebusHandler.resetCounters(); }
 
 void Schedule::publishCounters() {
@@ -323,22 +291,6 @@ void Schedule::publishSend(const std::vector<uint8_t> &master,
   std::string topic = "ebus/";
   std::string payload;
   if (master[2] == 0x07 && master[3] == 0x04) {
-<<<<<<< HEAD
-    topic += "nodes/" + ebus::Sequence::to_string(master);
-    std::string t;
-    t += "Address: 0x" +
-         ebus::Sequence::to_string(ebus::Sequence::range(master, 1, 1));
-    t += " Manufacturer: 0x" +
-         ebus::Sequence::to_string(ebus::Sequence::range(slave, 1, 1));
-    t += " Type: " + ebus::byte_2_string(ebus::Sequence::range(slave, 2, 5));
-    t +=
-        " SW: " + ebus::Sequence::to_string(ebus::Sequence::range(slave, 7, 1));
-    t += "." + ebus::Sequence::to_string(ebus::Sequence::range(slave, 8, 1));
-    t +=
-        " HW: " + ebus::Sequence::to_string(ebus::Sequence::range(slave, 9, 1));
-    t += "." + ebus::Sequence::to_string(ebus::Sequence::range(slave, 10, 1));
-    payload = t;
-=======
     topic += "nodes/" + ebus::Sequence::to_string(master[1]);
     payload += "MF=";
     payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 1, 1));
@@ -348,7 +300,6 @@ void Schedule::publishSend(const std::vector<uint8_t> &master,
     payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 7, 2));
     payload += ";HW=";
     payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 9, 2));
->>>>>>> master
   } else {
     topic += "sent/" + ebus::Sequence::to_string(master);
     payload = ebus::Sequence::to_string(slave);

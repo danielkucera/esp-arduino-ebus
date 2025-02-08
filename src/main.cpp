@@ -62,10 +62,6 @@ char netmaskValue[STRING_LEN];
 
 char pwm_value[NUMBER_LEN];
 
-<<<<<<< HEAD
-#ifdef EBUS_INTERNAL
-=======
->>>>>>> master
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
     "00", "10", "30", "70", "F0", "01", "11", "31", "71",
@@ -73,11 +69,6 @@ static char ebus_address_values[][NUMBER_LEN] = {
     "77", "F7", "0F", "1F", "3F", "7F", "FF"};
 
 char comand_distance[NUMBER_LEN];
-<<<<<<< HEAD
-// char external_bus_request[STRING_LEN];
-#endif
-=======
->>>>>>> master
 
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
@@ -112,13 +103,6 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     "Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1",
     "0..60", "min='0' max='60' step='1'");
-<<<<<<< HEAD
-// iotwebconf::CheckboxParameter externalBusRequestParam =
-//     iotwebconf::CheckboxParameter("External bus request",
-//                                   "external_bus_request",
-//                                   external_bus_request, STRING_LEN);
-=======
->>>>>>> master
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =
@@ -161,10 +145,6 @@ Track<uint32_t> pwm("ebus/device/ebus/pwm", 0);
 #ifdef EBUS_INTERNAL
 Track<String> ebusAddress("ebus/device/ebus/ebus_address", 0);
 Track<String> commandDistance("ebus/device/ebus/comand_distance", 0);
-<<<<<<< HEAD
-// Track<String> externalBusRequest("ebus/device/ebus/external_bus_request", 0);
-=======
->>>>>>> master
 #endif
 
 // ebus/device/wifi
@@ -316,28 +296,9 @@ void data_process() {
   BusType::data d;
   if (Bus.read(d)) {
 #ifdef EBUS_INTERNAL
-<<<<<<< HEAD
-    // static int statusBusRequest = INFO;
-
-    // // push data to schedule
-    // if (schedule.getExternalBusRequest()) {
-    //   // d._enhanced is perhaps the wrong term - arbitrating seems to fit better
-    //   if (d._enhanced && d._client == schedule.getClient())
-    //     statusBusRequest = d._c;
-    // }
-
     if (!d._enhanced) {
       schedule.processData(d._d);
       last_comms = millis();
-      // if (statusBusRequest != INFO) {
-      //   schedule.stateExternalBusRequest(statusBusRequest == STARTED);
-      //   statusBusRequest = INFO;
-      // }
-=======
-    if (!d._enhanced) {
-      schedule.processData(d._d);
-      last_comms = millis();
->>>>>>> master
     }
 #endif
 
@@ -412,12 +373,6 @@ void saveParamsCallback() {
 
   schedule.setDistance(atoi(comand_distance));
   commandDistance = comand_distance;
-<<<<<<< HEAD
-
-  // schedule.setExternalBusRequest(externalBusRequestParam.isChecked());
-  // externalBusRequest = schedule.getExternalBusRequest() ? "true" : "false";
-=======
->>>>>>> master
 #endif
 
   if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
@@ -487,11 +442,6 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
                   atoi(comand_distance));
-<<<<<<< HEAD
-  // pos += snprintf(status + pos, sizeof(status), "external_bus_request: %s\r\n",
-  //                 schedule.getExternalBusRequest() ? "true" : "false");
-=======
->>>>>>> master
 #endif
 
   pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
@@ -572,13 +522,7 @@ void handleRoot() {
        "user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
-<<<<<<< HEAD
-#ifdef EBUS_INTERNAL
   s += "<a href='/commands'>Commands</a><br>";
-#endif
-=======
-  s += "<a href='/commands'>Commands</a><br>";
->>>>>>> master
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
@@ -658,10 +602,6 @@ void setup() {
 #ifdef EBUS_INTERNAL
   ebusGroup.addItem(&ebusAddressParam);
   ebusGroup.addItem(&commandDistanceParam);
-<<<<<<< HEAD
-  // ebusGroup.addItem(&externalBusRequestParam);
-=======
->>>>>>> master
 #endif
 
   mqttGroup.addItem(&mqttServerParam);
@@ -709,10 +649,6 @@ void setup() {
 #ifdef EBUS_INTERNAL
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(comand_distance));
-<<<<<<< HEAD
-  // schedule.setExternalBusRequest(externalBusRequestParam.isChecked());
-=======
->>>>>>> master
 #endif
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
