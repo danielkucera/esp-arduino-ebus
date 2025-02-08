@@ -548,9 +548,7 @@ void handleRoot() {
        "user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
-#ifdef EBUS_INTERNAL
   s += "<a href='/commands'>Commands</a><br>";
-#endif
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
