@@ -18,14 +18,14 @@ void onMqttConnect(bool sessionPresent) {
   // topic  : ebus/config/insert/NAME_OF_COMMAND
   // payload: ebus command in form of "ZZPBSBNNDBx" for e.g.
   // {
-  //   "command": "08b509030d0600",
+  //   "command": "fe070009",
   //   "unit": "°C",
-  //   "active": true,
-  //   "interval": 60,
-  //   "master": false,
+  //   "active": false,
+  //   "interval": 0,
+  //   "master": true,
   //   "position": 1,
-  //   "datatype": "DATA2c",
-  //   "topic": "Aussentemperatur",
+  //   "datatype": "DATA2b",
+  //   "topic": "outdoor",
   //   "ha": true,
   //   "ha_class": "temperature"
   // }
@@ -51,7 +51,7 @@ void onMqttConnect(bool sessionPresent) {
   // payload: array of sequences for e.g.
   // [
   //   "0700",
-  //   "b509"
+  //   "fe"
   // ]
 
   mqttClient.subscribe("ebus/config/load", 0);
@@ -74,8 +74,8 @@ void onMqttConnect(bool sessionPresent) {
   // topic  : ebus/config/send
   // payload: array of ebus command(s) in form of "ZZPBSBNNDBx" for e.g.
   // [
-  //   "08070400",
-  //   "08b509030d0600"
+  //   "05070400",
+  //   "15070400"
   // ]
 #endif
 }
