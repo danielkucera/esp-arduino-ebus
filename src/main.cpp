@@ -62,7 +62,6 @@ char netmaskValue[STRING_LEN];
 
 char pwm_value[NUMBER_LEN];
 
-#ifdef EBUS_INTERNAL
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
     "00", "10", "30", "70", "F0", "01", "11", "31", "71",
@@ -71,7 +70,6 @@ static char ebus_address_values[][NUMBER_LEN] = {
 
 char comand_distance[NUMBER_LEN];
 // char external_bus_request[STRING_LEN];
-#endif
 
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
@@ -308,8 +306,8 @@ void data_process() {
 
     // // push data to schedule
     // if (schedule.getExternalBusRequest()) {
-    //   // d._enhanced is perhaps the wrong term - arbitrating seems to fit better
-    //   if (d._enhanced && d._client == schedule.getClient())
+    //   // d._enhanced is perhaps the wrong term - arbitrating seems to fit
+    //   better if (d._enhanced && d._client == schedule.getClient())
     //     statusBusRequest = d._c;
     // }
 
@@ -466,7 +464,8 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
                   atoi(comand_distance));
-  // pos += snprintf(status + pos, sizeof(status), "external_bus_request: %s\r\n",
+  // pos += snprintf(status + pos, sizeof(status), "external_bus_request:
+  // %s\r\n",
   //                 schedule.getExternalBusRequest() ? "true" : "false");
 #endif
 
