@@ -67,7 +67,7 @@ IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
 iotwebconf::ParameterGroup connGroup =
     iotwebconf::ParameterGroup("conn", "Connection parameters");
 iotwebconf::CheckboxParameter staticIPParam = iotwebconf::CheckboxParameter(
-    "Enable Static IP", "staticIPParam", staticIPValue, STRING_LEN);
+    "Static IP", "staticIPParam", staticIPValue, STRING_LEN);
 iotwebconf::TextParameter ipAddressParam =
     iotwebconf::TextParameter("IP address", "ipAddress", ipAddressValue,
                               STRING_LEN, "", DEFAULT_STATIC_IP);
@@ -78,7 +78,7 @@ iotwebconf::TextParameter netmaskParam =
                               STRING_LEN, DEFAULT_NETMASK, DEFAULT_NETMASK);
 
 iotwebconf::ParameterGroup ebusGroup =
-    iotwebconf::ParameterGroup("ebus", "EBUS configuration");
+    iotwebconf::ParameterGroup("ebus", "eBUS configuration");
 iotwebconf::NumberParameter pwmParam =
     iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
                                 "130", "1..255", "min='1' max='255' step='1'");
