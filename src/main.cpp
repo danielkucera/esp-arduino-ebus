@@ -164,14 +164,12 @@ Track<int8_t> rssi("ebus/device/wifi/rssi", 30);
 Track<int> nbrArbitrations("ebus/arbitration/total", 10);
 
 Track<int> nbrWon("ebus/arbitration/won", 10);
-Track<float> nbrWonPercent("ebus/arbitration/won/percent", 10);
 Track<int> nbrRestarts1("ebus/arbitration/won/restarts1", 10);
 Track<int> nbrRestarts2("ebus/arbitration/won/restarts2", 10);
 Track<int> nbrWon1("ebus/arbitration/won/won1", 10);
 Track<int> nbrWon2("ebus/arbitration/won/won2", 10);
 
 Track<int> nbrLost("ebus/arbitration/lost", 10);
-Track<float> nbrLostPercent("ebus/arbitration/lost/percent", 10);
 Track<int> nbrLost1("ebus/arbitration/lost/lost1", 10);
 Track<int> nbrLost2("ebus/arbitration/lost/lost2", 10);
 Track<int> nbrLate("ebus/arbitration/lost/late", 10);
@@ -527,15 +525,12 @@ void publishValues() {
   nbrArbitrations = Bus._nbrArbitrations;
 
   nbrWon = Bus._nbrWon1 + Bus._nbrWon2;
-  nbrWonPercent =
-      nbrWon.value() / static_cast<float>(nbrArbitrations.value()) * 100.0f;
   nbrRestarts1 = Bus._nbrRestarts1;
   nbrRestarts2 = Bus._nbrRestarts2;
   nbrWon1 = Bus._nbrWon1;
   nbrWon2 = Bus._nbrWon2;
 
   nbrLost = nbrArbitrations.value() - nbrWon.value();
-  nbrLostPercent = 100.0f - nbrWonPercent.value();
   nbrLost1 = Bus._nbrLost1;
   nbrLost2 = Bus._nbrLost2;
   nbrLate = Bus._nbrLate;
