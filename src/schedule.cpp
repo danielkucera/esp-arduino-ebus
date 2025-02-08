@@ -2,6 +2,8 @@
 
 #include <ArduinoJson.h>
 
+#include <sstream>
+
 #include "bus.hpp"
 #include "mqtt.hpp"
 
@@ -274,6 +276,29 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
 
       mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
     }
+  }
+
+  if (master[2] == 0x07 && master[3] == 0x00) {
+    std::string topic = "ebus/system/time";
+    std::string payload = "20";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 13, 1));
+    payload += "-";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 11, 1));
+    payload += "-";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 10, 1));
+    payload += " ";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 9, 1));
+    payload += ":";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 8, 1));
+    payload += ":";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 7, 1));
+    mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+    topic = "ebus/system/outdoor";
+    std::ostringstream ostr;
+    ostr << ebus::byte_2_data2b(ebus::Sequence::range(master, 5, 2));
+    ostr << " °C";
+    mqttClient.publish(topic.c_str(), 0, true, ostr.str().c_str());
   }
 
   Command *pasCommand = store.findPassiveCommand(master);
