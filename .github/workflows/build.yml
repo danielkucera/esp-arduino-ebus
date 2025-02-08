@@ -42,7 +42,7 @@ jobs:
     - name: Build v3.0
       run: pio run -e esp12e-v3 ; mv .pio/build/esp12e-v3/firmware.bin release/firmware-HW_v3.x-${GITHUB_SHA::6}.bin
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         path: release
 
