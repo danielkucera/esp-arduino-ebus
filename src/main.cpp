@@ -8,6 +8,10 @@
 #include "enhanced.hpp"
 #include "mqtt.hpp"
 
+#ifdef EBUS_INTERNAL
+#include "schedule.hpp"
+#endif
+
 #ifdef ESP32
 #include <ESPmDNS.h>
 #include <IotWebConfESP32HTTPUpdateServer.h>
@@ -51,12 +55,20 @@ TaskHandle_t Task1;
 DNSServer dnsServer;
 WebServer configServer(80);
 
-char pwm_value[NUMBER_LEN];
-
 char staticIPValue[STRING_LEN];
 char ipAddressValue[STRING_LEN];
 char gatewayValue[STRING_LEN];
 char netmaskValue[STRING_LEN];
+
+char pwm_value[NUMBER_LEN];
+
+char ebus_address[NUMBER_LEN];
+static char ebus_address_values[][NUMBER_LEN] = {
+    "00", "10", "30", "70", "F0", "01", "11", "31", "71",
+    "F1", "03", "13", "33", "73", "F3", "07", "17", "37",
+    "77", "F7", "0F", "1F", "3F", "7F", "FF"};
+
+char comand_distance[NUMBER_LEN];
 
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
@@ -82,6 +94,16 @@ iotwebconf::ParameterGroup ebusGroup =
 iotwebconf::NumberParameter pwmParam =
     iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
                                 "130", "1..255", "min='1' max='255' step='1'");
+#ifdef EBUS_INTERNAL
+iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
+    "eBUS address", "ebus_address", ebus_address, NUMBER_LEN,
+    reinterpret_cast<char*>(ebus_address_values),
+    reinterpret_cast<char*>(ebus_address_values),
+    sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
+iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
+    "Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1",
+    "0..60", "min='0' max='60' step='1'");
+#endif
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
@@ -120,6 +142,11 @@ uint32_t reset_code = -1;
 // ebus/device/ebus
 Track<uint32_t> pwm("ebus/device/ebus/pwm", 0);
 
+#ifdef EBUS_INTERNAL
+Track<String> ebusAddress("ebus/device/ebus/ebus_address", 0);
+Track<String> commandDistance("ebus/device/ebus/comand_distance", 0);
+#endif
+
 // ebus/device/wifi
 Track<uint32_t> last_connect("ebus/device/wifi/last_connect", 30);
 Track<int> reconnect_count("ebus/device/wifi/reconnect_count", 30);
@@ -129,14 +156,12 @@ Track<int8_t> rssi("ebus/device/wifi/rssi", 30);
 Track<int> nbrArbitrations("ebus/arbitration/total", 10);
 
 Track<int> nbrWon("ebus/arbitration/won", 10);
-Track<float> nbrWonPercent("ebus/arbitration/won/percent", 10);
 Track<int> nbrRestarts1("ebus/arbitration/won/restarts1", 10);
 Track<int> nbrRestarts2("ebus/arbitration/won/restarts2", 10);
 Track<int> nbrWon1("ebus/arbitration/won/won1", 10);
 Track<int> nbrWon2("ebus/arbitration/won/won2", 10);
 
 Track<int> nbrLost("ebus/arbitration/lost", 10);
-Track<float> nbrLostPercent("ebus/arbitration/lost/percent", 10);
 Track<int> nbrLost1("ebus/arbitration/lost/lost1", 10);
 Track<int> nbrLost2("ebus/arbitration/lost/lost2", 10);
 Track<int> nbrLate("ebus/arbitration/lost/late", 10);
@@ -205,6 +230,9 @@ inline void enableTX() {
 void set_pwm(uint8_t value) {
 #ifdef PWM_PIN
   ledcWrite(PWM_CHANNEL, value);
+#ifdef EBUS_INTERNAL
+  schedule.resetCounters();
+#endif
 #endif
 }
 
@@ -259,9 +287,21 @@ void data_process() {
     handleEnhClient(&enhClients[i]);
   }
 
+#ifdef EBUS_INTERNAL
+  // check schedule for data
+  schedule.nextCommand();
+#endif
+
   // check queue for data
   BusType::data d;
   if (Bus.read(d)) {
+#ifdef EBUS_INTERNAL
+    if (!d._enhanced) {
+      schedule.processData(d._d);
+      last_comms = millis();
+    }
+#endif
+
     for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
@@ -327,6 +367,14 @@ void saveParamsCallback() {
   set_pwm(atoi(pwm_value));
   pwm = get_pwm();
 
+#ifdef EBUS_INTERNAL
+  schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebusAddress = ebus_address;
+
+  schedule.setDistance(atoi(comand_distance));
+  commandDistance = comand_distance;
+#endif
+
   if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
 
   if (mqtt_user[0] != '\0') mqttClient.setCredentials(mqtt_user, mqtt_pass);
@@ -388,6 +436,14 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "nbr_errors: %i\r\n",
                   static_cast<int>(Bus._nbrErrors));
   pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
+
+#ifdef EBUS_INTERNAL
+  pos += snprintf(status + pos, sizeof(status), "ebus_address: %s\r\n",
+                  ebus_address);
+  pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
+                  atoi(comand_distance));
+#endif
+
   pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
                   mqttClient.connected() ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "mqtt_server: %s\r\n",
@@ -398,6 +454,13 @@ char* status_string() {
 }
 
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
+
+#ifdef EBUS_INTERNAL
+void handleCommands() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    store.getCommands().c_str());
+}
+#endif
 
 void publishStatus() {
   // ebus/device
@@ -418,6 +481,11 @@ void publishStatus() {
 
   // ebus/device/ebus
   pwm = get_pwm();
+
+#ifdef EBUS_INTERNAL
+  ebusAddress = ebus_address;
+  commandDistance = comand_distance;
+#endif
 }
 
 void publishValues() {
@@ -431,15 +499,12 @@ void publishValues() {
   nbrArbitrations = Bus._nbrArbitrations;
 
   nbrWon = Bus._nbrWon1 + Bus._nbrWon2;
-  nbrWonPercent =
-      nbrWon.value() / static_cast<float>(nbrArbitrations.value()) * 100.0f;
   nbrRestarts1 = Bus._nbrRestarts1;
   nbrRestarts2 = Bus._nbrRestarts2;
   nbrWon1 = Bus._nbrWon1;
   nbrWon2 = Bus._nbrWon2;
 
   nbrLost = nbrArbitrations.value() - nbrWon.value();
-  nbrLostPercent = 100.0f - nbrWonPercent.value();
   nbrLost1 = Bus._nbrLost1;
   nbrLost2 = Bus._nbrLost2;
   nbrLate = Bus._nbrLate;
@@ -457,6 +522,7 @@ void handleRoot() {
        "user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
+  s += "<a href='/commands'>Commands</a><br>";
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
@@ -533,6 +599,11 @@ void setup() {
 
   ebusGroup.addItem(&pwmParam);
 
+#ifdef EBUS_INTERNAL
+  ebusGroup.addItem(&ebusAddressParam);
+  ebusGroup.addItem(&commandDistanceParam);
+#endif
+
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
@@ -557,8 +628,12 @@ void setup() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
-  configServer.on("/config", [] { iotWebConf.handleConfig(); });
 
+#ifdef EBUS_INTERNAL
+  configServer.on("/commands", [] { handleCommands(); });
+#endif
+
+  configServer.on("/config", [] { iotWebConf.handleConfig(); });
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
 
   iotWebConf.setupUpdateServer(
@@ -570,6 +645,11 @@ void setup() {
       });
 
   set_pwm(atoi(pwm_value));
+
+#ifdef EBUS_INTERNAL
+  schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  schedule.setDistance(atoi(comand_distance));
+#endif
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
     iotWebConf.doLoop();
@@ -598,6 +678,12 @@ void setup() {
   wdt_start();
 
   last_comms = millis();
+
+#ifdef EBUS_INTERNAL
+  // install saved commands
+  store.loadCommands();
+  if (store.active()) enableTX();
+#endif
 
 #ifdef ESP32
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
@@ -628,12 +714,23 @@ void loop() {
     needMqttConnect = true;
   }
 
-  uptime = millis();
+  if (mqttClient.connected()) {
+    if (millis() > lastMqttUpdate + 5 * 1000) {
+      lastMqttUpdate = millis();
+      publishValues();
 
-  if (mqttClient.connected() && millis() > lastMqttUpdate + 5 * 1000) {
-    lastMqttUpdate = millis();
-    publishValues();
+#ifdef EBUS_INTERNAL
+      schedule.publishCounters();
+#endif
+    }
+#ifdef EBUS_INTERNAL
+    // Check whether new commands have been added
+    store.doLoop();
+    if (store.active()) enableTX();
+#endif
   }
+
+  uptime = millis();
 
   if (millis() > last_comms + 200 * 1000) {
     reset();
