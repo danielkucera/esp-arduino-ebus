@@ -59,8 +59,6 @@ Schedule::Schedule()
     : ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &activeCallback,
                   &passiveCallback, &reactiveCallback) {
   ebusHandler.setErrorCallback(errorCallback);
-  ebusHandler.setMaxLockCounter(3);
-  ebusHandler.setExternalBusRequest(false);
 }
 
 void Schedule::setAddress(const uint8_t source) {
@@ -136,13 +134,7 @@ void Schedule::nextCommand() {
         }
 
         if (command.size() > 0) {
-          if (ebusHandler.enque(command)) {
-            // if (ebusHandler.getExternalBusRequest()) {
-            //   WiFiClient *client = dummyClient;
-            //   uint8_t address = ebusHandler.getAddress();
-            //   setArbitrationClient(client, address);
-            // }
-          }
+          ebusHandler.enque(command);
         }
       }
     }
@@ -150,20 +142,6 @@ void Schedule::nextCommand() {
 }
 
 void Schedule::processData(const uint8_t byte) { ebusHandler.run(byte); }
-
-// const WiFiClient *Schedule::getClient() { return dummyClient; }
-
-// void Schedule::setExternalBusRequest(const bool external) {
-//   ebusHandler.setExternalBusRequest(external);
-// }
-
-// const bool Schedule::getExternalBusRequest() const {
-//   ebusHandler.getExternalBusRequest();
-// }
-
-// void Schedule::pokeExternalBusRequest(const bool won) {
-//   ebusHandler.pokeExternalBusRequest(won);
-// }
 
 void Schedule::resetCounters() { ebusHandler.resetCounters(); }
 
