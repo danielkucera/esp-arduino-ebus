@@ -26,7 +26,8 @@ void Store::insertCommand(const char *payload) {
     std::string key = doc["command"].as<std::string>();
 
     command.key = key;
-    command.command = ebus::Sequence::to_vector(key);
+    command.command =
+        ebus::Sequence::to_vector(doc["command"].as<std::string>());
     command.unit = doc["unit"].as<std::string>();
     command.active = doc["active"].as<bool>();
     command.interval = doc["interval"].as<uint32_t>();
@@ -105,7 +106,7 @@ const std::string Store::getCommands() const {
   if (activeCommands.size() > 0) {
     for (const Command &command : activeCommands) {
       JsonObject obj = doc.add<JsonObject>();
-      obj["command"] = command.key;
+      obj["command"] = ebus::Sequence::to_string(command.command);
       obj["unit"] = command.unit;
       obj["active"] = true;
       obj["interval"] = command.interval;
@@ -121,7 +122,7 @@ const std::string Store::getCommands() const {
   if (passiveCommands.size() > 0) {
     for (const Command &command : passiveCommands) {
       JsonObject obj = doc.add<JsonObject>();
-      obj["command"] = command.key;
+      obj["command"] = ebus::Sequence::to_string(command.command);
       obj["unit"] = command.unit;
       obj["active"] = false;
       obj["interval"] = command.interval;
@@ -288,7 +289,7 @@ const std::string Store::serializeCommands() const {
   if (activeCommands.size() > 0) {
     for (const Command &command : activeCommands) {
       JsonArray arr = doc.add<JsonArray>();
-      arr.add(command.key);
+      arr.add(ebus::Sequence::to_string(command.command));
       arr.add(command.unit);
       arr.add(true);
       arr.add(command.interval);
@@ -304,7 +305,7 @@ const std::string Store::serializeCommands() const {
   if (passiveCommands.size() > 0) {
     for (const Command &command : passiveCommands) {
       JsonArray arr = doc.add<JsonArray>();
-      arr.add(command.key);
+      arr.add(ebus::Sequence::to_string(command.command));
       arr.add(command.unit);
       arr.add(false);
       arr.add(command.interval);
@@ -360,7 +361,7 @@ void Store::deserializeCommands(const char *payload) {
 }
 
 void Store::publishCommand(const std::vector<Command> *commands,
-                           const std::string &key, bool remove) {
+                           const std::string &key, const bool remove) {
   const std::vector<Command>::const_iterator it =
       std::find_if(commands->begin(), commands->end(),
                    [&key](const Command &cmd) { return cmd.key == key; });
@@ -373,7 +374,7 @@ void Store::publishCommand(const std::vector<Command> *commands,
     if (!remove) {
       JsonDocument doc;
 
-      doc["command"] = it->key;
+      doc["command"] = ebus::Sequence::to_string(it->command);
       doc["unit"] = it->unit;
       doc["active"] = it->active;
       doc["interval"] = it->interval;
@@ -400,7 +401,7 @@ void Store::publishCommand(const std::vector<Command> *commands,
   }
 }
 
-void Store::publishHomeAssistant(const Command *command, bool remove) {
+void Store::publishHomeAssistant(const Command *command, const bool remove) {
   std::string name = command->topic;
   std::replace(name.begin(), name.end(), '/', '_');
 
@@ -418,6 +419,7 @@ void Store::publishHomeAssistant(const Command *command, bool remove) {
     doc["state_topic"] = "ebus/values/" + command->topic;
     if (command->unit.compare("null") != 0 && command->unit.length() > 0)
       doc["unit_of_measurement"] = command->unit;
+    // TODO(yuhu-): use thing serial + topic or hash ?
     doc["unique_id"] = command->key;
     doc["value_template"] = "{{value_json.value}}";
 
