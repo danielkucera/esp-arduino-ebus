@@ -71,18 +71,7 @@ void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
 }
 
-void Schedule::publishRaw(const char *payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
-  } else {
-    raw = doc.as<bool>();
-  }
-}
+void Schedule::publishRaw(const bool enable) { raw = enable; }
 
 void Schedule::handleFilter(const char *payload) {
   JsonDocument doc;

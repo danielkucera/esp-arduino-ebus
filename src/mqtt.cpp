@@ -43,7 +43,7 @@ void onMqttConnect(bool sessionPresent) {
   mqttClient.subscribe("ebus/config/raw", 0);
   // Enable/disable the raw data printout
   // topic  : ebus/config/raw
-  // payload: true or false
+  // payload: true
 
   mqttClient.subscribe("ebus/config/filter", 0);
   // Insert raw data filter
@@ -94,14 +94,14 @@ void onMqttMessage(const char *topic, const char *payload,
     if (String(payload).equalsIgnoreCase("true")) reset();
   }
 #ifdef EBUS_INTERNAL
-  else if (tmp.startsWith("ebus/config/insert/")) {
+  if (tmp.startsWith("ebus/config/insert/")) {
     if (String(payload).length() > 0) store.enqueCommand(payload);
   } else if (tmp.startsWith("ebus/config/remove/")) {
     if (String(payload).equalsIgnoreCase("true")) store.removeCommand(topic);
   } else if (tmp.equals("ebus/config/list")) {
     if (String(payload).equalsIgnoreCase("true")) store.publishCommands();
   } else if (tmp.equals("ebus/config/raw")) {
-    schedule.publishRaw(payload);
+    schedule.publishRaw(String(payload).equalsIgnoreCase("true"));
   } else if (tmp.equals("ebus/config/filter")) {
     if (String(payload).length() > 0) schedule.handleFilter(payload);
   } else if (tmp.equals("ebus/config/load")) {
