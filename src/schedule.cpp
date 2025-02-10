@@ -2,6 +2,8 @@
 
 #include <ArduinoJson.h>
 
+#include <sstream>
+
 #include "bus.hpp"
 #include "mqtt.hpp"
 
@@ -69,18 +71,7 @@ void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
 }
 
-void Schedule::publishRaw(const char *payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
-  } else {
-    raw = doc.as<bool>();
-  }
-}
+void Schedule::publishRaw(const bool enable) { raw = enable; }
 
 void Schedule::handleFilter(const char *payload) {
   JsonDocument doc;
@@ -276,13 +267,36 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
     }
   }
 
-  Command *pasCommand = store.findPassiveCommand(master);
-  if (pasCommand != nullptr) {
-    if (pasCommand->master)
-      publishValue(pasCommand,
+  if (master[2] == 0x07 && master[3] == 0x00) {
+    std::string topic = "ebus/system/time";
+    std::string payload = "20";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 13, 1));
+    payload += "-";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 11, 1));
+    payload += "-";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 10, 1));
+    payload += " ";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 9, 1));
+    payload += ":";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 8, 1));
+    payload += ":";
+    payload += ebus::Sequence::to_string(ebus::Sequence::range(master, 7, 1));
+    mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+
+    topic = "ebus/system/outdoor";
+    std::ostringstream ostr;
+    ostr << ebus::byte_2_data2b(ebus::Sequence::range(master, 5, 2));
+    ostr << " °C";
+    mqttClient.publish(topic.c_str(), 0, true, ostr.str().c_str());
+  }
+
+  std::vector<Command *> pasCommands = store.findPassiveCommands(master);
+  for (Command *command : pasCommands) {
+    if (command->master)
+      publishValue(command,
                    ebus::Sequence::range(master, 4, master.size() - 4));
     else
-      publishValue(pasCommand, slave);
+      publishValue(command, slave);
   }
 }
 
