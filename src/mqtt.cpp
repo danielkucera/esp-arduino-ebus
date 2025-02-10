@@ -13,11 +13,12 @@ void onMqttConnect(bool sessionPresent) {
   // payload: true
 
 #ifdef EBUS_INTERNAL
-  mqttClient.subscribe("ebus/config/insert/#", 0);
+  mqttClient.subscribe("ebus/config/insert", 0);
   // Insert new command
-  // topic  : ebus/config/insert/NAME_OF_COMMAND
+  // topic  : ebus/config/insert
   // payload: ebus command in form of "ZZPBSBNNDBx" for e.g.
   // {
+  //   "key": "UNIQUE_KEY",
   //   "command": "fe070009",
   //   "unit": "°C",
   //   "active": false,
@@ -25,15 +26,18 @@ void onMqttConnect(bool sessionPresent) {
   //   "master": true,
   //   "position": 1,
   //   "datatype": "DATA2b",
-  //   "topic": "outdoor",
+  //   "topic": "outdoor/temperature",
   //   "ha": true,
   //   "ha_class": "temperature"
   // }
 
-  mqttClient.subscribe("ebus/config/remove/#", 0);
+  mqttClient.subscribe("ebus/config/remove", 0);
   // Remove loaded command
-  // topic  : ebus/config/remove/NAME_OF_COMMAND
-  // payload: true
+  // topic  : ebus/config/remove
+  // payload: UNIQUE_KEY of ebus command
+  // {
+  //   "key": "UNIQUE_KEY"
+  // }
 
   mqttClient.subscribe("ebus/config/list", 0);
   // Publish loaded commands
@@ -94,10 +98,10 @@ void onMqttMessage(const char *topic, const char *payload,
     if (String(payload).equalsIgnoreCase("true")) reset();
   }
 #ifdef EBUS_INTERNAL
-  if (tmp.startsWith("ebus/config/insert/")) {
+  if (tmp.equals("ebus/config/insert")) {
     if (String(payload).length() > 0) store.enqueCommand(payload);
-  } else if (tmp.startsWith("ebus/config/remove/")) {
-    if (String(payload).equalsIgnoreCase("true")) store.removeCommand(topic);
+  } else if (tmp.equals("ebus/config/remove")) {
+    if (String(payload).length() > 0) store.removeCommand(payload);
   } else if (tmp.equals("ebus/config/list")) {
     if (String(payload).equalsIgnoreCase("true")) store.publishCommands();
   } else if (tmp.equals("ebus/config/raw")) {

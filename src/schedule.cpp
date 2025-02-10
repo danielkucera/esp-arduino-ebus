@@ -290,13 +290,13 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
     mqttClient.publish(topic.c_str(), 0, true, ostr.str().c_str());
   }
 
-  Command *pasCommand = store.findPassiveCommand(master);
-  if (pasCommand != nullptr) {
-    if (pasCommand->master)
-      publishValue(pasCommand,
+  std::vector<Command *> pasCommands = store.findPassiveCommands(master);
+  for (Command *command : pasCommands) {
+    if (command->master)
+      publishValue(command,
                    ebus::Sequence::range(master, 4, master.size() - 4));
     else
-      publishValue(pasCommand, slave);
+      publishValue(command, slave);
   }
 }
 

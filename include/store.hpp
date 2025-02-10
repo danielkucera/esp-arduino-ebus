@@ -32,7 +32,7 @@ class Store {
 
   void enqueCommand(const char *payload);
   void insertCommand(const char *payload);
-  void removeCommand(const char *topic);
+  void removeCommand(const char *payload);
 
   void publishCommands();
   const std::string getCommands() const;
@@ -41,7 +41,8 @@ class Store {
 
   const bool active() const;
   Command *nextActiveCommand();
-  Command *findPassiveCommand(const std::vector<uint8_t> &master);
+  std::vector<Command *> findPassiveCommands(
+      const std::vector<uint8_t> &master);
 
   void loadCommands();
   void saveCommands() const;
