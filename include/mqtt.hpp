@@ -75,6 +75,10 @@ class Track {
 
   void publish() { publish(true); }
 
+  void touch() {
+    if (millis() > m_last + m_maxage * 1000) publish(true);
+  }
+
  private:
   T m_value;
   const char *m_topic;
