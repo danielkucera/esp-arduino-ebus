@@ -673,6 +673,10 @@ void setup() {
   wifiServerEnh.begin();
   statusServer.begin();
 
+#ifdef ESP32
+  ArduinoOTA.onStart([]() { vTaskDelete(Task1); });
+#endif
+
   ArduinoOTA.begin();
 
   MDNS.begin(HOSTNAME);
