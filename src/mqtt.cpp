@@ -13,27 +13,31 @@ void onMqttConnect(bool sessionPresent) {
   // payload: true
 
 #ifdef EBUS_INTERNAL
-  mqttClient.subscribe("ebus/config/insert/#", 0);
+  mqttClient.subscribe("ebus/config/insert", 0);
   // Insert new command
-  // topic  : ebus/config/insert/NAME_OF_COMMAND
+  // topic  : ebus/config/insert
   // payload: ebus command in form of "ZZPBSBNNDBx" for e.g.
   // {
-  //   "command": "08b509030d0600",
+  //   "key": "UNIQUE_KEY",
+  //   "command": "fe070009",
   //   "unit": "°C",
-  //   "active": true,
-  //   "interval": 60,
-  //   "master": false,
+  //   "active": false,
+  //   "interval": 0,
+  //   "master": true,
   //   "position": 1,
-  //   "datatype": "DATA2c",
-  //   "topic": "Aussentemperatur",
+  //   "datatype": "DATA2b",
+  //   "topic": "outdoor/temperature",
   //   "ha": true,
   //   "ha_class": "temperature"
   // }
 
-  mqttClient.subscribe("ebus/config/remove/#", 0);
+  mqttClient.subscribe("ebus/config/remove", 0);
   // Remove loaded command
-  // topic  : ebus/config/remove/NAME_OF_COMMAND
-  // payload: true
+  // topic  : ebus/config/remove
+  // payload: UNIQUE_KEY of ebus command
+  // {
+  //   "key": "UNIQUE_KEY"
+  // }
 
   mqttClient.subscribe("ebus/config/list", 0);
   // Publish loaded commands
@@ -43,7 +47,7 @@ void onMqttConnect(bool sessionPresent) {
   mqttClient.subscribe("ebus/config/raw", 0);
   // Enable/disable the raw data printout
   // topic  : ebus/config/raw
-  // payload: true or false
+  // payload: true
 
   mqttClient.subscribe("ebus/config/filter", 0);
   // Insert raw data filter
@@ -51,7 +55,7 @@ void onMqttConnect(bool sessionPresent) {
   // payload: array of sequences for e.g.
   // [
   //   "0700",
-  //   "b509"
+  //   "fe"
   // ]
 
   mqttClient.subscribe("ebus/config/load", 0);
@@ -74,8 +78,8 @@ void onMqttConnect(bool sessionPresent) {
   // topic  : ebus/config/send
   // payload: array of ebus command(s) in form of "ZZPBSBNNDBx" for e.g.
   // [
-  //   "08070400",
-  //   "08b509030d0600"
+  //   "05070400",
+  //   "15070400"
   // ]
 #endif
 }
@@ -94,14 +98,14 @@ void onMqttMessage(const char *topic, const char *payload,
     if (String(payload).equalsIgnoreCase("true")) reset();
   }
 #ifdef EBUS_INTERNAL
-  else if (tmp.startsWith("ebus/config/insert/")) {
+  if (tmp.equals("ebus/config/insert")) {
     if (String(payload).length() > 0) store.enqueCommand(payload);
-  } else if (tmp.startsWith("ebus/config/remove/")) {
-    if (String(payload).equalsIgnoreCase("true")) store.removeCommand(topic);
+  } else if (tmp.equals("ebus/config/remove")) {
+    if (String(payload).length() > 0) store.removeCommand(payload);
   } else if (tmp.equals("ebus/config/list")) {
     if (String(payload).equalsIgnoreCase("true")) store.publishCommands();
   } else if (tmp.equals("ebus/config/raw")) {
-    schedule.publishRaw(payload);
+    schedule.publishRaw(String(payload).equalsIgnoreCase("true"));
   } else if (tmp.equals("ebus/config/filter")) {
     if (String(payload).length() > 0) schedule.handleFilter(payload);
   } else if (tmp.equals("ebus/config/load")) {
