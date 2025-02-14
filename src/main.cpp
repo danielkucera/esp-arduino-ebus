@@ -493,6 +493,8 @@ void publishValues() {
   free_heap = ESP.getFreeHeap();
 
   // ebus/device/wifi
+  last_connect.touch();
+  reconnect_count.touch();
   rssi = WiFi.RSSI();
 
   // ebus/arbitration
