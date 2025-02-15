@@ -49,8 +49,8 @@ class Schedule {
   std::deque<std::vector<uint8_t>> sendCommands;
   std::vector<uint8_t> sendCommand;
 
-  static bool busReadyCallback();
-  static void busWriteCallback(const uint8_t byte);
+  static void writeCallback(const uint8_t byte);
+  static int readBufferCallback();
 
   static void activeCallback(const std::vector<uint8_t> &master,
                              const std::vector<uint8_t> &slave);

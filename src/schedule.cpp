@@ -56,7 +56,7 @@ Track<uint32_t> requestsError("ebus/requests/error", 10);
 Schedule schedule;
 
 Schedule::Schedule()
-    : ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &activeCallback,
+    : ebusHandler(0xff, &writeCallback, &readBufferCallback, &activeCallback,
                   &passiveCallback, &reactiveCallback) {
   ebusHandler.setErrorCallback(errorCallback);
 }
@@ -197,9 +197,9 @@ void Schedule::publishCounters() {
   requestsError = counters.requestsError;
 }
 
-bool Schedule::busReadyCallback() { return Bus.availableForWrite(); }
+void Schedule::writeCallback(const uint8_t byte) { Bus.write(byte); }
 
-void Schedule::busWriteCallback(const uint8_t byte) { Bus.write(byte); }
+int Schedule::readBufferCallback() { return Bus.available(); }
 
 void Schedule::activeCallback(const std::vector<uint8_t> &master,
                               const std::vector<uint8_t> &slave) {
