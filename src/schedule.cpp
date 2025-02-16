@@ -43,6 +43,7 @@ Track<uint32_t> errorsActiveSlaveACK("ebus/errors/active/slaveACK", 10);
 // resets
 Track<uint32_t> resetsTotal("ebus/resets/total", 10);
 Track<uint32_t> resetsPassive00("ebus/resets/passive00", 10);
+Track<uint32_t> resetsPassive0704("ebus/resets/passive0704", 10);
 Track<uint32_t> resetsPassive("ebus/resets/passive", 10);
 Track<uint32_t> resetsActive("ebus/resets/active", 10);
 
@@ -186,6 +187,7 @@ void Schedule::publishCounters() {
   // resets
   resetsTotal = counters.resetsTotal;
   resetsPassive00 = counters.resetsPassive00;
+  resetsPassive0704 = counters.resetsPassive0704;
   resetsPassive = counters.resetsPassive;
   resetsActive = counters.resetsActive;
 
