@@ -43,6 +43,7 @@ Track<uint32_t> errorsActiveSlaveACK("ebus/errors/active/slaveACK", 10);
 // resets
 Track<uint32_t> resetsTotal("ebus/resets/total", 10);
 Track<uint32_t> resetsPassive00("ebus/resets/passive00", 10);
+Track<uint32_t> resetsPassive0704("ebus/resets/passive0704", 10);
 Track<uint32_t> resetsPassive("ebus/resets/passive", 10);
 Track<uint32_t> resetsActive("ebus/resets/active", 10);
 
@@ -56,7 +57,7 @@ Track<uint32_t> requestsError("ebus/requests/error", 10);
 Schedule schedule;
 
 Schedule::Schedule()
-    : ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &activeCallback,
+    : ebusHandler(0xff, &writeCallback, &readBufferCallback, &activeCallback,
                   &passiveCallback, &reactiveCallback) {
   ebusHandler.setErrorCallback(errorCallback);
 }
@@ -186,6 +187,7 @@ void Schedule::publishCounters() {
   // resets
   resetsTotal = counters.resetsTotal;
   resetsPassive00 = counters.resetsPassive00;
+  resetsPassive0704 = counters.resetsPassive0704;
   resetsPassive = counters.resetsPassive;
   resetsActive = counters.resetsActive;
 
@@ -197,9 +199,9 @@ void Schedule::publishCounters() {
   requestsError = counters.requestsError;
 }
 
-bool Schedule::busReadyCallback() { return Bus.availableForWrite(); }
+void Schedule::writeCallback(const uint8_t byte) { Bus.write(byte); }
 
-void Schedule::busWriteCallback(const uint8_t byte) { Bus.write(byte); }
+int Schedule::readBufferCallback() { return Bus.available(); }
 
 void Schedule::activeCallback(const std::vector<uint8_t> &master,
                               const std::vector<uint8_t> &slave) {
