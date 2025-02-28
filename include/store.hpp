@@ -49,18 +49,20 @@ class Store {
   static void wipeCommands();
 
  private:
-  std::vector<Command> activeCommands;
-  std::vector<Command> passiveCommands;
+  std::vector<Command> allCommands;
+
+  size_t activeCommands = 0;
+  size_t passiveCommands = 0;
 
   std::deque<std::string> newCommands;
   uint32_t distanceInsert = 300;
   uint32_t lastInsert = 0;
 
-  std::deque<std::string> pubCommands;
+  std::deque<const Command *> pubCommands;
   uint32_t distancePublish = 100;
   uint32_t lastPublish = 0;
 
-  bool init = true;
+  void countCommands();
 
   void checkNewCommands();
   void checkPubCommands();
@@ -68,8 +70,7 @@ class Store {
   const std::string serializeCommands() const;
   void deserializeCommands(const char *payload);
 
-  static void publishCommand(const std::vector<Command> *commands,
-                             const std::string &key, const bool remove);
+  static void publishCommand(const Command *command, const bool remove);
 
   static void publishHomeAssistant(const Command *command, const bool remove);
 };
