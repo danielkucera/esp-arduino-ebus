@@ -13,7 +13,7 @@
 
 struct Command {
   std::string key;               // ebus command as string
-  std::vector<uint8_t> command;  // ebus command as vector ZZ PB SB NN DBx
+  std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
   std::string unit;              // unit of the received data
   bool active;                   // active sending of command
   uint32_t interval;        // minimum interval between two commands in seconds
@@ -32,7 +32,7 @@ class Store {
 
   void enqueCommand(const char *payload);
   void insertCommand(const char *payload);
-  void removeCommand(const char *topic);
+  void removeCommand(const char *payload);
 
   void publishCommands();
   const std::string getCommands() const;
@@ -41,7 +41,8 @@ class Store {
 
   const bool active() const;
   Command *nextActiveCommand();
-  Command *findPassiveCommand(const std::vector<uint8_t> &master);
+  std::vector<Command *> findPassiveCommands(
+      const std::vector<uint8_t> &master);
 
   void loadCommands();
   void saveCommands() const;
@@ -68,9 +69,9 @@ class Store {
   void deserializeCommands(const char *payload);
 
   static void publishCommand(const std::vector<Command> *commands,
-                             const std::string &key, bool remove);
+                             const std::string &key, const bool remove);
 
-  static void publishHomeAssistant(const Command *command, bool remove);
+  static void publishHomeAssistant(const Command *command, const bool remove);
 };
 
 extern Store store;

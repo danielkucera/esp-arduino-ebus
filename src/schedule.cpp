@@ -2,6 +2,8 @@
 
 #include <ArduinoJson.h>
 
+#include <sstream>
+
 #include "bus.hpp"
 #include "mqtt.hpp"
 
@@ -70,18 +72,7 @@ void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
 }
 
-void Schedule::publishRaw(const char *payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
-  } else {
-    raw = doc.as<bool>();
-  }
-}
+void Schedule::publishRaw(const bool enable) { raw = enable; }
 
 void Schedule::handleFilter(const char *payload) {
   JsonDocument doc;
@@ -278,13 +269,13 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
     }
   }
 
-  Command *pasCommand = store.findPassiveCommand(master);
-  if (pasCommand != nullptr) {
-    if (pasCommand->master)
-      publishValue(pasCommand,
+  std::vector<Command *> pasCommands = store.findPassiveCommands(master);
+  for (Command *command : pasCommands) {
+    if (command->master)
+      publishValue(command,
                    ebus::Sequence::range(master, 4, master.size() - 4));
     else
-      publishValue(pasCommand, slave);
+      publishValue(command, slave);
   }
 }
 
