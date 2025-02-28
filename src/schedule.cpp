@@ -281,22 +281,8 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
 
 void Schedule::publishSend(const std::vector<uint8_t> &master,
                            const std::vector<uint8_t> &slave) {
-  std::string topic = "ebus/";
-  std::string payload;
-  if (master[2] == 0x07 && master[3] == 0x04) {
-    topic += "nodes/" + ebus::Sequence::to_string(master[1]);
-    payload += "MF=";
-    payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 1, 1));
-    payload += ";ID=";
-    payload += ebus::byte_2_string(ebus::Sequence::range(slave, 2, 5));
-    payload += ";SW=";
-    payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 7, 2));
-    payload += ";HW=";
-    payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 9, 2));
-  } else {
-    topic += "sent/" + ebus::Sequence::to_string(master);
-    payload = ebus::Sequence::to_string(slave);
-  }
+  std::string topic = "ebus/sent/" + ebus::Sequence::to_string(master);
+  std::string payload = ebus::Sequence::to_string(slave);
 
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 }
