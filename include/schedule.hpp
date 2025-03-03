@@ -1,13 +1,13 @@
 #pragma once
 
+#include <Datatypes.h>
+#include <EbusHandler.h>
 #include <WiFiClient.h>
 
 #include <deque>
 #include <string>
 #include <vector>
 
-#include "Datatypes.h"
-#include "EbusHandler.h"
 #include "store.hpp"
 
 // This class sends time-controlled active commands to the ebus. All valid

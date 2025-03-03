@@ -1,10 +1,10 @@
 #pragma once
 
+#include <Datatypes.h>
+
 #include <deque>
 #include <string>
 #include <vector>
-
-#include "Datatypes.h"
 
 // Implements the storage of active and passive commands. New commands can be
 // added and removed via mqtt. It provides functions for saving, loading and
