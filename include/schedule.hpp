@@ -61,7 +61,7 @@ class Schedule {
 
   static void errorCallback(const std::string &str);
 
-  void processActive(const std::vector<uint8_t>(master),
+  void processActive(const std::vector<uint8_t> &master,
                      const std::vector<uint8_t> &slave);
   void processPassive(const std::vector<uint8_t> &master,
                       const std::vector<uint8_t> &slave);
