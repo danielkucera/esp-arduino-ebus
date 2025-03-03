@@ -245,7 +245,7 @@ void Schedule::errorCallback(const std::string &str) {
   mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
 }
 
-void Schedule::processActive(const std::vector<uint8_t>(master),
+void Schedule::processActive(const std::vector<uint8_t> &master,
                              const std::vector<uint8_t> &slave) {
   if (send)
     publishSend(sendCommand, slave);

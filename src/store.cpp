@@ -2,8 +2,8 @@
 
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <Sequence.h>
 
-#include "Sequence.h"
 #include "mqtt.hpp"
 
 Store store;
