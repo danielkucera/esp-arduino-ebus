@@ -25,8 +25,6 @@ These topics are available on every device.
 |**output**           |
 |ebus/commands        |list of installed commands
 |ebus/value           |received values of installed commands
-|ebus/system          |time and outdoor temperature of system (Service 07h 00h)
-|ebus/nodes           |decoded answer from an active sent identification telegram (Service 07h 04h)
 |ebus/sent            |values of 'send' command: subtopic=master; value=slave;
 |ebus/raw             |values of 'raw' printout: subtopic=master; value=slave;
 |**counter**          |
