@@ -19,7 +19,7 @@ void Store::insertCommand(const char *payload) {
   if (error) {
     std::string err = "DeserializationError ";
     err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+    mqtt.publish("cmd/error", 0, false, err.c_str());
   } else {
     Command command;
 
@@ -62,7 +62,7 @@ void Store::removeCommand(const char *payload) {
   if (error) {
     std::string err = "DeserializationError ";
     err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+    mqtt.publish("cmd/error", 0, false, err.c_str());
   } else {
     std::string key = doc["key"].as<std::string>();
 
@@ -77,7 +77,7 @@ void Store::removeCommand(const char *payload) {
       countCommands();
     } else {
       std::string err = key + " not found";
-      mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+      mqtt.publish("cmd/error", 0, false, err.c_str());
     }
   }
 }
@@ -85,8 +85,7 @@ void Store::removeCommand(const char *payload) {
 void Store::publishCommands() {
   for (const Command &command : allCommands) pubCommands.push_back(&command);
 
-  if (allCommands.size() == 0)
-    mqttClient.publish("ebus/commands", 0, false, "");
+  if (allCommands.size() == 0) mqtt.publish("commands", 0, false, "");
 }
 
 const std::string Store::getCommands() const {
@@ -180,13 +179,12 @@ void Store::loadCommands() {
       std::string payload(buffer.begin(), buffer.end());
 
       deserializeCommands(payload.c_str());
-      mqttClient.publish("ebus/config/loading", 0, false,
-                         String(bytes).c_str());
+      mqtt.publish("cmd/loading", 0, false, String(bytes).c_str());
     } else {
-      mqttClient.publish("ebus/config/loading", 0, false, "failed");
+      mqtt.publish("cmd/loading", 0, false, "failed");
     }
   } else {
-    mqttClient.publish("ebus/config/loading", 0, false, "no data");
+    mqtt.publish("cmd/loading", 0, false, "no data");
   }
 
   commands.end();
@@ -200,11 +198,11 @@ void Store::saveCommands() const {
   if (bytes > 2) {  // 2 = empty json array "[]"
     bytes = commands.putBytes("ebus", serializeCommands().c_str(), bytes);
     if (bytes > 2)  // saving was successful
-      mqttClient.publish("ebus/config/saving", 0, false, String(bytes).c_str());
+      mqtt.publish("cmd/saving", 0, false, String(bytes).c_str());
     else
-      mqttClient.publish("ebus/config/saving", 0, false, "failed");
+      mqtt.publish("cmd/saving", 0, false, "failed");
   } else {
-    mqttClient.publish("ebus/config/saving", 0, false, "no data");
+    mqtt.publish("cmd/saving", 0, false, "no data");
   }
 
   commands.end();
@@ -217,11 +215,11 @@ void Store::wipeCommands() {
   size_t bytes = commands.getBytesLength("ebus");
   if (bytes > 0) {
     if (commands.remove("ebus"))  // wiping was successful
-      mqttClient.publish("ebus/config/wiping", 0, false, String(bytes).c_str());
+      mqtt.publish("cmd/wiping", 0, false, String(bytes).c_str());
     else
-      mqttClient.publish("ebus/config/wiping", 0, false, "failed");
+      mqtt.publish("cmd/wiping", 0, false, "failed");
   } else {
-    mqttClient.publish("ebus/config/wiping", 0, false, "no data");
+    mqtt.publish("cmd/wiping", 0, false, "no data");
   }
 
   commands.end();
@@ -292,7 +290,7 @@ void Store::deserializeCommands(const char *payload) {
   if (error) {
     std::string err = "DeserializationError ";
     err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+    mqtt.publish("cmd/error", 0, false, err.c_str());
   } else {
     JsonArray array = doc.as<JsonArray>();
     for (JsonVariant variant : array) {
@@ -319,7 +317,7 @@ void Store::deserializeCommands(const char *payload) {
 }
 
 void Store::publishCommand(const Command *command, const bool remove) {
-  std::string topic = "ebus/commands/" + command->key;
+  std::string topic = "commands/" + command->key;
 
   std::string payload;
 
@@ -341,11 +339,11 @@ void Store::publishCommand(const Command *command, const bool remove) {
     serializeJson(doc, payload);
   }
 
-  mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 
   if (remove) {
-    topic = "ebus/values/" + command->topic;
-    mqttClient.publish(topic.c_str(), 0, false, "");
+    topic = "values/" + command->topic;
+    mqtt.publish(topic.c_str(), 0, false, "");
   }
 }
 
@@ -353,7 +351,8 @@ void Store::publishHomeAssistant(const Command *command, const bool remove) {
   std::string name = command->topic;
   std::replace(name.begin(), name.end(), '/', '_');
 
-  std::string topic = "homeassistant/sensor/ebus/" + name + "/config";
+  std::string topic =
+      "homeassistant/sensor/" + mqtt.getUniqueId() + '/' + name + "/config";
 
   std::string payload;
 
@@ -364,14 +363,26 @@ void Store::publishHomeAssistant(const Command *command, const bool remove) {
     if (command->ha_class.compare("null") != 0 &&
         command->ha_class.length() > 0)
       doc["device_class"] = command->ha_class;
-    doc["state_topic"] = "ebus/values/" + command->topic;
+    doc["state_topic"] =
+        mqtt.getRootTopic() + std::string("values/") + command->topic;
     if (command->unit.compare("null") != 0 && command->unit.length() > 0)
       doc["unit_of_measurement"] = command->unit;
-    doc["unique_id"] = command->key;  // TODO(yuhu-): use MAC + key
+    doc["unique_id"] = mqtt.getUniqueId() + '_' + command->key;
     doc["value_template"] = "{{value_json.value}}";
+
+    JsonObject device = doc["device"].to<JsonObject>();
+    device["identifiers"] = "ebus_" + mqtt.getUniqueId();
+    device["name"] = "esp-eBus adapter " + mqtt.getUniqueId();
+    device["manufacturer"] = "";  // TODO(yuhu-): fill with thing data
+    device["model"] = "";         // TODO(yuhu-): fill with thing data
+    device["model_id"] = "";      // TODO(yuhu-): fill with thing data
+    device["serial_number"] = mqtt.getUniqueId();
+    device["hw_version"] = "";  // TODO(yuhu-): fill with thing data
+    device["sw_version"] = "";  // TODO(yuhu-): fill with thing data
+    device["configuration_url"] = "http://esp-ebus.local";
 
     serializeJson(doc, payload);
   }
 
-  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
 }

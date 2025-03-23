@@ -2,24 +2,55 @@
 
 #include <AsyncMqttClient.h>
 
-// The onMqtt callback functions are the interface to the mqtt sub-system for
-// the user-defined commands.
+#include <string>
 
-extern AsyncMqttClient mqttClient;
+// The Mqtt class acts as a wrapper for the MQTT subsystem.
 
-void onMqttConnect(bool sessionPresent);
-void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
-void onMqttSubscribe(uint16_t packetId, uint8_t qos);
-void onMqttUnsubscribe(uint16_t packetId);
-void onMqttMessage(const char *topic, const char *payload,
-                   AsyncMqttClientMessageProperties properties, size_t len,
-                   size_t index, size_t total);
-void onMqttPublish(uint16_t packetId);
+class Mqtt {
+ public:
+  Mqtt();
 
-// This class can sum all kinds of primitive number types. After a minimum time
-// in seconds, the summed data is published under the specified mqtt topic.
+  void setUniqueId(const uint32_t id);
+  const std::string &getUniqueId() const;
+
+  const std::string &getRootTopic() const;
+
+  void setServer(const char *host, uint16_t port);
+  void setCredentials(const char *username, const char *password = nullptr);
+
+  void connect();
+  bool connected() const;
+
+  uint16_t publish(const char *topic, uint8_t qos, bool retain,
+                   const char *payload = nullptr, bool prefix = true);
+
+ private:
+  AsyncMqttClient client;
+  std::string uniqueId;
+  std::string rootTopic;
+
+  uint16_t subscribe(const char *topic, uint8_t qos);
+
+  static void onConnect(bool sessionPresent);
+  static void onDisconnect(AsyncMqttClientDisconnectReason reason) {}
+
+  static void onSubscribe(uint16_t packetId, uint8_t qos) {}
+  static void onUnsubscribe(uint16_t packetId) {}
+
+  static void onMessage(const char *topic, const char *payload,
+                        AsyncMqttClientMessageProperties properties, size_t len,
+                        size_t index, size_t total);
+
+  static void onPublish(uint16_t packetId) {}
+};
+
+extern Mqtt mqtt;
+
+// The Track class can sum all kinds of primitive number types. After a minimum
+// time in seconds, the summed data is published under the specified mqtt topic.
 // After a maximum period of time, a publication is always carried out for an
 // order.
+
 template <class T>
 class Track {
  public:
@@ -88,7 +119,7 @@ class Track {
 
   inline void publish(boolean force) {
     if (force || millis() > m_last + m_seconds * 1000) {
-      mqttClient.publish(m_topic, 0, true, String(m_value).c_str());
+      mqtt.publish(m_topic, 0, true, String(m_value).c_str());
       m_last = millis();
     }
   }

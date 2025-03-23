@@ -21,7 +21,7 @@ struct Command {
   bool master;              // true..master false..slave
   size_t position;          // starting byte in payload (DBx)
   ebus::Datatype datatype;  // ebus datatype
-  std::string topic;        // mqtt topic
+  std::string topic;        // mqtt subtopic below "values/"
   bool ha;                  // home assistant support for auto discovery
   std::string ha_class;     // home assistant device_class
 };

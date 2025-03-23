@@ -2,59 +2,64 @@
 
 #include <ArduinoJson.h>
 
-#include <sstream>
-
 #include "bus.hpp"
 #include "mqtt.hpp"
 
 // messages
-Track<uint32_t> messagesTotal("ebus/messages/total", 10);
+Track<uint32_t> messagesTotal("state/internal/messages/total", 10);
 
-Track<uint32_t> messagesPassiveMS("ebus/messages/passiveMS", 10);
-Track<uint32_t> messagesPassiveMM("ebus/messages/passiveMM", 10);
+Track<uint32_t> messagesPassiveMS("state/internal/messages/passiveMS", 10);
+Track<uint32_t> messagesPassiveMM("state/internal/messages/passiveMM", 10);
 
-Track<uint32_t> messagesReactiveMS("ebus/messages/reactiveMS", 10);
-Track<uint32_t> messagesReactiveMM("ebus/messages/reactiveMM", 10);
-Track<uint32_t> messagesReactiveBC("ebus/messages/reactiveBC", 10);
+Track<uint32_t> messagesReactiveMS("state/internal/messages/reactiveMS", 10);
+Track<uint32_t> messagesReactiveMM("state/internal/messages/reactiveMM", 10);
+Track<uint32_t> messagesReactiveBC("state/internal/messages/reactiveBC", 10);
 
-Track<uint32_t> messagesActiveMS("ebus/messages/activeMS", 10);
-Track<uint32_t> messagesActiveMM("ebus/messages/activeMM", 10);
-Track<uint32_t> messagesActiveBC("ebus/messages/activeBC", 10);
+Track<uint32_t> messagesActiveMS("state/internal/messages/activeMS", 10);
+Track<uint32_t> messagesActiveMM("state/internal/messages/activeMM", 10);
+Track<uint32_t> messagesActiveBC("state/internal/messages/activeBC", 10);
 
 // errors
-Track<uint32_t> errorsTotal("ebus/errors/total", 10);
+Track<uint32_t> errorsTotal("state/internal/errors/total", 10);
 
-Track<uint32_t> errorsPassive("ebus/errors/passive", 10);
-Track<uint32_t> errorsPassiveMaster("ebus/errors/passive/master", 10);
-Track<uint32_t> errorsPassiveMasterACK("ebus/errors/passive/masterACK", 10);
-Track<uint32_t> errorsPassiveSlave("ebus/errors/passive/slave", 10);
-Track<uint32_t> errorsPassiveSlaveACK("ebus/errors/passive/slaveACK", 10);
+Track<uint32_t> errorsPassive("state/internal/errors/passive", 10);
+Track<uint32_t> errorsPassiveMaster("state/internal/errors/passive/master", 10);
+Track<uint32_t> errorsPassiveMasterACK(
+    "state/internal/errors/passive/masterACK", 10);
+Track<uint32_t> errorsPassiveSlave("state/internal/errors/passive/slave", 10);
+Track<uint32_t> errorsPassiveSlaveACK("state/internal/errors/passive/slaveACK",
+                                      10);
 
-Track<uint32_t> errorsReactive("ebus/errors/reactive", 10);
-Track<uint32_t> errorsReactiveMaster("ebus/errors/reactive/master", 10);
-Track<uint32_t> errorsReactiveMasterACK("ebus/errors/reactive/masterACK", 10);
-Track<uint32_t> errorsReactiveSlave("ebus/errors/reactive/slave", 10);
-Track<uint32_t> errorsReactiveSlaveACK("ebus/errors/reactive/slaveACK", 10);
+Track<uint32_t> errorsReactive("state/internal/errors/reactive", 10);
+Track<uint32_t> errorsReactiveMaster("state/internal/errors/reactive/master",
+                                     10);
+Track<uint32_t> errorsReactiveMasterACK(
+    "state/internal/errors/reactive/masterACK", 10);
+Track<uint32_t> errorsReactiveSlave("state/internal/errors/reactive/slave", 10);
+Track<uint32_t> errorsReactiveSlaveACK(
+    "state/internal/errors/reactive/slaveACK", 10);
 
-Track<uint32_t> errorsActive("ebus/errors/active", 10);
-Track<uint32_t> errorsActiveMaster("ebus/errors/active/master", 10);
-Track<uint32_t> errorsActiveMasterACK("ebus/errors/active/masterACK", 10);
-Track<uint32_t> errorsActiveSlave("ebus/errors/active/slave", 10);
-Track<uint32_t> errorsActiveSlaveACK("ebus/errors/active/slaveACK", 10);
+Track<uint32_t> errorsActive("state/internal/errors/active", 10);
+Track<uint32_t> errorsActiveMaster("state/internal/errors/active/master", 10);
+Track<uint32_t> errorsActiveMasterACK("state/internal/errors/active/masterACK",
+                                      10);
+Track<uint32_t> errorsActiveSlave("state/internal/errors/active/slave", 10);
+Track<uint32_t> errorsActiveSlaveACK("state/internal/errors/active/slaveACK",
+                                     10);
 
 // resets
-Track<uint32_t> resetsTotal("ebus/resets/total", 10);
-Track<uint32_t> resetsPassive00("ebus/resets/passive00", 10);
-Track<uint32_t> resetsPassive0704("ebus/resets/passive0704", 10);
-Track<uint32_t> resetsPassive("ebus/resets/passive", 10);
-Track<uint32_t> resetsActive("ebus/resets/active", 10);
+Track<uint32_t> resetsTotal("state/internal/resets/total", 10);
+Track<uint32_t> resetsPassive00("state/internal/resets/passive00", 10);
+Track<uint32_t> resetsPassive0704("state/internal/resets/passive0704", 10);
+Track<uint32_t> resetsPassive("state/internal/resets/passive", 10);
+Track<uint32_t> resetsActive("state/internal/resets/active", 10);
 
 // requests
-Track<uint32_t> requestsTotal("ebus/requests/total", 10);
-Track<uint32_t> requestsWon("ebus/requests/won", 10);
-Track<uint32_t> requestsLost("ebus/requests/lost", 10);
-Track<uint32_t> requestsRetry("ebus/requests/retry", 10);
-Track<uint32_t> requestsError("ebus/requests/error", 10);
+Track<uint32_t> requestsTotal("state/internal/requests/total", 10);
+Track<uint32_t> requestsWon("state/internal/requests/won", 10);
+Track<uint32_t> requestsLost("state/internal/requests/lost", 10);
+Track<uint32_t> requestsRetry("state/internal/requests/retry", 10);
+Track<uint32_t> requestsError("state/internal/requests/error", 10);
 
 Schedule schedule;
 
@@ -81,7 +86,7 @@ void Schedule::handleFilter(const char *payload) {
   if (error) {
     std::string err = "DeserializationError ";
     err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+    mqtt.publish("cmd/error", 0, false, err.c_str());
   } else {
     rawFilters.clear();
     JsonArray array = doc.as<JsonArray>();
@@ -97,7 +102,7 @@ void Schedule::handleSend(const char *payload) {
   if (error) {
     std::string err = "DeserializationError ";
     err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+    mqtt.publish("cmd/error", 0, false, err.c_str());
   } else {
     sendCommands.clear();
     JsonArray array = doc.as<JsonArray>();
@@ -208,7 +213,7 @@ void Schedule::passiveCallback(const std::vector<uint8_t> &master,
 
 void Schedule::reactiveCallback(const std::vector<uint8_t> &master,
                                 std::vector<uint8_t> *const slave) {
-  std::vector<uint8_t> search;
+  // std::vector<uint8_t> search;
   switch (ebus::Telegram::typeOf(master[1])) {
     case ebus::Type::BC:
       schedule.processPassive(std::vector<uint8_t>(master),
@@ -240,9 +245,9 @@ void Schedule::reactiveCallback(const std::vector<uint8_t> &master,
 }
 
 void Schedule::errorCallback(const std::string &str) {
-  std::string topic = "ebus/resets/last";
+  std::string topic = "state/internal/resets/last";
   std::string payload = str;
-  mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }
 
 void Schedule::processActive(const std::vector<uint8_t> &master,
@@ -261,11 +266,11 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
                                    return ebus::Sequence::contains(master, vec);
                                  });
     if (count > 0 || rawFilters.size() == 0) {
-      std::string topic = "ebus/raw/" + ebus::Sequence::to_string(master);
+      std::string topic = "raw/" + ebus::Sequence::to_string(master);
       std::string payload = ebus::Sequence::to_string(slave);
       if (payload.empty()) payload = "-";
 
-      mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
+      mqtt.publish(topic.c_str(), 0, false, payload.c_str());
     }
   }
 
@@ -281,10 +286,10 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
 
 void Schedule::publishSend(const std::vector<uint8_t> &master,
                            const std::vector<uint8_t> &slave) {
-  std::string topic = "ebus/sent/" + ebus::Sequence::to_string(master);
+  std::string topic = "sent/" + ebus::Sequence::to_string(master);
   std::string payload = ebus::Sequence::to_string(slave);
 
-  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, true, payload.c_str());
 }
 
 void Schedule::publishValue(Command *command,
@@ -348,7 +353,7 @@ void Schedule::publishValue(Command *command,
   std::string payload;
   serializeJson(doc, payload);
 
-  std::string topic = "ebus/values/" + command->topic;
+  std::string topic = "values/" + command->topic;
 
-  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, true, payload.c_str());
 }

@@ -207,3 +207,198 @@ You will need an USB-TTL adaptor (dongle) which suports 3V3 voltage levels and h
 - if that doesn't work, connect also TP1 to 3V3 and try again (see Issue #27)
 
 
+## MQTT support
+**Warning: The current implementation does not support TLS encryption. The MQTT server should therefore be run in a secure environment!**
+
+
+### MQTT configuration
+At the configuration web page you can set
+- server IP address or hostname
+- user name
+- password
+
+
+### MQTT interface
+- Basic device data, settings and various counters are published regularly.
+ 
+The device's **root topic** begins with ebus/, followed by the last 6 characters of its MAC address as a unique device ID and a trailing slash.
+For e.g. `ebus/8406AC/`
+
+The following subtopics are available on every device.
+|***subtopic***                 |***description***
+|:-                             |:-
+|**output**                     |
+|device                         |information about your device                                   
+|device/ebus                    |basic ebus adapter settings (configration)
+|device/firmware                |details of installed firmware
+|device/wifi                    |wifi details
+|&nbsp;                         |&nbsp;
+|**counter**                    | 
+|state/arbitration              |arbitration over common interface (e.g. ebusd)
+|&nbsp;                         |&nbsp;
+|**input**                      |
+|cmd/restart                    |restarting of the device 
+
+
+### MQTT interface with firmware EBUS_INTERNAL=1
+- `EBUS_INTERNAL=1` adds a scheduler and an eBUS command buffer to the device.
+
+The following subtopics are available.
+|***subtopic***                 |***description***
+|:-                             |:-
+|**output**                     |
+|commands                       |installed commands
+|values                         |received values of installed commands
+|sent                           |values of 'send' command: subtopic=master; value=slave;
+|raw                            |values of 'raw' printout: subtopic=master; value=slave;
+|&nbsp;                         |&nbsp;
+|**counter**                    |
+|state/internal/messages        |processed messages
+|state/internal/errors          |errors of finite state machine  
+|state/internal/resets          |resets of finite state machine 
+|state/internal/requets         |bus requests (arbitration)
+|&nbsp;                         |&nbsp;
+|**input**                      |
+|cmd/insert                     |inserting (installing) a new command
+|cmd/remove                     |removing an installed command
+|cmd/list                       |list all installed commands
+|cmd/load                       |loading (install) of saved commands
+|cmd/save                       |saving of current installed commands
+|cmd/wipe                       |wiping of saved commands
+|cmd/send                       |sending of given ebus command(s) once
+|cmd/raw                        |toggling of raw data printout
+|cmd/filter                     |adding filter(s) for raw data printout
+|&nbsp;                         |&nbsp;
+|**response of input**          |
+|cmd/loading                    |bytes of loaded commands
+|cmd/saving                     |bytes of saved commands
+|cmd/wiping                     |bytes of wiped commands
+|cmd/error                      |message of last occurred error
+
+
+### Details of MQTT commands
+The provided examples were created using `Mosquitto` in a `Linux shell`. The `server IP address or hostname` and `unique device ID` must be adjusted to your environment.
+
+- `server IP address or hostname = server`
+- `unique device ID = 8406AC`
+- `root topic = ebus/8406AC/`
+
+**Restarting of the device**
+```
+* subtopic: cmd/restart
+* payload : true
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/restart' -m 'true' 
+```
+
+**Inserting (Installing) a new command**
+```
+* subtopic: cmd/insert
+* payload : ebus command in form of "ZZPBSBNNDBx" with a UNIQUE_KEY for e.g.
+{
+  "key": "UNIQUE_KEY",               // ebus command as string
+  "command": "fe070009",             // ebus command as vector of "ZZPBSBNNDBx"
+  "unit": "°C",                      // unit of the received data
+  "active": false,                   // active sending of command
+  "interval": 0,                     // minimum interval between two commands in seconds
+  "master": true,                    // true..master false..slave
+  "position": 1,                     // starting byte in payload (DBx)
+  "datatype": "DATA2b",              // ebus datatype
+  "topic": "outdoor/temperature",    // mqtt subtopic below "values/"
+  "ha": true,                        // home assistant support for auto discovery
+  "ha_class": "temperature"          // home assistant device_class
+}
+
+ebus datatype: BCD, UINT8, INT8, UINT16, INT16, UINT32, INT32, DATA1b, DATA1c, DATA2b, DATA2c, FLOAT (values as 1/1000)
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/insert' -m '{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2b","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}'
+```
+
+**Removing an installed command**
+```
+* subtopic: cmd/remove
+* payload : UNIQUE_KEY of ebus command
+{
+  "key": "UNIQUE_KEY"
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/remove' -m '{"key":"01"}'
+```
+
+**List all installed commands**
+```
+* subtopic: cmd/list
+* payload : true
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/list' -m 'true'
+```
+
+**Loading (install) of saved commands**
+```
+* subtopic: cmd/load
+* payload : true
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/load' -m 'true'
+```
+
+**Saving of current installed commands**
+```
+* subtopic: cmd/save
+* payload : true
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/save' -m 'true'
+```
+
+**Wiping of saved commands**
+```
+* subtopic: cmd/wipe
+* payload : true
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/wipe' -m 'true'
+```
+
+**Sending of given ebus command(s) once**
+```
+* subtopic: cmd/send
+* payload : array of ebus command(s) in form of "ZZPBSBNNDBx" for e.g.
+[
+  "05070400",
+  "15070400"
+]
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/send' -m '["05070400","15070400"]'
+```
+
+**Toggling of the raw data printout**
+```
+* subtopic: cmd/raw
+* payload : true | false
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/raw' -m 'true'
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/raw' -m 'false'
+```
+
+**Adding filter(s) for raw data printout**
+```
+* subtopic: cmd/filter
+* payload:  array of sequences for e.g.
+[
+  "0700",
+  "fe"
+]
+```
+```
+mosquitto_pub -h server -t 'ebus/8406AC/cmd/filter' -m '["0700","fe"]'
+```
+
