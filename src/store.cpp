@@ -351,8 +351,8 @@ void Store::publishHomeAssistant(const Command *command, const bool remove) {
   std::string name = command->topic;
   std::replace(name.begin(), name.end(), '/', '_');
 
-  std::string topic =
-      "homeassistant/sensor/" + mqtt.getUniqueId() + '/' + name + "/config";
+  std::string topic = "homeassistant/sensor/ebus_" + mqtt.getUniqueId() + '/' +
+                      name + "/config";
 
   std::string payload;
 
@@ -367,7 +367,7 @@ void Store::publishHomeAssistant(const Command *command, const bool remove) {
         mqtt.getRootTopic() + std::string("values/") + command->topic;
     if (command->unit.compare("null") != 0 && command->unit.length() > 0)
       doc["unit_of_measurement"] = command->unit;
-    doc["unique_id"] = mqtt.getUniqueId() + '_' + command->key;
+    doc["unique_id"] = "ebus_" + mqtt.getUniqueId() + '_' + command->key;
     doc["value_template"] = "{{value_json.value}}";
 
     JsonObject device = doc["device"].to<JsonObject>();
