@@ -482,16 +482,16 @@ void publishStatus() {
   loopDuration.publish();
   maxLoopDuration.publish();
   free_heap.publish();
-  mqtt.publish("device/reset_code", 0, true, String(reset_code).c_str());
+  mqtt.publish("device/reset_code", 0, false, String(reset_code).c_str());
 
-  mqtt.publish("device/unique_id", 0, true, mqtt.getUniqueId().c_str());
+  mqtt.publish("device/unique_id", 0, false, mqtt.getUniqueId().c_str());
 
   // ebus/device/firmware
-  mqtt.publish("device/firmware/version", 0, true, AUTO_VERSION);
-  mqtt.publish("device/firmware/sdk", 0, true, ESP.getSdkVersion());
-  mqtt.publish("device/firmware/async", 0, true,
+  mqtt.publish("device/firmware/version", 0, false, AUTO_VERSION);
+  mqtt.publish("device/firmware/sdk", 0, false, ESP.getSdkVersion());
+  mqtt.publish("device/firmware/async", 0, false,
                USE_ASYNCHRONOUS ? "true" : "false");
-  mqtt.publish("device/firmware/software_serial", 0, true,
+  mqtt.publish("device/firmware/software_serial", 0, false,
                USE_SOFTWARE_SERIAL ? "true" : "false");
 
   // ebus/device/ebus

@@ -289,7 +289,7 @@ void Schedule::publishSend(const std::vector<uint8_t> &master,
   std::string topic = "sent/" + ebus::Sequence::to_string(master);
   std::string payload = ebus::Sequence::to_string(slave);
 
-  mqtt.publish(topic.c_str(), 0, true, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }
 
 void Schedule::publishValue(Command *command,
@@ -355,5 +355,5 @@ void Schedule::publishValue(Command *command,
 
   std::string topic = "values/" + command->topic;
 
-  mqtt.publish(topic.c_str(), 0, true, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }

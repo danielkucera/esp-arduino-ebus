@@ -119,7 +119,7 @@ class Track {
 
   inline void publish(boolean force) {
     if (force || millis() > m_last + m_seconds * 1000) {
-      mqtt.publish(m_topic, 0, true, String(m_value).c_str());
+      mqtt.publish(m_topic, 0, false, String(m_value).c_str());
       m_last = millis();
     }
   }

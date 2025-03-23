@@ -384,5 +384,5 @@ void Store::publishHomeAssistant(const Command *command, const bool remove) {
     serializeJson(doc, payload);
   }
 
-  mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
+  mqtt.publish(topic.c_str(), 0, false, payload.c_str(), false);
 }
