@@ -493,6 +493,8 @@ void publishValues() {
   free_heap = ESP.getFreeHeap();
 
   // ebus/device/wifi
+  last_connect.touch();
+  reconnect_count.touch();
   rssi = WiFi.RSSI();
 
   // ebus/arbitration
@@ -670,6 +672,10 @@ void setup() {
   wifiServerRO.begin();
   wifiServerEnh.begin();
   statusServer.begin();
+
+#ifdef ESP32
+  ArduinoOTA.onStart([]() { vTaskDelete(Task1); });
+#endif
 
   ArduinoOTA.begin();
 

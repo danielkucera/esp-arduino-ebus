@@ -2,6 +2,8 @@
 
 #include <ArduinoJson.h>
 
+#include <sstream>
+
 #include "bus.hpp"
 #include "mqtt.hpp"
 
@@ -43,6 +45,7 @@ Track<uint32_t> errorsActiveSlaveACK("ebus/errors/active/slaveACK", 10);
 // resets
 Track<uint32_t> resetsTotal("ebus/resets/total", 10);
 Track<uint32_t> resetsPassive00("ebus/resets/passive00", 10);
+Track<uint32_t> resetsPassive0704("ebus/resets/passive0704", 10);
 Track<uint32_t> resetsPassive("ebus/resets/passive", 10);
 Track<uint32_t> resetsActive("ebus/resets/active", 10);
 
@@ -56,7 +59,7 @@ Track<uint32_t> requestsError("ebus/requests/error", 10);
 Schedule schedule;
 
 Schedule::Schedule()
-    : ebusHandler(0xff, &busReadyCallback, &busWriteCallback, &activeCallback,
+    : ebusHandler(0xff, &writeCallback, &readBufferCallback, &activeCallback,
                   &passiveCallback, &reactiveCallback) {
   ebusHandler.setErrorCallback(errorCallback);
 }
@@ -69,18 +72,7 @@ void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
 }
 
-void Schedule::publishRaw(const char *payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
-  } else {
-    raw = doc.as<bool>();
-  }
-}
+void Schedule::publishRaw(const bool enable) { raw = enable; }
 
 void Schedule::handleFilter(const char *payload) {
   JsonDocument doc;
@@ -186,6 +178,7 @@ void Schedule::publishCounters() {
   // resets
   resetsTotal = counters.resetsTotal;
   resetsPassive00 = counters.resetsPassive00;
+  resetsPassive0704 = counters.resetsPassive0704;
   resetsPassive = counters.resetsPassive;
   resetsActive = counters.resetsActive;
 
@@ -197,9 +190,9 @@ void Schedule::publishCounters() {
   requestsError = counters.requestsError;
 }
 
-bool Schedule::busReadyCallback() { return Bus.availableForWrite(); }
+void Schedule::writeCallback(const uint8_t byte) { Bus.write(byte); }
 
-void Schedule::busWriteCallback(const uint8_t byte) { Bus.write(byte); }
+int Schedule::readBufferCallback() { return Bus.available(); }
 
 void Schedule::activeCallback(const std::vector<uint8_t> &master,
                               const std::vector<uint8_t> &slave) {
@@ -252,7 +245,7 @@ void Schedule::errorCallback(const std::string &str) {
   mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
 }
 
-void Schedule::processActive(const std::vector<uint8_t>(master),
+void Schedule::processActive(const std::vector<uint8_t> &master,
                              const std::vector<uint8_t> &slave) {
   if (send)
     publishSend(sendCommand, slave);
@@ -276,34 +269,20 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
     }
   }
 
-  Command *pasCommand = store.findPassiveCommand(master);
-  if (pasCommand != nullptr) {
-    if (pasCommand->master)
-      publishValue(pasCommand,
+  std::vector<Command *> pasCommands = store.findPassiveCommands(master);
+  for (Command *command : pasCommands) {
+    if (command->master)
+      publishValue(command,
                    ebus::Sequence::range(master, 4, master.size() - 4));
     else
-      publishValue(pasCommand, slave);
+      publishValue(command, slave);
   }
 }
 
 void Schedule::publishSend(const std::vector<uint8_t> &master,
                            const std::vector<uint8_t> &slave) {
-  std::string topic = "ebus/";
-  std::string payload;
-  if (master[2] == 0x07 && master[3] == 0x04) {
-    topic += "nodes/" + ebus::Sequence::to_string(master[1]);
-    payload += "MF=";
-    payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 1, 1));
-    payload += ";ID=";
-    payload += ebus::byte_2_string(ebus::Sequence::range(slave, 2, 5));
-    payload += ";SW=";
-    payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 7, 2));
-    payload += ";HW=";
-    payload += ebus::Sequence::to_string(ebus::Sequence::range(slave, 9, 2));
-  } else {
-    topic += "sent/" + ebus::Sequence::to_string(master);
-    payload = ebus::Sequence::to_string(slave);
-  }
+  std::string topic = "ebus/sent/" + ebus::Sequence::to_string(master);
+  std::string payload = ebus::Sequence::to_string(slave);
 
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 }

@@ -1,13 +1,13 @@
 #pragma once
 
+#include <Datatypes.h>
+#include <EbusHandler.h>
 #include <WiFiClient.h>
 
 #include <deque>
 #include <string>
 #include <vector>
 
-#include "Datatypes.h"
-#include "EbusHandler.h"
 #include "store.hpp"
 
 // This class sends time-controlled active commands to the ebus. All valid
@@ -23,7 +23,7 @@ class Schedule {
   void setAddress(const uint8_t source);
   void setDistance(const uint8_t distance);
 
-  void publishRaw(const char *payload);
+  void publishRaw(const bool enable);
   void handleFilter(const char *payload);
 
   void handleSend(const char *payload);
@@ -49,8 +49,8 @@ class Schedule {
   std::deque<std::vector<uint8_t>> sendCommands;
   std::vector<uint8_t> sendCommand;
 
-  static bool busReadyCallback();
-  static void busWriteCallback(const uint8_t byte);
+  static void writeCallback(const uint8_t byte);
+  static int readBufferCallback();
 
   static void activeCallback(const std::vector<uint8_t> &master,
                              const std::vector<uint8_t> &slave);
@@ -61,7 +61,7 @@ class Schedule {
 
   static void errorCallback(const std::string &str);
 
-  void processActive(const std::vector<uint8_t>(master),
+  void processActive(const std::vector<uint8_t> &master,
                      const std::vector<uint8_t> &slave);
   void processPassive(const std::vector<uint8_t> &master,
                       const std::vector<uint8_t> &slave);

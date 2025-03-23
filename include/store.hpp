@@ -1,10 +1,10 @@
 #pragma once
 
+#include <Datatypes.h>
+
 #include <deque>
 #include <string>
 #include <vector>
-
-#include "Datatypes.h"
 
 // Implements the storage of active and passive commands. New commands can be
 // added and removed via mqtt. It provides functions for saving, loading and
@@ -13,7 +13,7 @@
 
 struct Command {
   std::string key;               // ebus command as string
-  std::vector<uint8_t> command;  // ebus command as vector ZZ PB SB NN DBx
+  std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
   std::string unit;              // unit of the received data
   bool active;                   // active sending of command
   uint32_t interval;        // minimum interval between two commands in seconds
@@ -32,7 +32,7 @@ class Store {
 
   void enqueCommand(const char *payload);
   void insertCommand(const char *payload);
-  void removeCommand(const char *topic);
+  void removeCommand(const char *payload);
 
   void publishCommands();
   const std::string getCommands() const;
@@ -41,25 +41,28 @@ class Store {
 
   const bool active() const;
   Command *nextActiveCommand();
-  Command *findPassiveCommand(const std::vector<uint8_t> &master);
+  std::vector<Command *> findPassiveCommands(
+      const std::vector<uint8_t> &master);
 
   void loadCommands();
   void saveCommands() const;
   static void wipeCommands();
 
  private:
-  std::vector<Command> activeCommands;
-  std::vector<Command> passiveCommands;
+  std::vector<Command> allCommands;
+
+  size_t activeCommands = 0;
+  size_t passiveCommands = 0;
 
   std::deque<std::string> newCommands;
   uint32_t distanceInsert = 300;
   uint32_t lastInsert = 0;
 
-  std::deque<std::string> pubCommands;
+  std::deque<const Command *> pubCommands;
   uint32_t distancePublish = 100;
   uint32_t lastPublish = 0;
 
-  bool init = true;
+  void countCommands();
 
   void checkNewCommands();
   void checkPubCommands();
@@ -67,10 +70,9 @@ class Store {
   const std::string serializeCommands() const;
   void deserializeCommands(const char *payload);
 
-  static void publishCommand(const std::vector<Command> *commands,
-                             const std::string &key, bool remove);
+  static void publishCommand(const Command *command, const bool remove);
 
-  static void publishHomeAssistant(const Command *command, bool remove);
+  static void publishHomeAssistant(const Command *command, const bool remove);
 };
 
 extern Store store;
