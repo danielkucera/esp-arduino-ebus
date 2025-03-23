@@ -249,8 +249,8 @@ The following subtopics are available.
 |**output**                     |
 |commands                       |installed commands
 |values                         |received values of installed commands
-|sent                           |values of 'send' command: subtopic=master; value=slave;
-|raw                            |values of 'raw' printout: subtopic=master; value=slave;
+|sent                           |result of send command: subtopic=master; value=slave
+|raw                            |values of raw data printout: subtopic=master; value=slave
 |&nbsp;                         |&nbsp;
 |**counter**                    |
 |state/internal/messages        |processed messages
@@ -286,7 +286,7 @@ The provided examples were created using `Mosquitto` in a `Linux shell`. The `se
 **Restarting of the device**
 ```
 * subtopic: cmd/restart
-* payload : true
+* payload:  true
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406AC/cmd/restart' -m 'true' 
@@ -295,7 +295,7 @@ mosquitto_pub -h server -t 'ebus/8406AC/cmd/restart' -m 'true'
 **Inserting (Installing) a new command**
 ```
 * subtopic: cmd/insert
-* payload : ebus command in form of "ZZPBSBNNDBx" with a UNIQUE_KEY for e.g.
+* payload:  ebus command in form of "ZZPBSBNNDBx" with a UNIQUE_KEY for e.g.
 {
   "key": "UNIQUE_KEY",               // ebus command as string
   "command": "fe070009",             // ebus command as vector of "ZZPBSBNNDBx"
@@ -319,7 +319,7 @@ mosquitto_pub -h server -t 'ebus/8406AC/cmd/insert' -m '{"key":"01","command":"f
 **Removing an installed command**
 ```
 * subtopic: cmd/remove
-* payload : UNIQUE_KEY of ebus command
+* payload:  UNIQUE_KEY of ebus command
 {
   "key": "UNIQUE_KEY"
 }
@@ -331,7 +331,7 @@ mosquitto_pub -h server -t 'ebus/8406AC/cmd/remove' -m '{"key":"01"}'
 **List all installed commands**
 ```
 * subtopic: cmd/list
-* payload : true
+* payload:  true
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406AC/cmd/list' -m 'true'
@@ -340,7 +340,7 @@ mosquitto_pub -h server -t 'ebus/8406AC/cmd/list' -m 'true'
 **Loading (install) of saved commands**
 ```
 * subtopic: cmd/load
-* payload : true
+* payload:  true
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406AC/cmd/load' -m 'true'
@@ -349,7 +349,7 @@ mosquitto_pub -h server -t 'ebus/8406AC/cmd/load' -m 'true'
 **Saving of current installed commands**
 ```
 * subtopic: cmd/save
-* payload : true
+* payload:  true
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406AC/cmd/save' -m 'true'
@@ -358,7 +358,7 @@ mosquitto_pub -h server -t 'ebus/8406AC/cmd/save' -m 'true'
 **Wiping of saved commands**
 ```
 * subtopic: cmd/wipe
-* payload : true
+* payload:  true
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406AC/cmd/wipe' -m 'true'
@@ -367,7 +367,7 @@ mosquitto_pub -h server -t 'ebus/8406AC/cmd/wipe' -m 'true'
 **Sending of given ebus command(s) once**
 ```
 * subtopic: cmd/send
-* payload : array of ebus command(s) in form of "ZZPBSBNNDBx" for e.g.
+* payload:  array of ebus command(s) in form of "ZZPBSBNNDBx" for e.g.
 [
   "05070400",
   "15070400"
@@ -380,7 +380,7 @@ mosquitto_pub -h server -t 'ebus/8406AC/cmd/send' -m '["05070400","15070400"]'
 **Toggling of the raw data printout**
 ```
 * subtopic: cmd/raw
-* payload : true | false
+* payload:  true | false
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406AC/cmd/raw' -m 'true'
