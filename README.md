@@ -297,7 +297,7 @@ mosquitto_pub -h server -t 'ebus/8406AC/cmd/restart' -m 'true'
 * subtopic: cmd/insert
 * payload:  ebus command in form of "ZZPBSBNNDBx" with a UNIQUE_KEY for e.g.
 {
-  "key": "UNIQUE_KEY",               // ebus command as string
+  "key": "UNIQUE_KEY",               // unique key of command
   "command": "fe070009",             // ebus command as vector of "ZZPBSBNNDBx"
   "unit": "°C",                      // unit of the received data
   "active": false,                   // active sending of command

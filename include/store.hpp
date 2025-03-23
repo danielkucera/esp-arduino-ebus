@@ -12,7 +12,7 @@
 // startup.
 
 struct Command {
-  std::string key;               // ebus command as string
+  std::string key;               // unique key of command
   std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
   std::string unit;              // unit of the received data
   bool active;                   // active sending of command
