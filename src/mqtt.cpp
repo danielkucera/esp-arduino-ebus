@@ -15,10 +15,8 @@ Mqtt::Mqtt() {
   client.onPublish(onPublish);
 }
 
-void Mqtt::setUniqueId(const uint32_t id) {
-  char tmp[9];
-  snprintf(tmp, sizeof(tmp), "%08X", id);
-  uniqueId = std::string(tmp).substr(2, 6);
+void Mqtt::setUniqueId(const char* id) {
+  uniqueId = id;
   rootTopic = "ebus/" + uniqueId + "/";
 }
 

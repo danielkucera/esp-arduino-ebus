@@ -52,6 +52,9 @@ TaskHandle_t Task1;
 #endif
 
 #define CONFIG_VERSION "eea"
+
+char unique_id[7]{};
+
 DNSServer dnsServer;
 WebServer configServer(80);
 
@@ -239,20 +242,23 @@ void set_pwm(uint8_t value) {
 uint32_t get_pwm() {
 #ifdef PWM_PIN
   return ledcRead(PWM_CHANNEL);
-#endif
+#else
   return 0;
+#endif
 }
 
-uint32_t getChipId() {
-#ifdef ESP32
+void calcUniqueId() {
   uint32_t id = 0;
+#ifdef ESP32
   for (int i = 0; i < 17; i = i + 8) {
     id |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
   }
-  return id;
 #else
-  return ESP.getChipId();
+  id = ESP.getChipId();
 #endif
+  char tmp[9]{};
+  snprintf(tmp, sizeof(tmp), "%08X", id);
+  memmove(unique_id, &tmp[2], 6);
 }
 
 void reset() {
@@ -414,8 +420,7 @@ char* status_string() {
                   USE_ASYNCHRONOUS ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "software_serial_mode: %s\n",
                   USE_SOFTWARE_SERIAL ? "true" : "false");
-  pos += snprintf(status + pos, sizeof(status), "unique_id: %s\n",
-                  mqtt.getUniqueId().c_str());
+  pos += snprintf(status + pos, sizeof(status), "unique_id: %s\n", unique_id);
   pos += snprintf(status + pos, sizeof(status), "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
                   last_connect.value());
@@ -484,7 +489,7 @@ void publishStatus() {
   free_heap.publish();
   mqtt.publish("device/reset_code", 0, false, String(reset_code).c_str());
 
-  mqtt.publish("device/unique_id", 0, false, mqtt.getUniqueId().c_str());
+  mqtt.publish("device/unique_id", 0, false, unique_id);
 
   // ebus/device/firmware
   mqtt.publish("device/firmware/version", 0, false, AUTO_VERSION);
@@ -577,6 +582,8 @@ void setup() {
 #else
   reset_code = ESP.getResetInfoPtr()->reason;
 #endif
+
+  calcUniqueId();
 
   Bus.begin();
 
@@ -672,7 +679,7 @@ void setup() {
     iotWebConf.doLoop();
   }
 
-  mqtt.setUniqueId(getChipId());
+  mqtt.setUniqueId(unique_id);
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 

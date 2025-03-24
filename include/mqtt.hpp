@@ -10,7 +10,7 @@ class Mqtt {
  public:
   Mqtt();
 
-  void setUniqueId(const uint32_t id);
+  void setUniqueId(const char* id);
   const std::string &getUniqueId() const;
 
   const std::string &getRootTopic() const;
