@@ -229,7 +229,7 @@ The following subtopics are available on every device.
 |:-                             |:-
 |**output**                     |
 |device                         |information about your device                                   
-|device/ebus                    |basic ebus adapter settings (configration)
+|device/ebus                    |basic ebus adapter settings (configuration)
 |device/firmware                |details of installed firmware
 |device/wifi                    |wifi details
 |&nbsp;                         |&nbsp;
