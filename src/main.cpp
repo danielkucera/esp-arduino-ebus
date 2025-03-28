@@ -67,9 +67,9 @@ char pwm_value[NUMBER_LEN];
 
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
-    "00", "10", "30", "70", "F0", "01", "11", "31", "71",
-    "F1", "03", "13", "33", "73", "F3", "07", "17", "37",
-    "77", "F7", "0F", "1F", "3F", "7F", "FF"};
+    "00", "10", "30", "70", "f0", "01", "11", "31", "71",
+    "f1", "03", "13", "33", "73", "f3", "07", "17", "37",
+    "77", "f7", "0f", "1f", "3f", "7f", "ff"};
 
 char comand_distance[NUMBER_LEN];
 
@@ -102,7 +102,7 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     "eBUS address", "ebus_address", ebus_address, NUMBER_LEN,
     reinterpret_cast<char*>(ebus_address_values),
     reinterpret_cast<char*>(ebus_address_values),
-    sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
+    sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     "Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1",
     "0..60", "min='0' max='60' step='1'");
@@ -257,7 +257,7 @@ void calcUniqueId() {
   id = ESP.getChipId();
 #endif
   char tmp[9]{};
-  snprintf(tmp, sizeof(tmp), "%08X", id);
+  snprintf(tmp, sizeof(tmp), "%08x", id);
   memmove(unique_id, &tmp[2], 6);
 }
 

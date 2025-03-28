@@ -353,7 +353,12 @@ void Schedule::publishValue(Command *command,
   std::string payload;
   serializeJson(doc, payload);
 
-  std::string topic = "values/" + command->topic;
+  std::string name = command->topic;
+  std::transform(name.begin(), name.end(), name.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+
+  std::string topic = "values/" + name;
+
 
   mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }
