@@ -54,8 +54,8 @@ extern Mqtt mqtt;
 template <class T>
 class Track {
  public:
-  Track(const char *topic, const uint16_t seconds, const uint16_t maxage = 60)
-      : m_topic(topic), m_seconds(seconds), m_maxage(maxage) {}
+  Track(const char *topic, const uint16_t minage, const uint16_t maxage = 60)
+      : m_topic(topic), m_minage(minage), m_maxage(maxage) {}
 
   // OK xxx = 1;
   const Track &operator=(const T &value) {
@@ -113,12 +113,12 @@ class Track {
  private:
   T m_value;
   const char *m_topic;
-  const uint16_t m_seconds = 0;
+  const uint16_t m_minage = 0;
   const uint16_t m_maxage = 0;
   uint32_t m_last = 0;
 
   inline void publish(boolean force) {
-    if (force || millis() > m_last + m_seconds * 1000) {
+    if (force || millis() > m_last + m_minage * 1000) {
       mqtt.publish(m_topic, 0, false, String(m_value).c_str());
       m_last = millis();
     }

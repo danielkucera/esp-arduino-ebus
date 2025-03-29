@@ -380,7 +380,7 @@ void Store::publishHomeAssistant(const Command *command, const bool remove) {
 
     JsonObject device = doc["device"].to<JsonObject>();
     device["identifiers"] = "ebus" + mqtt.getUniqueId();
-    device["name"] = "esp-eBus Adapter";
+    device["name"] = "esp-ebus";
     device["manufacturer"] = "";  // TODO(yuhu-): fill with thing data
     device["model"] = "";         // TODO(yuhu-): fill with thing data
     device["model_id"] = "";      // TODO(yuhu-): fill with thing data

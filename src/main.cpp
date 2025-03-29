@@ -53,8 +53,6 @@ TaskHandle_t Task1;
 
 #define CONFIG_VERSION "eea"
 
-char unique_id[7]{};
-
 DNSServer dnsServer;
 WebServer configServer(80);
 
@@ -140,14 +138,20 @@ Track<uint32_t> uptime("device/uptime", 10);
 Track<uint32_t> loopDuration("device/loop_duration", 10);
 Track<uint32_t> maxLoopDuration("device/loop_duration_max", 10);
 Track<uint32_t> free_heap("device/free_heap", 10);
-uint32_t reset_code = -1;
+Track<uint32_t> reset_code("device/reset_code", 0, 300);
+Track<String> unique_id("device/unique_id", 0, 300);
+
+// ebus/device/firmware
+Track<String> version("device/firmware/version", 0, 300);
+Track<String> sdk("device/firmware/sdk", 0, 300);
+Track<String> async("device/firmware/async", 0, 300);
+Track<String> software_serial("device/firmware/software_serial", 0, 300);
 
 // ebus/device/ebus
-Track<uint32_t> pwm("device/ebus/pwm", 0);
-
+Track<uint32_t> pwm("device/ebus/pwm", 0, 300);
 #ifdef EBUS_INTERNAL
-Track<String> ebusAddress("device/ebus/ebus_address", 0);
-Track<String> commandDistance("device/ebus/comand_distance", 0);
+Track<String> ebusAddress("device/ebus/ebus_address", 0, 300);
+Track<String> commandDistance("device/ebus/comand_distance", 0, 300);
 #endif
 
 // ebus/device/wifi
@@ -155,7 +159,7 @@ Track<uint32_t> last_connect("device/wifi/last_connect", 30);
 Track<int> reconnect_count("device/wifi/reconnect_count", 30);
 Track<int8_t> rssi("device/wifi/rssi", 30);
 
-// ebus/arbitration
+// ebus/state/arbitration
 Track<int> nbrArbitrations("state/arbitration/total", 10);
 
 Track<int> nbrWon("state/arbitration/won", 10);
@@ -258,7 +262,7 @@ void calcUniqueId() {
 #endif
   char tmp[9]{};
   snprintf(tmp, sizeof(tmp), "%08x", id);
-  memmove(unique_id, &tmp[2], 6);
+  unique_id = String(tmp).substring(2);
 }
 
 void reset() {
@@ -420,7 +424,8 @@ char* status_string() {
                   USE_ASYNCHRONOUS ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "software_serial_mode: %s\n",
                   USE_SOFTWARE_SERIAL ? "true" : "false");
-  pos += snprintf(status + pos, sizeof(status), "unique_id: %s\n", unique_id);
+  pos += snprintf(status + pos, sizeof(status), "unique_id: %s\n",
+                  unique_id.value());
   pos += snprintf(status + pos, sizeof(status), "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
                   last_connect.value());
@@ -429,7 +434,8 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "rssi: %d dBm\n", WiFi.RSSI());
   pos += snprintf(status + pos, sizeof(status), "free_heap: %u B\n",
                   free_heap.value());
-  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n", reset_code);
+  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n",
+                  reset_code.value());
   pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
                   loopDuration.value());
   pos += snprintf(status + pos, sizeof(status), "max_loop_duration: %u us\r\n",
@@ -487,37 +493,53 @@ void publishStatus() {
   loopDuration.publish();
   maxLoopDuration.publish();
   free_heap.publish();
-  mqtt.publish("device/reset_code", 0, false, String(reset_code).c_str());
-
-  mqtt.publish("device/unique_id", 0, false, unique_id);
+  reset_code.publish();
+  unique_id.publish();
 
   // ebus/device/firmware
-  mqtt.publish("device/firmware/version", 0, false, AUTO_VERSION);
-  mqtt.publish("device/firmware/sdk", 0, false, ESP.getSdkVersion());
-  mqtt.publish("device/firmware/async", 0, false,
-               USE_ASYNCHRONOUS ? "true" : "false");
-  mqtt.publish("device/firmware/software_serial", 0, false,
-               USE_SOFTWARE_SERIAL ? "true" : "false");
+  version = AUTO_VERSION;
+  sdk = ESP.getSdkVersion();
+  async = USE_ASYNCHRONOUS ? "true" : "false";
+  software_serial = USE_SOFTWARE_SERIAL ? "true" : "false";
 
   // ebus/device/ebus
   pwm = get_pwm();
-
 #ifdef EBUS_INTERNAL
   ebusAddress = ebus_address;
   commandDistance = comand_distance;
 #endif
+
+  // ebus/device/wifi
+  last_connect.publish();
+  reconnect_count.publish();
+  rssi = WiFi.RSSI();
 }
 
 void publishValues() {
   // ebus/device
   free_heap = ESP.getFreeHeap();
+  reset_code.touch();
+  unique_id.touch();
+
+  // ebus/device/firmware
+  version.touch();
+  sdk.touch();
+  async.touch();
+  software_serial.touch();
+
+  // ebus/device/ebus
+  pwm.touch();
+#ifdef EBUS_INTERNAL
+  ebusAddress.touch();
+  commandDistance.touch();
+#endif
 
   // ebus/device/wifi
   last_connect.touch();
   reconnect_count.touch();
   rssi = WiFi.RSSI();
 
-  // ebus/arbitration
+  // ebus/state/arbitration
   nbrArbitrations = Bus._nbrArbitrations;
 
   nbrWon = Bus._nbrWon1 + Bus._nbrWon2;
@@ -679,7 +701,7 @@ void setup() {
     iotWebConf.doLoop();
   }
 
-  mqtt.setUniqueId(unique_id);
+  mqtt.setUniqueId(unique_id.value().c_str());
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
