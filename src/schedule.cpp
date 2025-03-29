@@ -360,5 +360,5 @@ void Schedule::publishValue(Command *command,
   std::string topic = "values/" + name;
 
 
-  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, true, payload.c_str());
 }
