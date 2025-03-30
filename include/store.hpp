@@ -19,10 +19,10 @@ struct Command {
   bool active;                   // active sending of command
   uint32_t interval;        // minimum interval between two commands in seconds
   uint32_t last;            // last time of the successful command
-  bool master;              // true..master false..slave
-  size_t position;          // starting byte in payload (DBx)
+  bool master;              // value of interest is in master or slave part
+  size_t position;          // starting byte in interested part
   ebus::Datatype datatype;  // ebus datatype
-  std::string topic;        // mqtt subtopic below "values/"
+  std::string topic;        // mqtt topic below "values/"
   bool ha;                  // home assistant support for auto discovery
   std::string ha_class;     // home assistant device_class
 };

@@ -221,184 +221,221 @@ At the configuration web page you can set
 ### MQTT interface
 - Basic device data, settings and various counters are published regularly.
  
-The device's **root topic** begins with ebus/, followed by the last 6 characters of its MAC address as a unique device ID and a trailing slash.
-For e.g. `ebus/8406AC/`
+The device's **root topic** begins with ebus/, followed by the last 6 characters of its MAC address as a unique device ID and a trailing slash. For e.g. `ebus/8406ac/`
 
-The following subtopics are available on every device.
-|***subtopic***                 |***description***
+The following topics are available on every device.
+|***topic***                    |***description***
 |:-                             |:-
-|**output**                     |
-|device                         |information about your device                                   
-|device/ebus                    |basic ebus adapter settings (configuration)
-|device/firmware                |details of installed firmware
-|device/wifi                    |wifi details
-|&nbsp;                         |&nbsp;
-|**counter**                    | 
+|settings                       |settings of the ebus adapter
+|firmware                       |details of the installed firmware
+|state                          |various status/counter information  
+|state/wifi                     |wifi related information
 |state/arbitration              |arbitration over common interface (e.g. ebusd)
-|&nbsp;                         |&nbsp;
-|**input**                      |
-|cmd/restart                    |restarting of the device 
+|&nbsp;                         |
+|**communcation**               |
+|request                        |JSON encoded request 
+|response                       |JSON encoded response / error message
 
 
 ### MQTT interface with firmware EBUS_INTERNAL=1
-- `EBUS_INTERNAL=1` adds a scheduler and an eBUS command buffer to the device.
+- `EBUS_INTERNAL=1` adds a scheduler, an ebus command buffer and home assistant support to the device.
 
-The following subtopics are available.
-|***subtopic***                 |***description***
+The following topics are available.
+|***topic***                    |***description***
 |:-                             |:-
-|**output**                     |
 |commands                       |installed commands
 |values                         |received values of installed commands
-|sent                           |result of send command: subtopic=master; value=slave
-|raw                            |values of raw data printout: subtopic=master; value=slave
-|&nbsp;                         |&nbsp;
-|**counter**                    |
 |state/internal/messages        |processed messages
 |state/internal/errors          |errors of finite state machine  
 |state/internal/resets          |resets of finite state machine 
 |state/internal/requets         |bus requests (arbitration)
-|&nbsp;                         |&nbsp;
-|**input**                      |
-|cmd/insert                     |inserting (installing) a new command
-|cmd/remove                     |removing an installed command
-|cmd/list                       |list all installed commands
-|cmd/load                       |loading (install) of saved commands
-|cmd/save                       |saving of current installed commands
-|cmd/wipe                       |wiping of saved commands
-|cmd/send                       |sending of given ebus command(s) once
-|cmd/raw                        |toggling of raw data printout
-|cmd/filter                     |adding filter(s) for raw data printout
-|&nbsp;                         |&nbsp;
-|**response of input**          |
-|cmd/loading                    |bytes of loaded commands
-|cmd/saving                     |bytes of saved commands
-|cmd/wiping                     |bytes of wiped commands
-|cmd/error                      |message of last occurred error
 
 
 ### Details of MQTT commands
+The MQTT command interface is divided into two topics for bidirectional communication.
+- Commands can be sent to the **request** topic.
+- After processing, a response is sent to the **response** topic.
+- Only **JSON-encoded** messages are processed.
+- To distinguish between commands, each message contains a **unique ID**.
+
 The provided examples were created using `Mosquitto` in a `Linux shell`. The `server IP address or hostname` and `unique device ID` must be adjusted to your environment.
 
 - `server IP address or hostname = server`
-- `unique device ID = 8406AC`
-- `root topic = ebus/8406AC/`
+- `unique device ID = 8406ac`
+- `request topic = ebus/8406ac/request`
+- `response topic = ebus/8406ac/response`
 
 **Restarting of the device**
 ```
-* subtopic: cmd/restart
-* payload:  true
+id: restart
+payload:
+{
+  "id": "restart",
+  "value": true
+}
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/restart' -m 'true' 
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart","value":true}' 
 ```
 
 **Inserting (Installing) a new command**
 ```
-* subtopic: cmd/insert
-* payload:  ebus command in form of "ZZPBSBNNDBx" with a UNIQUE_KEY for e.g.
+id: insert
+payload:
 {
-  "key": "UNIQUE_KEY",               // unique key of command
-  "command": "fe070009",             // ebus command as vector of "ZZPBSBNNDBx"
-  "unit": "°C",                      // unit of the received data
-  "active": false,                   // active sending of command
-  "interval": 0,                     // minimum interval between two commands in seconds
-  "master": true,                    // true..master false..slave
-  "position": 1,                     // starting byte in payload (DBx)
-  "datatype": "DATA2b",              // ebus datatype
-  "topic": "outdoor/temperature",    // mqtt subtopic below "values/"
-  "ha": true,                        // home assistant support for auto discovery
-  "ha_class": "temperature"          // home assistant device_class
+  "id": "insert",
+  "commands": [
+    {
+      "key": "UNIQUE_KEY",               // unique key of command
+      "command": "ZZPBSBNNDBx",          // ebus command as vector of "ZZPBSBNNDBx"
+      "unit": "°C",                      // unit of the received data
+      "active": false,                   // active sending of command
+      "interval": 0,                     // minimum interval between two commands in seconds
+      "master": true,                    // value of interest is in master or slave part
+      "position": 1,                     // starting byte in interested part
+      "datatype": "DATA2b",              // ebus datatype
+      "topic": "outdoor_temperature",    // mqtt topic below "values/"
+      "ha": true,                        // home assistant support for auto discovery
+      "ha_class": "temperature"          // home assistant device_class
+    },
+    {
+    ...
+    }
+  ]
 }
 
 ebus datatype: BCD, UINT8, INT8, UINT16, INT16, UINT32, INT32, DATA1b, DATA1c, DATA2b, DATA2c, FLOAT (values as 1/1000)
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/insert' -m '{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2b","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2b","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"},{"key":"30","command":"08b5090329e201","unit":"W","active":false,"interval":0,"master":false,"position":3,"datatype":"UINT8","topic":"heating/output","ha":true,"ha_class":"power"}]}'
 ```
 
 **Removing an installed command**
 ```
-* subtopic: cmd/remove
-* payload:  UNIQUE_KEY of ebus command
+id: remove
+payload:
 {
-  "key": "UNIQUE_KEY"
+  "id": "remove",
+  "keys": [
+    "UNIQUE_KEY",
+    ...
+  ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/remove' -m '{"key":"01"}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01","02","03"]}'
 ```
 
 **List all installed commands**
 ```
-* subtopic: cmd/list
-* payload:  true
+id: list
+payload:
+{
+  "id": "list",
+  "value": true
+}
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/list' -m 'true'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"list","value":true}'
 ```
 
 **Loading (install) of saved commands**
 ```
-* subtopic: cmd/load
-* payload:  true
+id: load
+payload:
+{
+  "id": "load",
+  "value": true
+}
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/load' -m 'true'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"load","value":true}'
 ```
 
 **Saving of current installed commands**
 ```
-* subtopic: cmd/save
-* payload:  true
+id: save
+payload:
+{
+  "id": "save",
+  "value": true
+}
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/save' -m 'true'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"save","value":true}'
 ```
 
 **Wiping of saved commands**
 ```
-* subtopic: cmd/wipe
-* payload:  true
+id: wipe
+payload:
+{
+  "id": "wipe",
+  "value": true
+}
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/wipe' -m 'true'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe","value":true}'
 ```
 
 **Sending of given ebus command(s) once**
 ```
-* subtopic: cmd/send
-* payload:  array of ebus command(s) in form of "ZZPBSBNNDBx" for e.g.
-[
-  "05070400",
-  "15070400"
-]
+id: send
+payload:
+{
+  "id": "send",
+  "commands": [
+    "ZZPBSBNNDBx",
+    ...
+  ]
+}
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/send' -m '["05070400","15070400"]'
-```
-
-**Toggling of the raw data printout**
-```
-* subtopic: cmd/raw
-* payload:  true | false
-```
-```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/raw' -m 'true'
-```
-```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/raw' -m 'false'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"send","commands":["05070400","15070400"]}'
 ```
 
-**Adding filter(s) for raw data printout**
+**Switching data forwarding (including filters)**
 ```
-* subtopic: cmd/filter
-* payload:  array of sequences for e.g.
-[
-  "0700",
-  "fe"
-]
+id: forward
+payload:
+{
+  "id": "forward",
+  "value": true,
+  "filters": [
+    "DB(x)",
+    ...
+  ]
+}
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406AC/cmd/filter' -m '["0700","fe"]'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":true,"filters":["0700","fe"]}'
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":false}'
 ```
 
+### Home Assistant Support
+When a command is loaded with a true **ha** flag, the an MQTT topic below **homeassistant** is automatically created. A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. According to the above data it should look like the following example.
+```
+topic: homeassistant/sensor/ebus8406ac/outdoor_temperature/config
+value:
+{
+  "name": "outdoor temperature",
+  "device_class": "temperature",
+  "state_topic": "ebus/8406ac/values/outdoor_temperature",
+  "unit_of_measurement": "°C",
+  "unique_id": "ebus8406ac_01",
+  "value_template": "{{value_json.value}}",
+  "device": {
+    "identifiers": "ebus8406ac",
+    "name": "esp-ebus",
+    "manufacturer": "",
+    "model": "",
+    "model_id": "",
+    "serial_number": "8406ac",
+    "hw_version": "",
+    "sw_version": "",
+    "configuration_url": "http://esp-ebus.local"
+  }
+}
+```
