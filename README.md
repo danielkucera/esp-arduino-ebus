@@ -307,7 +307,7 @@ payload:
 ebus datatype: BCD, UINT8, INT8, UINT16, INT16, UINT32, INT32, DATA1b, DATA1c, DATA2b, DATA2c, FLOAT (values as 1/1000)
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2b","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"},{"key":"30","command":"08b5090329e201","unit":"W","active":false,"interval":0,"master":false,"position":3,"datatype":"UINT8","topic":"heating/output","ha":true,"ha_class":"power"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2b","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
 ```
 
 **Removing an installed command**
@@ -323,7 +323,7 @@ payload:
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01","30"]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01"]}'
 ```
 
 **List all installed commands**
@@ -425,28 +425,6 @@ payload:
   "state_topic": "ebus/8406ac/values/outdoor_temperature",
   "unit_of_measurement": "°C",
   "unique_id": "ebus8406ac_01",
-  "value_template": "{{value_json.value}}",
-  "device": {
-    "identifiers": "ebus8406ac",
-    "name": "esp-ebus",
-    "manufacturer": "",
-    "model": "",
-    "model_id": "",
-    "serial_number": "8406ac",
-    "hw_version": "",
-    "sw_version": "",
-    "configuration_url": "http://esp-ebus.local"
-  }
-}
-
-topic: homeassistant/sensor/ebus8406ac/heating_output/config
-payload:
-{
-  "name": "heating output",
-  "device_class": "power",
-  "state_topic": "ebus/8406ac/values/heating_output",
-  "unit_of_measurement": "W",
-  "unique_id": "ebus8406ac_30",
   "value_template": "{{value_json.value}}",
   "device": {
     "identifiers": "ebus8406ac",
