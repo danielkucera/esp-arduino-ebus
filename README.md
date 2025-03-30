@@ -238,7 +238,7 @@ The following topics are available on every device.
 
 
 ### MQTT interface with firmware EBUS_INTERNAL=1
-- `EBUS_INTERNAL=1` adds a scheduler, an ebus command buffer and home assistant support to the device.
+A firmware with `EBUS_INTERNAL=1` adds a scheduler, a command buffer and Home Assistant support to the device.
 
 The following topics are available.
 |***topic***                    |***description***
