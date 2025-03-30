@@ -323,7 +323,7 @@ payload:
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01","02","03"]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01","30"]}'
 ```
 
 **List all installed commands**
@@ -415,16 +415,38 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":fal
 ```
 
 ### Home Assistant Support
-When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. According to the above data it should look like the following example.
+When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. According to the above data it should look like the following examples.
 ```
 topic: homeassistant/sensor/ebus8406ac/outdoor_temperature/config
-value:
+payload:
 {
   "name": "outdoor temperature",
   "device_class": "temperature",
   "state_topic": "ebus/8406ac/values/outdoor_temperature",
   "unit_of_measurement": "°C",
   "unique_id": "ebus8406ac_01",
+  "value_template": "{{value_json.value}}",
+  "device": {
+    "identifiers": "ebus8406ac",
+    "name": "esp-ebus",
+    "manufacturer": "",
+    "model": "",
+    "model_id": "",
+    "serial_number": "8406ac",
+    "hw_version": "",
+    "sw_version": "",
+    "configuration_url": "http://esp-ebus.local"
+  }
+}
+
+topic: homeassistant/sensor/ebus8406ac/heating_output/config
+payload:
+{
+  "name": "heating output",
+  "device_class": "power",
+  "state_topic": "ebus/8406ac/values/heating_output",
+  "unit_of_measurement": "W",
+  "unique_id": "ebus8406ac_30",
   "value_template": "{{value_json.value}}",
   "device": {
     "identifiers": "ebus8406ac",
