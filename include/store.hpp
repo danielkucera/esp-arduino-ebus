@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ArduinoJson.h>
 #include <Datatypes.h>
 
 #include <deque>
@@ -30,23 +31,26 @@ class Store {
  public:
   Store() = default;
 
-  void enqueCommand(const char *payload);
-  void insertCommand(const char *payload);
-  void removeCommand(const char *payload);
+  void insertCommands(const JsonArray &commands);
+  void removeCommands(const JsonArray &keys);
 
   void publishCommands();
+
+  void loadCommands();
+  void saveCommands() const;
+  static void wipeCommands();
+
   const std::string getCommands() const;
 
   void doLoop();
+
+  const size_t getActiveCommands() const;
+  const size_t getPassiveCommands() const;
 
   const bool active() const;
   Command *nextActiveCommand();
   std::vector<Command *> findPassiveCommands(
       const std::vector<uint8_t> &master);
-
-  void loadCommands();
-  void saveCommands() const;
-  static void wipeCommands();
 
  private:
   std::vector<Command> allCommands;
@@ -54,9 +58,13 @@ class Store {
   size_t activeCommands = 0;
   size_t passiveCommands = 0;
 
-  std::deque<std::string> newCommands;
+  std::deque<Command> newCommands;
   uint32_t distanceInsert = 300;
   uint32_t lastInsert = 0;
+
+  std::deque<std::string> remCommands;
+  uint32_t distanceRemove = 300;
+  uint32_t lastRemove = 0;
 
   std::deque<const Command *> pubCommands;
   uint32_t distancePublish = 100;
@@ -64,11 +72,20 @@ class Store {
 
   void countCommands();
 
-  void checkNewCommands();
-  void checkPubCommands();
+  void checkInsertCommands();
+  void checkRemoveCommands();
+  void checkPublishCommands();
+
+  Command createCommand(const JsonDocument &doc);
+
+  void insertCommand(const Command &command);
+  void removeCommand(const std::string &key);
 
   const std::string serializeCommands() const;
   void deserializeCommands(const char *payload);
+
+  static void publishResponse(const std::string &id, const std::string &status,
+                              const size_t &bytes = 0);
 
   static void publishCommand(const Command *command, const bool remove);
 

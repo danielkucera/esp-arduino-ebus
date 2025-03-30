@@ -1,11 +1,9 @@
 #include "schedule.hpp"
 
-#include <ArduinoJson.h>
-
 #include "bus.hpp"
 #include "mqtt.hpp"
 
-// messages
+// ebus/<unique_id>/state/internal/messages
 Track<uint32_t> messagesTotal("state/internal/messages/total", 10);
 
 Track<uint32_t> messagesPassiveMS("state/internal/messages/passiveMS", 10);
@@ -19,7 +17,7 @@ Track<uint32_t> messagesActiveMS("state/internal/messages/activeMS", 10);
 Track<uint32_t> messagesActiveMM("state/internal/messages/activeMM", 10);
 Track<uint32_t> messagesActiveBC("state/internal/messages/activeBC", 10);
 
-// errors
+// ebus/<unique_id>/state/internal/errors
 Track<uint32_t> errorsTotal("state/internal/errors/total", 10);
 
 Track<uint32_t> errorsPassive("state/internal/errors/passive", 10);
@@ -47,14 +45,14 @@ Track<uint32_t> errorsActiveSlave("state/internal/errors/active/slave", 10);
 Track<uint32_t> errorsActiveSlaveACK("state/internal/errors/active/slaveACK",
                                      10);
 
-// resets
+// ebus/<unique_id>/state/internal/resets
 Track<uint32_t> resetsTotal("state/internal/resets/total", 10);
 Track<uint32_t> resetsPassive00("state/internal/resets/passive00", 10);
 Track<uint32_t> resetsPassive0704("state/internal/resets/passive0704", 10);
 Track<uint32_t> resetsPassive("state/internal/resets/passive", 10);
 Track<uint32_t> resetsActive("state/internal/resets/active", 10);
 
-// requests
+// ebus/<unique_id>/state/internal/requests
 Track<uint32_t> requestsTotal("state/internal/requests/total", 10);
 Track<uint32_t> requestsWon("state/internal/requests/won", 10);
 Track<uint32_t> requestsLost("state/internal/requests/lost", 10);
@@ -77,38 +75,18 @@ void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
 }
 
-void Schedule::publishRaw(const bool enable) { raw = enable; }
-
-void Schedule::handleFilter(const char *payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqtt.publish("cmd/error", 0, false, err.c_str());
-  } else {
-    rawFilters.clear();
-    JsonArray array = doc.as<JsonArray>();
-    for (JsonVariant variant : array)
-      rawFilters.push_back(ebus::Sequence::to_vector(variant));
-  }
+void Schedule::handleSend(const JsonArray &commands) {
+  sendCommands.clear();
+  for (JsonVariant command : commands)
+    sendCommands.push_back(ebus::Sequence::to_vector(command));
 }
 
-void Schedule::handleSend(const char *payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
+void Schedule::toggleForward(const bool enable) { forward = enable; }
 
-  if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqtt.publish("cmd/error", 0, false, err.c_str());
-  } else {
-    sendCommands.clear();
-    JsonArray array = doc.as<JsonArray>();
-    for (JsonVariant variant : array)
-      sendCommands.push_back(ebus::Sequence::to_vector(variant));
-  }
+void Schedule::handleForwadFilter(const JsonArray &filters) {
+  forwardfilters.clear();
+  for (JsonVariant filter : filters)
+    forwardfilters.push_back(ebus::Sequence::to_vector(filter));
 }
 
 void Schedule::nextCommand() {
@@ -253,25 +231,20 @@ void Schedule::errorCallback(const std::string &str) {
 void Schedule::processActive(const std::vector<uint8_t> &master,
                              const std::vector<uint8_t> &slave) {
   if (send)
-    publishSend(sendCommand, slave);
+    publishResponse("send", sendCommand, slave);
   else
     publishValue(scheduleCommand, slave);
 }
 
 void Schedule::processPassive(const std::vector<uint8_t> &master,
                               const std::vector<uint8_t> &slave) {
-  if (raw) {
-    size_t count = std::count_if(rawFilters.begin(), rawFilters.end(),
+  if (forward) {
+    size_t count = std::count_if(forwardfilters.begin(), forwardfilters.end(),
                                  [&master](const std::vector<uint8_t> &vec) {
                                    return ebus::Sequence::contains(master, vec);
                                  });
-    if (count > 0 || rawFilters.size() == 0) {
-      std::string topic = "raw/" + ebus::Sequence::to_string(master);
-      std::string payload = ebus::Sequence::to_string(slave);
-      if (payload.empty()) payload = "-";
-
-      mqtt.publish(topic.c_str(), 0, false, payload.c_str());
-    }
+    if (count > 0 || forwardfilters.size() == 0)
+      publishResponse("forward", master, slave);
   }
 
   std::vector<Command *> pasCommands = store.findPassiveCommands(master);
@@ -284,12 +257,16 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
   }
 }
 
-void Schedule::publishSend(const std::vector<uint8_t> &master,
-                           const std::vector<uint8_t> &slave) {
-  std::string topic = "sent/" + ebus::Sequence::to_string(master);
-  std::string payload = ebus::Sequence::to_string(slave);
-
-  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
+void Schedule::publishResponse(const std::string &id,
+                               const std::vector<uint8_t> &master,
+                               const std::vector<uint8_t> &slave) {
+  std::string payload;
+  JsonDocument doc;
+  doc["id"] = id;
+  doc["master"] = ebus::Sequence::to_string(master);
+  doc["slave"] = ebus::Sequence::to_string(slave);
+  serializeJson(doc, payload);
+  mqtt.publish("response", 0, false, payload.c_str());
 }
 
 void Schedule::publishValue(Command *command,
@@ -358,7 +335,6 @@ void Schedule::publishValue(Command *command,
                  [](unsigned char c) { return std::tolower(c); });
 
   std::string topic = "values/" + name;
-
 
   mqtt.publish(topic.c_str(), 0, true, payload.c_str());
 }

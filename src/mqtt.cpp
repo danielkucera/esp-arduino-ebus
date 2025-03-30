@@ -1,5 +1,7 @@
 #include "mqtt.hpp"
 
+#include <ArduinoJson.h>
+
 #include "main.hpp"
 #include "schedule.hpp"
 #include "store.hpp"
@@ -15,7 +17,7 @@ Mqtt::Mqtt() {
   client.onPublish(onPublish);
 }
 
-void Mqtt::setUniqueId(const char* id) {
+void Mqtt::setUniqueId(const char *id) {
   uniqueId = id;
   rootTopic = "ebus/" + uniqueId + "/";
 }
@@ -48,110 +50,56 @@ uint16_t Mqtt::subscribe(const char *topic, uint8_t qos) {
 }
 
 void Mqtt::onConnect(bool sessionPresent) {
-  std::string topic = mqtt.getRootTopic() + "cmd/restart";
+  std::string topic = mqtt.getRootTopic() + "request";
   mqtt.subscribe(topic.c_str(), 0);
-  // Restarting of the device
-  // payload: true
-
-#ifdef EBUS_INTERNAL
-  topic = mqtt.getRootTopic() + "cmd/insert";
-  mqtt.subscribe(topic.c_str(), 0);
-  // Inserting (Installing) a new command
-  // payload: ebus command in form of "ZZPBSBNNDBx" with a UNIQUE_KEY for e.g.
-  // {
-  //   "key": "UNIQUE_KEY",
-  //   "command": "fe070009",
-  //   "unit": "°C",
-  //   "active": false,
-  //   "interval": 0,
-  //   "master": true,
-  //   "position": 1,
-  //   "datatype": "DATA2b",
-  //   "topic": "outdoor/temperature",
-  //   "ha": true,
-  //   "ha_class": "temperature"
-  // }
-
-  topic = mqtt.getRootTopic() + "cmd/remove";
-  mqtt.subscribe(topic.c_str(), 0);
-  // Removing an installed command
-  // payload: UNIQUE_KEY of ebus command
-  // {
-  //   "key": "UNIQUE_KEY"
-  // }
-
-  topic = mqtt.getRootTopic() + "cmd/list";
-  mqtt.subscribe(topic.c_str(), 0);
-  // List all installed commands
-  // payload: true
-
-  topic = mqtt.getRootTopic() + "cmd/load";
-  mqtt.subscribe(topic.c_str(), 0);
-  // Loading (install) of saved commands
-  // payload: true
-
-  topic = mqtt.getRootTopic() + "cmd/save";
-  mqtt.subscribe(topic.c_str(), 0);
-  // Saving of current installed commands
-  // payload: true
-
-  topic = mqtt.getRootTopic() + "cmd/wipe";
-  mqtt.subscribe(topic.c_str(), 0);
-  // Wiping of saved commands
-  // payload: true
-
-  topic = mqtt.getRootTopic() + "cmd/send";
-  mqtt.subscribe(topic.c_str(), 0);
-  // Sending of given ebus command(s) once
-  // payload: array of ebus command(s) in form of "ZZPBSBNNDBx" for e.g.
-  // [
-  //   "05070400",
-  //   "15070400"
-  // ]
-
-  topic = mqtt.getRootTopic() + "cmd/raw";
-  mqtt.subscribe(topic.c_str(), 0);
-  // Toggling of the raw data printout
-  // payload: true | false
-
-  topic = mqtt.getRootTopic() + "cmd/filter";
-  mqtt.subscribe(topic.c_str(), 0);
-  // Adding filter(s) for raw data printout
-  // payload: array of sequences for e.g.
-  // [
-  //   "0700",
-  //   "fe"
-  // ]
-#endif
 }
 
 void Mqtt::onMessage(const char *topic, const char *payload,
                      AsyncMqttClientMessageProperties properties, size_t len,
                      size_t index, size_t total) {
-  std::string tmp = topic;
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, payload);
 
-  if (tmp.rfind("restart") != std::string::npos) {
-    if (String(payload).equalsIgnoreCase("true")) reset();
-  }
+  if (error) {
+    std::string errorPayload;
+    JsonDocument errorDoc;
+    errorDoc["error"] = error.c_str();
+    serializeJson(errorDoc, errorPayload);
+    mqtt.publish("response", 0, false, errorPayload.c_str());
+  } else {
+    std::string id = doc["id"].as<std::string>();
+    if (id.compare("restart") == 0) {
+      boolean value = doc["value"].as<boolean>();
+      if (value) reset();
+    }
 #ifdef EBUS_INTERNAL
-  if (tmp.rfind("insert") != std::string::npos) {
-    if (String(payload).length() > 0) store.enqueCommand(payload);
-  } else if (tmp.rfind("remove") != std::string::npos) {
-    if (String(payload).length() > 0) store.removeCommand(payload);
-  } else if (tmp.rfind("list") != std::string::npos) {
-    if (String(payload).equalsIgnoreCase("true")) store.publishCommands();
-  } else if (tmp.rfind("load") != std::string::npos) {
-    if (String(payload).equalsIgnoreCase("true")) store.loadCommands();
-  } else if (tmp.rfind("save") != std::string::npos) {
-    if (String(payload).equalsIgnoreCase("true")) store.saveCommands();
-  } else if (tmp.rfind("wipe") != std::string::npos) {
-    if (String(payload).equalsIgnoreCase("true")) store.wipeCommands();
-  } else if (tmp.rfind("send") != std::string::npos) {
-    if (String(payload).length() > 0) schedule.handleSend(payload);
-  } else if (tmp.rfind("raw") != std::string::npos) {
-    schedule.publishRaw(String(payload).equalsIgnoreCase("true"));
-  } else if (tmp.rfind("filter") != std::string::npos) {
-    if (String(payload).length() > 0) schedule.handleFilter(payload);
-  }
+    if (id.compare("insert") == 0) {
+      JsonArray commands = doc["commands"].as<JsonArray>();
+      if (commands != nullptr) store.insertCommands(commands);
+    } else if (id.compare("remove") == 0) {
+      JsonArray keys = doc["keys"].as<JsonArray>();
+      if (keys != nullptr) store.removeCommands(keys);
+    } else if (id.compare("list") == 0) {
+      boolean value = doc["value"].as<boolean>();
+      if (value) store.publishCommands();
+    } else if (id.compare("load") == 0) {
+      boolean value = doc["value"].as<boolean>();
+      if (value) store.loadCommands();
+    } else if (id.compare("save") == 0) {
+      boolean value = doc["value"].as<boolean>();
+      if (value) store.saveCommands();
+    } else if (id.compare("wipe") == 0) {
+      boolean value = doc["value"].as<boolean>();
+      if (value) store.wipeCommands();
+    } else if (id.compare("send") == 0) {
+      JsonArray commands = doc["commands"].as<JsonArray>();
+      if (commands != nullptr) schedule.handleSend(commands);
+    } else if (id.compare("forward") == 0) {
+      JsonArray filters = doc["filters"].as<JsonArray>();
+      if (filters != nullptr) schedule.handleForwadFilter(filters);
+      boolean value = doc["value"].as<boolean>();
+      schedule.toggleForward(value);
+    }
 #endif
+  }
 }
