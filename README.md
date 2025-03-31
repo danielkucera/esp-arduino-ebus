@@ -219,9 +219,8 @@ At the configuration web page you can set
 
 
 ### MQTT interface
-- Basic device data, settings and various counters are published regularly.
- 
-The device's **root topic** begins with ebus/, followed by the last 6 characters of its MAC address as a unique device ID and a trailing slash. For e.g. `ebus/8406ac/`
+The device's MQTT **root topic** begins with ebus/, followed by the last 6 characters of its MAC address as a unique device ID and a trailing slash. For e.g. `ebus/8406ac/`.
+Basic device data, settings and various counters are published regularly.
 
 The following topics are available on every device.
 |***topic***                    |***description***
