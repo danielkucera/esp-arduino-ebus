@@ -257,6 +257,21 @@ The MQTT command interface is divided into two topics for bidirectional communic
 - Only **JSON-encoded** messages are processed.
 - To distinguish between commands, each message contains a **unique ID**.
 
+Available MQTT commands.
+|***command***    |***description***                                             |***EBUS_INTERNAL=1***     
+|:-               |:-                                                            |:-
+|restart          |Restarting of the device                                      |
+|insert           |Inserting (Installing) of new commands                        |x
+|remove           |Removing installed commands                                   |x
+|list             |Output of installed commands                                  |x
+|load             |Loading (Installing) saved commands                           |x
+|save             |Saving the currently installed commands                       |x
+|wipe             |Wiping of the saved commands                                  |x
+|send             |Sending ebus commands once                                    |x
+|forward          |Activate/deactivate data forwarding (including filtering)     |x
+
+
+### Examples
 The provided examples were created using `Mosquitto` in a `Linux shell`. The `server IP address or hostname` and `unique device ID` must be adjusted to your environment.
 
 - `server IP address or hostname = server`
@@ -277,7 +292,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart","value":true}' 
 ```
 
-**Inserting (Installing) a new command**
+**Inserting (Installing) of new commands**
 ```
 id: insert
 payload:
@@ -309,7 +324,7 @@ ebus datatype: BCD, UINT8, INT8, UINT16, INT16, UINT32, INT32, DATA1b, DATA1c, D
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2b","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
 ```
 
-**Removing an installed command**
+**Removing installed commands**
 ```
 id: remove
 payload:
@@ -325,7 +340,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01"]}'
 ```
 
-**List all installed commands**
+**Output of installed commands**
 ```
 id: list
 payload:
@@ -338,7 +353,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"list","value":true}'
 ```
 
-**Loading (install) of saved commands**
+**Loading (Installing) saved commands**
 ```
 id: load
 payload:
@@ -351,7 +366,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"load","value":true}'
 ```
 
-**Saving of current installed commands**
+**Saving the currently installed commands**
 ```
 id: save
 payload:
@@ -364,7 +379,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"save","value":true}'
 ```
 
-**Wiping of saved commands**
+**Wiping of the saved commands**
 ```
 id: wipe
 payload:
@@ -377,7 +392,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe","value":true}'
 ```
 
-**Sending of given ebus command(s) once**
+**Sending ebus commands once**
 ```
 id: send
 payload:
@@ -393,7 +408,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"send","commands":["05070400","15070400"]}'
 ```
 
-**Switching data forwarding (including filters)**
+**Activate/deactivate data forwarding (including filtering)**
 ```
 id: forward
 payload:
