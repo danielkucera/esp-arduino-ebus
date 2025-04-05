@@ -10,13 +10,16 @@ class Mqtt {
  public:
   Mqtt();
 
-  void setUniqueId(const char* id);
+  void setUniqueId(const char *id);
   const std::string &getUniqueId() const;
 
   const std::string &getRootTopic() const;
 
   void setServer(const char *host, uint16_t port);
   void setCredentials(const char *username, const char *password = nullptr);
+
+  void setWill(const char *topic, uint8_t qos, bool retain,
+               const char *payload = nullptr, size_t length = 0);
 
   void connect();
   bool connected() const;
