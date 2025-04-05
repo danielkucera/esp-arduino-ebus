@@ -453,3 +453,42 @@ payload:
   }
 }
 ```
+
+### Individual Home Assistant configuration examples (MQTT Discovery)
+
+**MQTT Device - Diagnostic - Uptime of device (DD HH:MM:SS)**
+```
+topic: homeassistant/sensor/ebus8406ac/uptime/config
+payload:
+{
+  "name": "Uptime",
+  "entity_category": "diagnostic",
+  "unique_id": "ebus8406ac_uptime",
+  "state_topic": "ebus/8406ac/state/uptime",
+  "value_template": "{{timedelta(seconds=((value|float)/1000)|int)}}",
+  "icon": "mdi:clock",
+  "device": {
+    "identifiers": "ebus8406ac"
+  }
+}
+```
+
+**MQTT Device - Configuration - Restart button**
+```
+topic: homeassistant/button/ebus8406ac/restart/config
+payload:
+{
+  "name": "Restart",
+  "device_class": "restart",
+  "entity_category": "config",
+  "unique_id": "ebus8406ac_restart",
+  "availability_topic": "ebus/8406ac/state/available",
+  "command_topic": "ebus/8406ac/request",
+  "payload_press": "{\"id\":\"restart\",\"value\":true}",
+  "qos": 0,
+  "retain": false,
+  "device": {
+    "identifiers": "ebus8406ac"
+  }
+}
+```
