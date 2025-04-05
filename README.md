@@ -219,9 +219,8 @@ At the configuration web page you can set
 
 
 ### MQTT interface
-- Basic device data, settings and various counters are published regularly.
- 
-The device's **root topic** begins with ebus/, followed by the last 6 characters of its MAC address as a unique device ID and a trailing slash. For e.g. `ebus/8406ac/`
+The device's MQTT **root topic** begins with ebus/, followed by the last 6 characters of its MAC address as a unique device ID and a trailing slash. For e.g. `ebus/8406ac/`.
+Basic device data, settings and various counters are published regularly.
 
 The following topics are available on every device.
 |***topic***                    |***description***
@@ -238,7 +237,7 @@ The following topics are available on every device.
 
 
 ### MQTT interface with firmware EBUS_INTERNAL=1
-- `EBUS_INTERNAL=1` adds a scheduler, an ebus command buffer and home assistant support to the device.
+A firmware with `EBUS_INTERNAL=1` adds a scheduler, a command buffer and Home Assistant support to the device.
 
 The following topics are available.
 |***topic***                    |***description***
@@ -258,6 +257,21 @@ The MQTT command interface is divided into two topics for bidirectional communic
 - Only **JSON-encoded** messages are processed.
 - To distinguish between commands, each message contains a **unique ID**.
 
+Available MQTT commands.
+|***command***    |***description***                                             |***EBUS_INTERNAL=1***     
+|:-               |:-                                                            |:-
+|restart          |Restarting of the device                                      |
+|insert           |Inserting (Installing) of new commands                        |x
+|remove           |Removing installed commands                                   |x
+|list             |Output of installed commands                                  |x
+|load             |Loading (Installing) saved commands                           |x
+|save             |Saving the currently installed commands                       |x
+|wipe             |Wiping of the saved commands                                  |x
+|send             |Sending ebus commands once                                    |x
+|forward          |Activate/deactivate data forwarding (including filtering)     |x
+
+
+### Examples
 The provided examples were created using `Mosquitto` in a `Linux shell`. The `server IP address or hostname` and `unique device ID` must be adjusted to your environment.
 
 - `server IP address or hostname = server`
@@ -278,7 +292,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart","value":true}' 
 ```
 
-**Inserting (Installing) a new command**
+**Inserting (Installing) of new commands**
 ```
 id: insert
 payload:
@@ -286,8 +300,8 @@ payload:
   "id": "insert",
   "commands": [
     {
-      "key": "UNIQUE_KEY",               // unique key of command
-      "command": "ZZPBSBNNDBx",          // ebus command as vector of "ZZPBSBNNDBx"
+      "key": "01",                       // unique key of command
+      "command": "fe070009",             // ebus command as vector of "ZZPBSBNNDBx"
       "unit": "°C",                      // unit of the received data
       "active": false,                   // active sending of command
       "interval": 0,                     // minimum interval between two commands in seconds
@@ -310,7 +324,7 @@ ebus datatype: BCD, UINT8, INT8, UINT16, INT16, UINT32, INT32, DATA1b, DATA1c, D
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2b","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
 ```
 
-**Removing an installed command**
+**Removing installed commands**
 ```
 id: remove
 payload:
@@ -326,7 +340,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01"]}'
 ```
 
-**List all installed commands**
+**Output of installed commands**
 ```
 id: list
 payload:
@@ -339,7 +353,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"list","value":true}'
 ```
 
-**Loading (install) of saved commands**
+**Loading (Installing) saved commands**
 ```
 id: load
 payload:
@@ -352,7 +366,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"load","value":true}'
 ```
 
-**Saving of current installed commands**
+**Saving the currently installed commands**
 ```
 id: save
 payload:
@@ -365,7 +379,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"save","value":true}'
 ```
 
-**Wiping of saved commands**
+**Wiping of the saved commands**
 ```
 id: wipe
 payload:
@@ -378,7 +392,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe","value":true}'
 ```
 
-**Sending of given ebus command(s) once**
+**Sending ebus commands once**
 ```
 id: send
 payload:
@@ -394,7 +408,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"send","commands":["05070400","15070400"]}'
 ```
 
-**Switching data forwarding (including filters)**
+**Activate/deactivate data forwarding (including filtering)**
 ```
 id: forward
 payload:
@@ -415,7 +429,7 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":fal
 ```
 
 ### Home Assistant Support
-When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. According to the above data it should look like the following examples.
+When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. According to the above data it should look like the following example.
 ```
 topic: homeassistant/sensor/ebus8406ac/outdoor_temperature/config
 payload:
