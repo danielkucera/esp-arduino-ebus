@@ -358,49 +358,50 @@ void Store::publishCommand(const Command *command, const bool remove) {
 }
 
 void Store::publishHomeAssistant(const Command *command, const bool remove) {
-  std::string stateTopic = command->topic;
-  std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
+  if (command->ha_class.compare("null") != 0 &&
+      command->ha_class.length() > 0) {
+    std::string stateTopic = command->topic;
+    std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
 
-  std::string subTopic = stateTopic;
-  std::replace(subTopic.begin(), subTopic.end(), '/', '_');
+    std::string subTopic = stateTopic;
+    std::replace(subTopic.begin(), subTopic.end(), '/', '_');
 
-  std::string topic = "homeassistant/sensor/ebus" + mqtt.getUniqueId() + '/' +
-                      subTopic + "/config";
+    std::string topic = "homeassistant/sensor/ebus" + mqtt.getUniqueId() + '/' +
+                        subTopic + "/config";
 
-  std::string payload;
+    std::string payload;
 
-  if (!remove) {
-    JsonDocument doc;
+    if (!remove) {
+      JsonDocument doc;
 
-    std::string name = command->topic;
-    std::replace(name.begin(), name.end(), '/', ' ');
-    std::replace(name.begin(), name.end(), '_', ' ');
+      std::string name = command->topic;
+      std::replace(name.begin(), name.end(), '/', ' ');
+      std::replace(name.begin(), name.end(), '_', ' ');
 
-    doc["name"] = name;
-    if (command->ha_class.compare("null") != 0 &&
-        command->ha_class.length() > 0)
+      doc["name"] = name;
       doc["device_class"] = command->ha_class;
-    doc["state_topic"] =
-        mqtt.getRootTopic() + std::string("values/") + stateTopic;
-    if (command->unit.compare("null") != 0 && command->unit.length() > 0)
-      doc["unit_of_measurement"] = command->unit;
-    doc["unique_id"] = "ebus" + mqtt.getUniqueId() + '_' + command->key;
-    doc["value_template"] = "{{value_json.value}}";
+      doc["state_topic"] =
+          mqtt.getRootTopic() + std::string("values/") + stateTopic;
+      if (command->unit.compare("null") != 0 && command->unit.length() > 0)
+        doc["unit_of_measurement"] = command->unit;
+      doc["unique_id"] = "ebus" + mqtt.getUniqueId() + '_' + command->key;
+      doc["value_template"] = "{{value_json.value}}";
 
-    JsonObject device = doc["device"].to<JsonObject>();
-    device["identifiers"] = "ebus" + mqtt.getUniqueId();
-    device["name"] = "esp-ebus";
-    device["manufacturer"] = "";  // TODO(yuhu-): fill with thing data
-    device["model"] = "";         // TODO(yuhu-): fill with thing data
-    device["model_id"] = "";      // TODO(yuhu-): fill with thing data
-    device["serial_number"] = mqtt.getUniqueId();
-    device["hw_version"] = "";  // TODO(yuhu-): fill with thing data
-    device["sw_version"] = "";  // TODO(yuhu-): fill with thing data
-    device["configuration_url"] = "http://esp-ebus.local";
+      JsonObject device = doc["device"].to<JsonObject>();
+      device["identifiers"] = "ebus" + mqtt.getUniqueId();
+      device["name"] = "esp-ebus";
+      device["manufacturer"] = "";  // TODO(yuhu-): fill with thing data
+      device["model"] = "";         // TODO(yuhu-): fill with thing data
+      device["model_id"] = "";      // TODO(yuhu-): fill with thing data
+      device["serial_number"] = mqtt.getUniqueId();
+      device["hw_version"] = "";  // TODO(yuhu-): fill with thing data
+      device["sw_version"] = "";  // TODO(yuhu-): fill with thing data
+      device["configuration_url"] = "http://esp-ebus.local";
 
-    serializeJson(doc, payload);
+      serializeJson(doc, payload);
+    }
+
+    mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
   }
-
-  mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
 }
