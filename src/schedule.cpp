@@ -2,6 +2,7 @@
 
 #include "bus.hpp"
 #include "mqtt.hpp"
+#include "track.hpp"
 
 // ebus/<unique_id>/state/internal/messages
 Track<uint32_t> messagesTotal("state/internal/messages/total", 10);

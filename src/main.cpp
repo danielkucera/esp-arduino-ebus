@@ -7,6 +7,7 @@
 #include "bus.hpp"
 #include "enhanced.hpp"
 #include "mqtt.hpp"
+#include "track.hpp"
 
 #ifdef EBUS_INTERNAL
 #include "schedule.hpp"
@@ -77,6 +78,8 @@ char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
 
+char haSupportValue[STRING_LEN];
+
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
 
 iotwebconf::ParameterGroup connGroup =
@@ -116,6 +119,11 @@ iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
     "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", "roger");
 iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
     "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", "password");
+
+iotwebconf::ParameterGroup haGroup =
+    iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
+iotwebconf::CheckboxParameter haSupportParam = iotwebconf::CheckboxParameter(
+    "Home Assistant support", "haSupportParam", haSupportValue, STRING_LEN);
 
 IPAddress ipAddress;
 IPAddress gateway;
@@ -399,6 +407,10 @@ void saveParamsCallback() {
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
 
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
+
+  mqtt.setHASupport(haSupportParam.isChecked());
+  mqtt.publisHA(!haSupportParam.isChecked());
+  store.publishCommands();
 }
 
 void connectWifi(const char* ssid, const char* password) {
@@ -440,24 +452,7 @@ char* status_string() {
                   maxLoopDuration.value());
   pos +=
       snprintf(status + pos, sizeof(status), "version: %s\r\n", AUTO_VERSION);
-  pos += snprintf(status + pos, sizeof(status), "nbr_arbitrations: %i\r\n",
-                  static_cast<int>(Bus._nbrArbitrations));
-  pos += snprintf(status + pos, sizeof(status), "nbr_restarts1: %i\r\n",
-                  static_cast<int>(Bus._nbrRestarts1));
-  pos += snprintf(status + pos, sizeof(status), "nbr_restarts2: %i\r\n",
-                  static_cast<int>(Bus._nbrRestarts2));
-  pos += snprintf(status + pos, sizeof(status), "nbr_lost1: %i\r\n",
-                  static_cast<int>(Bus._nbrLost1));
-  pos += snprintf(status + pos, sizeof(status), "nbr_lost2: %i\r\n",
-                  static_cast<int>(Bus._nbrLost2));
-  pos += snprintf(status + pos, sizeof(status), "nbr_won1: %i\r\n",
-                  static_cast<int>(Bus._nbrWon1));
-  pos += snprintf(status + pos, sizeof(status), "nbr_won2: %i\r\n",
-                  static_cast<int>(Bus._nbrWon2));
-  pos += snprintf(status + pos, sizeof(status), "nbr_late: %i\r\n",
-                  static_cast<int>(Bus._nbrLate));
-  pos += snprintf(status + pos, sizeof(status), "nbr_errors: %i\r\n",
-                  static_cast<int>(Bus._nbrErrors));
+
   pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
 
 #ifdef EBUS_INTERNAL
@@ -472,6 +467,9 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "mqtt_server: %s\r\n",
                   mqtt_server);
   pos += snprintf(status + pos, sizeof(status), "mqtt_user: %s\r\n", mqtt_user);
+
+  pos += snprintf(status + pos, sizeof(status), "ha_support: %s\r\n",
+                  haSupportParam.isChecked() ? "true" : "false");
 
   return status;
 }
@@ -651,9 +649,12 @@ void setup() {
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
 
+  haGroup.addItem(&haSupportParam);
+
   iotWebConf.addParameterGroup(&connGroup);
   iotWebConf.addParameterGroup(&ebusGroup);
   iotWebConf.addParameterGroup(&mqttGroup);
+  iotWebConf.addParameterGroup(&haGroup);
   iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
@@ -701,6 +702,8 @@ void setup() {
   mqtt.setUniqueId(unique_id);
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
+
+  mqtt.setHASupport(haSupportParam.isChecked());
 
   wifiServer.begin();
   wifiServerRO.begin();

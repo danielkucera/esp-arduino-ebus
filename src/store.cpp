@@ -193,6 +193,7 @@ void Store::checkPublishCommands() {
   if (pubCommands.size() > 0) {
     if (millis() > lastPublish + distancePublish) {
       publishCommand(pubCommands.front(), false);
+      publishHASensors(pubCommands.front(), !mqtt.getHASupport());
       pubCommands.pop_front();
     }
   }
@@ -228,7 +229,7 @@ void Store::insertCommand(const Command &command) {
   allCommands.push_back(command);
   countCommands();
   publishCommand(&allCommands.back(), false);
-  if (command.ha) publishHomeAssistant(&allCommands.back(), false);
+  publishHASensors(&allCommands.back(), false);
 
   lastInsert = millis();
   publishResponse("insert", "key '" + key + "' inserted");
@@ -241,7 +242,7 @@ void Store::removeCommand(const std::string &key) {
 
   if (it != allCommands.end()) {
     publishCommand(&(*it), true);
-    if (it->ha) publishHomeAssistant(&(*it), true);
+    publishHASensors(&(*it), true);
     allCommands.erase(it);
     countCommands();
     lastRemove = millis();
@@ -357,7 +358,7 @@ void Store::publishCommand(const Command *command, const bool remove) {
   }
 }
 
-void Store::publishHomeAssistant(const Command *command, const bool remove) {
+void Store::publishHASensors(const Command *command, const bool remove) {
   std::string stateTopic = command->topic;
   std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
                  [](unsigned char c) { return std::tolower(c); });
@@ -370,7 +371,7 @@ void Store::publishHomeAssistant(const Command *command, const bool remove) {
 
   std::string payload;
 
-  if (!remove) {
+  if (command->ha && mqtt.getHASupport() && !remove) {
     JsonDocument doc;
 
     std::string name = command->topic;
@@ -390,17 +391,10 @@ void Store::publishHomeAssistant(const Command *command, const bool remove) {
 
     JsonObject device = doc["device"].to<JsonObject>();
     device["identifiers"] = "ebus" + mqtt.getUniqueId();
-    device["name"] = "esp-ebus";
-    device["manufacturer"] = "";  // TODO(yuhu-): fill with thing data
-    device["model"] = "";         // TODO(yuhu-): fill with thing data
-    device["model_id"] = "";      // TODO(yuhu-): fill with thing data
-    device["serial_number"] = mqtt.getUniqueId();
-    device["hw_version"] = "";  // TODO(yuhu-): fill with thing data
-    device["sw_version"] = "";  // TODO(yuhu-): fill with thing data
-    device["configuration_url"] = "http://esp-ebus.local";
 
     serializeJson(doc, payload);
   }
 
-  mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
+  if (remove || mqtt.getHASupport())
+    mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
 }

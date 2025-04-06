@@ -50,6 +50,18 @@ uint16_t Mqtt::publish(const char *topic, uint8_t qos, bool retain,
   return client.publish(mqttTopic.c_str(), qos, retain, payload);
 }
 
+void Mqtt::setHASupport(const bool enable) { haSupport = enable; }
+
+const bool Mqtt::getHASupport() const { return haSupport; }
+
+void Mqtt::publisHA(const bool remove) const {
+  mqtt.publishHADiagnostic("Uptime", remove,
+                           "{{timedelta(seconds=((value|float)/1000)|int)}}",
+                           true);
+
+  mqtt.publishHAConfigButton("Restart", remove);
+}
+
 uint16_t Mqtt::subscribe(const char *topic, uint8_t qos) {
   return client.subscribe(topic, qos);
 }
@@ -61,6 +73,8 @@ void Mqtt::onConnect(bool sessionPresent) {
   std::string topicWill = mqtt.getRootTopic() + "state/available";
   mqtt.publish(topicWill.c_str(), 0, true, "online", false);
   mqtt.setWill(topicWill.c_str(), 0, true, "offline");
+
+  mqtt.publisHA(false);
 }
 
 void Mqtt::onMessage(const char *topic, const char *payload,
@@ -88,7 +102,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
     } else if (id.compare("remove") == 0) {
       JsonArray keys = doc["keys"].as<JsonArray>();
       if (keys != nullptr) store.removeCommands(keys);
-    } else if (id.compare("list") == 0) {
+    } else if (id.compare("publish") == 0) {
       boolean value = doc["value"].as<boolean>();
       if (value) store.publishCommands();
     } else if (id.compare("load") == 0) {
@@ -111,4 +125,77 @@ void Mqtt::onMessage(const char *topic, const char *payload,
     }
 #endif
   }
+}
+
+void Mqtt::publishHADiagnostic(const char *name, const bool remove,
+                               const char *value_template, const bool full) {
+  std::string lowerName = name;
+  std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+
+  std::string topic =
+      "homeassistant/sensor/ebus" + uniqueId + '/' + lowerName + "/config";
+
+  std::string payload;
+
+  if (haSupport) {
+    JsonDocument doc;
+
+    doc["name"] = name;
+    doc["entity_category"] = "diagnostic";
+    doc["unique_id"] = "ebus" + uniqueId + '_' + lowerName;
+    doc["state_topic"] = rootTopic + std::string("state/") + lowerName;
+    doc["value_template"] = value_template;
+
+    JsonObject device = doc["device"].to<JsonObject>();
+    device["identifiers"] = "ebus" + uniqueId;
+    if (full) {
+      device["name"] = "esp-ebus";
+      device["manufacturer"] = "";  // TODO(yuhu-): fill with thing data
+      device["model"] = "";         // TODO(yuhu-): fill with thing data
+      device["model_id"] = "";      // TODO(yuhu-): fill with thing data
+      device["serial_number"] = uniqueId;
+      device["hw_version"] = "";  // TODO(yuhu-): fill with thing data
+      device["sw_version"] = "";  // TODO(yuhu-): fill with thing data
+      device["configuration_url"] = "http://esp-ebus.local";
+    }
+
+    serializeJson(doc, payload);
+  }
+
+  if (remove || haSupport)
+    mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
+}
+
+void Mqtt::publishHAConfigButton(const char *name, const bool remove) {
+  std::string lowerName = name;
+  std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+
+  std::string topic =
+      "homeassistant/button/ebus" + uniqueId + '/' + lowerName + "/config";
+
+  std::string payload;
+
+  if (haSupport) {
+    JsonDocument doc;
+
+    doc["name"] = name;
+    doc["entity_category"] = "config";
+    doc["unique_id"] = "ebus" + uniqueId + '_' + lowerName;
+    doc["availability_topic"] = rootTopic + std::string("state/available");
+
+    doc["command_topic"] = rootTopic + "request";
+    doc["payload_press"] = "{\"id\":\"" + lowerName + "\",\"value\":true}";
+    doc["qos"] = 0;
+    doc["retain"] = false;
+
+    JsonObject device = doc["device"].to<JsonObject>();
+    device["identifiers"] = "ebus" + uniqueId;
+
+    serializeJson(doc, payload);
+  }
+  
+  if (remove || haSupport)
+    mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
 }

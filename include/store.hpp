@@ -67,7 +67,7 @@ class Store {
   uint32_t lastRemove = 0;
 
   std::deque<const Command *> pubCommands;
-  uint32_t distancePublish = 100;
+  uint32_t distancePublish = 200;
   uint32_t lastPublish = 0;
 
   void countCommands();
@@ -89,7 +89,7 @@ class Store {
 
   static void publishCommand(const Command *command, const bool remove);
 
-  static void publishHomeAssistant(const Command *command, const bool remove);
+  static void publishHASensors(const Command *command, const bool remove);
 };
 
 extern Store store;

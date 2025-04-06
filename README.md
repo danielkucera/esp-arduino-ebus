@@ -208,18 +208,19 @@ You will need an USB-TTL adaptor (dongle) which suports 3V3 voltage levels and h
 
 
 ## MQTT support
-**Warning: The current implementation does not support TLS encryption. The MQTT server should therefore be run in a secure environment!**
-
-
-### MQTT configuration
-At the configuration web page you can set
+By setting the MQTT server IP address / hostname, MQTT support is activated. At the configuration web page you can set
 - server IP address or hostname
 - user name
 - password
 
+**Warning: The current implementation does not support TLS encryption. The MQTT server should therefore be run in a secure environment!**
 
 ### MQTT interface
-The device's MQTT **root topic** begins with ebus/, followed by the last 6 characters of its MAC address as a unique device ID and a trailing slash. For e.g. `ebus/8406ac/`.
+- The device's MQTT **root topic** begins with ebus/,
+- followed by the last 6 characters of its MAC address as a unique device ID
+- and a trailing slash.
+- Example root topic: **`ebus/8406ac/`**.
+
 Basic device data, settings and various counters are published regularly.
 
 The following topics are available on every device.
@@ -237,7 +238,7 @@ The following topics are available on every device.
 
 
 ### MQTT interface with firmware EBUS_INTERNAL=1
-A firmware with `EBUS_INTERNAL=1` adds a scheduler, a command buffer and Home Assistant support to the device.
+A firmware with `EBUS_INTERNAL=1` adds a scheduler and a command buffer to the device.
 
 The following topics are available.
 |***topic***                    |***description***
@@ -263,7 +264,7 @@ Available MQTT commands.
 |restart          |Restarting of the device                                      |
 |insert           |Inserting (Installing) of new commands                        |x
 |remove           |Removing installed commands                                   |x
-|list             |Output of installed commands                                  |x
+|publish          |Publishing installed commands                                 |x
 |load             |Loading (Installing) saved commands                           |x
 |save             |Saving the currently installed commands                       |x
 |wipe             |Wiping of the saved commands                                  |x
@@ -273,11 +274,10 @@ Available MQTT commands.
 
 ### Examples
 The provided examples were created using `Mosquitto` in a `Linux shell`. The `server IP address or hostname` and `unique device ID` must be adjusted to your environment.
-
-- `server IP address or hostname = server`
-- `unique device ID = 8406ac`
-- `request topic = ebus/8406ac/request`
-- `response topic = ebus/8406ac/response`
+- server IP address or hostname = `server`
+- unique device ID = `8406ac`
+- request topic = `ebus/8406ac/request`
+- response topic = `ebus/8406ac/response`
 
 **Restarting of the device**
 ```
@@ -340,17 +340,17 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01"]}'
 ```
 
-**Output of installed commands**
+**Publishing installed commands**
 ```
-id: list
+id: publish
 payload:
 {
-  "id": "list",
+  "id": "publish",
   "value": true
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"list","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"publish","value":true}'
 ```
 
 **Loading (Installing) saved commands**
@@ -429,32 +429,9 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":fal
 ```
 
 ### Home Assistant Support
-When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. According to the above data it should look like the following example.
-```
-topic: homeassistant/sensor/ebus8406ac/outdoor_temperature/config
-payload:
-{
-  "name": "outdoor temperature",
-  "device_class": "temperature",
-  "state_topic": "ebus/8406ac/values/outdoor_temperature",
-  "unit_of_measurement": "°C",
-  "unique_id": "ebus8406ac_01",
-  "value_template": "{{value_json.value}}",
-  "device": {
-    "identifiers": "ebus8406ac",
-    "name": "esp-ebus",
-    "manufacturer": "",
-    "model": "",
-    "model_id": "",
-    "serial_number": "8406ac",
-    "hw_version": "",
-    "sw_version": "",
-    "configuration_url": "http://esp-ebus.local"
-  }
-}
-```
-
-### Individual Home Assistant configuration examples (MQTT Discovery)
+Home Assistant support can be globally activated on the configuration web page.
+- Once Home Assistant support is activated there will be the followed MQTT topics created under **homeassistant**.
+- A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
 
 **MQTT Device - Diagnostic - Uptime of device (DD HH:MM:SS)**
 ```
@@ -466,9 +443,16 @@ payload:
   "unique_id": "ebus8406ac_uptime",
   "state_topic": "ebus/8406ac/state/uptime",
   "value_template": "{{timedelta(seconds=((value|float)/1000)|int)}}",
-  "icon": "mdi:clock",
   "device": {
-    "identifiers": "ebus8406ac"
+    "identifiers": "ebus8406ac",
+    "name": "esp-ebus",
+    "manufacturer": "",
+    "model": "",
+    "model_id": "",
+    "serial_number": "8406ac",
+    "hw_version": "",
+    "sw_version": "",
+    "configuration_url": "http://esp-ebus.local"
   }
 }
 ```
@@ -487,6 +471,26 @@ payload:
   "payload_press": "{\"id\":\"restart\",\"value\":true}",
   "qos": 0,
   "retain": false,
+  "device": {
+    "identifiers": "ebus8406ac"
+  }
+}
+``` 
+
+**MQTT Device - Sensors**
+- When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. 
+- A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
+- According to the above data it should look like the following example.
+```
+topic: homeassistant/sensor/ebus8406ac/outdoor_temperature/config
+payload:
+{
+  "name": "outdoor temperature",
+  "device_class": "temperature",
+  "state_topic": "ebus/8406ac/values/outdoor_temperature",
+  "unit_of_measurement": "°C",
+  "unique_id": "ebus8406ac_01",
+  "value_template": "{{value_json.value}}",
   "device": {
     "identifiers": "ebus8406ac"
   }
