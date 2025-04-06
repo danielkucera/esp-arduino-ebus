@@ -54,7 +54,7 @@ void Mqtt::setHASupport(const bool enable) { haSupport = enable; }
 
 const bool Mqtt::getHASupport() const { return haSupport; }
 
-void Mqtt::publisHA(const bool remove) const {
+void Mqtt::publisHA(const bool remove) {
   mqtt.publishHADiagnostic("Uptime", remove,
                            "{{timedelta(seconds=((value|float)/1000)|int)}}",
                            true);
@@ -133,9 +133,6 @@ void Mqtt::publishHADiagnostic(const char *name, const bool remove,
   std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
                  [](unsigned char c) { return std::tolower(c); });
 
-  std::string topic =
-      "homeassistant/sensor/ebus" + uniqueId + '/' + lowerName + "/config";
-
   std::string payload;
 
   if (haSupport) {
@@ -163,17 +160,17 @@ void Mqtt::publishHADiagnostic(const char *name, const bool remove,
     serializeJson(doc, payload);
   }
 
-  if (remove || haSupport)
+  if (remove || haSupport) {
+    std::string topic =
+        "homeassistant/sensor/ebus" + uniqueId + '/' + lowerName + "/config";
     mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
+  }
 }
 
 void Mqtt::publishHAConfigButton(const char *name, const bool remove) {
   std::string lowerName = name;
   std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
                  [](unsigned char c) { return std::tolower(c); });
-
-  std::string topic =
-      "homeassistant/button/ebus" + uniqueId + '/' + lowerName + "/config";
 
   std::string payload;
 
@@ -195,7 +192,10 @@ void Mqtt::publishHAConfigButton(const char *name, const bool remove) {
 
     serializeJson(doc, payload);
   }
-  
-  if (remove || haSupport)
+
+  if (remove || haSupport) {
+    std::string topic =
+        "homeassistant/button/ebus" + uniqueId + '/' + lowerName + "/config";
     mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
+  }
 }

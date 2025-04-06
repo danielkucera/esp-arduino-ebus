@@ -30,7 +30,7 @@ class Mqtt {
   void setHASupport(const bool enable);
   const bool getHASupport() const;
 
-  void publisHA(const bool remove) const;
+  static void publisHA(const bool remove);
 
  private:
   AsyncMqttClient client;
