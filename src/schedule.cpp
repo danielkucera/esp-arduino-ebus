@@ -63,8 +63,7 @@ Track<uint32_t> requestsError("state/internal/requests/error", 10);
 Schedule schedule;
 
 Schedule::Schedule()
-    : ebusHandler(0xff, &writeCallback, &readBufferCallback, &activeCallback,
-                  &passiveCallback, &reactiveCallback) {
+    : ebusHandler(0xff, &writeCallback, &readBufferCallback, &publishCallback) {
   ebusHandler.setErrorCallback(errorCallback);
 }
 
@@ -178,48 +177,49 @@ void Schedule::writeCallback(const uint8_t byte) { Bus.write(byte); }
 
 int Schedule::readBufferCallback() { return Bus.available(); }
 
-void Schedule::activeCallback(const std::vector<uint8_t> &master,
-                              const std::vector<uint8_t> &slave) {
-  schedule.processActive(std::vector<uint8_t>(master),
-                         std::vector<uint8_t>(slave));
-}
-
-void Schedule::passiveCallback(const std::vector<uint8_t> &master,
-                               const std::vector<uint8_t> &slave) {
-  schedule.processPassive(std::vector<uint8_t>(master),
-                          std::vector<uint8_t>(slave));
-}
-
-void Schedule::reactiveCallback(const std::vector<uint8_t> &master,
-                                std::vector<uint8_t> *const slave) {
-  // std::vector<uint8_t> search;
-  switch (ebus::Telegram::typeOf(master[1])) {
-    case ebus::Type::BC:
-      schedule.processPassive(std::vector<uint8_t>(master),
-                              std::vector<uint8_t>());
+void Schedule::publishCallback(const ebus::Message message,
+                               const std::vector<uint8_t> &master,
+                               std::vector<uint8_t> *const slave) {
+  std::vector<uint8_t> search;
+  switch (message) {
+    case ebus::Message::active:
+      schedule.processActive(std::vector<uint8_t>(master),
+                             std::vector<uint8_t>(*slave));
       break;
-    case ebus::Type::MM:
-      schedule.processPassive(std::vector<uint8_t>(master),
-                              std::vector<uint8_t>());
-      break;
-    case ebus::Type::MS:
-      // TODO(yuhu-): fill with thing data
-      // handle Identification (Service 07h 04h)
-      // hh...Manufacturer (BYTE)
-      // gg...Unit_ID_0-5 (ASCII)
-      // ss...Software version (BCD)
-      // rr...Revision (BCD)
-      // vv...Hardware version (BCD)
-      // hh...Revision (BCD)
-      // search = {0x07, 0x04};
-      // if (ebus::Sequence::contains(master, search))
-      //   *slave = ebus::Sequence::to_vector("0ahhggggggggggssrrhhrr");
-
+    case ebus::Message::passive:
       schedule.processPassive(std::vector<uint8_t>(master),
                               std::vector<uint8_t>(*slave));
       break;
-    default:
-      break;
+    case ebus::Message::reactive:
+
+      switch (ebus::Telegram::typeOf(master[1])) {
+        case ebus::Type::BC:
+          schedule.processPassive(std::vector<uint8_t>(master),
+                                  std::vector<uint8_t>());
+          break;
+        case ebus::Type::MM:
+          schedule.processPassive(std::vector<uint8_t>(master),
+                                  std::vector<uint8_t>());
+          break;
+        case ebus::Type::MS:
+          // TODO(yuhu-): fill with thing data
+          // handle Identification (Service 07h 04h)
+          // hh...Manufacturer (BYTE)
+          // gg...Unit_ID_0-5 (ASCII)
+          // ss...Software version (BCD)
+          // rr...Revision (BCD)
+          // vv...Hardware version (BCD)
+          // hh...Revision (BCD)
+          // search = {0x07, 0x04};
+          // if (ebus::Sequence::contains(master, search))
+          //   *slave = ebus::Sequence::to_vector("0ahhggggggggggssrrhhrr");
+
+          schedule.processPassive(std::vector<uint8_t>(master),
+                                  std::vector<uint8_t>(*slave));
+          break;
+        default:
+          break;
+      }
   }
 }
 

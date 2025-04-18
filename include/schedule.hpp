@@ -52,12 +52,9 @@ class Schedule {
   static void writeCallback(const uint8_t byte);
   static int readBufferCallback();
 
-  static void activeCallback(const std::vector<uint8_t> &master,
-                             const std::vector<uint8_t> &slave);
-  static void passiveCallback(const std::vector<uint8_t> &master,
-                              const std::vector<uint8_t> &slave);
-  static void reactiveCallback(const std::vector<uint8_t> &master,
-                               std::vector<uint8_t> *const slave);
+  static void publishCallback(const ebus::Message message,
+                              const std::vector<uint8_t> &master,
+                              std::vector<uint8_t> *const slave);
 
   static void errorCallback(const std::string &str);
 
