@@ -177,7 +177,8 @@ void Schedule::writeCallback(const uint8_t byte) { Bus.write(byte); }
 
 int Schedule::readBufferCallback() { return Bus.available(); }
 
-void Schedule::publishCallback(const ebus::Message message,
+void Schedule::publishCallback(const ebus::Message &message,
+                               const ebus::Type &type,
                                const std::vector<uint8_t> &master,
                                std::vector<uint8_t> *const slave) {
   std::vector<uint8_t> search;
@@ -192,16 +193,16 @@ void Schedule::publishCallback(const ebus::Message message,
       break;
     case ebus::Message::reactive:
 
-      switch (ebus::Telegram::typeOf(master[1])) {
-        case ebus::Type::BC:
+      switch (type) {
+        case ebus::Type::broadcast:
           schedule.processPassive(std::vector<uint8_t>(master),
                                   std::vector<uint8_t>());
           break;
-        case ebus::Type::MM:
+        case ebus::Type::masterMaster:
           schedule.processPassive(std::vector<uint8_t>(master),
                                   std::vector<uint8_t>());
           break;
-        case ebus::Type::MS:
+        case ebus::Type::masterSlave:
           // TODO(yuhu-): fill with thing data
           // handle Identification (Service 07h 04h)
           // hh...Manufacturer (BYTE)

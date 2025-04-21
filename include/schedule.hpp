@@ -52,7 +52,8 @@ class Schedule {
   static void writeCallback(const uint8_t byte);
   static int readBufferCallback();
 
-  static void publishCallback(const ebus::Message message,
+  static void publishCallback(const ebus::Message &message,
+                              const ebus::Type &type,
                               const std::vector<uint8_t> &master,
                               std::vector<uint8_t> *const slave);
 
