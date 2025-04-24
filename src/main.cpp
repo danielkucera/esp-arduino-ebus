@@ -7,6 +7,7 @@
 #include "bus.hpp"
 #include "enhanced.hpp"
 #include "mqtt.hpp"
+#include "track.hpp"
 
 #ifdef EBUS_INTERNAL
 #include "schedule.hpp"
@@ -52,6 +53,9 @@ TaskHandle_t Task1;
 #endif
 
 #define CONFIG_VERSION "eea"
+
+char unique_id[7]{};
+
 DNSServer dnsServer;
 WebServer configServer(80);
 
@@ -64,15 +68,17 @@ char pwm_value[NUMBER_LEN];
 
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
-    "00", "10", "30", "70", "F0", "01", "11", "31", "71",
-    "F1", "03", "13", "33", "73", "F3", "07", "17", "37",
-    "77", "F7", "0F", "1F", "3F", "7F", "FF"};
+    "00", "10", "30", "70", "f0", "01", "11", "31", "71",
+    "f1", "03", "13", "33", "73", "f3", "07", "17", "37",
+    "77", "f7", "0f", "1f", "3f", "7f", "ff"};
 
-char comand_distance[NUMBER_LEN];
+char command_distance[NUMBER_LEN];
 
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
+
+char haSupportValue[STRING_LEN];
 
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
 
@@ -99,9 +105,9 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     "eBUS address", "ebus_address", ebus_address, NUMBER_LEN,
     reinterpret_cast<char*>(ebus_address_values),
     reinterpret_cast<char*>(ebus_address_values),
-    sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "FF");
+    sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
-    "Command distance", "comand_distance", comand_distance, NUMBER_LEN, "1",
+    "Command distance", "command_distance", command_distance, NUMBER_LEN, "1",
     "0..60", "min='0' max='60' step='1'");
 #endif
 
@@ -113,6 +119,11 @@ iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
     "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", "roger");
 iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
     "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", "password");
+
+iotwebconf::ParameterGroup haGroup =
+    iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
+iotwebconf::CheckboxParameter haSupportParam = iotwebconf::CheckboxParameter(
+    "Home Assistant support", "haSupportParam", haSupportValue, STRING_LEN);
 
 IPAddress ipAddress;
 IPAddress gateway;
@@ -132,51 +143,54 @@ bool needMqttConnect = false;
 uint32_t lastMqttConnectionAttempt = 0;
 uint32_t lastMqttUpdate = 0;
 
-// ebus/device
-Track<uint32_t> uptime("ebus/device/uptime", 10);
-Track<uint32_t> loopDuration("ebus/device/loop_duration", 10);
-Track<uint32_t> maxLoopDuration("ebus/device/loop_duration_max", 10);
-Track<uint32_t> free_heap("ebus/device/free_heap", 10);
-uint32_t reset_code = -1;
-
-// ebus/device/ebus
-Track<uint32_t> pwm("ebus/device/ebus/pwm", 0);
-
+// ebus/<unique_id>/settings
+Track<uint32_t> pwm("settings/pwm", 0, 300);
 #ifdef EBUS_INTERNAL
-Track<String> ebusAddress("ebus/device/ebus/ebus_address", 0);
-Track<String> commandDistance("ebus/device/ebus/comand_distance", 0);
+Track<String> ebusAddress("settings/ebus_address", 0, 300);
+Track<String> commandDistance("settings/command_distance", 0, 300);
+Track<size_t> activeCommands("settings/active_commands", 0, 300);
+Track<size_t> passiveCommands("settings/passive_commands", 0, 300);
 #endif
 
-// ebus/device/wifi
-Track<uint32_t> last_connect("ebus/device/wifi/last_connect", 30);
-Track<int> reconnect_count("ebus/device/wifi/reconnect_count", 30);
-Track<int8_t> rssi("ebus/device/wifi/rssi", 30);
+// ebus/<unique_id>/firmware
+Track<String> version("firmware/version", 0, 300);
+Track<String> sdk("firmware/sdk", 0, 300);
+Track<String> async("firmware/async", 0, 300);
+Track<String> software_serial("firmware/software_serial", 0, 300);
 
-// ebus/arbitration
-Track<int> nbrArbitrations("ebus/arbitration/total", 10);
+// ebus/<unique_id>/state
+Track<uint32_t> reset_code("state/reset_code", 0, 300);
+Track<uint32_t> uptime("state/uptime", 10);
+Track<uint32_t> loopDuration("state/loop_duration", 10);
+Track<uint32_t> maxLoopDuration("state/loop_duration_max", 10);
+Track<uint32_t> free_heap("state/free_heap", 10);
 
-Track<int> nbrWon("ebus/arbitration/won", 10);
-Track<int> nbrRestarts1("ebus/arbitration/won/restarts1", 10);
-Track<int> nbrRestarts2("ebus/arbitration/won/restarts2", 10);
-Track<int> nbrWon1("ebus/arbitration/won/won1", 10);
-Track<int> nbrWon2("ebus/arbitration/won/won2", 10);
+// ebus/<unique_id>/state/wifi
+Track<uint32_t> last_connect("state/wifi/last_connect", 30);
+Track<int> reconnect_count("state/wifi/reconnect_count", 30);
+Track<int8_t> rssi("state/wifi/rssi", 30);
 
-Track<int> nbrLost("ebus/arbitration/lost", 10);
-Track<int> nbrLost1("ebus/arbitration/lost/lost1", 10);
-Track<int> nbrLost2("ebus/arbitration/lost/lost2", 10);
-Track<int> nbrLate("ebus/arbitration/lost/late", 10);
-Track<int> nbrErrors("ebus/arbitration/lost/errors", 10);
+// ebus/<unique_id>/state/arbitration
+Track<int> nbrArbitrations("state/arbitration/total", 10);
+Track<int> nbrRestarts1("state/arbitration/restarts1", 10);
+Track<int> nbrRestarts2("state/arbitration/restarts2", 10);
+Track<int> nbrWon1("state/arbitration/won1", 10);
+Track<int> nbrWon2("state/arbitration/won2", 10);
+Track<int> nbrLost1("state/arbitration/lost1", 10);
+Track<int> nbrLost2("state/arbitration/lost2", 10);
+Track<int> nbrLate("state/arbitration/late", 10);
+Track<int> nbrErrors("state/arbitration/errors", 10);
 
 bool connectMqtt() {
-  if (mqttClient.connected()) return true;
+  if (mqtt.connected()) return true;
 
   uint32_t now = millis();
 
   if (1000 > now - lastMqttConnectionAttempt) return false;
 
-  mqttClient.connect();
+  mqtt.connect();
 
-  if (!mqttClient.connected()) {
+  if (!mqtt.connected()) {
     lastMqttConnectionAttempt = now;
     return false;
   }
@@ -239,8 +253,23 @@ void set_pwm(uint8_t value) {
 uint32_t get_pwm() {
 #ifdef PWM_PIN
   return ledcRead(PWM_CHANNEL);
-#endif
+#else
   return 0;
+#endif
+}
+
+void calcUniqueId() {
+  uint32_t id = 0;
+#ifdef ESP32
+  for (int i = 0; i < 17; i = i + 8) {
+    id |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+  }
+#else
+  id = ESP.getChipId();
+#endif
+  char tmp[9]{};
+  snprintf(tmp, sizeof(tmp), "%08x", id);
+  memmove(unique_id, &tmp[2], 6);
 }
 
 void reset() {
@@ -371,13 +400,17 @@ void saveParamsCallback() {
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   ebusAddress = ebus_address;
 
-  schedule.setDistance(atoi(comand_distance));
-  commandDistance = comand_distance;
+  schedule.setDistance(atoi(command_distance));
+  commandDistance = command_distance;
 #endif
 
-  if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
+  if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
 
-  if (mqtt_user[0] != '\0') mqttClient.setCredentials(mqtt_user, mqtt_pass);
+  if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
+
+  mqtt.setHASupport(haSupportParam.isChecked());
+  mqtt.publisHA(!haSupportParam.isChecked());
+  store.publishCommands();
 }
 
 void connectWifi(const char* ssid, const char* password) {
@@ -402,6 +435,7 @@ char* status_string() {
                   USE_ASYNCHRONOUS ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "software_serial_mode: %s\n",
                   USE_SOFTWARE_SERIAL ? "true" : "false");
+  pos += snprintf(status + pos, sizeof(status), "unique_id: %s\n", unique_id);
   pos += snprintf(status + pos, sizeof(status), "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
                   last_connect.value());
@@ -410,45 +444,32 @@ char* status_string() {
   pos += snprintf(status + pos, sizeof(status), "rssi: %d dBm\n", WiFi.RSSI());
   pos += snprintf(status + pos, sizeof(status), "free_heap: %u B\n",
                   free_heap.value());
-  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n", reset_code);
+  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n",
+                  reset_code.value());
   pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
                   loopDuration.value());
   pos += snprintf(status + pos, sizeof(status), "max_loop_duration: %u us\r\n",
                   maxLoopDuration.value());
   pos +=
       snprintf(status + pos, sizeof(status), "version: %s\r\n", AUTO_VERSION);
-  pos += snprintf(status + pos, sizeof(status), "nbr_arbitrations: %i\r\n",
-                  static_cast<int>(Bus._nbrArbitrations));
-  pos += snprintf(status + pos, sizeof(status), "nbr_restarts1: %i\r\n",
-                  static_cast<int>(Bus._nbrRestarts1));
-  pos += snprintf(status + pos, sizeof(status), "nbr_restarts2: %i\r\n",
-                  static_cast<int>(Bus._nbrRestarts2));
-  pos += snprintf(status + pos, sizeof(status), "nbr_lost1: %i\r\n",
-                  static_cast<int>(Bus._nbrLost1));
-  pos += snprintf(status + pos, sizeof(status), "nbr_lost2: %i\r\n",
-                  static_cast<int>(Bus._nbrLost2));
-  pos += snprintf(status + pos, sizeof(status), "nbr_won1: %i\r\n",
-                  static_cast<int>(Bus._nbrWon1));
-  pos += snprintf(status + pos, sizeof(status), "nbr_won2: %i\r\n",
-                  static_cast<int>(Bus._nbrWon2));
-  pos += snprintf(status + pos, sizeof(status), "nbr_late: %i\r\n",
-                  static_cast<int>(Bus._nbrLate));
-  pos += snprintf(status + pos, sizeof(status), "nbr_errors: %i\r\n",
-                  static_cast<int>(Bus._nbrErrors));
+
   pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
 
 #ifdef EBUS_INTERNAL
   pos += snprintf(status + pos, sizeof(status), "ebus_address: %s\r\n",
                   ebus_address);
   pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
-                  atoi(comand_distance));
+                  atoi(command_distance));
 #endif
 
   pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
-                  mqttClient.connected() ? "true" : "false");
+                  mqtt.connected() ? "true" : "false");
   pos += snprintf(status + pos, sizeof(status), "mqtt_server: %s\r\n",
                   mqtt_server);
   pos += snprintf(status + pos, sizeof(status), "mqtt_user: %s\r\n", mqtt_user);
+
+  pos += snprintf(status + pos, sizeof(status), "ha_support: %s\r\n",
+                  haSupportParam.isChecked() ? "true" : "false");
 
   return status;
 }
@@ -463,50 +484,66 @@ void handleCommands() {
 #endif
 
 void publishStatus() {
-  // ebus/device
+  // ebus/<unique_id>/settings
+  pwm = get_pwm();
+#ifdef EBUS_INTERNAL
+  ebusAddress = ebus_address;
+  commandDistance = command_distance;
+  activeCommands = store.getActiveCommands();
+  passiveCommands = store.getPassiveCommands();
+#endif
+
+  // ebus/<unique_id>/firmware
+  version = AUTO_VERSION;
+  sdk = ESP.getSdkVersion();
+  async = USE_ASYNCHRONOUS ? "true" : "false";
+  software_serial = USE_SOFTWARE_SERIAL ? "true" : "false";
+
+  // ebus/<unique_id>/
+  reset_code.publish();
   uptime.publish();
   loopDuration.publish();
   maxLoopDuration.publish();
-  free_heap.publish();
-  mqttClient.publish("ebus/device/reset_code", 0, true,
-                     String(reset_code).c_str());
+  free_heap = ESP.getFreeHeap();
 
-  // ebus/device/firmware
-  mqttClient.publish("ebus/device/firmware/version", 0, true, AUTO_VERSION);
-  mqttClient.publish("ebus/device/firmware/sdk", 0, true, ESP.getSdkVersion());
-  mqttClient.publish("ebus/device/firmware/async", 0, true,
-                     USE_ASYNCHRONOUS ? "true" : "false");
-  mqttClient.publish("ebus/device/firmware/software_serial", 0, true,
-                     USE_SOFTWARE_SERIAL ? "true" : "false");
-
-  // ebus/device/ebus
-  pwm = get_pwm();
-
-#ifdef EBUS_INTERNAL
-  ebusAddress = ebus_address;
-  commandDistance = comand_distance;
-#endif
+  // ebus/<unique_id>/state/wifi
+  last_connect.publish();
+  reconnect_count.publish();
+  rssi = WiFi.RSSI();
 }
 
 void publishValues() {
-  // ebus/device
+  // ebus/<unique_id>/settings
+  pwm.touch();
+#ifdef EBUS_INTERNAL
+  ebusAddress.touch();
+  commandDistance.touch();
+  activeCommands = store.getActiveCommands();
+  passiveCommands = store.getPassiveCommands();
+#endif
+
+  // ebus/<unique_id>/firmware
+  version.touch();
+  sdk.touch();
+  async.touch();
+  software_serial.touch();
+
+  // ebus/<unique_id>/state
+  reset_code.touch();
+  maxLoopDuration.touch();
   free_heap = ESP.getFreeHeap();
 
-  // ebus/device/wifi
+  // ebus/<unique_id>/state/wifi
   last_connect.touch();
   reconnect_count.touch();
   rssi = WiFi.RSSI();
 
-  // ebus/arbitration
+  // ebus/<unique_id>/state/arbitration
   nbrArbitrations = Bus._nbrArbitrations;
-
-  nbrWon = Bus._nbrWon1 + Bus._nbrWon2;
   nbrRestarts1 = Bus._nbrRestarts1;
   nbrRestarts2 = Bus._nbrRestarts2;
   nbrWon1 = Bus._nbrWon1;
   nbrWon2 = Bus._nbrWon2;
-
-  nbrLost = nbrArbitrations.value() - nbrWon.value();
   nbrLost1 = Bus._nbrLost1;
   nbrLost2 = Bus._nbrLost2;
   nbrLate = Bus._nbrLate;
@@ -563,6 +600,8 @@ void setup() {
   reset_code = ESP.getResetInfoPtr()->reason;
 #endif
 
+  calcUniqueId();
+
   Bus.begin();
 
   DebugSer.begin(115200);
@@ -610,9 +649,12 @@ void setup() {
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
 
+  haGroup.addItem(&haSupportParam);
+
   iotWebConf.addParameterGroup(&connGroup);
   iotWebConf.addParameterGroup(&ebusGroup);
   iotWebConf.addParameterGroup(&mqttGroup);
+  iotWebConf.addParameterGroup(&haGroup);
   iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
@@ -650,23 +692,18 @@ void setup() {
 
 #ifdef EBUS_INTERNAL
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
-  schedule.setDistance(atoi(comand_distance));
+  schedule.setDistance(atoi(command_distance));
 #endif
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
     iotWebConf.doLoop();
   }
 
-  mqttClient.onConnect(onMqttConnect);
-  mqttClient.onDisconnect(onMqttDisconnect);
-  mqttClient.onSubscribe(onMqttSubscribe);
-  mqttClient.onUnsubscribe(onMqttUnsubscribe);
-  mqttClient.onMessage(onMqttMessage);
-  mqttClient.onPublish(onMqttPublish);
+  mqtt.setUniqueId(unique_id);
+  if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
+  if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
-  if (mqtt_server[0] != '\0') mqttClient.setServer(mqtt_server, 1883);
-
-  if (mqtt_user[0] != '\0') mqttClient.setCredentials(mqtt_user, mqtt_pass);
+  mqtt.setHASupport(haSupportParam.isChecked());
 
   wifiServer.begin();
   wifiServerRO.begin();
@@ -716,11 +753,11 @@ void loop() {
       publishStatus();
     }
   } else if ((iotWebConf.getState() == iotwebconf::OnLine) &&
-             (!mqttClient.connected())) {
+             (!mqtt.connected())) {
     needMqttConnect = true;
   }
 
-  if (mqttClient.connected()) {
+  if (mqtt.connected()) {
     if (millis() > lastMqttUpdate + 5 * 1000) {
       lastMqttUpdate = millis();
       publishValues();

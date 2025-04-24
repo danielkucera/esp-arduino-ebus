@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ArduinoJson.h>
 #include <Datatypes.h>
 
 #include <deque>
@@ -12,16 +13,16 @@
 // startup.
 
 struct Command {
-  std::string key;               // ebus command as string
+  std::string key;               // unique key of command
   std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
   std::string unit;              // unit of the received data
   bool active;                   // active sending of command
   uint32_t interval;        // minimum interval between two commands in seconds
   uint32_t last;            // last time of the successful command
-  bool master;              // true..master false..slave
-  size_t position;          // starting byte in payload (DBx)
+  bool master;              // value of interest is in master or slave part
+  size_t position;          // starting byte in interested part
   ebus::Datatype datatype;  // ebus datatype
-  std::string topic;        // mqtt topic
+  std::string topic;        // mqtt topic below "values/"
   bool ha;                  // home assistant support for auto discovery
   std::string ha_class;     // home assistant device_class
 };
@@ -30,23 +31,26 @@ class Store {
  public:
   Store() = default;
 
-  void enqueCommand(const char *payload);
-  void insertCommand(const char *payload);
-  void removeCommand(const char *payload);
+  void insertCommands(const JsonArray &commands);
+  void removeCommands(const JsonArray &keys);
 
   void publishCommands();
+
+  void loadCommands();
+  void saveCommands() const;
+  static void wipeCommands();
+
   const std::string getCommands() const;
 
   void doLoop();
+
+  const size_t getActiveCommands() const;
+  const size_t getPassiveCommands() const;
 
   const bool active() const;
   Command *nextActiveCommand();
   std::vector<Command *> findPassiveCommands(
       const std::vector<uint8_t> &master);
-
-  void loadCommands();
-  void saveCommands() const;
-  static void wipeCommands();
 
  private:
   std::vector<Command> allCommands;
@@ -54,25 +58,38 @@ class Store {
   size_t activeCommands = 0;
   size_t passiveCommands = 0;
 
-  std::deque<std::string> newCommands;
+  std::deque<Command> newCommands;
   uint32_t distanceInsert = 300;
   uint32_t lastInsert = 0;
 
+  std::deque<std::string> remCommands;
+  uint32_t distanceRemove = 300;
+  uint32_t lastRemove = 0;
+
   std::deque<const Command *> pubCommands;
-  uint32_t distancePublish = 100;
+  uint32_t distancePublish = 200;
   uint32_t lastPublish = 0;
 
   void countCommands();
 
-  void checkNewCommands();
-  void checkPubCommands();
+  void checkInsertCommands();
+  void checkRemoveCommands();
+  void checkPublishCommands();
+
+  Command createCommand(const JsonDocument &doc);
+
+  void insertCommand(const Command &command);
+  void removeCommand(const std::string &key);
 
   const std::string serializeCommands() const;
   void deserializeCommands(const char *payload);
 
+  static void publishResponse(const std::string &id, const std::string &status,
+                              const size_t &bytes = 0);
+
   static void publishCommand(const Command *command, const bool remove);
 
-  static void publishHomeAssistant(const Command *command, const bool remove);
+  static void publishHASensors(const Command *command, const bool remove);
 };
 
 extern Store store;

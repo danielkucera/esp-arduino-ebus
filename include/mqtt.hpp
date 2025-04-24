@@ -2,94 +2,61 @@
 
 #include <AsyncMqttClient.h>
 
-// The onMqtt callback functions are the interface to the mqtt sub-system for
-// the user-defined commands.
+#include <string>
 
-extern AsyncMqttClient mqttClient;
+// The Mqtt class acts as a wrapper for the entire MQTT subsystem.
 
-void onMqttConnect(bool sessionPresent);
-void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
-void onMqttSubscribe(uint16_t packetId, uint8_t qos);
-void onMqttUnsubscribe(uint16_t packetId);
-void onMqttMessage(const char *topic, const char *payload,
-                   AsyncMqttClientMessageProperties properties, size_t len,
-                   size_t index, size_t total);
-void onMqttPublish(uint16_t packetId);
-
-// This class can sum all kinds of primitive number types. After a minimum time
-// in seconds, the summed data is published under the specified mqtt topic.
-// After a maximum period of time, a publication is always carried out for an
-// order.
-template <class T>
-class Track {
+class Mqtt {
  public:
-  Track(const char *topic, const uint16_t seconds, const uint16_t maxage = 60)
-      : m_topic(topic), m_seconds(seconds), m_maxage(maxage) {}
+  Mqtt();
 
-  // OK xxx = 1;
-  const Track &operator=(const T &value) {
-    if (m_value != value) {
-      m_value = value;
-      publish(false);
-    } else {
-      if (millis() > m_last + m_maxage * 1000) publish(true);
-    }
-    return *this;
-  }
+  void setUniqueId(const char *id);
+  const std::string &getUniqueId() const;
 
-  // OK xxx += 1;
-  const Track &operator+=(const T &value) {
-    m_value += value;
-    publish(false);
-    return *this;
-  }
+  const std::string &getRootTopic() const;
 
-  // OK xxx += xxx;
-  const Track &operator+=(const Track &rhs) {
-    m_value += rhs.m_value;
-    publish(false);
-    return *this;
-  }
+  void setServer(const char *host, uint16_t port);
+  void setCredentials(const char *username, const char *password = nullptr);
 
-  // OK xxx = xxx + xxx;
-  friend Track operator+(Track lhs, const Track &rhs) {
-    lhs += rhs;
-    return lhs;
-  }
+  void setWill(const char *topic, uint8_t qos, bool retain,
+               const char *payload = nullptr, size_t length = 0);
 
-  // OK ++xxx;
-  const Track &operator++() {
-    m_value++;
-    publish(false);
-    return *this;
-  }
+  void connect();
+  bool connected() const;
 
-  // OK xxx++;
-  const Track operator++(int) {
-    Track old = *this;
-    operator++();
-    return old;
-  }
+  uint16_t publish(const char *topic, uint8_t qos, bool retain,
+                   const char *payload = nullptr, bool prefix = true);
 
-  const T &value() const { return m_value; }
+  void setHASupport(const bool enable);
+  const bool getHASupport() const;
 
-  void publish() { publish(true); }
-
-  void touch() {
-    if (millis() > m_last + m_maxage * 1000) publish(true);
-  }
+  static void publisHA(const bool remove);
 
  private:
-  T m_value;
-  const char *m_topic;
-  const uint16_t m_seconds = 0;
-  const uint16_t m_maxage = 0;
-  uint32_t m_last = 0;
+  AsyncMqttClient client;
+  std::string uniqueId;
+  std::string rootTopic;
 
-  inline void publish(boolean force) {
-    if (force || millis() > m_last + m_seconds * 1000) {
-      mqttClient.publish(m_topic, 0, true, String(m_value).c_str());
-      m_last = millis();
-    }
-  }
+  bool haSupport = false;
+
+  uint16_t subscribe(const char *topic, uint8_t qos);
+
+  static void onConnect(bool sessionPresent);
+  static void onDisconnect(AsyncMqttClientDisconnectReason reason) {}
+
+  static void onSubscribe(uint16_t packetId, uint8_t qos) {}
+  static void onUnsubscribe(uint16_t packetId) {}
+
+  static void onMessage(const char *topic, const char *payload,
+                        AsyncMqttClientMessageProperties properties, size_t len,
+                        size_t index, size_t total);
+
+  static void onPublish(uint16_t packetId) {}
+
+  void publishHADiagnostic(const char *name, const bool remove,
+                           const char *value_template, const bool full = false);
+
+  void publishHAConfigButton(const char *name, const bool remove);
 };
+
+extern Mqtt mqtt;

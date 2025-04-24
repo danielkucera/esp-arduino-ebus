@@ -1,6 +1,5 @@
 #include "store.hpp"
 
-#include <ArduinoJson.h>
 #include <Preferences.h>
 #include <Sequence.h>
 
@@ -8,85 +7,76 @@
 
 Store store;
 
-void Store::enqueCommand(const char *payload) {
-  newCommands.push_back(std::string(payload));
+void Store::insertCommands(const JsonArray &commands) {
+  for (JsonVariant command : commands)
+    newCommands.push_back(createCommand(command));
 }
 
-void Store::insertCommand(const char *payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
-  } else {
-    Command command;
-
-    std::string key = doc["key"].as<std::string>();
-
-    command.key = key;
-    command.command =
-        ebus::Sequence::to_vector(doc["command"].as<std::string>());
-    command.unit = doc["unit"].as<std::string>();
-    command.active = doc["active"].as<bool>();
-    command.interval = doc["interval"].as<uint32_t>();
-    command.last = 0;
-    command.master = doc["master"].as<bool>();
-    command.position = doc["position"].as<size_t>();
-    command.datatype =
-        ebus::string2datatype(doc["datatype"].as<const char *>());
-    command.topic = doc["topic"].as<std::string>();
-    command.ha = doc["ha"].as<bool>();
-    command.ha_class = doc["ha_class"].as<std::string>();
-
-    const std::vector<Command>::const_iterator it =
-        std::find_if(allCommands.begin(), allCommands.end(),
-                     [&key](const Command &cmd) { return cmd.key == key; });
-
-    if (it != allCommands.end()) allCommands.erase(it);
-
-    allCommands.push_back(command);
-    countCommands();
-    publishCommand(&allCommands.back(), false);
-    if (command.ha) publishHomeAssistant(&allCommands.back(), false);
-
-    lastInsert = millis();
-  }
-}
-
-void Store::removeCommand(const char *payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
-  } else {
-    std::string key = doc["key"].as<std::string>();
-
-    const std::vector<Command>::const_iterator it =
-        std::find_if(allCommands.begin(), allCommands.end(),
-                     [&key](const Command &cmd) { return cmd.key == key; });
-
-    if (it != allCommands.end()) {
-      publishCommand(&(*it), true);
-      if (it->ha) publishHomeAssistant(&(*it), true);
-      allCommands.erase(it);
-      countCommands();
-    } else {
-      std::string err = key + " not found";
-      mqttClient.publish("ebus/config/error", 0, false, err.c_str());
-    }
-  }
+void Store::removeCommands(const JsonArray &keys) {
+  for (JsonVariant key : keys) remCommands.push_back(key);
 }
 
 void Store::publishCommands() {
   for (const Command &command : allCommands) pubCommands.push_back(&command);
 
-  if (allCommands.size() == 0)
-    mqttClient.publish("ebus/commands", 0, false, "");
+  if (allCommands.size() == 0) mqtt.publish("commands", 0, false, "");
+}
+
+void Store::loadCommands() {
+  Preferences commands;
+  commands.begin("commands", true);
+
+  size_t bytes = commands.getBytesLength("ebus");
+  if (bytes > 2) {  // 2 = empty json array "[]"
+    std::vector<char> buffer(bytes);
+    bytes = commands.getBytes("ebus", buffer.data(), bytes);
+    if (bytes > 2) {
+      std::string payload(buffer.begin(), buffer.end());
+      deserializeCommands(payload.c_str());
+      publishResponse("load", "successful", bytes);
+    } else {
+      publishResponse("load", "failed");
+    }
+  } else {
+    publishResponse("load", "no data");
+  }
+
+  commands.end();
+}
+
+void Store::saveCommands() const {
+  Preferences commands;
+  commands.begin("commands", false);
+
+  size_t bytes = strlen(serializeCommands().c_str());
+  if (bytes > 2) {  // 2 = empty json array "[]"
+    bytes = commands.putBytes("ebus", serializeCommands().c_str(), bytes);
+    if (bytes > 2)
+      publishResponse("save", "successful", bytes);
+    else
+      publishResponse("save", "failed");
+  } else {
+    publishResponse("save", "no data");
+  }
+
+  commands.end();
+}
+
+void Store::wipeCommands() {
+  Preferences commands;
+  commands.begin("commands", false);
+
+  size_t bytes = commands.getBytesLength("ebus");
+  if (bytes > 0) {
+    if (commands.remove("ebus"))
+      publishResponse("wipe", "successful", bytes);
+    else
+      publishResponse("wipe", "failed");
+  } else {
+    publishResponse("wipe", "no data");
+  }
+
+  commands.end();
 }
 
 const std::string Store::getCommands() const {
@@ -123,10 +113,14 @@ const std::string Store::getCommands() const {
 
 void Store::doLoop() {
   if (millis() > 2 * 1000) {
-    checkNewCommands();
-    checkPubCommands();
+    checkInsertCommands();
+    checkRemoveCommands();
+    checkPublishCommands();
   }
 }
+
+const size_t Store::getActiveCommands() const { return activeCommands; }
+const size_t Store::getPassiveCommands() const { return passiveCommands; }
 
 const bool Store::active() const { return activeCommands > 0; }
 
@@ -168,65 +162,6 @@ std::vector<Command *> Store::findPassiveCommands(
   return commands;
 }
 
-void Store::loadCommands() {
-  Preferences commands;
-  commands.begin("commands", true);
-
-  size_t bytes = commands.getBytesLength("ebus");
-  if (bytes > 2) {  // 2 = empty json array "[]"
-    std::vector<char> buffer(bytes);
-    bytes = commands.getBytes("ebus", buffer.data(), bytes);
-    if (bytes > 2) {  // loading was successful
-      std::string payload(buffer.begin(), buffer.end());
-
-      deserializeCommands(payload.c_str());
-      mqttClient.publish("ebus/config/loading", 0, false,
-                         String(bytes).c_str());
-    } else {
-      mqttClient.publish("ebus/config/loading", 0, false, "failed");
-    }
-  } else {
-    mqttClient.publish("ebus/config/loading", 0, false, "no data");
-  }
-
-  commands.end();
-}
-
-void Store::saveCommands() const {
-  Preferences commands;
-  commands.begin("commands", false);
-
-  size_t bytes = strlen(serializeCommands().c_str());
-  if (bytes > 2) {  // 2 = empty json array "[]"
-    bytes = commands.putBytes("ebus", serializeCommands().c_str(), bytes);
-    if (bytes > 2)  // saving was successful
-      mqttClient.publish("ebus/config/saving", 0, false, String(bytes).c_str());
-    else
-      mqttClient.publish("ebus/config/saving", 0, false, "failed");
-  } else {
-    mqttClient.publish("ebus/config/saving", 0, false, "no data");
-  }
-
-  commands.end();
-}
-
-void Store::wipeCommands() {
-  Preferences commands;
-  commands.begin("commands", false);
-
-  size_t bytes = commands.getBytesLength("ebus");
-  if (bytes > 0) {
-    if (commands.remove("ebus"))  // wiping was successful
-      mqttClient.publish("ebus/config/wiping", 0, false, String(bytes).c_str());
-    else
-      mqttClient.publish("ebus/config/wiping", 0, false, "failed");
-  } else {
-    mqttClient.publish("ebus/config/wiping", 0, false, "no data");
-  }
-
-  commands.end();
-}
-
 void Store::countCommands() {
   activeCommands = std::count_if(allCommands.begin(), allCommands.end(),
                                  [](const Command &cmd) { return cmd.active; });
@@ -234,22 +169,86 @@ void Store::countCommands() {
   passiveCommands = allCommands.size() - activeCommands;
 }
 
-void Store::checkNewCommands() {
+void Store::checkInsertCommands() {
   if (newCommands.size() > 0) {
     if (millis() > lastInsert + distanceInsert) {
-      std::string payload = newCommands.front();
+      Command command = newCommands.front();
       newCommands.pop_front();
-      insertCommand(payload.c_str());
+      insertCommand(command);
     }
   }
 }
 
-void Store::checkPubCommands() {
+void Store::checkRemoveCommands() {
+  if (remCommands.size() > 0) {
+    if (millis() > lastRemove + distanceRemove) {
+      std::string payload = remCommands.front();
+      remCommands.pop_front();
+      removeCommand(payload);
+    }
+  }
+}
+
+void Store::checkPublishCommands() {
   if (pubCommands.size() > 0) {
     if (millis() > lastPublish + distancePublish) {
       publishCommand(pubCommands.front(), false);
+      publishHASensors(pubCommands.front(), !mqtt.getHASupport());
       pubCommands.pop_front();
     }
+  }
+}
+
+Command Store::createCommand(const JsonDocument &doc) {
+  Command command;
+
+  command.key = doc["key"].as<std::string>();
+  command.command = ebus::Sequence::to_vector(doc["command"].as<std::string>());
+  command.unit = doc["unit"].as<std::string>();
+  command.active = doc["active"].as<bool>();
+  command.interval = doc["interval"].as<uint32_t>();
+  command.last = 0;
+  command.master = doc["master"].as<bool>();
+  command.position = doc["position"].as<size_t>();
+  command.datatype = ebus::string2datatype(doc["datatype"].as<const char *>());
+  command.topic = doc["topic"].as<std::string>();
+  command.ha = doc["ha"].as<bool>();
+  command.ha_class = doc["ha_class"].as<std::string>();
+
+  return command;
+}
+
+void Store::insertCommand(const Command &command) {
+  std::string key = command.key;
+  const std::vector<Command>::const_iterator it =
+      std::find_if(allCommands.begin(), allCommands.end(),
+                   [&key](const Command &cmd) { return cmd.key == key; });
+
+  if (it != allCommands.end()) allCommands.erase(it);
+
+  allCommands.push_back(command);
+  countCommands();
+  publishCommand(&allCommands.back(), false);
+  publishHASensors(&allCommands.back(), false);
+
+  lastInsert = millis();
+  publishResponse("insert", "key '" + key + "' inserted");
+}
+
+void Store::removeCommand(const std::string &key) {
+  const std::vector<Command>::const_iterator it =
+      std::find_if(allCommands.begin(), allCommands.end(),
+                   [&key](const Command &cmd) { return cmd.key == key; });
+
+  if (it != allCommands.end()) {
+    publishCommand(&(*it), true);
+    publishHASensors(&(*it), true);
+    allCommands.erase(it);
+    countCommands();
+    lastRemove = millis();
+    publishResponse("remove", "key '" + key + "' removed");
+  } else {
+    publishResponse("remove", "key '" + key + "' not found");
   }
 }
 
@@ -259,19 +258,19 @@ const std::string Store::serializeCommands() const {
 
   if (allCommands.size() > 0) {
     for (const Command &command : allCommands) {
-      JsonArray arr = doc.add<JsonArray>();
+      JsonArray array = doc.add<JsonArray>();
 
-      arr.add(command.key);
-      arr.add(ebus::Sequence::to_string(command.command));
-      arr.add(command.unit);
-      arr.add(command.active);
-      arr.add(command.interval);
-      arr.add(command.master);
-      arr.add(command.position);
-      arr.add(ebus::datatype2string(command.datatype));
-      arr.add(command.topic);
-      arr.add(command.ha);
-      arr.add(command.ha_class);
+      array.add(command.key);
+      array.add(ebus::Sequence::to_string(command.command));
+      array.add(command.unit);
+      array.add(command.active);
+      array.add(command.interval);
+      array.add(command.master);
+      array.add(command.position);
+      array.add(ebus::datatype2string(command.datatype));
+      array.add(command.topic);
+      array.add(command.ha);
+      array.add(command.ha_class);
     }
   }
 
@@ -290,9 +289,11 @@ void Store::deserializeCommands(const char *payload) {
   DeserializationError error = deserializeJson(doc, payload);
 
   if (error) {
-    std::string err = "DeserializationError ";
-    err += error.c_str();
-    mqttClient.publish("ebus/config/error", 0, false, err.c_str());
+    std::string errorPayload;
+    JsonDocument errorDoc;
+    errorDoc["error"] = error.c_str();
+    serializeJson(errorDoc, errorPayload);
+    mqtt.publish("response", 0, false, errorPayload.c_str());
   } else {
     JsonArray array = doc.as<JsonArray>();
     for (JsonVariant variant : array) {
@@ -310,16 +311,24 @@ void Store::deserializeCommands(const char *payload) {
       tmpDoc["ha"] = variant[9];
       tmpDoc["ha_class"] = variant[10];
 
-      std::string tmpPayload;
-      serializeJson(tmpDoc, tmpPayload);
-
-      newCommands.push_back(tmpPayload);
+      newCommands.push_back(createCommand(tmpDoc));
     }
   }
 }
 
+void Store::publishResponse(const std::string &id, const std::string &status,
+                            const size_t &bytes) {
+  std::string payload;
+  JsonDocument doc;
+  doc["id"] = id;
+  doc["status"] = status;
+  if (bytes > 0) doc["bytes"] = bytes;
+  serializeJson(doc, payload);
+  mqtt.publish("response", 0, false, payload.c_str());
+}
+
 void Store::publishCommand(const Command *command, const bool remove) {
-  std::string topic = "ebus/commands/" + command->key;
+  std::string topic = "commands/" + command->key;
 
   std::string payload;
 
@@ -341,37 +350,51 @@ void Store::publishCommand(const Command *command, const bool remove) {
     serializeJson(doc, payload);
   }
 
-  mqttClient.publish(topic.c_str(), 0, false, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 
   if (remove) {
-    topic = "ebus/values/" + command->topic;
-    mqttClient.publish(topic.c_str(), 0, false, "");
+    topic = "values/" + command->topic;
+    mqtt.publish(topic.c_str(), 0, false, "");
   }
 }
 
-void Store::publishHomeAssistant(const Command *command, const bool remove) {
-  std::string name = command->topic;
-  std::replace(name.begin(), name.end(), '/', '_');
+void Store::publishHASensors(const Command *command, const bool remove) {
+  std::string stateTopic = command->topic;
+  std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
 
-  std::string topic = "homeassistant/sensor/ebus/" + name + "/config";
+  std::string subTopic = stateTopic;
+  std::replace(subTopic.begin(), subTopic.end(), '/', '_');
+
+  std::string topic = "homeassistant/sensor/ebus" + mqtt.getUniqueId() + '/' +
+                      subTopic + "/config";
 
   std::string payload;
 
-  if (!remove) {
+  if (command->ha && mqtt.getHASupport() && !remove) {
     JsonDocument doc;
+
+    std::string name = command->topic;
+    std::replace(name.begin(), name.end(), '/', ' ');
+    std::replace(name.begin(), name.end(), '_', ' ');
 
     doc["name"] = name;
     if (command->ha_class.compare("null") != 0 &&
         command->ha_class.length() > 0)
       doc["device_class"] = command->ha_class;
-    doc["state_topic"] = "ebus/values/" + command->topic;
+    doc["state_topic"] =
+        mqtt.getRootTopic() + std::string("values/") + stateTopic;
     if (command->unit.compare("null") != 0 && command->unit.length() > 0)
       doc["unit_of_measurement"] = command->unit;
-    doc["unique_id"] = command->key;  // TODO(yuhu-): use MAC + key
+    doc["unique_id"] = "ebus" + mqtt.getUniqueId() + '_' + command->key;
     doc["value_template"] = "{{value_json.value}}";
+
+    JsonObject device = doc["device"].to<JsonObject>();
+    device["identifiers"] = "ebus" + mqtt.getUniqueId();
 
     serializeJson(doc, payload);
   }
 
-  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+  if (remove || mqtt.getHASupport())
+    mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
 }
