@@ -248,7 +248,7 @@ The following topics are available.
 |state/internal/messages        |processed messages
 |state/internal/errors          |errors of finite state machine  
 |state/internal/resets          |resets of finite state machine 
-|state/internal/requets         |bus requests (arbitration)
+|state/internal/requests        |bus requests (arbitration)
 
 
 ### Details of MQTT commands

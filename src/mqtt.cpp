@@ -96,7 +96,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       if (value) reset();
     }
 #ifdef EBUS_INTERNAL
-    if (id.compare("insert") == 0) {
+    else if (id.compare("insert") == 0) {  // NOLINT
       JsonArray commands = doc["commands"].as<JsonArray>();
       if (commands != nullptr) store.insertCommands(commands);
     } else if (id.compare("remove") == 0) {
@@ -124,6 +124,13 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       schedule.toggleForward(value);
     }
 #endif
+    else {  // NOLINT
+      std::string errorPayload;
+      JsonDocument errorDoc;
+      errorDoc["error"] = "command '" + id + "' not found";
+      serializeJson(errorDoc, errorPayload);
+      mqtt.publish("response", 0, false, errorPayload.c_str());
+    }
   }
 }
 
