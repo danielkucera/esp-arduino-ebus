@@ -7,16 +7,24 @@
 // ebus/<unique_id>/state/internal/messages
 Track<uint32_t> messagesTotal("state/internal/messages/total", 10);
 
-Track<uint32_t> messagesPassiveMS("state/internal/messages/passiveMS", 10);
-Track<uint32_t> messagesPassiveMM("state/internal/messages/passiveMM", 10);
+Track<uint32_t> messagesPassiveMasterSlave(
+    "state/internal/messages/passiveMasterSlave", 10);
+Track<uint32_t> messagesPassiveMasterMaster(
+    "state/internal/messages/passiveMasterMaster", 10);
 
-Track<uint32_t> messagesReactiveMS("state/internal/messages/reactiveMS", 10);
-Track<uint32_t> messagesReactiveMM("state/internal/messages/reactiveMM", 10);
-Track<uint32_t> messagesReactiveBC("state/internal/messages/reactiveBC", 10);
+Track<uint32_t> messagesReactiveMasterSlave(
+    "state/internal/messages/reactiveMasterSlave", 10);
+Track<uint32_t> messagesReactiveMasterMaster(
+    "state/internal/messages/reactiveMasterMaster", 10);
+Track<uint32_t> messagesReactiveBroadcast(
+    "state/internal/messages/reactiveBroadcast", 10);
 
-Track<uint32_t> messagesActiveMS("state/internal/messages/activeMS", 10);
-Track<uint32_t> messagesActiveMM("state/internal/messages/activeMM", 10);
-Track<uint32_t> messagesActiveBC("state/internal/messages/activeBC", 10);
+Track<uint32_t> messagesActiveMasterSlave(
+    "state/internal/messages/activeMasterSlave", 10);
+Track<uint32_t> messagesActiveMasterMaster(
+    "state/internal/messages/activeMasterMaster", 10);
+Track<uint32_t> messagesActiveBroadcast(
+    "state/internal/messages/activeBroadcast", 10);
 
 // ebus/<unique_id>/state/internal/errors
 Track<uint32_t> errorsTotal("state/internal/errors/total", 10);
@@ -126,16 +134,16 @@ void Schedule::publishCounters() {
   // messages
   messagesTotal = counters.messagesTotal;
 
-  messagesPassiveMS = counters.messagesPassiveMS;
-  messagesPassiveMM = counters.messagesPassiveMM;
+  messagesPassiveMasterSlave = counters.messagesPassiveMasterSlave;
+  messagesPassiveMasterMaster = counters.messagesPassiveMasterMaster;
 
-  messagesReactiveMS = counters.messagesReactiveMS;
-  messagesReactiveMM = counters.messagesReactiveMM;
-  messagesReactiveBC = counters.messagesReactiveBC;
+  messagesReactiveMasterSlave = counters.messagesReactiveMasterSlave;
+  messagesReactiveMasterMaster = counters.messagesReactiveMasterMaster;
+  messagesReactiveBroadcast = counters.messagesReactiveBroadcast;
 
-  messagesActiveMS = counters.messagesActiveMS;
-  messagesActiveMM = counters.messagesActiveMM;
-  messagesActiveBC = counters.messagesActiveBC;
+  messagesActiveMasterSlave = counters.messagesActiveMasterSlave;
+  messagesActiveMasterMaster = counters.messagesActiveMasterMaster;
+  messagesActiveBroadcast = counters.messagesActiveBroadcast;
 
   // errors
   errorsTotal = counters.errorsTotal;
@@ -305,19 +313,19 @@ void Schedule::publishValue(Command *command,
       doc["value"] = ebus::byte_2_int32(
           ebus::Sequence::range(value, command->position, 4));
       break;
-    case ebus::Datatype::DATA1b:
+    case ebus::Datatype::DATA1B:
       doc["value"] = ebus::byte_2_data1b(
           ebus::Sequence::range(value, command->position, 1));
       break;
-    case ebus::Datatype::DATA1c:
+    case ebus::Datatype::DATA1C:
       doc["value"] = ebus::byte_2_data1c(
           ebus::Sequence::range(value, command->position, 1));
       break;
-    case ebus::Datatype::DATA2b:
+    case ebus::Datatype::DATA2B:
       doc["value"] = ebus::byte_2_data2b(
           ebus::Sequence::range(value, command->position, 2));
       break;
-    case ebus::Datatype::DATA2c:
+    case ebus::Datatype::DATA2C:
       doc["value"] = ebus::byte_2_data2c(
           ebus::Sequence::range(value, command->position, 2));
       break;
