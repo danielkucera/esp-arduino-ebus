@@ -45,6 +45,10 @@ Preferences preferences;
 #define DEFAULT_GATEWAY "192.168.1.1"
 #define DEFAULT_NETMASK "255.255.255.0"
 
+#define DEFAULT_MQTT_SERVER DEFAULT_GATEWAY
+#define DEFAULT_MQTT_USER "roger"
+#define DEFAULT_MQTT_PASS "password"
+
 #define STRING_LEN 64
 #define NUMBER_LEN 8
 
@@ -88,37 +92,40 @@ iotwebconf::CheckboxParameter staticIPParam = iotwebconf::CheckboxParameter(
     "Static IP", "staticIPParam", staticIPValue, STRING_LEN);
 iotwebconf::TextParameter ipAddressParam =
     iotwebconf::TextParameter("IP address", "ipAddress", ipAddressValue,
-                              STRING_LEN, "", DEFAULT_STATIC_IP);
+                              STRING_LEN, nullptr, DEFAULT_STATIC_IP);
 iotwebconf::TextParameter gatewayParam = iotwebconf::TextParameter(
-    "Gateway", "gateway", gatewayValue, STRING_LEN, "", DEFAULT_GATEWAY);
+    "Gateway", "gateway", gatewayValue, STRING_LEN, nullptr, DEFAULT_GATEWAY);
 iotwebconf::TextParameter netmaskParam =
     iotwebconf::TextParameter("Subnet mask", "netmask", netmaskValue,
-                              STRING_LEN, DEFAULT_NETMASK, DEFAULT_NETMASK);
+                              STRING_LEN, nullptr, DEFAULT_NETMASK);
 
 iotwebconf::ParameterGroup ebusGroup =
     iotwebconf::ParameterGroup("ebus", "eBUS configuration");
-iotwebconf::NumberParameter pwmParam =
-    iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
-                                "130", "1..255", "min='1' max='255' step='1'");
+iotwebconf::NumberParameter pwmParam = iotwebconf::NumberParameter(
+    "PWM value", "pwm_value", pwm_value, NUMBER_LEN, nullptr, "1..255",
+    "min='1' max='255' step='1'");
 #ifdef EBUS_INTERNAL
 iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     "eBUS address", "ebus_address", ebus_address, NUMBER_LEN,
     reinterpret_cast<char*>(ebus_address_values),
     reinterpret_cast<char*>(ebus_address_values),
-    sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
+    sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN);
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
-    "Command distance", "command_distance", command_distance, NUMBER_LEN, "1",
-    "0..60", "min='0' max='60' step='1'");
+    "Command distance", "command_distance", command_distance, NUMBER_LEN,
+    nullptr, "0..60", "min='0' max='60' step='1'");
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
-iotwebconf::TextParameter mqttServerParam = iotwebconf::TextParameter(
-    "MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "", "server.lan");
-iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
-    "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", "roger");
-iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
-    "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", "password");
+iotwebconf::TextParameter mqttServerParam =
+    iotwebconf::TextParameter("MQTT server", "mqtt_server", mqtt_server,
+                              STRING_LEN, nullptr, DEFAULT_MQTT_SERVER);
+iotwebconf::TextParameter mqttUserParam =
+    iotwebconf::TextParameter("MQTT user", "mqtt_user", mqtt_user, STRING_LEN,
+                              nullptr, DEFAULT_MQTT_USER);
+iotwebconf::PasswordParameter mqttPasswordParam =
+    iotwebconf::PasswordParameter("MQTT password", "mqtt_pass", mqtt_pass,
+                                  STRING_LEN, nullptr, DEFAULT_MQTT_PASS);
 
 iotwebconf::ParameterGroup haGroup =
     iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
