@@ -307,7 +307,7 @@ payload:
       "interval": 0,                     // minimum interval between two commands in seconds
       "master": true,                    // value of interest is in master or slave part
       "position": 1,                     // starting byte in interested part
-      "datatype": "DATA2b",              // ebus datatype
+      "datatype": "DATA2B",              // ebus datatype
       "topic": "outdoor_temperature",    // mqtt topic below "values/"
       "ha": true,                        // home assistant support for auto discovery
       "ha_class": "temperature"          // home assistant device_class
@@ -318,10 +318,10 @@ payload:
   ]
 }
 
-ebus datatype: BCD, UINT8, INT8, UINT16, INT16, UINT32, INT32, DATA1b, DATA1c, DATA2b, DATA2c, FLOAT (values as 1/1000)
+ebus datatype: BCD, UINT8, INT8, UINT16, INT16, UINT32, INT32, DATA1B, DATA1C, DATA2B, DATA2C, FLOAT (values as 1/1000)
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2b","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
 ```
 
 **Removing installed commands**
