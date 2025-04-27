@@ -30,4 +30,4 @@ bool handleNewClient(WiFiServer *server, WiFiClient clients[]);
 int pushClient(WiFiClient *client, uint8_t B);
 void handleClient(WiFiClient *client);
 
-void reset();
+void restart();

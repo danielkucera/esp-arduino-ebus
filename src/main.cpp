@@ -273,14 +273,9 @@ void calcUniqueId() {
   memmove(unique_id, &tmp[2], 6);
 }
 
-void reset() {
+void restart() {
   disableTX();
   ESP.restart();
-}
-
-void reset_config() {
-  preferences.clear();
-  reset();
 }
 
 void check_reset() {
@@ -289,7 +284,8 @@ void check_reset() {
   uint32_t resetStart = millis();
   while (digitalRead(RESET_PIN) == 0) {
     if (millis() > resetStart + RESET_MS) {
-      reset_config();
+      preferences.clear();
+      restart();
     }
   }
 }
@@ -774,7 +770,7 @@ void loop() {
   uptime = millis();
 
   if (millis() > last_comms + 200 * 1000) {
-    reset();
+    restart();
   }
 
   // Check if new client on the status server

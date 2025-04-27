@@ -93,7 +93,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
     std::string id = doc["id"].as<std::string>();
     if (id.compare("restart") == 0) {
       boolean value = doc["value"].as<boolean>();
-      if (value) reset();
+      if (value) restart();
     }
 #ifdef EBUS_INTERNAL
     else if (id.compare("insert") == 0) {  // NOLINT
