@@ -9,7 +9,6 @@
 
 #define QUEUE_SIZE 480
 #define STACK_PROTECTOR 512  // bytes
-#define RESET_MS 1000
 
 #ifdef ESP32
 #define UART_TX 20

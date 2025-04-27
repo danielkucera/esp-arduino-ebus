@@ -31,6 +31,9 @@ ESP8266HTTPUpdateServer httpUpdater;
 
 Preferences preferences;
 
+// minimum time of reset pin
+#define RESET_MS 1000
+
 // PWM
 #define PWM_CHANNEL 0
 #define PWM_FREQ 10000
@@ -39,15 +42,13 @@ Preferences preferences;
 // mDNS
 #define HOSTNAME "esp-eBus"
 
-// IotWebConfig
-// adjust this if the iotwebconfig structure has changed
-#define CONFIG_VERSION "eea"
+// IotWebConf
+// adjust this if the iotwebconf structure has changed
+#define CONFIG_VERSION "eeb"
 
 #define STRING_LEN 64
 #define NUMBER_LEN 8
 
-// #define DEFAULT_AP "ebus-test"
-// #define DEFAULT_PASS "lectronz"
 #define DEFAULT_APMODE_PASS "ebusebus"
 
 #define DUMMY_STATIC_IP "192.168.1.180"
@@ -88,12 +89,13 @@ char mqtt_pass[STRING_LEN];
 
 char haSupportValue[STRING_LEN];
 
-IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
+IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, DEFAULT_APMODE_PASS,
+                      CONFIG_VERSION);
 
 iotwebconf::ParameterGroup connGroup =
     iotwebconf::ParameterGroup("conn", "Connection parameters");
 iotwebconf::CheckboxParameter staticIPParam = iotwebconf::CheckboxParameter(
-    "Static IP", "staticIPParam", staticIPValue, STRING_LEN, "");
+    "Static IP", "staticIPParam", staticIPValue, STRING_LEN);
 iotwebconf::TextParameter ipAddressParam = iotwebconf::TextParameter(
     "IP address", "ipAddress", ipAddressValue, STRING_LEN, "", DUMMY_STATIC_IP);
 iotwebconf::TextParameter gatewayParam = iotwebconf::TextParameter(
@@ -130,7 +132,7 @@ iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
 iotwebconf::ParameterGroup haGroup =
     iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
 iotwebconf::CheckboxParameter haSupportParam = iotwebconf::CheckboxParameter(
-    "Home Assistant support", "haSupportParam", haSupportValue, STRING_LEN, "");
+    "Home Assistant support", "haSupportParam", haSupportValue, STRING_LEN);
 
 IPAddress ipAddress;
 IPAddress gateway;
@@ -628,10 +630,6 @@ void setup() {
     iotWebConf.init();
     strncpy(iotWebConf.getApPasswordParameter()->valueBuffer,
             DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test",
-            IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz",
-            IOTWEBCONF_WORD_LEN);
     iotWebConf.saveConfig();
 
     WiFi.channel(
