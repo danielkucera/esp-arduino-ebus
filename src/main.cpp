@@ -31,8 +31,6 @@ ESP8266HTTPUpdateServer httpUpdater;
 
 Preferences preferences;
 
-#define ALPHA 0.3
-
 #define PWM_CHANNEL 0
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
@@ -304,10 +302,11 @@ void loop_duration() {
   static uint32_t lastTime = 0;
   uint32_t now = micros();
   uint32_t delta = now - lastTime;
+  float alpha = 0.3;
 
   lastTime = now;
 
-  loopDuration = ((1 - ALPHA) * loopDuration.value() + (ALPHA * delta));
+  loopDuration = ((1 - alpha) * loopDuration.value() + (alpha * delta));
 
   if (delta > maxLoopDuration.value()) {
     maxLoopDuration = delta;
