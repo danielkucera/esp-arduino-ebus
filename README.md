@@ -232,7 +232,7 @@ The following topics are available on every device.
 |state/wifi                     |wifi related information
 |state/arbitration              |arbitration over common interface (e.g. ebusd)
 |&nbsp;                         |
-|**communcation**               |
+|**communication**              |
 |request                        |JSON encoded request 
 |response                       |JSON encoded response / error message
 
