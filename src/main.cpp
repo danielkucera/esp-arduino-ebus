@@ -213,14 +213,6 @@ void wifiConnected() {
   needMqttConnect = true;
 }
 
-int random_ch() {
-#ifdef ESP32
-  return esp_random() % 13 + 1;
-#else
-  return ESP8266TrueRandom.random(1, 13);
-#endif
-}
-
 void wdt_start() {
 #ifdef ESP32
   esp_task_wdt_init(6, true);
@@ -669,10 +661,6 @@ void setup() {
     strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "",
             IOTWEBCONF_WORD_LEN);
     iotWebConf.saveConfig();
-
-    WiFi.channel(
-        random_ch());  // doesn't work,
-                       // https://github.com/prampec/IotWebConf/issues/286
   } else {
     iotWebConf.skipApStartup();
     // -- Initializing the configuration.
