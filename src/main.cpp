@@ -624,21 +624,7 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  if (preferences.getBool("firstboot", true)) {
-    preferences.putBool("firstboot", false);
-
-    iotWebConf.init();
-    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer,
-            DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
-    iotWebConf.saveConfig();
-
-    WiFi.channel(
-        random_ch());  // doesn't work,
-                       // https://github.com/prampec/IotWebConf/issues/286
-  } else {
-    iotWebConf.skipApStartup();
-  }
-
+  // IotWebConf
   connGroup.addItem(&staticIPParam);
   connGroup.addItem(&ipAddressParam);
   connGroup.addItem(&gatewayParam);
@@ -672,8 +658,26 @@ void setup() {
   iotWebConf.setStatusPin(STATUS_LED_PIN);
 #endif
 
-  // -- Initializing the configuration.
-  iotWebConf.init();
+  if (preferences.getBool("firstboot", true)) {
+    preferences.putBool("firstboot", false);
+
+    iotWebConf.init();
+    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer,
+            DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
+    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "",
+            IOTWEBCONF_WORD_LEN);
+    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "",
+            IOTWEBCONF_WORD_LEN);
+    iotWebConf.saveConfig();
+
+    WiFi.channel(
+        random_ch());  // doesn't work,
+                       // https://github.com/prampec/IotWebConf/issues/286
+  } else {
+    iotWebConf.skipApStartup();
+    // -- Initializing the configuration.
+    iotWebConf.init();
+  }
 
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
