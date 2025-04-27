@@ -16,6 +16,10 @@ SoftwareSerial mySerial;
 
 BusType Bus;
 
+// On ESP8266, maximum 512 icw SoftwareSerial, otherwise you run out of heap
+#define RXBUFFERSIZE 512
+#define QUEUE_SIZE 480
+
 #define BAUD_RATE 2400
 #define MAX_FRAMEBITS (1 + 8 + 1)
 #define SERIAL_EVENT_TASK_STACK_SIZE 2048

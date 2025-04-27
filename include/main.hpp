@@ -4,10 +4,8 @@
 #include <WiFiServer.h>
 
 #define MAX_SRV_CLIENTS 4
-// On ESP8266, maximum 512 icw SoftwareSerial, otherwise you run out of heap
-#define RXBUFFERSIZE 512
 
-#define QUEUE_SIZE 480
+// never used - how does this work?
 #define STACK_PROTECTOR 512  // bytes
 
 #ifdef ESP32
