@@ -5,9 +5,6 @@
 
 #define MAX_SRV_CLIENTS 4
 
-// never used - how does this work?
-#define STACK_PROTECTOR 512  // bytes
-
 #ifdef ESP32
 #define UART_TX 20
 #define UART_RX 21
