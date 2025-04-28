@@ -50,6 +50,8 @@ Preferences preferences;
 #define NUMBER_LEN 8
 
 #define DEFAULT_APMODE_PASS "ebusebus"
+#define DEFAULT_AP "ebus-test"
+#define DEFAULT_PASS "lectronz"
 
 #define DUMMY_STATIC_IP "192.168.1.180"
 #define DUMMY_GATEWAY "192.168.1.1"
@@ -652,9 +654,9 @@ void setup() {
     iotWebConf.init();
     strncpy(iotWebConf.getApPasswordParameter()->valueBuffer,
             DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "",
+    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, DEFAULT_AP,
             IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "",
+    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, DEFAULT_PASS,
             IOTWEBCONF_WORD_LEN);
     iotWebConf.saveConfig();
   } else {
