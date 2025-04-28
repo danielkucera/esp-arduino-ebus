@@ -4,13 +4,6 @@
 #include <WiFiServer.h>
 
 #define MAX_SRV_CLIENTS 4
-// On ESP8266, maximum 512 icw SoftwareSerial, otherwise you run out of heap
-#define RXBUFFERSIZE 512
-
-#define QUEUE_SIZE 480
-#define STACK_PROTECTOR 512  // bytes
-#define HOSTNAME "esp-eBus"
-#define RESET_MS 1000
 
 #ifdef ESP32
 #define UART_TX 20
@@ -34,4 +27,4 @@ bool handleNewClient(WiFiServer *server, WiFiClient clients[]);
 int pushClient(WiFiClient *client, uint8_t B);
 void handleClient(WiFiClient *client);
 
-void reset();
+void restart();

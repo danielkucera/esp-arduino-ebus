@@ -31,28 +31,39 @@ ESP8266HTTPUpdateServer httpUpdater;
 
 Preferences preferences;
 
-#define ALPHA 0.3
+// minimum time of reset pin
+#define RESET_MS 1000
 
+// PWM
 #define PWM_CHANNEL 0
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
 
-#define DEFAULT_AP "ebus-test"
-#define DEFAULT_PASS "lectronz"
-#define DEFAULT_APMODE_PASS "ebusebus"
+// mDNS
+#define HOSTNAME "esp-eBus"
 
-#define DEFAULT_STATIC_IP "192.168.1.180"
-#define DEFAULT_GATEWAY "192.168.1.1"
-#define DEFAULT_NETMASK "255.255.255.0"
+// IotWebConf
+// adjust this if the iotwebconf structure has changed
+#define CONFIG_VERSION "eeb"
 
 #define STRING_LEN 64
 #define NUMBER_LEN 8
 
+#define DEFAULT_APMODE_PASS "ebusebus"
+#define DEFAULT_AP "ebus-test"
+#define DEFAULT_PASS "lectronz"
+
+#define DUMMY_STATIC_IP "192.168.1.180"
+#define DUMMY_GATEWAY "192.168.1.1"
+#define DUMMY_NETMASK "255.255.255.0"
+
+#define DUMMY_MQTT_SERVER DUMMY_GATEWAY
+#define DUMMY_MQTT_USER "roger"
+#define DUMMY_MQTT_PASS "password"
+
 #ifdef ESP32
 TaskHandle_t Task1;
 #endif
-
-#define CONFIG_VERSION "eea"
 
 char unique_id[7]{};
 
@@ -80,20 +91,19 @@ char mqtt_pass[STRING_LEN];
 
 char haSupportValue[STRING_LEN];
 
-IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, "", CONFIG_VERSION);
+IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, DEFAULT_APMODE_PASS,
+                      CONFIG_VERSION);
 
 iotwebconf::ParameterGroup connGroup =
     iotwebconf::ParameterGroup("conn", "Connection parameters");
 iotwebconf::CheckboxParameter staticIPParam = iotwebconf::CheckboxParameter(
     "Static IP", "staticIPParam", staticIPValue, STRING_LEN);
-iotwebconf::TextParameter ipAddressParam =
-    iotwebconf::TextParameter("IP address", "ipAddress", ipAddressValue,
-                              STRING_LEN, "", DEFAULT_STATIC_IP);
+iotwebconf::TextParameter ipAddressParam = iotwebconf::TextParameter(
+    "IP address", "ipAddress", ipAddressValue, STRING_LEN, "", DUMMY_STATIC_IP);
 iotwebconf::TextParameter gatewayParam = iotwebconf::TextParameter(
-    "Gateway", "gateway", gatewayValue, STRING_LEN, "", DEFAULT_GATEWAY);
-iotwebconf::TextParameter netmaskParam =
-    iotwebconf::TextParameter("Subnet mask", "netmask", netmaskValue,
-                              STRING_LEN, DEFAULT_NETMASK, DEFAULT_NETMASK);
+    "Gateway", "gateway", gatewayValue, STRING_LEN, "", DUMMY_GATEWAY);
+iotwebconf::TextParameter netmaskParam = iotwebconf::TextParameter(
+    "Subnet mask", "netmask", netmaskValue, STRING_LEN, "", DUMMY_NETMASK);
 
 iotwebconf::ParameterGroup ebusGroup =
     iotwebconf::ParameterGroup("ebus", "eBUS configuration");
@@ -107,18 +117,19 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
-    "Command distance", "command_distance", command_distance, NUMBER_LEN, "1",
+    "Command distance", "command_distance", command_distance, NUMBER_LEN, "2",
     "0..60", "min='0' max='60' step='1'");
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
-iotwebconf::TextParameter mqttServerParam = iotwebconf::TextParameter(
-    "MQTT server", "mqtt_server", mqtt_server, STRING_LEN, "", "server.lan");
+iotwebconf::TextParameter mqttServerParam =
+    iotwebconf::TextParameter("MQTT server", "mqtt_server", mqtt_server,
+                              STRING_LEN, "", DUMMY_MQTT_SERVER);
 iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
-    "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", "roger");
+    "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", DUMMY_MQTT_USER);
 iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
-    "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", "password");
+    "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", DUMMY_MQTT_PASS);
 
 iotwebconf::ParameterGroup haGroup =
     iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
@@ -204,14 +215,6 @@ void wifiConnected() {
   needMqttConnect = true;
 }
 
-int random_ch() {
-#ifdef ESP32
-  return esp_random() % 13 + 1;
-#else
-  return ESP8266TrueRandom.random(1, 13);
-#endif
-}
-
 void wdt_start() {
 #ifdef ESP32
   esp_task_wdt_init(6, true);
@@ -272,14 +275,9 @@ void calcUniqueId() {
   memmove(unique_id, &tmp[2], 6);
 }
 
-void reset() {
+void restart() {
   disableTX();
   ESP.restart();
-}
-
-void reset_config() {
-  preferences.clear();
-  reset();
 }
 
 void check_reset() {
@@ -288,7 +286,8 @@ void check_reset() {
   uint32_t resetStart = millis();
   while (digitalRead(RESET_PIN) == 0) {
     if (millis() > resetStart + RESET_MS) {
-      reset_config();
+      preferences.clear();
+      restart();
     }
   }
 }
@@ -297,10 +296,11 @@ void loop_duration() {
   static uint32_t lastTime = 0;
   uint32_t now = micros();
   uint32_t delta = now - lastTime;
+  float alpha = 0.3;
 
   lastTime = now;
 
-  loopDuration = ((1 - ALPHA) * loopDuration.value() + (ALPHA * delta));
+  loopDuration = ((1 - alpha) * loopDuration.value() + (alpha * delta));
 
   if (delta > maxLoopDuration.value()) {
     maxLoopDuration = delta;
@@ -614,25 +614,7 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  if (preferences.getBool("firstboot", true)) {
-    preferences.putBool("firstboot", false);
-
-    iotWebConf.init();
-    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer,
-            DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, "ebus-test",
-            IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, "lectronz",
-            IOTWEBCONF_WORD_LEN);
-    iotWebConf.saveConfig();
-
-    WiFi.channel(
-        random_ch());  // doesn't work,
-                       // https://github.com/prampec/IotWebConf/issues/286
-  } else {
-    iotWebConf.skipApStartup();
-  }
-
+  // IotWebConf
   connGroup.addItem(&staticIPParam);
   connGroup.addItem(&ipAddressParam);
   connGroup.addItem(&gatewayParam);
@@ -666,8 +648,22 @@ void setup() {
   iotWebConf.setStatusPin(STATUS_LED_PIN);
 #endif
 
-  // -- Initializing the configuration.
-  iotWebConf.init();
+  if (preferences.getBool("firstboot", true)) {
+    preferences.putBool("firstboot", false);
+
+    iotWebConf.init();
+    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer,
+            DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
+    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, DEFAULT_AP,
+            IOTWEBCONF_WORD_LEN);
+    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, DEFAULT_PASS,
+            IOTWEBCONF_WORD_LEN);
+    iotWebConf.saveConfig();
+  } else {
+    iotWebConf.skipApStartup();
+    // -- Initializing the configuration.
+    iotWebConf.init();
+  }
 
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
@@ -776,7 +772,7 @@ void loop() {
   uptime = millis();
 
   if (millis() > last_comms + 200 * 1000) {
-    reset();
+    restart();
   }
 
   // Check if new client on the status server
