@@ -5,7 +5,7 @@
 #include "track.hpp"
 
 // ebus/<unique_id>/state/internal/messages
-Track<uint32_t> messagesTotal("state/internal/messages/total", 10);
+Track<uint32_t> messagesTotal("state/internal/messages", 10);
 
 Track<uint32_t> messagesPassiveMasterSlave(
     "state/internal/messages/passiveMasterSlave", 10);
@@ -27,7 +27,7 @@ Track<uint32_t> messagesActiveBroadcast(
     "state/internal/messages/activeBroadcast", 10);
 
 // ebus/<unique_id>/state/internal/errors
-Track<uint32_t> errorsTotal("state/internal/errors/total", 10);
+Track<uint32_t> errorsTotal("state/internal/errors", 10);
 
 Track<uint32_t> errorsPassive("state/internal/errors/passive", 10);
 Track<uint32_t> errorsPassiveMaster("state/internal/errors/passive/master", 10);
@@ -55,14 +55,14 @@ Track<uint32_t> errorsActiveSlaveACK("state/internal/errors/active/slaveACK",
                                      10);
 
 // ebus/<unique_id>/state/internal/resets
-Track<uint32_t> resetsTotal("state/internal/resets/total", 10);
+Track<uint32_t> resetsTotal("state/internal/resets", 10);
 Track<uint32_t> resetsPassive00("state/internal/resets/passive00", 10);
 Track<uint32_t> resetsPassive0704("state/internal/resets/passive0704", 10);
 Track<uint32_t> resetsPassive("state/internal/resets/passive", 10);
 Track<uint32_t> resetsActive("state/internal/resets/active", 10);
 
 // ebus/<unique_id>/state/internal/requests
-Track<uint32_t> requestsTotal("state/internal/requests/total", 10);
+Track<uint32_t> requestsTotal("state/internal/requests", 10);
 Track<uint32_t> requestsWon("state/internal/requests/won", 10);
 Track<uint32_t> requestsLost("state/internal/requests/lost", 10);
 Track<uint32_t> requestsRetry("state/internal/requests/retry", 10);
@@ -346,5 +346,5 @@ void Schedule::publishValue(Command *command,
 
   std::string topic = "values/" + name;
 
-  mqtt.publish(topic.c_str(), 0, true, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }

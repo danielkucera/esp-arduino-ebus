@@ -3,14 +3,13 @@
 #include <ArduinoJson.h>
 #include <Datatypes.h>
 
-#include <deque>
 #include <string>
 #include <vector>
 
-// Implements the storage of active and passive commands. New commands can be
-// added and removed via mqtt. It provides functions for saving, loading and
-// deleting commands in the nvs memory. Commands stored in the nvs are loaded at
-// startup.
+// This Store class stores both active and passive eBUS commands. For permanent
+// storage (NVS), functions for saving, loading, and deleting commands are
+// available. Permanently stored commands are automatically loaded when the
+// device is restarted.
 
 struct Command {
   std::string key;               // unique key of command
@@ -31,23 +30,24 @@ class Store {
  public:
   Store() = default;
 
-  void insertCommands(const JsonArray &commands);
-  void removeCommands(const JsonArray &keys);
+  Command createCommand(const JsonDocument &doc);
 
-  void publishCommands();
+  void insertCommand(const Command &command);
+  void removeCommand(const std::string &key);
+  const Command *findCommand(const std::string &key);
 
-  void loadCommands();
-  void saveCommands() const;
-  static void wipeCommands();
+  int64_t loadCommands();
+  int64_t saveCommands() const;
+  static int64_t wipeCommands();
 
-  const std::string getCommands() const;
-
-  void doLoop();
+  const std::string getCommandsJson() const;
+  const std::vector<Command *> getCommands();
 
   const size_t getActiveCommands() const;
   const size_t getPassiveCommands() const;
 
   const bool active() const;
+
   Command *nextActiveCommand();
   std::vector<Command *> findPassiveCommands(
       const std::vector<uint8_t> &master);
@@ -58,38 +58,10 @@ class Store {
   size_t activeCommands = 0;
   size_t passiveCommands = 0;
 
-  std::deque<Command> newCommands;
-  uint32_t distanceInsert = 300;
-  uint32_t lastInsert = 0;
-
-  std::deque<std::string> remCommands;
-  uint32_t distanceRemove = 300;
-  uint32_t lastRemove = 0;
-
-  std::deque<const Command *> pubCommands;
-  uint32_t distancePublish = 200;
-  uint32_t lastPublish = 0;
-
   void countCommands();
-
-  void checkInsertCommands();
-  void checkRemoveCommands();
-  void checkPublishCommands();
-
-  Command createCommand(const JsonDocument &doc);
-
-  void insertCommand(const Command &command);
-  void removeCommand(const std::string &key);
 
   const std::string serializeCommands() const;
   void deserializeCommands(const char *payload);
-
-  static void publishResponse(const std::string &id, const std::string &status,
-                              const size_t &bytes = 0);
-
-  static void publishCommand(const Command *command, const bool remove);
-
-  static void publishHASensors(const Command *command, const bool remove);
 };
 
 extern Store store;
