@@ -281,7 +281,6 @@ The provided examples were created using `Mosquitto` in a `Linux shell`. The `se
 
 **Restarting of the device**
 ```
-id: restart
 payload:
 {
   "id": "restart",
@@ -294,7 +293,6 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart","value":tru
 
 **Inserting (Installing) of new commands**
 ```
-id: insert
 payload:
 {
   "id": "insert",
@@ -326,7 +324,6 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[
 
 **Removing installed commands**
 ```
-id: remove
 payload:
 {
   "id": "remove",
@@ -342,7 +339,6 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01"
 
 **Publishing installed commands**
 ```
-id: publish
 payload:
 {
   "id": "publish",
@@ -355,7 +351,6 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"publish","value":tru
 
 **Loading (Installing) saved commands**
 ```
-id: load
 payload:
 {
   "id": "load",
@@ -368,7 +363,6 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"load","value":true}'
 
 **Saving the currently installed commands**
 ```
-id: save
 payload:
 {
   "id": "save",
@@ -381,7 +375,6 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"save","value":true}'
 
 **Wiping of the saved commands**
 ```
-id: wipe
 payload:
 {
   "id": "wipe",
@@ -394,7 +387,6 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe","value":true}'
 
 **Sending ebus commands once**
 ```
-id: send
 payload:
 {
   "id": "send",
@@ -410,7 +402,6 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"send","commands":["0
 
 **Activate/deactivate data forwarding (including filtering)**
 ```
-id: forward
 payload:
 {
   "id": "forward",

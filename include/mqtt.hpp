@@ -2,7 +2,11 @@
 
 #include <AsyncMqttClient.h>
 
+#include <deque>
 #include <string>
+#include <tuple>
+
+#include "store.hpp"
 
 // The Mqtt class acts as a wrapper for the entire MQTT subsystem.
 
@@ -10,27 +14,27 @@ class Mqtt {
  public:
   Mqtt();
 
-  void setUniqueId(const char *id);
-  const std::string &getUniqueId() const;
-
-  const std::string &getRootTopic() const;
-
   void setServer(const char *host, uint16_t port);
   void setCredentials(const char *username, const char *password = nullptr);
 
-  void setWill(const char *topic, uint8_t qos, bool retain,
-               const char *payload = nullptr, size_t length = 0);
+  void setUniqueId(const char *id);
+  void setHASupport(const bool enable);
 
   void connect();
   bool connected() const;
 
+  void doLoop();
+
   uint16_t publish(const char *topic, uint8_t qos, bool retain,
                    const char *payload = nullptr, bool prefix = true);
 
-  void setHASupport(const bool enable);
-  const bool getHASupport() const;
+  void publishResponse(const std::string &id, const std::string &status,
+                       const size_t &bytes = 0);
 
-  static void publisHA(const bool remove);
+  void publisHA() const;
+
+  void publishCommands();
+  void publishHASensors(const bool remove);
 
  private:
   AsyncMqttClient client;
@@ -38,6 +42,25 @@ class Mqtt {
   std::string rootTopic;
 
   bool haSupport = false;
+
+  std::deque<Command> insCommands;
+  uint32_t distanceInsert = 300;
+  uint32_t lastInsert = 0;
+
+  std::deque<std::string> remCommands;
+  uint32_t distanceRemove = 300;
+  uint32_t lastRemove = 0;
+
+  std::deque<const Command *> pubCommands;
+  uint32_t distancePublish = 200;
+  uint32_t lastPublish = 0;
+
+  std::deque<std::tuple<const Command *, bool>> pubHASensors;
+  uint32_t distanceHASensors = 200;
+  uint32_t lastHASensors = 0;
+
+  void setWill(const char *topic, uint8_t qos, bool retain,
+               const char *payload = nullptr, size_t length = 0);
 
   uint16_t subscribe(const char *topic, uint8_t qos);
 
@@ -53,10 +76,27 @@ class Mqtt {
 
   static void onPublish(uint16_t packetId) {}
 
+  void insertCommands(const JsonArray &commands);
+  void removeCommands(const JsonArray &keys);
+
+  void checkInsertCommands();
+  void checkRemoveCommands();
+
+  void checkPublishCommands();
+  void checkPublishHASensors();
+
+  static void loadCommands();
+  static void saveCommands();
+  static void wipeCommands();
+
+  void publishCommand(const Command *command);
+
   void publishHADiagnostic(const char *name, const bool remove,
                            const char *value_template, const bool full = false);
 
   void publishHAConfigButton(const char *name, const bool remove);
+
+  void publishHASensor(const Command *command, const bool remove);
 };
 
 extern Mqtt mqtt;

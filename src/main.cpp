@@ -409,8 +409,7 @@ void saveParamsCallback() {
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
   mqtt.setHASupport(haSupportParam.isChecked());
-  mqtt.publisHA(!haSupportParam.isChecked());
-  store.publishCommands();
+  mqtt.publisHA();
 }
 
 void connectWifi(const char* ssid, const char* password) {
@@ -479,7 +478,7 @@ void handleStatus() { configServer.send(200, "text/plain", status_string()); }
 #ifdef EBUS_INTERNAL
 void handleCommands() {
   configServer.send(200, "application/json;charset=utf-8",
-                    store.getCommands().c_str());
+                    store.getCommandsJson().c_str());
 }
 #endif
 
@@ -719,9 +718,10 @@ void setup() {
   last_comms = millis();
 
 #ifdef EBUS_INTERNAL
-  // install saved commands
-  store.loadCommands();
+  store.loadCommands();  // install saved commands
   if (store.active()) enableTX();
+
+  mqtt.publishHASensors(false);
 #endif
 
 #ifdef ESP32
@@ -763,11 +763,13 @@ void loop() {
 #endif
     }
 #ifdef EBUS_INTERNAL
-    // Check whether new commands have been added
-    store.doLoop();
-    if (store.active()) enableTX();
+    mqtt.doLoop();
 #endif
   }
+
+#ifdef EBUS_INTERNAL
+  if (store.active()) enableTX();
+#endif
 
   uptime = millis();
 

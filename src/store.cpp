@@ -3,83 +3,115 @@
 #include <Preferences.h>
 #include <Sequence.h>
 
-#include "mqtt.hpp"
-
 Store store;
 
-void Store::insertCommands(const JsonArray &commands) {
-  for (JsonVariant command : commands)
-    newCommands.push_back(createCommand(command));
+Command Store::createCommand(const JsonDocument &doc) {
+  Command command;
+
+  command.key = doc["key"].as<std::string>();
+  command.command = ebus::Sequence::to_vector(doc["command"].as<std::string>());
+  command.unit = doc["unit"].as<std::string>();
+  command.active = doc["active"].as<bool>();
+  command.interval = doc["interval"].as<uint32_t>();
+  command.last = 0;
+  command.master = doc["master"].as<bool>();
+  command.position = doc["position"].as<size_t>();
+  command.datatype = ebus::string2datatype(doc["datatype"].as<const char *>());
+  command.topic = doc["topic"].as<std::string>();
+  command.ha = doc["ha"].as<bool>();
+  command.ha_class = doc["ha_class"].as<std::string>();
+
+  return command;
 }
 
-void Store::removeCommands(const JsonArray &keys) {
-  for (JsonVariant key : keys) remCommands.push_back(key);
+void Store::insertCommand(const Command &command) {
+  std::string key = command.key;
+  const std::vector<Command>::iterator it =
+      std::find_if(allCommands.begin(), allCommands.end(),
+                   [&key](const Command &cmd) { return cmd.key == key; });
+
+  if (it != allCommands.end()) {
+    *it = command;
+  } else {
+    allCommands.push_back(command);
+    countCommands();
+  }
 }
 
-void Store::publishCommands() {
-  for (const Command &command : allCommands) pubCommands.push_back(&command);
+void Store::removeCommand(const std::string &key) {
+  const std::vector<Command>::const_iterator it =
+      std::find_if(allCommands.cbegin(), allCommands.cend(),
+                   [&key](const Command &cmd) { return cmd.key == key; });
 
-  if (allCommands.size() == 0) mqtt.publish("commands", 0, false, "");
+  if (it != allCommands.end()) {
+    allCommands.erase(it);
+    countCommands();
+  }
 }
 
-void Store::loadCommands() {
-  Preferences commands;
-  commands.begin("commands", true);
+const Command *Store::findCommand(const std::string &key) {
+  const std::vector<Command>::const_iterator it =
+      std::find_if(allCommands.cbegin(), allCommands.cend(),
+                   [&key](const Command &cmd) { return cmd.key == key; });
 
-  size_t bytes = commands.getBytesLength("ebus");
+  if (it != allCommands.end())
+    return &(*it);
+  else
+    return nullptr;
+}
+
+int64_t Store::loadCommands() {
+  Preferences preferences;
+  preferences.begin("commands", true);
+
+  int64_t bytes = preferences.getBytesLength("ebus");
   if (bytes > 2) {  // 2 = empty json array "[]"
     std::vector<char> buffer(bytes);
-    bytes = commands.getBytes("ebus", buffer.data(), bytes);
-    if (bytes > 2) {
+    bytes = preferences.getBytes("ebus", buffer.data(), bytes);
+    if (bytes > 0) {
       std::string payload(buffer.begin(), buffer.end());
       deserializeCommands(payload.c_str());
-      publishResponse("load", "successful", bytes);
     } else {
-      publishResponse("load", "failed");
+      bytes = -1;
     }
   } else {
-    publishResponse("load", "no data");
+    bytes = 0;
   }
 
-  commands.end();
+  preferences.end();
+  return bytes;
 }
 
-void Store::saveCommands() const {
-  Preferences commands;
-  commands.begin("commands", false);
+int64_t Store::saveCommands() const {
+  Preferences preferences;
+  preferences.begin("commands", false);
 
-  size_t bytes = strlen(serializeCommands().c_str());
+  int64_t bytes = strlen(serializeCommands().c_str());
   if (bytes > 2) {  // 2 = empty json array "[]"
-    bytes = commands.putBytes("ebus", serializeCommands().c_str(), bytes);
-    if (bytes > 2)
-      publishResponse("save", "successful", bytes);
-    else
-      publishResponse("save", "failed");
+    bytes = preferences.putBytes("ebus", serializeCommands().c_str(), bytes);
+    if (bytes == 0) bytes = -1;
   } else {
-    publishResponse("save", "no data");
+    bytes = 0;
   }
 
-  commands.end();
+  preferences.end();
+  return bytes;
 }
 
-void Store::wipeCommands() {
-  Preferences commands;
-  commands.begin("commands", false);
+int64_t Store::wipeCommands() {
+  Preferences preferences;
+  preferences.begin("commands", false);
 
-  size_t bytes = commands.getBytesLength("ebus");
+  int64_t bytes = preferences.getBytesLength("ebus");
   if (bytes > 0) {
-    if (commands.remove("ebus"))
-      publishResponse("wipe", "successful", bytes);
-    else
-      publishResponse("wipe", "failed");
-  } else {
-    publishResponse("wipe", "no data");
+    if (!preferences.remove("ebus")) bytes = -1;
   }
 
-  commands.end();
+  preferences.end();
+  return bytes;
 }
 
-const std::string Store::getCommands() const {
+const std::string Store::getCommandsJson() const {
   std::string payload;
   JsonDocument doc;
 
@@ -111,12 +143,10 @@ const std::string Store::getCommands() const {
   return payload;
 }
 
-void Store::doLoop() {
-  if (millis() > 2 * 1000) {
-    checkInsertCommands();
-    checkRemoveCommands();
-    checkPublishCommands();
-  }
+const std::vector<Command *> Store::getCommands() {
+  std::vector<Command *> commands;
+  for (Command &command : allCommands) commands.push_back(&(command));
+  return commands;
 }
 
 const size_t Store::getActiveCommands() const { return activeCommands; }
@@ -169,89 +199,6 @@ void Store::countCommands() {
   passiveCommands = allCommands.size() - activeCommands;
 }
 
-void Store::checkInsertCommands() {
-  if (newCommands.size() > 0) {
-    if (millis() > lastInsert + distanceInsert) {
-      Command command = newCommands.front();
-      newCommands.pop_front();
-      insertCommand(command);
-    }
-  }
-}
-
-void Store::checkRemoveCommands() {
-  if (remCommands.size() > 0) {
-    if (millis() > lastRemove + distanceRemove) {
-      std::string payload = remCommands.front();
-      remCommands.pop_front();
-      removeCommand(payload);
-    }
-  }
-}
-
-void Store::checkPublishCommands() {
-  if (pubCommands.size() > 0) {
-    if (millis() > lastPublish + distancePublish) {
-      publishCommand(pubCommands.front(), false);
-      publishHASensors(pubCommands.front(), !mqtt.getHASupport());
-      pubCommands.pop_front();
-    }
-  }
-}
-
-Command Store::createCommand(const JsonDocument &doc) {
-  Command command;
-
-  command.key = doc["key"].as<std::string>();
-  command.command = ebus::Sequence::to_vector(doc["command"].as<std::string>());
-  command.unit = doc["unit"].as<std::string>();
-  command.active = doc["active"].as<bool>();
-  command.interval = doc["interval"].as<uint32_t>();
-  command.last = 0;
-  command.master = doc["master"].as<bool>();
-  command.position = doc["position"].as<size_t>();
-  command.datatype = ebus::string2datatype(doc["datatype"].as<const char *>());
-  command.topic = doc["topic"].as<std::string>();
-  command.ha = doc["ha"].as<bool>();
-  command.ha_class = doc["ha_class"].as<std::string>();
-
-  return command;
-}
-
-void Store::insertCommand(const Command &command) {
-  std::string key = command.key;
-  const std::vector<Command>::const_iterator it =
-      std::find_if(allCommands.begin(), allCommands.end(),
-                   [&key](const Command &cmd) { return cmd.key == key; });
-
-  if (it != allCommands.end()) allCommands.erase(it);
-
-  allCommands.push_back(command);
-  countCommands();
-  publishCommand(&allCommands.back(), false);
-  publishHASensors(&allCommands.back(), false);
-
-  lastInsert = millis();
-  publishResponse("insert", "key '" + key + "' inserted");
-}
-
-void Store::removeCommand(const std::string &key) {
-  const std::vector<Command>::const_iterator it =
-      std::find_if(allCommands.begin(), allCommands.end(),
-                   [&key](const Command &cmd) { return cmd.key == key; });
-
-  if (it != allCommands.end()) {
-    publishCommand(&(*it), true);
-    publishHASensors(&(*it), true);
-    allCommands.erase(it);
-    countCommands();
-    lastRemove = millis();
-    publishResponse("remove", "key '" + key + "' removed");
-  } else {
-    publishResponse("remove", "key '" + key + "' not found");
-  }
-}
-
 const std::string Store::serializeCommands() const {
   std::string payload;
   JsonDocument doc;
@@ -288,13 +235,7 @@ void Store::deserializeCommands(const char *payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);
 
-  if (error) {
-    std::string errorPayload;
-    JsonDocument errorDoc;
-    errorDoc["error"] = error.c_str();
-    serializeJson(errorDoc, errorPayload);
-    mqtt.publish("response", 0, false, errorPayload.c_str());
-  } else {
+  if (!error) {
     JsonArray array = doc.as<JsonArray>();
     for (JsonVariant variant : array) {
       JsonDocument tmpDoc;
@@ -311,90 +252,7 @@ void Store::deserializeCommands(const char *payload) {
       tmpDoc["ha"] = variant[9];
       tmpDoc["ha_class"] = variant[10];
 
-      newCommands.push_back(createCommand(tmpDoc));
+      insertCommand(createCommand(tmpDoc));
     }
   }
-}
-
-void Store::publishResponse(const std::string &id, const std::string &status,
-                            const size_t &bytes) {
-  std::string payload;
-  JsonDocument doc;
-  doc["id"] = id;
-  doc["status"] = status;
-  if (bytes > 0) doc["bytes"] = bytes;
-  serializeJson(doc, payload);
-  mqtt.publish("response", 0, false, payload.c_str());
-}
-
-void Store::publishCommand(const Command *command, const bool remove) {
-  std::string topic = "commands/" + command->key;
-
-  std::string payload;
-
-  if (!remove) {
-    JsonDocument doc;
-
-    doc["key"] = command->key;
-    doc["command"] = ebus::Sequence::to_string(command->command);
-    doc["unit"] = command->unit;
-    doc["active"] = command->active;
-    doc["interval"] = command->interval;
-    doc["master"] = command->master;
-    doc["position"] = command->position;
-    doc["datatype"] = ebus::datatype2string(command->datatype);
-    doc["topic"] = command->topic;
-    doc["ha"] = command->ha;
-    doc["ha_class"] = command->ha_class;
-
-    serializeJson(doc, payload);
-  }
-
-  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
-
-  if (remove) {
-    topic = "values/" + command->topic;
-    mqtt.publish(topic.c_str(), 0, false, "");
-  }
-}
-
-void Store::publishHASensors(const Command *command, const bool remove) {
-  std::string stateTopic = command->topic;
-  std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-
-  std::string subTopic = stateTopic;
-  std::replace(subTopic.begin(), subTopic.end(), '/', '_');
-
-  std::string topic = "homeassistant/sensor/ebus" + mqtt.getUniqueId() + '/' +
-                      subTopic + "/config";
-
-  std::string payload;
-
-  if (command->ha && mqtt.getHASupport() && !remove) {
-    JsonDocument doc;
-
-    std::string name = command->topic;
-    std::replace(name.begin(), name.end(), '/', ' ');
-    std::replace(name.begin(), name.end(), '_', ' ');
-
-    doc["name"] = name;
-    if (command->ha_class.compare("null") != 0 &&
-        command->ha_class.length() > 0)
-      doc["device_class"] = command->ha_class;
-    doc["state_topic"] =
-        mqtt.getRootTopic() + std::string("values/") + stateTopic;
-    if (command->unit.compare("null") != 0 && command->unit.length() > 0)
-      doc["unit_of_measurement"] = command->unit;
-    doc["unique_id"] = "ebus" + mqtt.getUniqueId() + '_' + command->key;
-    doc["value_template"] = "{{value_json.value}}";
-
-    JsonObject device = doc["device"].to<JsonObject>();
-    device["identifiers"] = "ebus" + mqtt.getUniqueId();
-
-    serializeJson(doc, payload);
-  }
-
-  if (remove || mqtt.getHASupport())
-    mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
 }

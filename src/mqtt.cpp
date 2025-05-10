@@ -4,7 +4,6 @@
 
 #include "main.hpp"
 #include "schedule.hpp"
-#include "store.hpp"
 
 Mqtt mqtt;
 
@@ -17,15 +16,6 @@ Mqtt::Mqtt() {
   client.onPublish(onPublish);
 }
 
-void Mqtt::setUniqueId(const char *id) {
-  uniqueId = id;
-  rootTopic = "ebus/" + uniqueId + "/";
-}
-
-const std::string &Mqtt::getUniqueId() const { return uniqueId; }
-
-const std::string &Mqtt::getRootTopic() const { return rootTopic; }
-
 void Mqtt::setServer(const char *host, uint16_t port) {
   client.setServer(host, port);
 }
@@ -34,14 +24,23 @@ void Mqtt::setCredentials(const char *username, const char *password) {
   client.setCredentials(username, password);
 }
 
-void Mqtt::setWill(const char *topic, uint8_t qos, bool retain,
-                   const char *payload, size_t length) {
-  client.setWill(topic, qos, retain, payload, length);
+void Mqtt::setUniqueId(const char *id) {
+  uniqueId = id;
+  rootTopic = "ebus/" + uniqueId + "/";
 }
+
+void Mqtt::setHASupport(const bool enable) { haSupport = enable; }
 
 void Mqtt::connect() { client.connect(); }
 
 bool Mqtt::connected() const { return client.connected(); }
+
+void Mqtt::doLoop() {
+  checkInsertCommands();
+  checkRemoveCommands();
+  checkPublishCommands();
+  checkPublishHASensors();
+}
 
 uint16_t Mqtt::publish(const char *topic, uint8_t qos, bool retain,
                        const char *payload, bool prefix) {
@@ -50,16 +49,37 @@ uint16_t Mqtt::publish(const char *topic, uint8_t qos, bool retain,
   return client.publish(mqttTopic.c_str(), qos, retain, payload);
 }
 
-void Mqtt::setHASupport(const bool enable) { haSupport = enable; }
+void Mqtt::publishResponse(const std::string &id, const std::string &status,
+                           const size_t &bytes) {
+  std::string payload;
+  JsonDocument doc;
+  doc["id"] = id;
+  doc["status"] = status;
+  if (bytes > 0) doc["bytes"] = bytes;
+  serializeJson(doc, payload);
+  publish("response", 0, false, payload.c_str());
+}
 
-const bool Mqtt::getHASupport() const { return haSupport; }
-
-void Mqtt::publisHA(const bool remove) {
-  mqtt.publishHADiagnostic("Uptime", remove,
+void Mqtt::publisHA() const {
+  mqtt.publishHADiagnostic("Uptime", !haSupport,
                            "{{timedelta(seconds=((value|float)/1000)|int)}}",
                            true);
 
-  mqtt.publishHAConfigButton("Restart", remove);
+  mqtt.publishHAConfigButton("Restart", !haSupport);
+}
+
+void Mqtt::publishCommands() {
+  for (Command *command : store.getCommands()) pubCommands.push_back(command);
+}
+
+void Mqtt::publishHASensors(const bool remove) {
+  for (Command *command : store.getCommands())
+    pubHASensors.push_back(std::make_tuple(command, remove));
+}
+
+void Mqtt::setWill(const char *topic, uint8_t qos, bool retain,
+                   const char *payload, size_t length) {
+  client.setWill(topic, qos, retain, payload, length);
 }
 
 uint16_t Mqtt::subscribe(const char *topic, uint8_t qos) {
@@ -67,14 +87,14 @@ uint16_t Mqtt::subscribe(const char *topic, uint8_t qos) {
 }
 
 void Mqtt::onConnect(bool sessionPresent) {
-  std::string topicRequest = mqtt.getRootTopic() + "request";
+  std::string topicRequest = mqtt.rootTopic + "request";
   mqtt.subscribe(topicRequest.c_str(), 0);
 
-  std::string topicWill = mqtt.getRootTopic() + "state/available";
+  std::string topicWill = mqtt.rootTopic + "state/available";
   mqtt.publish(topicWill.c_str(), 0, true, "online", false);
   mqtt.setWill(topicWill.c_str(), 0, true, "offline");
 
-  mqtt.publisHA(false);
+  mqtt.publisHA();
 }
 
 void Mqtt::onMessage(const char *topic, const char *payload,
@@ -98,22 +118,22 @@ void Mqtt::onMessage(const char *topic, const char *payload,
 #ifdef EBUS_INTERNAL
     else if (id.compare("insert") == 0) {  // NOLINT
       JsonArray commands = doc["commands"].as<JsonArray>();
-      if (commands != nullptr) store.insertCommands(commands);
+      if (commands != nullptr) mqtt.insertCommands(commands);
     } else if (id.compare("remove") == 0) {
       JsonArray keys = doc["keys"].as<JsonArray>();
-      if (keys != nullptr) store.removeCommands(keys);
+      if (keys != nullptr) mqtt.removeCommands(keys);
     } else if (id.compare("publish") == 0) {
       boolean value = doc["value"].as<boolean>();
-      if (value) store.publishCommands();
+      if (value) mqtt.publishCommands();
     } else if (id.compare("load") == 0) {
       boolean value = doc["value"].as<boolean>();
-      if (value) store.loadCommands();
+      if (value) mqtt.loadCommands();
     } else if (id.compare("save") == 0) {
       boolean value = doc["value"].as<boolean>();
-      if (value) store.saveCommands();
+      if (value) mqtt.saveCommands();
     } else if (id.compare("wipe") == 0) {
       boolean value = doc["value"].as<boolean>();
-      if (value) store.wipeCommands();
+      if (value) mqtt.wipeCommands();
     } else if (id.compare("send") == 0) {
       JsonArray commands = doc["commands"].as<JsonArray>();
       if (commands != nullptr) schedule.handleSend(commands);
@@ -132,6 +152,118 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       mqtt.publish("response", 0, false, errorPayload.c_str());
     }
   }
+}
+
+void Mqtt::insertCommands(const JsonArray &commands) {
+  for (JsonVariant command : commands)
+    insCommands.push_back(store.createCommand(command));
+}
+
+void Mqtt::removeCommands(const JsonArray &keys) {
+  for (JsonVariant key : keys) remCommands.push_back(key);
+}
+
+void Mqtt::checkInsertCommands() {
+  if (insCommands.size() > 0) {
+    if (millis() > lastInsert + distanceInsert) {
+      lastInsert = millis();
+      Command command = insCommands.front();
+      insCommands.pop_front();
+      store.insertCommand(command);
+      if (haSupport) mqtt.publishHASensor(&command, false);
+      mqtt.publishResponse("insert", "key '" + command.key + "' inserted");
+    }
+  }
+}
+
+void Mqtt::checkRemoveCommands() {
+  if (remCommands.size() > 0) {
+    if (millis() > lastRemove + distanceRemove) {
+      lastRemove = millis();
+      std::string key = remCommands.front();
+      remCommands.pop_front();
+      const Command *command = store.findCommand(key);
+      if (command != nullptr) {
+        if (haSupport) mqtt.publishHASensor(command, true);
+        store.removeCommand(key);
+        mqtt.publishResponse("remove", "key '" + key + "' removed");
+      } else {
+        mqtt.publishResponse("remove", "key '" + key + "' not found");
+      }
+    }
+  }
+}
+
+void Mqtt::checkPublishCommands() {
+  if (pubCommands.size() > 0) {
+    if (millis() > lastPublish + distancePublish) {
+      lastPublish = millis();
+      mqtt.publishCommand(pubCommands.front());
+      pubCommands.pop_front();
+    }
+  }
+}
+
+void Mqtt::checkPublishHASensors() {
+  if (pubHASensors.size() > 0) {
+    if (millis() > lastHASensors + distanceHASensors) {
+      lastHASensors = millis();
+      mqtt.publishHASensor(std::get<0>(pubHASensors.front()),
+                           std::get<1>(pubHASensors.front()));
+      pubHASensors.pop_front();
+    }
+  }
+}
+
+void Mqtt::loadCommands() {
+  int64_t bytes = store.loadCommands();
+  if (bytes > 0)
+    mqtt.publishResponse("load", "successful", bytes);
+  else if (bytes < 0)
+    mqtt.publishResponse("load", "failed");
+  else
+    mqtt.publishResponse("load", "no data");
+}
+
+void Mqtt::saveCommands() {
+  int64_t bytes = store.saveCommands();
+  if (bytes > 0)
+    mqtt.publishResponse("save", "successful", bytes);
+  else if (bytes < 0)
+    mqtt.publishResponse("save", "failed");
+  else
+    mqtt.publishResponse("save", "no data");
+}
+
+void Mqtt::wipeCommands() {
+  int64_t bytes = store.wipeCommands();
+  if (bytes > 0)
+    mqtt.publishResponse("wipe", "successful", bytes);
+  else if (bytes < 0)
+    mqtt.publishResponse("wipe", "failed");
+  else
+    mqtt.publishResponse("wipe", "no data");
+}
+
+void Mqtt::publishCommand(const Command *command) {
+  std::string topic = "commands/" + command->key;
+  std::string payload;
+  JsonDocument doc;
+
+  doc["key"] = command->key;
+  doc["command"] = ebus::Sequence::to_string(command->command);
+  doc["unit"] = command->unit;
+  doc["active"] = command->active;
+  doc["interval"] = command->interval;
+  doc["master"] = command->master;
+  doc["position"] = command->position;
+  doc["datatype"] = ebus::datatype2string(command->datatype);
+  doc["topic"] = command->topic;
+  doc["ha"] = command->ha;
+  doc["ha_class"] = command->ha_class;
+
+  serializeJson(doc, payload);
+  publish(topic.c_str(), 0, false, payload.c_str());
 }
 
 void Mqtt::publishHADiagnostic(const char *name, const bool remove,
@@ -170,7 +302,7 @@ void Mqtt::publishHADiagnostic(const char *name, const bool remove,
   if (remove || haSupport) {
     std::string topic =
         "homeassistant/sensor/ebus" + uniqueId + '/' + lowerName + "/config";
-    mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
+    publish(topic.c_str(), 0, true, payload.c_str(), false);
   }
 }
 
@@ -188,7 +320,6 @@ void Mqtt::publishHAConfigButton(const char *name, const bool remove) {
     doc["entity_category"] = "config";
     doc["unique_id"] = "ebus" + uniqueId + '_' + lowerName;
     doc["availability_topic"] = rootTopic + std::string("state/available");
-
     doc["command_topic"] = rootTopic + "request";
     doc["payload_press"] = "{\"id\":\"" + lowerName + "\",\"value\":true}";
     doc["qos"] = 0;
@@ -203,6 +334,46 @@ void Mqtt::publishHAConfigButton(const char *name, const bool remove) {
   if (remove || haSupport) {
     std::string topic =
         "homeassistant/button/ebus" + uniqueId + '/' + lowerName + "/config";
-    mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
+    publish(topic.c_str(), 0, true, payload.c_str(), false);
   }
+}
+
+void Mqtt::publishHASensor(const Command *command, const bool remove) {
+  std::string stateTopic = command->topic;
+  std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+
+  std::string subTopic = stateTopic;
+  std::replace(subTopic.begin(), subTopic.end(), '/', '_');
+
+  std::string topic =
+      "homeassistant/sensor/ebus" + uniqueId + '/' + subTopic + "/config";
+
+  std::string payload;
+
+  if (command->ha && haSupport && !remove) {
+    JsonDocument doc;
+
+    std::string name = command->topic;
+    std::replace(name.begin(), name.end(), '/', ' ');
+    std::replace(name.begin(), name.end(), '_', ' ');
+
+    doc["name"] = name;
+    if (command->ha_class.compare("null") != 0 &&
+        command->ha_class.length() > 0)
+      doc["device_class"] = command->ha_class;
+    doc["state_topic"] = rootTopic + std::string("values/") + stateTopic;
+    if (command->unit.compare("null") != 0 && command->unit.length() > 0)
+      doc["unit_of_measurement"] = command->unit;
+    doc["unique_id"] = "ebus" + uniqueId + '_' + command->key;
+    doc["value_template"] = "{{value_json.value}}";
+
+    JsonObject device = doc["device"].to<JsonObject>();
+    device["identifiers"] = "ebus" + uniqueId;
+
+    serializeJson(doc, payload);
+  }
+
+  if (remove || haSupport)
+    publish(topic.c_str(), 0, true, payload.c_str(), false);
 }
