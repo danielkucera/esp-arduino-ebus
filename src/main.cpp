@@ -710,17 +710,14 @@ void setup() {
 #endif
 
   ArduinoOTA.begin();
-
   MDNS.begin(HOSTNAME);
-
   wdt_start();
 
   last_comms = millis();
+  enableTX();
 
 #ifdef EBUS_INTERNAL
   store.loadCommands();  // install saved commands
-  if (store.active()) enableTX();
-
   mqtt.publishHASensors(false);
 #endif
 
@@ -767,10 +764,6 @@ void loop() {
 #endif
   }
 
-#ifdef EBUS_INTERNAL
-  if (store.active()) enableTX();
-#endif
-
   uptime = millis();
 
   if (millis() > last_comms + 200 * 1000) {
@@ -786,12 +779,7 @@ void loop() {
   }
 
   // Check if there are any new clients on the eBUS servers
-  if (handleNewClient(&wifiServer, serverClients)) {
-    enableTX();
-  }
-  if (handleNewClient(&wifiServerEnh, enhClients)) {
-    enableTX();
-  }
-
+  handleNewClient(&wifiServer, serverClients);
+  handleNewClient(&wifiServerEnh, enhClients);
   handleNewClient(&wifiServerRO, serverClientsRO);
 }
