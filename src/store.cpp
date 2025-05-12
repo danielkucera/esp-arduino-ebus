@@ -3,8 +3,6 @@
 #include <Preferences.h>
 #include <Sequence.h>
 
-#include <sstream>
-
 Store store;
 
 Command Store::createCommand(const JsonDocument &doc) {
