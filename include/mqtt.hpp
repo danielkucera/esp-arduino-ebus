@@ -5,10 +5,12 @@
 #include <deque>
 #include <string>
 #include <tuple>
+#include <vector>
 
 #include "store.hpp"
 
-// The Mqtt class acts as a wrapper for the entire MQTT subsystem.
+// The MQTT class acts as a wrapper for the entire MQTT subsystem. It provides
+// some basic methods for supporting Home Assistant.
 
 class Mqtt {
  public:
@@ -35,6 +37,12 @@ class Mqtt {
 
   void publishCommands();
   void publishHASensors(const bool remove);
+
+  static void publishData(const std::string &id,
+                          const std::vector<uint8_t> &master,
+                          const std::vector<uint8_t> &slave);
+
+  static void publishValue(Command *command, const JsonDocument &doc);
 
  private:
   AsyncMqttClient client;

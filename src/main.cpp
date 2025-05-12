@@ -480,6 +480,11 @@ void handleCommands() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getCommandsJson().c_str());
 }
+
+void handleValues() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    store.getValuesJson().c_str());
+}
 #endif
 
 void publishStatus() {
@@ -560,7 +565,12 @@ void handleRoot() {
        "user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
+
+#ifdef EBUS_INTERNAL
   s += "<a href='/commands'>Commands</a><br>";
+  s += "<a href='/values'>Values</a><br>";
+#endif
+
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
@@ -670,6 +680,7 @@ void setup() {
 
 #ifdef EBUS_INTERNAL
   configServer.on("/commands", [] { handleCommands(); });
+  configServer.on("/values", [] { handleValues(); });
 #endif
 
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
