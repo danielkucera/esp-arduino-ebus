@@ -51,15 +51,15 @@ class Schedule {
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;
 
-  static void writeCallback(const uint8_t byte);
-  static int readBufferCallback();
+  static void onWriteCallback(const uint8_t byte);
+  static int isDataAvailableCallback();
 
-  static void publishCallback(const ebus::Message &message,
+  static void onTelegramCallback(const ebus::Message &message,
                               const ebus::Type &type,
                               const std::vector<uint8_t> &master,
                               std::vector<uint8_t> *const slave);
 
-  static void errorCallback(const std::string &str);
+  static void onErrorCallback(const std::string &str);
 
   void processActive(const std::vector<uint8_t> &master,
                      const std::vector<uint8_t> &slave);

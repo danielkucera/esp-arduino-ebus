@@ -70,9 +70,11 @@ Track<uint32_t> requestsError("state/internal/requests/error", 10);
 
 Schedule schedule;
 
-Schedule::Schedule()
-    : ebusHandler(0xff, &writeCallback, &readBufferCallback, &publishCallback) {
-  ebusHandler.setErrorCallback(errorCallback);
+Schedule::Schedule() : ebusHandler(0xff) {
+  ebusHandler.onWrite(onWriteCallback);
+  ebusHandler.isDataAvailable(isDataAvailableCallback);
+  ebusHandler.onTelegram(onTelegramCallback);
+  ebusHandler.onError(onErrorCallback);
 }
 
 void Schedule::setAddress(const uint8_t source) {
@@ -181,14 +183,14 @@ void Schedule::publishCounters() {
   requestsError = counters.requestsError;
 }
 
-void Schedule::writeCallback(const uint8_t byte) { Bus.write(byte); }
+void Schedule::onWriteCallback(const uint8_t byte) { Bus.write(byte); }
 
-int Schedule::readBufferCallback() { return Bus.available(); }
+int Schedule::isDataAvailableCallback() { return Bus.available(); }
 
-void Schedule::publishCallback(const ebus::Message &message,
-                               const ebus::Type &type,
-                               const std::vector<uint8_t> &master,
-                               std::vector<uint8_t> *const slave) {
+void Schedule::onTelegramCallback(const ebus::Message &message,
+                                  const ebus::Type &type,
+                                  const std::vector<uint8_t> &master,
+                                  std::vector<uint8_t> *const slave) {
   switch (message) {
     case ebus::Message::active:
       schedule.processActive(std::vector<uint8_t>(master),
@@ -231,7 +233,7 @@ void Schedule::publishCallback(const ebus::Message &message,
   }
 }
 
-void Schedule::errorCallback(const std::string &str) {
+void Schedule::onErrorCallback(const std::string &str) {
   std::string topic = "state/internal/resets/last";
   std::string payload = str;
   mqtt.publish(topic.c_str(), 0, false, payload.c_str());
