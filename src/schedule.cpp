@@ -240,7 +240,7 @@ void Schedule::errorCallback(const std::string &str) {
 void Schedule::processActive(const std::vector<uint8_t> &master,
                              const std::vector<uint8_t> &slave) {
   if (send) {
-    mqtt.publishData("send", sendCommand, slave);
+    mqtt.publishData("send", master, slave);
   } else {
     store.updateData(scheduleCommand, master, slave);
     mqtt.publishValue(scheduleCommand, store.getValueJson(scheduleCommand));
