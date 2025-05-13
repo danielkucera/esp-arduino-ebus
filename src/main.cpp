@@ -459,6 +459,10 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
                   atoi(command_distance));
+  pos += snprintf(status + pos, sizeof(status), "active_commands: %i\r\n",
+                  store.getActiveCommands());
+  pos += snprintf(status + pos, sizeof(status), "passive_commands: %i\r\n",
+                  store.getPassiveCommands());
 #endif
 
   pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
