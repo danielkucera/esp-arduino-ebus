@@ -11,10 +11,12 @@
 
 #include "store.hpp"
 
-// This class sends time-controlled active commands to the ebus. All valid
-// received messages are compared with passively defined commands and evaluated
-// if they match. Individual commands are transmitted and the results reported
-// back. Raw data (including filter function) can also be output.
+// Active commands are sent on the eBUS at scheduled intervals, and the received
+// data is saved. Passive received messages are compared against defined
+// commands, and if they match, the received data is also saved. Furthermore, it
+// is possible to send individual commands to the eBUS. The results are returned
+// along with the command as raw data. Defined messages (filter function) can be
+// forwarded.
 
 class Schedule {
  public:
@@ -49,26 +51,21 @@ class Schedule {
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;
 
-  static void writeCallback(const uint8_t byte);
-  static int readBufferCallback();
+  static void onWriteCallback(const uint8_t byte);
+  static int isDataAvailableCallback();
 
-  static void publishCallback(const ebus::Message &message,
+  static void onTelegramCallback(const ebus::Message &message,
                               const ebus::Type &type,
                               const std::vector<uint8_t> &master,
                               std::vector<uint8_t> *const slave);
 
-  static void errorCallback(const std::string &str);
+  static void onErrorCallback(const std::string &str);
 
   void processActive(const std::vector<uint8_t> &master,
                      const std::vector<uint8_t> &slave);
+
   void processPassive(const std::vector<uint8_t> &master,
                       const std::vector<uint8_t> &slave);
-
-  static void publishResponse(const std::string &id,
-                              const std::vector<uint8_t> &master,
-                              const std::vector<uint8_t> &slave);
-
-  static void publishValue(Command *command, const std::vector<uint8_t> &value);
 };
 
 extern Schedule schedule;

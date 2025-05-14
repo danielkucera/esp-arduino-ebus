@@ -70,9 +70,11 @@ Track<uint32_t> requestsError("state/internal/requests/error", 10);
 
 Schedule schedule;
 
-Schedule::Schedule()
-    : ebusHandler(0xff, &writeCallback, &readBufferCallback, &publishCallback) {
-  ebusHandler.setErrorCallback(errorCallback);
+Schedule::Schedule() : ebusHandler(0xff) {
+  ebusHandler.onWrite(onWriteCallback);
+  ebusHandler.isDataAvailable(isDataAvailableCallback);
+  ebusHandler.onTelegram(onTelegramCallback);
+  ebusHandler.onError(onErrorCallback);
 }
 
 void Schedule::setAddress(const uint8_t source) {
@@ -181,15 +183,14 @@ void Schedule::publishCounters() {
   requestsError = counters.requestsError;
 }
 
-void Schedule::writeCallback(const uint8_t byte) { Bus.write(byte); }
+void Schedule::onWriteCallback(const uint8_t byte) { Bus.write(byte); }
 
-int Schedule::readBufferCallback() { return Bus.available(); }
+int Schedule::isDataAvailableCallback() { return Bus.available(); }
 
-void Schedule::publishCallback(const ebus::Message &message,
-                               const ebus::Type &type,
-                               const std::vector<uint8_t> &master,
-                               std::vector<uint8_t> *const slave) {
-  std::vector<uint8_t> search;
+void Schedule::onTelegramCallback(const ebus::Message &message,
+                                  const ebus::Type &type,
+                                  const std::vector<uint8_t> &master,
+                                  std::vector<uint8_t> *const slave) {
   switch (message) {
     case ebus::Message::active:
       schedule.processActive(std::vector<uint8_t>(master),
@@ -219,7 +220,7 @@ void Schedule::publishCallback(const ebus::Message &message,
           // rr...Revision (BCD)
           // vv...Hardware version (BCD)
           // hh...Revision (BCD)
-          // search = {0x07, 0x04};
+          // std::vector<uint8_t> search = {0x07, 0x04};
           // if (ebus::Sequence::contains(master, search))
           //   *slave = ebus::Sequence::to_vector("0ahhggggggggggssrrhhrr");
 
@@ -232,7 +233,7 @@ void Schedule::publishCallback(const ebus::Message &message,
   }
 }
 
-void Schedule::errorCallback(const std::string &str) {
+void Schedule::onErrorCallback(const std::string &str) {
   std::string topic = "state/internal/resets/last";
   std::string payload = str;
   mqtt.publish(topic.c_str(), 0, false, payload.c_str());
@@ -240,10 +241,12 @@ void Schedule::errorCallback(const std::string &str) {
 
 void Schedule::processActive(const std::vector<uint8_t> &master,
                              const std::vector<uint8_t> &slave) {
-  if (send)
-    publishResponse("send", sendCommand, slave);
-  else
-    publishValue(scheduleCommand, slave);
+  if (send) {
+    mqtt.publishData("send", master, slave);
+  } else {
+    store.updateData(scheduleCommand, master, slave);
+    mqtt.publishValue(scheduleCommand, store.getValueJson(scheduleCommand));
+  }
 }
 
 void Schedule::processPassive(const std::vector<uint8_t> &master,
@@ -254,97 +257,12 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
                                    return ebus::Sequence::contains(master, vec);
                                  });
     if (count > 0 || forwardfilters.size() == 0)
-      publishResponse("forward", master, slave);
+      mqtt.publishData("forward", master, slave);
   }
 
-  std::vector<Command *> pasCommands = store.findPassiveCommands(master);
+  std::vector<Command *> pasCommands = store.updateData(nullptr, master, slave);
+
   for (Command *command : pasCommands) {
-    if (command->master)
-      publishValue(command,
-                   ebus::Sequence::range(master, 4, master.size() - 4));
-    else
-      publishValue(command, slave);
+    mqtt.publishValue(command, store.getValueJson(command));
   }
-}
-
-void Schedule::publishResponse(const std::string &id,
-                               const std::vector<uint8_t> &master,
-                               const std::vector<uint8_t> &slave) {
-  std::string payload;
-  JsonDocument doc;
-  doc["id"] = id;
-  doc["master"] = ebus::Sequence::to_string(master);
-  doc["slave"] = ebus::Sequence::to_string(slave);
-  serializeJson(doc, payload);
-  mqtt.publish("response", 0, false, payload.c_str());
-}
-
-void Schedule::publishValue(Command *command,
-                            const std::vector<uint8_t> &value) {
-  command->last = millis();
-  JsonDocument doc;
-
-  switch (command->datatype) {
-    case ebus::Datatype::BCD:
-      doc["value"] =
-          ebus::byte_2_bcd(ebus::Sequence::range(value, command->position, 1));
-      break;
-    case ebus::Datatype::UINT8:
-      doc["value"] = ebus::byte_2_uint8(
-          ebus::Sequence::range(value, command->position, 1));
-      break;
-    case ebus::Datatype::INT8:
-      doc["value"] =
-          ebus::byte_2_int8(ebus::Sequence::range(value, command->position, 1));
-      break;
-    case ebus::Datatype::UINT16:
-      doc["value"] = ebus::byte_2_uint16(
-          ebus::Sequence::range(value, command->position, 2));
-      break;
-    case ebus::Datatype::INT16:
-      doc["value"] = ebus::byte_2_int16(
-          ebus::Sequence::range(value, command->position, 2));
-      break;
-    case ebus::Datatype::UINT32:
-      doc["value"] = ebus::byte_2_uint32(
-          ebus::Sequence::range(value, command->position, 4));
-      break;
-    case ebus::Datatype::INT32:
-      doc["value"] = ebus::byte_2_int32(
-          ebus::Sequence::range(value, command->position, 4));
-      break;
-    case ebus::Datatype::DATA1B:
-      doc["value"] = ebus::byte_2_data1b(
-          ebus::Sequence::range(value, command->position, 1));
-      break;
-    case ebus::Datatype::DATA1C:
-      doc["value"] = ebus::byte_2_data1c(
-          ebus::Sequence::range(value, command->position, 1));
-      break;
-    case ebus::Datatype::DATA2B:
-      doc["value"] = ebus::byte_2_data2b(
-          ebus::Sequence::range(value, command->position, 2));
-      break;
-    case ebus::Datatype::DATA2C:
-      doc["value"] = ebus::byte_2_data2c(
-          ebus::Sequence::range(value, command->position, 2));
-      break;
-    case ebus::Datatype::FLOAT:
-      doc["value"] = ebus::byte_2_float(
-          ebus::Sequence::range(value, command->position, 2));
-      break;
-    default:
-      break;
-  }
-
-  std::string payload;
-  serializeJson(doc, payload);
-
-  std::string name = command->topic;
-  std::transform(name.begin(), name.end(), name.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-
-  std::string topic = "values/" + name;
-
-  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }

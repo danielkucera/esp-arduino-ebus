@@ -14,16 +14,21 @@
 struct Command {
   std::string key;               // unique key of command
   std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
-  std::string unit;              // unit of the received data
+  std::string unit;              // unit of the interested part
   bool active;                   // active sending of command
-  uint32_t interval;        // minimum interval between two commands in seconds
-  uint32_t last;            // last time of the successful command
-  bool master;              // value of interest is in master or slave part
-  size_t position;          // starting byte in interested part
-  ebus::Datatype datatype;  // ebus datatype
-  std::string topic;        // mqtt topic below "values/"
-  bool ha;                  // home assistant support for auto discovery
-  std::string ha_class;     // home assistant device_class
+  uint32_t interval;  // minimum interval between two commands in seconds
+  uint32_t last;      // last time of the successful command (INTERNAL)
+  std::vector<uint8_t> data;  // received raw data (INTERNAL)
+  bool master;                // value of interest is in master or slave part
+  size_t position;            // starting position in the interested part
+  ebus::Datatype datatype;    // ebus datatype
+  size_t length;              // length of interested part (INTERNAL)
+  bool numeric;               // indicate numeric types (INTERNAL)
+  float divider;              // divider for value conversion
+  uint8_t digits;             // deciaml digits of value
+  std::string topic;          // mqtt topic below "values/"
+  bool ha;                    // home assistant support for auto discovery
+  std::string ha_class;       // home assistant device_class
 };
 
 class Store {
@@ -40,7 +45,9 @@ class Store {
   int64_t saveCommands() const;
   static int64_t wipeCommands();
 
+  static JsonDocument getCommandJson(const Command *command);
   const std::string getCommandsJson() const;
+
   const std::vector<Command *> getCommands();
 
   const size_t getActiveCommands() const;
@@ -52,6 +59,14 @@ class Store {
   std::vector<Command *> findPassiveCommands(
       const std::vector<uint8_t> &master);
 
+  std::vector<Command *> updateData(Command *command,
+                                    const std::vector<uint8_t> &master,
+                                    const std::vector<uint8_t> &slave);
+
+  static JsonDocument getValueJson(const Command *command);
+
+  const std::string getValuesJson() const;
+
  private:
   std::vector<Command> allCommands;
 
@@ -62,6 +77,9 @@ class Store {
 
   const std::string serializeCommands() const;
   void deserializeCommands(const char *payload);
+
+  static const double getValueDouble(const Command *command);
+  static const std::string getValueString(const Command *command);
 };
 
 extern Store store;

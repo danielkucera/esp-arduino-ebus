@@ -56,6 +56,7 @@ void Mqtt::publishResponse(const std::string &id, const std::string &status,
   doc["id"] = id;
   doc["status"] = status;
   if (bytes > 0) doc["bytes"] = bytes;
+  doc.shrinkToFit();
   serializeJson(doc, payload);
   publish("response", 0, false, payload.c_str());
 }
@@ -75,6 +76,34 @@ void Mqtt::publishCommands() {
 void Mqtt::publishHASensors(const bool remove) {
   for (Command *command : store.getCommands())
     pubHASensors.push_back(std::make_tuple(command, remove));
+}
+
+void Mqtt::publishData(const std::string &id,
+                       const std::vector<uint8_t> &master,
+                       const std::vector<uint8_t> &slave) {
+  std::string payload;
+  JsonDocument doc;
+  doc["id"] = id;
+  doc["master"] = ebus::Sequence::to_string(master);
+  doc["slave"] = ebus::Sequence::to_string(slave);
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+  mqtt.publish("response", 0, false, payload.c_str());
+}
+
+void Mqtt::publishValue(Command *command, const JsonDocument &doc) {
+  command->last = millis();
+
+  std::string payload;
+  serializeJson(doc, payload);
+
+  std::string name = command->topic;
+  std::transform(name.begin(), name.end(), name.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+
+  std::string topic = "values/" + name;
+
+  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }
 
 void Mqtt::setWill(const char *topic, uint8_t qos, bool retain,
@@ -107,6 +136,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
     std::string errorPayload;
     JsonDocument errorDoc;
     errorDoc["error"] = error.c_str();
+    doc.shrinkToFit();
     serializeJson(errorDoc, errorPayload);
     mqtt.publish("response", 0, false, errorPayload.c_str());
   } else {
@@ -148,6 +178,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       std::string errorPayload;
       JsonDocument errorDoc;
       errorDoc["error"] = "command '" + id + "' not found";
+      doc.shrinkToFit();
       serializeJson(errorDoc, errorPayload);
       mqtt.publish("response", 0, false, errorPayload.c_str());
     }
@@ -248,21 +279,7 @@ void Mqtt::wipeCommands() {
 void Mqtt::publishCommand(const Command *command) {
   std::string topic = "commands/" + command->key;
   std::string payload;
-  JsonDocument doc;
-
-  doc["key"] = command->key;
-  doc["command"] = ebus::Sequence::to_string(command->command);
-  doc["unit"] = command->unit;
-  doc["active"] = command->active;
-  doc["interval"] = command->interval;
-  doc["master"] = command->master;
-  doc["position"] = command->position;
-  doc["datatype"] = ebus::datatype2string(command->datatype);
-  doc["topic"] = command->topic;
-  doc["ha"] = command->ha;
-  doc["ha_class"] = command->ha_class;
-
-  serializeJson(doc, payload);
+  serializeJson(store.getCommandJson(command), payload);
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 
@@ -296,6 +313,7 @@ void Mqtt::publishHADiagnostic(const char *name, const bool remove,
       device["configuration_url"] = "http://esp-ebus.local";
     }
 
+    doc.shrinkToFit();
     serializeJson(doc, payload);
   }
 
@@ -328,6 +346,7 @@ void Mqtt::publishHAConfigButton(const char *name, const bool remove) {
     JsonObject device = doc["device"].to<JsonObject>();
     device["identifiers"] = "ebus" + uniqueId;
 
+    doc.shrinkToFit();
     serializeJson(doc, payload);
   }
 
@@ -371,6 +390,7 @@ void Mqtt::publishHASensor(const Command *command, const bool remove) {
     JsonObject device = doc["device"].to<JsonObject>();
     device["identifiers"] = "ebus" + uniqueId;
 
+    doc.shrinkToFit();
     serializeJson(doc, payload);
   }
 

@@ -300,12 +300,14 @@ payload:
     {
       "key": "01",                       // unique key of command
       "command": "fe070009",             // ebus command as vector of "ZZPBSBNNDBx"
-      "unit": "°C",                      // unit of the received data
+      "unit": "°C",                      // unit of the interested part
       "active": false,                   // active sending of command
       "interval": 0,                     // minimum interval between two commands in seconds
       "master": true,                    // value of interest is in master or slave part
-      "position": 1,                     // starting byte in interested part
+      "position": 1,                     // starting position in the interested part
       "datatype": "DATA2B",              // ebus datatype
+      "divider": 1,                      // divider for value conversion
+      "digits": 2,                       // deciaml digits of value
       "topic": "outdoor_temperature",    // mqtt topic below "values/"
       "ha": true,                        // home assistant support for auto discovery
       "ha_class": "temperature"          // home assistant device_class
@@ -316,10 +318,12 @@ payload:
   ]
 }
 
-ebus datatype: BCD, UINT8, INT8, UINT16, INT16, UINT32, INT32, DATA1B, DATA1C, DATA2B, DATA2C, FLOAT (values as 1/1000)
+ebus datatypes: 
+- numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (values as 1/1000)
+- character: CHAR1, CHAR2, CHAR3, CHAR4, CHAR5, CHAR6, CHAR7, CHAR8
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
 ```
 
 **Removing installed commands**

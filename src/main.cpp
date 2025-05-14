@@ -459,6 +459,10 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
                   atoi(command_distance));
+  pos += snprintf(status + pos, sizeof(status), "active_commands: %i\r\n",
+                  store.getActiveCommands());
+  pos += snprintf(status + pos, sizeof(status), "passive_commands: %i\r\n",
+                  store.getPassiveCommands());
 #endif
 
   pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
@@ -479,6 +483,11 @@ void handleStatus() { configServer.send(200, "text/plain", status_string()); }
 void handleCommands() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getCommandsJson().c_str());
+}
+
+void handleValues() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    store.getValuesJson().c_str());
 }
 #endif
 
@@ -560,7 +569,12 @@ void handleRoot() {
        "user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
+
+#ifdef EBUS_INTERNAL
   s += "<a href='/commands'>Commands</a><br>";
+  s += "<a href='/values'>Values</a><br>";
+#endif
+
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default: ";
   s += DEFAULT_APMODE_PASS;
@@ -670,6 +684,7 @@ void setup() {
 
 #ifdef EBUS_INTERNAL
   configServer.on("/commands", [] { handleCommands(); });
+  configServer.on("/values", [] { handleValues(); });
 #endif
 
   configServer.on("/config", [] { iotWebConf.handleConfig(); });

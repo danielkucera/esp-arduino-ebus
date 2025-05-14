@@ -7,19 +7,32 @@ Store store;
 
 Command Store::createCommand(const JsonDocument &doc) {
   Command command;
-
+  // TODO(yuhu-): check incoming data for completeness
   command.key = doc["key"].as<std::string>();
   command.command = ebus::Sequence::to_vector(doc["command"].as<std::string>());
   command.unit = doc["unit"].as<std::string>();
   command.active = doc["active"].as<bool>();
-  command.interval = doc["interval"].as<uint32_t>();
+  command.interval =
+      doc["interval"].isNull() ? 60 : doc["interval"].as<uint32_t>();
   command.last = 0;
+  command.data = std::vector<uint8_t>();
   command.master = doc["master"].as<bool>();
   command.position = doc["position"].as<size_t>();
-  command.datatype = ebus::string2datatype(doc["datatype"].as<const char *>());
+  command.datatype =
+      ebus::string_2_datatype(doc["datatype"].as<const char *>());
+  command.length = ebus::sizeof_datatype(command.datatype);
+  command.numeric = ebus::typeof_datatype(command.datatype);
+  command.divider =
+      doc["divider"].isNull()
+          ? 1
+          : (doc["divider"].as<float>() > 0 ? doc["divider"].as<float>() : 1);
+  command.digits = doc["digits"].isNull() ? 2 : doc["digits"].as<uint8_t>();
   command.topic = doc["topic"].as<std::string>();
-  command.ha = doc["ha"].as<bool>();
-  command.ha_class = doc["ha_class"].as<std::string>();
+  command.ha = doc["ha"].isNull() ? false : doc["ha"].as<bool>();
+  command.ha_class =
+      command.ha
+          ? (doc["ha_class"].isNull() ? "" : doc["ha_class"].as<std::string>())
+          : "";
 
   return command;
 }
@@ -111,31 +124,37 @@ int64_t Store::wipeCommands() {
   return bytes;
 }
 
+JsonDocument Store::getCommandJson(const Command *command) {
+  JsonDocument doc;
+
+  doc["key"] = command->key;
+  doc["command"] = ebus::Sequence::to_string(command->command);
+  doc["unit"] = command->unit;
+  doc["active"] = command->active;
+  doc["interval"] = command->interval;
+  doc["master"] = command->master;
+  doc["position"] = command->position;
+  doc["datatype"] = ebus::datatype_2_string(command->datatype);
+  doc["divider"] = command->divider;
+  doc["digits"] = command->digits;
+  doc["topic"] = command->topic;
+  doc["ha"] = command->ha;
+  doc["ha_class"] = command->ha_class;
+
+  doc.shrinkToFit();
+  return doc;
+}
+
 const std::string Store::getCommandsJson() const {
   std::string payload;
   JsonDocument doc;
 
   if (allCommands.size() > 0) {
-    for (const Command &command : allCommands) {
-      JsonObject obj = doc.add<JsonObject>();
-
-      obj["key"] = command.key;
-      obj["command"] = ebus::Sequence::to_string(command.command);
-      obj["unit"] = command.unit;
-      obj["active"] = command.active;
-      obj["interval"] = command.interval;
-      obj["master"] = command.master;
-      obj["position"] = command.position;
-      obj["datatype"] = ebus::datatype2string(command.datatype);
-      obj["topic"] = command.topic;
-      obj["ha"] = command.ha;
-      obj["ha_class"] = command.ha_class;
-    }
+    for (const Command &command : allCommands)
+      doc.add(getCommandJson(&command));
   }
 
-  if (doc.isNull()) {
-    doc.to<JsonArray>();
-  }
+  if (doc.isNull()) doc.to<JsonArray>();
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
@@ -192,6 +211,72 @@ std::vector<Command *> Store::findPassiveCommands(
   return commands;
 }
 
+std::vector<Command *> Store::updateData(Command *command,
+                                         const std::vector<uint8_t> &master,
+                                         const std::vector<uint8_t> &slave) {
+  std::vector<Command *> commands;
+
+  if (command == nullptr)
+    commands = findPassiveCommands(master);
+  else
+    commands.push_back(command);
+
+  for (Command *cmd : commands) {
+    cmd->last = millis();
+
+    if (cmd->master)
+      cmd->data = ebus::Sequence::range(master, 4 + cmd->position, cmd->length);
+    else
+      cmd->data = ebus::Sequence::range(slave, cmd->position, cmd->length);
+  }
+
+  return commands;
+}
+
+JsonDocument Store::getValueJson(const Command *command) {
+  JsonDocument doc;
+
+  if (command->numeric)
+    doc["value"] = store.getValueDouble(command);
+  else
+    doc["value"] = store.getValueString(command);
+
+  doc.shrinkToFit();
+  return doc;
+}
+
+const std::string Store::getValuesJson() const {
+  std::string payload;
+  JsonDocument doc;
+
+  JsonArray results = doc["results"].to<JsonArray>();
+
+  if (allCommands.size() > 0) {
+    size_t index = 0;
+    uint32_t now = millis();
+
+    for (const Command &command : allCommands) {
+      JsonArray array = results[index][command.key].to<JsonArray>();
+      if (command.numeric)
+        array.add(store.getValueDouble(&command));
+      else
+        array.add(store.getValueString(&command));
+
+      array.add(command.unit);
+      array.add(command.topic);
+      array.add(static_cast<uint32_t>((now - command.last) / 1000));
+      index++;
+    }
+  }
+
+  if (doc.isNull()) doc.to<JsonArray>();
+
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload;
+}
+
 void Store::countCommands() {
   activeCommands = std::count_if(allCommands.begin(), allCommands.end(),
                                  [](const Command &cmd) { return cmd.active; });
@@ -214,7 +299,9 @@ const std::string Store::serializeCommands() const {
       array.add(command.interval);
       array.add(command.master);
       array.add(command.position);
-      array.add(ebus::datatype2string(command.datatype));
+      array.add(ebus::datatype_2_string(command.datatype));
+      array.add(command.divider);
+      array.add(command.digits);
       array.add(command.topic);
       array.add(command.ha);
       array.add(command.ha_class);
@@ -248,11 +335,67 @@ void Store::deserializeCommands(const char *payload) {
       tmpDoc["master"] = variant[5];
       tmpDoc["position"] = variant[6];
       tmpDoc["datatype"] = variant[7];
-      tmpDoc["topic"] = variant[8];
-      tmpDoc["ha"] = variant[9];
-      tmpDoc["ha_class"] = variant[10];
+      tmpDoc["divider"] = variant[8];
+      tmpDoc["digits"] = variant[9];
+      tmpDoc["topic"] = variant[10];
+      tmpDoc["ha"] = variant[11];
+      tmpDoc["ha_class"] = variant[12];
 
       insertCommand(createCommand(tmpDoc));
     }
   }
+}
+
+const double Store::getValueDouble(const Command *command) {
+  double value = 0;
+
+  switch (command->datatype) {
+    case ebus::Datatype::BCD:
+      value = ebus::byte_2_bcd(command->data);
+      break;
+    case ebus::Datatype::UINT8:
+      value = ebus::byte_2_uint8(command->data);
+      break;
+    case ebus::Datatype::INT8:
+      value = ebus::byte_2_int8(command->data);
+      break;
+    case ebus::Datatype::UINT16:
+      value = ebus::byte_2_uint16(command->data);
+      break;
+    case ebus::Datatype::INT16:
+      value = ebus::byte_2_int16(command->data);
+      break;
+    case ebus::Datatype::UINT32:
+      value = ebus::byte_2_uint32(command->data);
+      break;
+    case ebus::Datatype::INT32:
+      value = ebus::byte_2_int32(command->data);
+      break;
+    case ebus::Datatype::DATA1B:
+      value = ebus::byte_2_data1b(command->data);
+      break;
+    case ebus::Datatype::DATA1C:
+      value = ebus::byte_2_data1c(command->data);
+      break;
+    case ebus::Datatype::DATA2B:
+      value = ebus::byte_2_data2b(command->data);
+      break;
+    case ebus::Datatype::DATA2C:
+      value = ebus::byte_2_data2c(command->data);
+      break;
+    case ebus::Datatype::FLOAT:
+      value = ebus::byte_2_float(command->data);
+      break;
+    default:
+      break;
+  }
+
+  value = value / command->divider;
+  value = ebus::round_digits(value, command->digits);
+
+  return value;
+}
+
+const std::string Store::getValueString(const Command *command) {
+  return ebus::byte_2_string(command->data);
 }
