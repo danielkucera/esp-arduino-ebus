@@ -157,19 +157,22 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       if (value) mqtt.publishCommands();
     } else if (id.compare("load") == 0) {
       boolean value = doc["value"].as<boolean>();
-      if (value) mqtt.loadCommands();
+      if (value) loadCommands();
     } else if (id.compare("save") == 0) {
       boolean value = doc["value"].as<boolean>();
-      if (value) mqtt.saveCommands();
+      if (value) saveCommands();
     } else if (id.compare("wipe") == 0) {
       boolean value = doc["value"].as<boolean>();
-      if (value) mqtt.wipeCommands();
+      if (value) wipeCommands();
     } else if (id.compare("send") == 0) {
       JsonArray commands = doc["commands"].as<JsonArray>();
-      if (commands != nullptr) schedule.handleSend(commands);
+      if (commands.isNull() || commands.size() == 0)
+        mqtt.publishResponse("send", "commands array invalid");
+      else
+        schedule.handleSend(commands);
     } else if (id.compare("forward") == 0) {
       JsonArray filters = doc["filters"].as<JsonArray>();
-      if (filters != nullptr) schedule.handleForwadFilter(filters);
+      if (!filters.isNull()) schedule.handleForwadFilter(filters);
       boolean value = doc["value"].as<boolean>();
       schedule.toggleForward(value);
     }
