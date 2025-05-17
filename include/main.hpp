@@ -25,6 +25,7 @@ int DEBUG_LOG_IMPL(const char *format, ...);
 
 bool handleNewClient(WiFiServer *server, WiFiClient clients[]);
 int pushClient(WiFiClient *client, uint8_t B);
-void handleClient(WiFiClient *client);
-
+void handleClient(WiFiClient *client); 
+char* status_string();
 void restart();
+
