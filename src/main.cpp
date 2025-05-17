@@ -197,7 +197,7 @@ bool connectMqtt() {
 
   uint32_t now = millis();
 
-  if (1000 > now - lastMqttConnectionAttempt) return false;
+  if (now - lastMqttConnectionAttempt < 1000) return false;
 
   mqtt.connect();
 
@@ -264,15 +264,15 @@ uint32_t get_pwm() {
 void calcUniqueId() {
   uint32_t id = 0;
 #ifdef ESP32
-  for (int i = 0; i < 17; i = i + 8) {
-    id |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+  for (int i = 0; i < 6; ++i) {
+    id |= ((ESP.getEfuseMac() >> (8 * (5 - i))) & 0xff) << (8 * i);
   }
 #else
   id = ESP.getChipId();
 #endif
   char tmp[9]{};
   snprintf(tmp, sizeof(tmp), "%08x", id);
-  memmove(unique_id, &tmp[2], 6);
+  strncpy(unique_id, &tmp[2], 6);
 }
 
 void restart() {
@@ -426,53 +426,60 @@ void connectWifi(const char* ssid, const char* password) {
 }
 
 char* status_string() {
-  static char status[1024];
+  size_t bufferSize = 2048;
+  char* status = new char[bufferSize];
+  if (!status) return nullptr;
 
   int pos = 0;
 
-  pos += snprintf(status + pos, sizeof(status), "async_mode: %s\n",
+  pos += snprintf(status + pos, bufferSize - pos, "async_mode: %s\n",
                   USE_ASYNCHRONOUS ? "true" : "false");
-  pos += snprintf(status + pos, sizeof(status), "software_serial_mode: %s\n",
+  pos += snprintf(status + pos, bufferSize - pos, "software_serial_mode: %s\n",
                   USE_SOFTWARE_SERIAL ? "true" : "false");
-  pos += snprintf(status + pos, sizeof(status), "unique_id: %s\n", unique_id);
-  pos += snprintf(status + pos, sizeof(status), "uptime: %ld ms\n", millis());
-  pos += snprintf(status + pos, sizeof(status), "last_connect_time: %u ms\n",
+  pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
+  pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", millis());
+  pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
                   last_connect.value());
-  pos += snprintf(status + pos, sizeof(status), "reconnect_count: %d \n",
+  pos += snprintf(status + pos, bufferSize - pos, "reconnect_count: %d \n",
                   reconnect_count.value());
-  pos += snprintf(status + pos, sizeof(status), "rssi: %d dBm\n", WiFi.RSSI());
-  pos += snprintf(status + pos, sizeof(status), "free_heap: %u B\n",
-                  free_heap.value());
-  pos += snprintf(status + pos, sizeof(status), "reset_code: %u\n",
-                  reset_code.value());
-  pos += snprintf(status + pos, sizeof(status), "loop_duration: %u us\r\n",
-                  loopDuration.value());
-  pos += snprintf(status + pos, sizeof(status), "max_loop_duration: %u us\r\n",
-                  maxLoopDuration.value());
   pos +=
-      snprintf(status + pos, sizeof(status), "version: %s\r\n", AUTO_VERSION);
+      snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
+  pos += snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n",
+                  free_heap.value());
+  pos += snprintf(status + pos, bufferSize - pos, "reset_code: %u\n",
+                  reset_code.value());
+  pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
+                  loopDuration.value());
+  pos += snprintf(status + pos, bufferSize - pos,
+                  "max_loop_duration: %u us\r\n", maxLoopDuration.value());
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "version: %s\r\n", AUTO_VERSION);
 
-  pos += snprintf(status + pos, sizeof(status), "pwm_value: %u\r\n", get_pwm());
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "pwm_value: %u\r\n", get_pwm());
 
 #ifdef EBUS_INTERNAL
-  pos += snprintf(status + pos, sizeof(status), "ebus_address: %s\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
                   ebus_address);
-  pos += snprintf(status + pos, sizeof(status), "command_distance: %i\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
                   atoi(command_distance));
-  pos += snprintf(status + pos, sizeof(status), "active_commands: %i\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "active_commands: %i\r\n",
                   store.getActiveCommands());
-  pos += snprintf(status + pos, sizeof(status), "passive_commands: %i\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %i\r\n",
                   store.getPassiveCommands());
 #endif
 
-  pos += snprintf(status + pos, sizeof(status), "mqtt_connected: %s\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.connected() ? "true" : "false");
-  pos += snprintf(status + pos, sizeof(status), "mqtt_server: %s\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "mqtt_server: %s\r\n",
                   mqtt_server);
-  pos += snprintf(status + pos, sizeof(status), "mqtt_user: %s\r\n", mqtt_user);
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "mqtt_user: %s\r\n", mqtt_user);
 
-  pos += snprintf(status + pos, sizeof(status), "ha_support: %s\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "ha_support: %s\r\n",
                   haSupportParam.isChecked() ? "true" : "false");
+
+  if (pos >= bufferSize) status[bufferSize - 1] = '\0';
 
   return status;
 }
@@ -755,6 +762,8 @@ void loop() {
   iotWebConf.doLoop();
 #endif
 
+  uptime = millis();
+
   if (needMqttConnect) {
     if (connectMqtt()) {
       needMqttConnect = false;
@@ -766,8 +775,8 @@ void loop() {
   }
 
   if (mqtt.connected()) {
-    if (millis() > lastMqttUpdate + 5 * 1000) {
-      lastMqttUpdate = millis();
+    if (uptime.value() > lastMqttUpdate + 5 * 1000) {
+      lastMqttUpdate = uptime.value();
       publishValues();
 
 #ifdef EBUS_INTERNAL
@@ -779,9 +788,7 @@ void loop() {
 #endif
   }
 
-  uptime = millis();
-
-  if (millis() > last_comms + 200 * 1000) {
+  if ((millis() - last_comms) > 200 * 1000) {
     restart();
   }
 

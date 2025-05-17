@@ -4,6 +4,8 @@
 #include "mqtt.hpp"
 #include "track.hpp"
 
+constexpr uint8_t DEFAULT_EBUS_HANDLER_ADDRESS = 0xff;
+
 // ebus/<unique_id>/state/internal/messages
 Track<uint32_t> messagesTotal("state/internal/messages", 10);
 
@@ -70,7 +72,7 @@ Track<uint32_t> requestsError("state/internal/requests/error", 10);
 
 Schedule schedule;
 
-Schedule::Schedule() : ebusHandler(0xff) {
+Schedule::Schedule() : ebusHandler(DEFAULT_EBUS_HANDLER_ADDRESS) {
   ebusHandler.onWrite(onWriteCallback);
   ebusHandler.isDataAvailable(isDataAvailableCallback);
   ebusHandler.onTelegram(onTelegramCallback);
@@ -102,8 +104,9 @@ void Schedule::handleForwadFilter(const JsonArray &filters) {
 void Schedule::nextCommand() {
   if (sendCommands.size() > 0 || store.active()) {
     if (!ebusHandler.isActive()) {
-      if (millis() > lastCommand + distanceCommands) {
-        lastCommand = millis();
+      uint32_t currentMillis = millis();
+      if (currentMillis > lastCommand + distanceCommands) {
+        lastCommand = currentMillis;
 
         std::vector<uint8_t> command;
         if (sendCommands.size() > 0) {
@@ -212,14 +215,15 @@ void Schedule::onTelegramCallback(const ebus::Message &message,
                                   std::vector<uint8_t>());
           break;
         case ebus::Type::masterSlave:
-          // TODO(yuhu-): fill with thing data
-          // handle Identification (Service 07h 04h)
+          // TODO(yuhu-): Implement handling of Identification (Service 07h 04h)
+          // Expected data format:
           // hh...Manufacturer (BYTE)
           // gg...Unit_ID_0-5 (ASCII)
           // ss...Software version (BCD)
           // rr...Revision (BCD)
           // vv...Hardware version (BCD)
           // hh...Revision (BCD)
+          // Example:
           // std::vector<uint8_t> search = {0x07, 0x04};
           // if (ebus::Sequence::contains(master, search))
           //   *slave = ebus::Sequence::to_vector("0ahhggggggggggssrrhhrr");
@@ -262,7 +266,6 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
 
   std::vector<Command *> pasCommands = store.updateData(nullptr, master, slave);
 
-  for (Command *command : pasCommands) {
+  for (Command *command : pasCommands)
     mqtt.publishValue(command, store.getValueJson(command));
-  }
 }
