@@ -1,4 +1,8 @@
+#ifdef ESP32
 #include <WebServer.h>
+#else
+#include <ESP8266WebServer.h>
+#endif
 
 #include "main.hpp"
 #include "http.hpp"
