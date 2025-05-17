@@ -6,6 +6,7 @@
 
 #include "bus.hpp"
 #include "enhanced.hpp"
+#include "http.hpp"
 #include "mqtt.hpp"
 #include "track.hpp"
 
@@ -68,7 +69,6 @@ TaskHandle_t Task1;
 char unique_id[7]{};
 
 DNSServer dnsServer;
-WebServer configServer(80);
 
 char staticIPValue[STRING_LEN];
 char ipAddressValue[STRING_LEN];
@@ -477,19 +477,18 @@ char* status_string() {
   return status;
 }
 
-void handleStatus() { configServer.send(200, "text/plain", status_string()); }
+bool handleStatusServerRequests() {
+  if (!statusServer.hasClient()) return false;
 
-#ifdef EBUS_INTERNAL
-void handleCommands() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    store.getCommandsJson().c_str());
-}
+  WiFiClient client = statusServer.accept();
 
-void handleValues() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    store.getValuesJson().c_str());
+  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.print(status_string());
+    client.flush();
+    client.stop();
+  }
+  return true;
 }
-#endif
 
 void publishStatus() {
   // ebus/<unique_id>/settings
@@ -558,49 +557,6 @@ void publishValues() {
   nbrErrors = Bus._nbrErrors;
 }
 
-void handleRoot() {
-  // -- Let IotWebConf test and handle captive portal requests.
-  if (iotWebConf.handleCaptivePortal()) {
-    // -- Captive portal request were already served.
-    return;
-  }
-  String s = "<html><head><title>esp-eBus adapter</title>";
-  s += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, "
-       "user-scalable=no\"/>";
-  s += "</head><body>";
-  s += "<a href='/status'>Adapter status</a><br>";
-
-#ifdef EBUS_INTERNAL
-  s += "<a href='/commands'>Commands</a><br>";
-  s += "<a href='/values'>Values</a><br>";
-#endif
-
-  s += "<a href='/config'>Configuration</a> - user: admin password: your "
-       "configured AP mode password or default: ";
-  s += DEFAULT_APMODE_PASS;
-  s += "<br>";
-  s += "<a href='/firmware'>Firmware update</a><br>";
-  s += "<br>";
-  s += "For more info see project page: <a "
-       "href='https://github.com/danielkucera/esp-arduino-ebus'>https://"
-       "github.com/danielkucera/esp-arduino-ebus</a>";
-  s += "</body></html>";
-
-  configServer.send(200, "text/html", s);
-}
-
-bool handleStatusServerRequests() {
-  if (!statusServer.hasClient()) return false;
-
-  WiFiClient client = statusServer.accept();
-
-  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.print(status_string());
-    client.flush();
-    client.stop();
-  }
-  return true;
-}
 
 void setup() {
   preferences.begin("esp-ebus", false);
@@ -678,17 +634,7 @@ void setup() {
     iotWebConf.init();
   }
 
-  // -- Set up required URL handlers on the web server.
-  configServer.on("/", [] { handleRoot(); });
-  configServer.on("/status", [] { handleStatus(); });
-
-#ifdef EBUS_INTERNAL
-  configServer.on("/commands", [] { handleCommands(); });
-  configServer.on("/values", [] { handleValues(); });
-#endif
-
-  configServer.on("/config", [] { iotWebConf.handleConfig(); });
-  configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
+  SetupHttpHandlers();
 
   iotWebConf.setupUpdateServer(
       [](const char* updatePath) {
