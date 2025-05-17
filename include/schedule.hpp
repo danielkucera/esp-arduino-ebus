@@ -55,9 +55,9 @@ class Schedule {
   static int isDataAvailableCallback();
 
   static void onTelegramCallback(const ebus::Message &message,
-                              const ebus::Type &type,
-                              const std::vector<uint8_t> &master,
-                              std::vector<uint8_t> *const slave);
+                                 const ebus::Type &type,
+                                 const std::vector<uint8_t> &master,
+                                 std::vector<uint8_t> *const slave);
 
   static void onErrorCallback(const std::string &str);
 
