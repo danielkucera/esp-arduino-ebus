@@ -477,19 +477,6 @@ char* status_string() {
   return status;
 }
 
-bool handleStatusServerRequests() {
-  if (!statusServer.hasClient()) return false;
-
-  WiFiClient client = statusServer.accept();
-
-  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.print(status_string());
-    client.flush();
-    client.stop();
-  }
-  return true;
-}
-
 void publishStatus() {
   // ebus/<unique_id>/settings
   pwm = get_pwm();
@@ -557,6 +544,18 @@ void publishValues() {
   nbrErrors = Bus._nbrErrors;
 }
 
+bool handleStatusServerRequests() {
+  if (!statusServer.hasClient()) return false;
+
+  WiFiClient client = statusServer.accept();
+
+  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
+    client.print(status_string());
+    client.flush();
+    client.stop();
+  }
+  return true;
+}
 
 void setup() {
   preferences.begin("esp-ebus", false);
