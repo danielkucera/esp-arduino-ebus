@@ -1,4 +1,5 @@
 #include "http.hpp"
+
 #include "main.hpp"
 
 WebServer configServer(80);
@@ -115,18 +116,26 @@ void handleRoot() {
   String s = "<html><head><title>esp-eBus adapter</title>";
   s += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, "
        "user-scalable=no\"/>";
+  s += "  <script type='text/javascript'>";
+  s += "     function confirmAction(action){ return confirm(\"Are you sure you "
+       "want to \" + action + \"?\"); }\n";
+  s += "  </script>\n";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
 #ifdef EBUS_INTERNAL
   s += "<a href='/commands/list'>List commands</a><br>";
   s += "<a href='/commands/upload'>Upload commands</a><br>";
   s += "<a href='/commands/download'>Download commands</a><br>";
-  s += "<a href='/commands/load'>Load commands</a><br>";
-  s += "<a href='/commands/save'>Save commands</a><br>";
-  s += "<a href='/commands/wipe'>Wipe commands</a><br>";
+  s += "<a href='/commands/load' onclick=\"return "
+       "confirmAction('load commands');\">Load commands</a><br>";
+  s += "<a href='/commands/save' onclick=\"return "
+       "confirmAction('save commands');\">Save commands</a><br>";
+  s += "<a href='/commands/wipe' onclick=\"return "
+       "confirmAction('wipe commands');\">Wipe commands</a><br>";
   s += "<a href='/values'>Values</a><br>";
-  s += "<a href='/restart'>Restart</a><br>";
 #endif
+  s += "<a href='/restart' onclick=\"return "
+       "confirmAction('restart');\">Restart</a><br>";
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default password";
   s += "<br>";
