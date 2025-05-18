@@ -110,6 +110,7 @@ void handleValues() {
                     store.getValuesJson().c_str());
 }
 #endif
+
 void handleRoot() {
   // -- Let IotWebConf test and handle captive portal requests.
   if (iotWebConf.handleCaptivePortal()) {
