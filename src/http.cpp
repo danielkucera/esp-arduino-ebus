@@ -88,16 +88,17 @@ void handleCommandsInsert() {
 
   DeserializationError error = deserializeJson(doc, body);
 
-  if (error)
+  if (error) {
     configServer.send(403, "text/html", "INVALID JSON");
-  else {
+  } else {
     JsonArray array = doc["commands"].as<JsonArray>();
     if (array != nullptr) {
       for (JsonVariant variant : array)
         store.insertCommand(store.createCommand(variant));
       configServer.send(200, "text/html", "OK");
-    } else
+    } else {
       configServer.send(403, "text/html", "NO COMMANDS");
+    }
   }
 }
 
