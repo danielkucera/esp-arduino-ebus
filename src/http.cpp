@@ -1,11 +1,9 @@
-#include "main.hpp"
 #include "http.hpp"
+#include "main.hpp"
 
 WebServer configServer(80);
 
-void handleStatus() { 
-  configServer.send(200, "text/plain", status_string()); 
-}
+void handleStatus() { configServer.send(200, "text/plain", status_string()); }
 
 #ifdef EBUS_INTERNAL
 void handleCommandsList() {
@@ -43,64 +41,61 @@ void handleCommandsUpload() {
   }
   </script>
   </body></html>
-  )") );
+  )"));
 }
 
-void handleCommandsDownload(){
+void handleCommandsDownload() {
   String s = "{ \"id\": \"insert\",\n   \"commands\": ";
-    s += store.getCommandsJson().c_str();
-    s += "\n}";
-  configServer.send(200, "application/json", s );
+  s += store.getCommandsJson().c_str();
+  s += "\n}";
+  configServer.send(200, "application/json", s);
 }
 
 void handleCommandsLoad() {
   int64_t bytes = store.loadCommands();
   if (bytes > 0)
-    configServer.send(200, "text/html","Successfully loaded");
-   else if (bytes < 0)
-    configServer.send(200, "text/html","Loading failed");
+    configServer.send(200, "text/html", "Successfully loaded");
+  else if (bytes < 0)
+    configServer.send(200, "text/html", "Loading failed");
   else
-    configServer.send(200, "text/html","No data loaded");
+    configServer.send(200, "text/html", "No data loaded");
 }
 
 void handleCommandsSave() {
   int64_t bytes = store.saveCommands();
   if (bytes > 0)
-    configServer.send(200, "text/html","Successfully saved");
-   else if (bytes < 0)
-    configServer.send(200, "text/html","Saving failed");
+    configServer.send(200, "text/html", "Successfully saved");
+  else if (bytes < 0)
+    configServer.send(200, "text/html", "Saving failed");
   else
-    configServer.send(200, "text/html","No data saved");
+    configServer.send(200, "text/html", "No data saved");
 }
 
 void handleCommandsWipe() {
   int64_t bytes = store.wipeCommands();
   if (bytes > 0)
-    configServer.send(200, "text/html","Successfully wiped");
-   else if (bytes < 0)
-    configServer.send(200, "text/html","Wiping failed");
+    configServer.send(200, "text/html", "Successfully wiped");
+  else if (bytes < 0)
+    configServer.send(200, "text/html", "Wiping failed");
   else
-    configServer.send(200, "text/html","No data wiped");
+    configServer.send(200, "text/html", "No data wiped");
 }
 
 void handleCommandsInsert() {
   JsonDocument doc;
-  String body = configServer.arg("plain"); 
- 
+  String body = configServer.arg("plain");
+
   DeserializationError error = deserializeJson(doc, body);
 
   if (error)
     configServer.send(403, "text/html", "INVALID JSON");
-  else
-  {
+  else {
     JsonArray array = doc["commands"].as<JsonArray>();
-    if (array != nullptr) 
-    {
+    if (array != nullptr) {
       for (JsonVariant variant : array)
-          store.insertCommand( store.createCommand(variant) );
+        store.insertCommand(store.createCommand(variant));
       configServer.send(200, "text/html", "OK");
-    }
-    else
+    } else
       configServer.send(403, "text/html", "NO COMMANDS");
   }
 }
@@ -145,12 +140,7 @@ void handleRoot() {
   configServer.send(200, "text/html", s);
 }
 
-void HandleNotFound(){
-    configServer.send(403, "text/html", "Page Not Found");
-}
-
-void SetupHttpHandlers()
-{
+void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
@@ -165,5 +155,6 @@ void SetupHttpHandlers()
   configServer.on("/values", [] { handleValues(); });
 #endif
   configServer.on("/restart", [] { restart(); });
+  configServer.on("/config", [] { iotWebConf.handleConfig(); });
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
 }
