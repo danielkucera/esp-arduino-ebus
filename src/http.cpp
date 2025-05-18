@@ -20,37 +20,36 @@ void handleCommandsList() {
 }
 
 void handleCommandsUpload() {
-   configServer.send(200, "text/html", F(R"(<html>
-<head><title>esp-eBus adapter</title>
-<meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
-</head><body>
-</body></html>
-<h3>Upload Commands</h3>
-<input type='file' id='file-upload'>
-<script type='text/javascript'>
-window.onload = function(event) {
-  document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
-}
-function handleFileSelect(event) {
-  var fileReader = new FileReader();
-  fileReader.onload = function(event) {
-    try {
-      var commands=JSON.parse(event.target.result);
-      var headers = new Headers();
-      headers.append('Accept', 'text/plain');
-      headers.append('Content-Type', 'text/plain');
-      fetch('/commands/insert', { method: 'POST', headers: headers, body: JSON.stringify(commands) } )
-      .then( response => {  alert(response.ok?"Succesfully loaded":"Something went wrong"); } );
-    } catch (error) {
-      alert('Invalid JSON Config file');
-    }
+  configServer.send(200, "text/html", F(R"(<html>
+  <head><title>esp-eBus adapter</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+  </head><body>
+  <h3>Upload Commands</h3>
+  <input type='file' id='file-upload'>
+  <script type='text/javascript'>
+  window.onload = function(event) {
+    document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
   }
-  var file = event.target.files[0];
-  fileReader.readAsText(file);
-}
-</script>
-  
-)") );
+  function handleFileSelect(event) {
+    var fileReader = new FileReader();
+    fileReader.onload = function(event) {
+      try {
+        var commands=JSON.parse(event.target.result);
+        var headers = new Headers();
+        headers.append('Accept', 'text/plain');
+        headers.append('Content-Type', 'text/plain');
+        fetch('/commands/insert', { method: 'POST', headers: headers, body: JSON.stringify(commands) } )
+        .then( response => {  alert(response.ok?"Succesfully loaded":"Something went wrong"); } );
+      } catch (error) { 
+        alert('Invalid JSON Config file'); 
+      }
+    }
+    var file = event.target.files[0];
+    fileReader.readAsText(file);
+  }
+  </script>
+  </body></html>
+  )") );
 }
 
 void handleCommandsDownload(){
@@ -128,7 +127,6 @@ void handleRoot() {
        "user-scalable=no\"/>";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
-
 #ifdef EBUS_INTERNAL
   s += "<a href='/commands/list'>List commands</a><br>";
   s += "<a href='/commands/upload'>Upload commands</a><br>";
@@ -139,7 +137,6 @@ void handleRoot() {
   s += "<a href='/values'>Values</a><br>";
   s += "<a href='/restart'>Restart</a><br>";
 #endif
-
   s += "<a href='/config'>Configuration</a> - user: admin password: your "
        "configured AP mode password or default password";
   s += "<br>";
@@ -162,7 +159,6 @@ void SetupHttpHandlers()
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
-
 #ifdef EBUS_INTERNAL
   configServer.on("/commands/list", [] { handleCommandsList(); });
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
