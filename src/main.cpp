@@ -195,14 +195,12 @@ Track<int> nbrErrors("state/arbitration/errors", 10);
 bool connectMqtt() {
   if (mqtt.connected()) return true;
 
-  uint32_t now = millis();
-
-  if (now - lastMqttConnectionAttempt < 1000) return false;
+  if (1000 > millis() - lastMqttConnectionAttempt) return false;
 
   mqtt.connect();
 
   if (!mqtt.connected()) {
-    lastMqttConnectionAttempt = now;
+    lastMqttConnectionAttempt = millis();
     return false;
   }
 
@@ -707,8 +705,6 @@ void loop() {
   iotWebConf.doLoop();
 #endif
 
-  uptime = millis();
-
   if (needMqttConnect) {
     if (connectMqtt()) {
       needMqttConnect = false;
@@ -720,8 +716,9 @@ void loop() {
   }
 
   if (mqtt.connected()) {
-    if (uptime.value() > lastMqttUpdate + 5 * 1000) {
-      lastMqttUpdate = uptime.value();
+    uint32_t currentMillis = millis();
+    if (currentMillis > lastMqttUpdate + 5 * 1000) {
+      lastMqttUpdate = currentMillis;
       publishValues();
 
 #ifdef EBUS_INTERNAL
@@ -733,7 +730,9 @@ void loop() {
 #endif
   }
 
-  if ((millis() - last_comms) > 200 * 1000) {
+  uptime = millis();
+
+  if (millis() > last_comms + 200 * 1000) {
     restart();
   }
 
