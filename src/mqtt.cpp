@@ -84,8 +84,8 @@ void Mqtt::publishData(const std::string &id,
   std::string payload;
   JsonDocument doc;
   doc["id"] = id;
-  doc["master"] = ebus::Sequence::to_string(master);
-  doc["slave"] = ebus::Sequence::to_string(slave);
+  doc["master"] = ebus::to_string(master);
+  doc["slave"] = ebus::to_string(slave);
   doc.shrinkToFit();
   serializeJson(doc, payload);
   mqtt.publish("response", 0, false, payload.c_str());

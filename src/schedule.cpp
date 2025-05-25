@@ -90,7 +90,7 @@ void Schedule::setDistance(const uint8_t distance) {
 void Schedule::handleSend(const JsonArray &commands) {
   sendCommands.clear();
   for (JsonVariant command : commands)
-    sendCommands.push_back(ebus::Sequence::to_vector(command));
+    sendCommands.push_back(ebus::to_vector(command));
 }
 
 void Schedule::toggleForward(const bool enable) { forward = enable; }
@@ -98,7 +98,7 @@ void Schedule::toggleForward(const bool enable) { forward = enable; }
 void Schedule::handleForwadFilter(const JsonArray &filters) {
   forwardfilters.clear();
   for (JsonVariant filter : filters)
-    forwardfilters.push_back(ebus::Sequence::to_vector(filter));
+    forwardfilters.push_back(ebus::to_vector(filter));
 }
 
 void Schedule::nextCommand() {
@@ -190,31 +190,30 @@ void Schedule::onWriteCallback(const uint8_t byte) { Bus.write(byte); }
 
 int Schedule::isDataAvailableCallback() { return Bus.available(); }
 
-void Schedule::onTelegramCallback(const ebus::Message &message,
-                                  const ebus::Type &type,
+void Schedule::onTelegramCallback(const ebus::MessageType &messageType,
+                                  const ebus::TelegramType &telegramType,
                                   const std::vector<uint8_t> &master,
                                   std::vector<uint8_t> *const slave) {
-  switch (message) {
-    case ebus::Message::active:
+  switch (messageType) {
+    case ebus::MessageType::active:
       schedule.processActive(std::vector<uint8_t>(master),
                              std::vector<uint8_t>(*slave));
       break;
-    case ebus::Message::passive:
+    case ebus::MessageType::passive:
       schedule.processPassive(std::vector<uint8_t>(master),
                               std::vector<uint8_t>(*slave));
       break;
-    case ebus::Message::reactive:
-
-      switch (type) {
-        case ebus::Type::broadcast:
+    case ebus::MessageType::reactive:
+      switch (telegramType) {
+        case ebus::TelegramType::broadcast:
           schedule.processPassive(std::vector<uint8_t>(master),
                                   std::vector<uint8_t>());
           break;
-        case ebus::Type::masterMaster:
+        case ebus::TelegramType::master_master:
           schedule.processPassive(std::vector<uint8_t>(master),
                                   std::vector<uint8_t>());
           break;
-        case ebus::Type::masterSlave:
+        case ebus::TelegramType::master_slave:
           // TODO(yuhu-): Implement handling of Identification (Service 07h 04h)
           // Expected data format:
           // hh...Manufacturer (BYTE)
@@ -224,8 +223,8 @@ void Schedule::onTelegramCallback(const ebus::Message &message,
           // vv...Hardware version (BCD)
           // hh...Revision (BCD)
           // Example:
-          // std::vector<uint8_t> search = {0x07, 0x04};
-          // if (ebus::Sequence::contains(master, search))
+          // const std::vector<uint8_t> SEARCH_0704 = {0x07, 0x04};
+          // if (ebus::Sequence::contains(master, SEARCH_0704))
           //   *slave = ebus::Sequence::to_vector("0ahhggggggggggssrrhhrr");
 
           schedule.processPassive(std::vector<uint8_t>(master),
@@ -234,6 +233,9 @@ void Schedule::onTelegramCallback(const ebus::Message &message,
         default:
           break;
       }
+      break;
+    default:
+      break;
   }
 }
 
@@ -258,7 +260,7 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
   if (forward) {
     size_t count = std::count_if(forwardfilters.begin(), forwardfilters.end(),
                                  [&master](const std::vector<uint8_t> &vec) {
-                                   return ebus::Sequence::contains(master, vec);
+                                   return ebus::contains(master, vec);
                                  });
     if (count > 0 || forwardfilters.size() == 0)
       mqtt.publishData("forward", master, slave);

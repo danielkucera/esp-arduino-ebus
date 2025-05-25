@@ -1,8 +1,7 @@
 #pragma once
 
 #include <ArduinoJson.h>
-#include <Datatypes.h>
-#include <EbusHandler.h>
+#include <Ebus.h>
 #include <WiFiClient.h>
 
 #include <deque>
@@ -37,7 +36,7 @@ class Schedule {
   void publishCounters();
 
  private:
-  ebus::EbusHandler ebusHandler;
+  ebus::Handler ebusHandler;
 
   Command *scheduleCommand = nullptr;
 
@@ -54,8 +53,8 @@ class Schedule {
   static void onWriteCallback(const uint8_t byte);
   static int isDataAvailableCallback();
 
-  static void onTelegramCallback(const ebus::Message &message,
-                                 const ebus::Type &type,
+  static void onTelegramCallback(const ebus::MessageType &message,
+                                 const ebus::TelegramType &type,
                                  const std::vector<uint8_t> &master,
                                  std::vector<uint8_t> *const slave);
 
