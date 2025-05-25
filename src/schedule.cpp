@@ -1,5 +1,7 @@
 #include "schedule.hpp"
 
+#include <map>
+
 #include "bus.hpp"
 #include "mqtt.hpp"
 #include "track.hpp"
@@ -69,6 +71,10 @@ Track<uint32_t> requestsWon("state/internal/requests/won", 10);
 Track<uint32_t> requestsLost("state/internal/requests/lost", 10);
 Track<uint32_t> requestsRetry("state/internal/requests/retry", 10);
 Track<uint32_t> requestsError("state/internal/requests/error", 10);
+
+// ebus/<unique_id>/state/internal/addresses
+std::map<uint8_t, uint32_t> seenMaster;  // /state/internal/addresses/master/..
+std::map<uint8_t, uint32_t> seenSlaves;  // /state/internal/addresses/slaves/..
 
 Schedule schedule;
 
@@ -184,6 +190,20 @@ void Schedule::publishCounters() {
   requestsLost = counters.requestsLost;
   requestsRetry = counters.requestsRetry;
   requestsError = counters.requestsError;
+
+  // master addresses
+  for (std::pair<const uint8_t, uint32_t> &master : seenMaster) {
+    std::string topic =
+        "state/internal/addresses/master/" + ebus::to_string(master.first);
+    mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
+  }
+
+  // slaves addresses
+  for (std::pair<const uint8_t, uint32_t> &slaves : seenSlaves) {
+    std::string topic =
+        "state/internal/addresses/slaves/" + ebus::to_string(slaves.first);
+    mqtt.publish(topic.c_str(), 0, false, String(slaves.second).c_str());
+  }
 }
 
 void Schedule::onWriteCallback(const uint8_t byte) { Bus.write(byte); }
@@ -194,6 +214,10 @@ void Schedule::onTelegramCallback(const ebus::MessageType &messageType,
                                   const ebus::TelegramType &telegramType,
                                   const std::vector<uint8_t> &master,
                                   std::vector<uint8_t> *const slave) {
+  // count master and slave addresses
+  seenMaster[master[0]] += 1;
+  if (ebus::isSlave(master[1])) seenSlaves[master[1]] += 1;
+
   switch (messageType) {
     case ebus::MessageType::active:
       schedule.processActive(std::vector<uint8_t>(master),
