@@ -64,7 +64,6 @@ class Store {
                                     const std::vector<uint8_t> &slave);
 
   static JsonDocument getValueJson(const Command *command);
-
   const std::string getValuesJson() const;
 
  private:
