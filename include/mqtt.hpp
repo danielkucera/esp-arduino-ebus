@@ -104,7 +104,7 @@ class Mqtt {
   static void saveCommands();
   static void wipeCommands();
 
-  void initScan(const bool full, const JsonArray &addresses);
+  static void initScan(const bool full, const JsonArray &addresses);
 
   void publishCommand(const Command *command);
 
