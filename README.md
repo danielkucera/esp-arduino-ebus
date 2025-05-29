@@ -249,6 +249,7 @@ The following topics are available.
 |state/internal/errors          |errors of finite state machine  
 |state/internal/resets          |resets of finite state machine 
 |state/internal/requests        |bus requests (arbitration)
+|state/internal/addresses       |collected ebus addresses
 
 
 ### Details of MQTT commands
