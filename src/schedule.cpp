@@ -73,8 +73,8 @@ Track<uint32_t> requestsRetry("state/internal/requests/retry", 10);
 Track<uint32_t> requestsError("state/internal/requests/error", 10);
 
 // ebus/<unique_id>/state/internal/addresses
-std::map<uint8_t, uint32_t> seenMaster;
-std::map<uint8_t, uint32_t> seenSlave;
+std::map<uint8_t, uint32_t> seenMasters;
+std::map<uint8_t, uint32_t> seenSlaves;
 
 Schedule schedule;
 
@@ -192,14 +192,14 @@ void Schedule::publishCounters() {
   requestsError = counters.requestsError;
 
   // master addresses
-  for (std::pair<const uint8_t, uint32_t> &master : seenMaster) {
+  for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
     std::string topic =
         "state/internal/addresses/master/" + ebus::to_string(master.first);
     mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
   }
 
   // slave addresses
-  for (std::pair<const uint8_t, uint32_t> &slave : seenSlave) {
+  for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) {
     std::string topic =
         "state/internal/addresses/slave/" + ebus::to_string(slave.first);
     mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
@@ -215,8 +215,8 @@ void Schedule::onTelegramCallback(const ebus::MessageType &messageType,
                                   const std::vector<uint8_t> &master,
                                   std::vector<uint8_t> *const slave) {
   // count master and slave addresses
-  seenMaster[master[0]] += 1;
-  if (ebus::isSlave(master[1])) seenSlave[master[1]] += 1;
+  seenMasters[master[0]] += 1;
+  if (ebus::isSlave(master[1])) seenSlaves[master[1]] += 1;
 
   switch (messageType) {
     case ebus::MessageType::active:
