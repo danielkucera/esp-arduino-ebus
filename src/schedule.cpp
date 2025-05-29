@@ -94,7 +94,6 @@ void Schedule::setDistance(const uint8_t distance) {
 }
 
 void Schedule::handleSend(const JsonArray &commands) {
-  sendCommands.clear();
   for (JsonVariant command : commands)
     sendCommands.push_back(ebus::to_vector(command));
 }
