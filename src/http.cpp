@@ -1,6 +1,8 @@
 #include "http.hpp"
 
 #include "main.hpp"
+#include "schedule.hpp"
+#include "store.hpp"
 
 WebServer configServer(80);
 
@@ -46,9 +48,9 @@ void handleCommandsUpload() {
 }
 
 void handleCommandsDownload() {
-  String s = "{ \"id\": \"insert\",\n   \"commands\": ";
+  String s = "{\"id\":\"insert\",\"commands\":";
   s += store.getCommandsJson().c_str();
-  s += "\n}";
+  s += "}";
   configServer.send(200, "application/json", s);
 }
 
@@ -106,6 +108,21 @@ void handleValues() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getValuesJson().c_str());
 }
+
+void handleParicipantsScanSeen() {
+  schedule.handleScanSeen();
+  configServer.send(200, "text/html", "Scan initiated");
+}
+
+void handleParicipantsScanFull() {
+  schedule.handleScanFull();
+  configServer.send(200, "text/html", "Scan full initiated");
+}
+
+void handleParicipantsList() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    schedule.getParticipantsJson().c_str());
+}
 #endif
 
 void handleRoot() {
@@ -134,6 +151,11 @@ void handleRoot() {
   s += "<a href='/commands/wipe' onclick=\"return "
        "confirmAction('wipe commands');\">Wipe commands</a><br>";
   s += "<a href='/values'>Values</a><br>";
+  s += "<a href='/participants/scan' onclick=\"return "
+       "confirmAction('scan');\">Scan</a><br>";
+  s += "<a href='/participants/scanfull' onclick=\"return "
+       "confirmAction('scan full');\">Scan full</a><br>";
+  s += "<a href='/participants/list'>Participants</a><br>";
 #endif
   s += "<a href='/restart' onclick=\"return "
        "confirmAction('restart');\">Restart</a><br>";
@@ -163,6 +185,11 @@ void SetupHttpHandlers() {
   configServer.on("/commands/save", [] { handleCommandsSave(); });
   configServer.on("/commands/wipe", [] { handleCommandsWipe(); });
   configServer.on("/values", [] { handleValues(); });
+  configServer.on("/participants/scanseen",
+                  [] { handleParicipantsScanSeen(); });
+  configServer.on("/participants/scanfull",
+                  [] { handleParicipantsScanFull(); });
+  configServer.on("/participants/list", [] { handleParicipantsList(); });
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });

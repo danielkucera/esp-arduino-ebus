@@ -3,7 +3,6 @@
 #include <ArduinoJson.h>
 
 #include "main.hpp"
-#include "schedule.hpp"
 
 Mqtt mqtt;
 
@@ -40,6 +39,7 @@ void Mqtt::doLoop() {
   checkRemoveCommands();
   checkPublishCommands();
   checkPublishHASensors();
+  checkPublishParticipants();
 }
 
 uint16_t Mqtt::publish(const char *topic, uint8_t qos, bool retain,
@@ -76,6 +76,11 @@ void Mqtt::publishCommands() {
 void Mqtt::publishHASensors(const bool remove) {
   for (Command *command : store.getCommands())
     pubHASensors.push_back(std::make_tuple(command, remove));
+}
+
+void Mqtt::publishParticipants() {
+  for (Participant *participant : schedule.getParticipants())
+    pubParticipants.push_back(participant);
 }
 
 void Mqtt::publishData(const std::string &id,
@@ -164,6 +169,13 @@ void Mqtt::onMessage(const char *topic, const char *payload,
     } else if (id.compare("wipe") == 0) {
       boolean value = doc["value"].as<boolean>();
       if (value) wipeCommands();
+    } else if (id.compare("scan") == 0) {
+      boolean full = doc["full"].as<boolean>();
+      JsonArray addresses = doc["addresses"].as<JsonArray>();
+      mqtt.initScan(full, addresses);
+    } else if (id.compare("participants") == 0) {
+      boolean value = doc["value"].as<boolean>();
+      if (value) mqtt.publishParticipants();
     } else if (id.compare("send") == 0) {
       JsonArray commands = doc["commands"].as<JsonArray>();
       if (commands.isNull() || commands.size() == 0)
@@ -249,6 +261,16 @@ void Mqtt::checkPublishHASensors() {
   }
 }
 
+void Mqtt::checkPublishParticipants() {
+  if (pubParticipants.size() > 0) {
+    if (millis() > lastParticipants + distanceParticipants) {
+      lastParticipants = millis();
+      mqtt.publishParticipant(pubParticipants.front());
+      pubParticipants.pop_front();
+    }
+  }
+}
+
 void Mqtt::loadCommands() {
   int64_t bytes = store.loadCommands();
   if (bytes > 0)
@@ -277,6 +299,17 @@ void Mqtt::wipeCommands() {
     mqtt.publishResponse("wipe", "failed");
   else
     mqtt.publishResponse("wipe", "no data");
+}
+
+void Mqtt::initScan(const bool full, const JsonArray &addresses) {
+  if (full)
+    schedule.handleScanFull();
+  else if (addresses.isNull() || addresses.size() == 0)
+    schedule.handleScanSeen();
+  else
+    schedule.handleScanAddresses(addresses);
+
+  mqtt.publishResponse("scan", "initiated");
 }
 
 void Mqtt::publishCommand(const Command *command) {
@@ -399,4 +432,11 @@ void Mqtt::publishHASensor(const Command *command, const bool remove) {
 
   if (remove || haSupport)
     publish(topic.c_str(), 0, true, payload.c_str(), false);
+}
+
+void Mqtt::publishParticipant(const Participant *participant) {
+  std::string topic = "participants/" + ebus::to_string(participant->slave);
+  std::string payload;
+  serializeJson(schedule.getParticipantJson(participant), payload);
+  publish(topic.c_str(), 0, false, payload.c_str());
 }
