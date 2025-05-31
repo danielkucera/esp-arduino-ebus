@@ -265,8 +265,10 @@ JsonDocument Schedule::getParticipantJson(const Participant *participant) {
   JsonDocument doc;
 
   doc["address"] = ebus::to_string(participant->slave);
-  doc["manufacturer"] = ebus::to_string(ebus::range(participant->scan070400, 1, 1));
-  doc["unitid"] = ebus::byte_2_string(ebus::range(participant->scan070400, 2, 5));
+  doc["manufacturer"] =
+      ebus::to_string(ebus::range(participant->scan070400, 1, 1));
+  doc["unitid"] =
+      ebus::byte_2_string(ebus::range(participant->scan070400, 2, 5));
   doc["software"] = ebus::to_string(ebus::range(participant->scan070400, 7, 2));
   doc["hardware"] = ebus::to_string(ebus::range(participant->scan070400, 9, 2));
 
