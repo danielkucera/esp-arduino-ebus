@@ -407,7 +407,7 @@ void saveParamsCallback() {
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
   mqtt.setHASupport(haSupportParam.isChecked());
-  mqtt.publisHA();
+  mqtt.publishHA();
 }
 
 void connectWifi(const char* ssid, const char* password) {
@@ -461,9 +461,9 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
                   atoi(command_distance));
-  pos += snprintf(status + pos, bufferSize - pos, "active_commands: %i\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "active_commands: %u\r\n",
                   store.getActiveCommands());
-  pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %i\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %u\r\n",
                   store.getPassiveCommands());
 #endif
 

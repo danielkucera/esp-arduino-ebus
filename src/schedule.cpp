@@ -1,10 +1,21 @@
 #include "schedule.hpp"
 
+#include <set>
+
 #include "bus.hpp"
 #include "mqtt.hpp"
 #include "track.hpp"
 
 constexpr uint8_t DEFAULT_EBUS_HANDLER_ADDRESS = 0xff;
+
+constexpr uint8_t SCAN_VENDOR_VAILLANT = 0xb5;
+
+const std::vector<uint8_t> SCAN_070400 = {0x07, 0x04, 0x00};
+const std::vector<uint8_t> SCAN_b50901 = {0xb5, 0x09, 0x01};
+const std::vector<uint8_t> SCAN_b5090124 = {0xb5, 0x09, 0x01, 0x24};
+const std::vector<uint8_t> SCAN_b5090125 = {0xb5, 0x09, 0x01, 0x25};
+const std::vector<uint8_t> SCAN_b5090126 = {0xb5, 0x09, 0x01, 0x26};
+const std::vector<uint8_t> SCAN_b5090127 = {0xb5, 0x09, 0x01, 0x27};
 
 // ebus/<unique_id>/state/internal/messages
 Track<uint32_t> messagesTotal("state/internal/messages", 10);
@@ -70,6 +81,10 @@ Track<uint32_t> requestsLost("state/internal/requests/lost", 10);
 Track<uint32_t> requestsRetry("state/internal/requests/retry", 10);
 Track<uint32_t> requestsError("state/internal/requests/error", 10);
 
+// ebus/<unique_id>/state/internal/addresses
+std::map<uint8_t, uint32_t> seenMasters;
+std::map<uint8_t, uint32_t> seenSlaves;
+
 Schedule schedule;
 
 Schedule::Schedule() : ebusHandler(DEFAULT_EBUS_HANDLER_ADDRESS) {
@@ -87,10 +102,53 @@ void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
 }
 
+void Schedule::handleScanFull() {
+  scanCommands.clear();
+  fullScan = true;
+  nextScanCommand();
+}
+
+void Schedule::handleScanSeen() {
+  scanCommands.clear();
+  std::set<uint8_t> slaves;
+
+  for (const std::pair<uint8_t, uint32_t> master : seenMasters)
+    if (master.first != ebusHandler.getAddress())
+      slaves.insert(ebus::slaveOf(master.first));
+
+  for (const std::pair<uint8_t, uint32_t> slave : seenSlaves)
+    if (slave.first != ebusHandler.getSlaveAddress())
+      slaves.insert(slave.first);
+
+  for (const uint8_t slave : slaves) {
+    std::vector<uint8_t> command;
+    command = {slave};
+    command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());
+    scanCommands.push_back(command);
+  }
+}
+
+void Schedule::handleScanAddresses(const JsonArray &addresses) {
+  scanCommands.clear();
+  std::set<uint8_t> slaves;
+
+  for (JsonVariant address : addresses) {
+    uint8_t firstByte = ebus::to_vector(address.as<std::string>())[0];
+    if (ebus::isSlave(firstByte) && firstByte != ebusHandler.getSlaveAddress())
+      slaves.insert(firstByte);
+  }
+
+  for (const uint8_t slave : slaves) {
+    std::vector<uint8_t> command;
+    command = {slave};
+    command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());
+    scanCommands.push_back(command);
+  }
+}
+
 void Schedule::handleSend(const JsonArray &commands) {
-  sendCommands.clear();
   for (JsonVariant command : commands)
-    sendCommands.push_back(ebus::Sequence::to_vector(command));
+    sendCommands.push_back(ebus::to_vector(command));
 }
 
 void Schedule::toggleForward(const bool enable) { forward = enable; }
@@ -98,25 +156,28 @@ void Schedule::toggleForward(const bool enable) { forward = enable; }
 void Schedule::handleForwadFilter(const JsonArray &filters) {
   forwardfilters.clear();
   for (JsonVariant filter : filters)
-    forwardfilters.push_back(ebus::Sequence::to_vector(filter));
+    forwardfilters.push_back(ebus::to_vector(filter));
 }
 
 void Schedule::nextCommand() {
-  if (sendCommands.size() > 0 || store.active()) {
+  if (scanCommands.size() > 0 || sendCommands.size() > 0 || store.active()) {
     if (!ebusHandler.isActive()) {
       uint32_t currentMillis = millis();
       if (currentMillis > lastCommand + distanceCommands) {
         lastCommand = currentMillis;
 
         std::vector<uint8_t> command;
-        if (sendCommands.size() > 0) {
-          send = true;
+        if (scanCommands.size() > 0) {
+          mode = Mode::scan;
+          command = scanCommands.front();
+          scanCommands.pop_front();
+          if (fullScan && scanCommands.size() == 0) nextScanCommand();
+        } else if (sendCommands.size() > 0) {
+          mode = Mode::send;
           command = sendCommands.front();
           sendCommands.pop_front();
-          sendCommand = {ebusHandler.getAddress()};
-          sendCommand.insert(sendCommand.end(), command.begin(), command.end());
         } else {
-          send = false;
+          mode = Mode::normal;
           scheduleCommand = store.nextActiveCommand();
           if (scheduleCommand != nullptr) command = scheduleCommand->command;
         }
@@ -184,37 +245,107 @@ void Schedule::publishCounters() {
   requestsLost = counters.requestsLost;
   requestsRetry = counters.requestsRetry;
   requestsError = counters.requestsError;
+
+  // master addresses
+  for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
+    std::string topic =
+        "state/internal/addresses/master/" + ebus::to_string(master.first);
+    mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
+  }
+
+  // slave addresses
+  for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) {
+    std::string topic =
+        "state/internal/addresses/slave/" + ebus::to_string(slave.first);
+    mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
+  }
+}
+
+JsonDocument Schedule::getParticipantJson(const Participant *participant) {
+  JsonDocument doc;
+
+  doc["address"] = ebus::to_string(participant->slave);
+  doc["manufacturer"] =
+      ebus::to_string(ebus::range(participant->scan070400, 1, 1));
+  doc["unitid"] =
+      ebus::byte_2_string(ebus::range(participant->scan070400, 2, 5));
+  doc["software"] = ebus::to_string(ebus::range(participant->scan070400, 7, 2));
+  doc["hardware"] = ebus::to_string(ebus::range(participant->scan070400, 9, 2));
+
+  if (participant->scanb5090124.size() > 0 &&
+      participant->scanb5090125.size() > 0 &&
+      participant->scanb5090126.size() > 0 &&
+      participant->scanb5090127.size() > 0) {
+    std::string serial =
+        ebus::byte_2_string(ebus::range(participant->scanb5090124, 2, 8));
+    serial += ebus::byte_2_string(ebus::range(participant->scanb5090125, 1, 9));
+    serial += ebus::byte_2_string(ebus::range(participant->scanb5090126, 1, 9));
+    serial += ebus::byte_2_string(ebus::range(participant->scanb5090127, 1, 2));
+
+    doc["serial"] = serial;
+    doc["article"] = serial.substr(6, 10);
+  }
+
+  doc.shrinkToFit();
+  return doc;
+}
+
+const std::string Schedule::getParticipantsJson() const {
+  std::string payload;
+  JsonDocument doc;
+
+  if (allParticipants.size() > 0) {
+    for (const std::pair<uint8_t, Participant> &participant : allParticipants)
+      doc.add(getParticipantJson(&participant.second));
+  }
+
+  if (doc.isNull()) doc.to<JsonArray>();
+
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload;
+}
+
+const std::vector<Participant *> Schedule::getParticipants() {
+  std::vector<Participant *> participants;
+  for (std::pair<const uint8_t, Participant> &participant : allParticipants)
+    participants.push_back(&(participant.second));
+  return participants;
 }
 
 void Schedule::onWriteCallback(const uint8_t byte) { Bus.write(byte); }
 
 int Schedule::isDataAvailableCallback() { return Bus.available(); }
 
-void Schedule::onTelegramCallback(const ebus::Message &message,
-                                  const ebus::Type &type,
+void Schedule::onTelegramCallback(const ebus::MessageType &messageType,
+                                  const ebus::TelegramType &telegramType,
                                   const std::vector<uint8_t> &master,
                                   std::vector<uint8_t> *const slave) {
-  switch (message) {
-    case ebus::Message::active:
+  // count master and slave addresses
+  seenMasters[master[0]] += 1;
+  if (ebus::isSlave(master[1])) seenSlaves[master[1]] += 1;
+
+  switch (messageType) {
+    case ebus::MessageType::active:
       schedule.processActive(std::vector<uint8_t>(master),
                              std::vector<uint8_t>(*slave));
       break;
-    case ebus::Message::passive:
+    case ebus::MessageType::passive:
       schedule.processPassive(std::vector<uint8_t>(master),
                               std::vector<uint8_t>(*slave));
       break;
-    case ebus::Message::reactive:
-
-      switch (type) {
-        case ebus::Type::broadcast:
+    case ebus::MessageType::reactive:
+      switch (telegramType) {
+        case ebus::TelegramType::broadcast:
           schedule.processPassive(std::vector<uint8_t>(master),
                                   std::vector<uint8_t>());
           break;
-        case ebus::Type::masterMaster:
+        case ebus::TelegramType::master_master:
           schedule.processPassive(std::vector<uint8_t>(master),
                                   std::vector<uint8_t>());
           break;
-        case ebus::Type::masterSlave:
+        case ebus::TelegramType::master_slave:
           // TODO(yuhu-): Implement handling of Identification (Service 07h 04h)
           // Expected data format:
           // hh...Manufacturer (BYTE)
@@ -224,8 +355,8 @@ void Schedule::onTelegramCallback(const ebus::Message &message,
           // vv...Hardware version (BCD)
           // hh...Revision (BCD)
           // Example:
-          // std::vector<uint8_t> search = {0x07, 0x04};
-          // if (ebus::Sequence::contains(master, search))
+          // const std::vector<uint8_t> SEARCH_0704 = {0x07, 0x04};
+          // if (ebus::Sequence::contains(master, SEARCH_0704))
           //   *slave = ebus::Sequence::to_vector("0ahhggggggggggssrrhhrr");
 
           schedule.processPassive(std::vector<uint8_t>(master),
@@ -234,6 +365,9 @@ void Schedule::onTelegramCallback(const ebus::Message &message,
         default:
           break;
       }
+      break;
+    default:
+      break;
   }
 }
 
@@ -245,7 +379,9 @@ void Schedule::onErrorCallback(const std::string &str) {
 
 void Schedule::processActive(const std::vector<uint8_t> &master,
                              const std::vector<uint8_t> &slave) {
-  if (send) {
+  if (mode == Mode::scan) {
+    processScan(master, slave);
+  } else if (mode == Mode::send) {
     mqtt.publishData("send", master, slave);
   } else {
     store.updateData(scheduleCommand, master, slave);
@@ -258,7 +394,7 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
   if (forward) {
     size_t count = std::count_if(forwardfilters.begin(), forwardfilters.end(),
                                  [&master](const std::vector<uint8_t> &vec) {
-                                   return ebus::Sequence::contains(master, vec);
+                                   return ebus::contains(master, vec);
                                  });
     if (count > 0 || forwardfilters.size() == 0)
       mqtt.publishData("forward", master, slave);
@@ -268,4 +404,50 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
 
   for (Command *command : pasCommands)
     mqtt.publishValue(command, store.getValueJson(command));
+}
+
+void Schedule::processScan(const std::vector<uint8_t> &master,
+                           const std::vector<uint8_t> &slave) {
+  if (ebus::contains(master, SCAN_070400)) {
+    allParticipants[master[1]].slave = master[1];
+    allParticipants[master[1]].scan070400 = slave;
+
+    if (!fullScan && slave[1] == SCAN_VENDOR_VAILLANT) {
+      for (uint8_t pos = 0x27; pos >= 0x24; pos--) {
+        std::vector<uint8_t> command;
+        command = {master[1]};
+        command.insert(command.end(), SCAN_b50901.begin(), SCAN_b50901.end());
+        command.push_back(pos);
+        scanCommands.push_front(command);
+      }
+    }
+  }
+
+  if (ebus::contains(master, SCAN_b5090124))
+    allParticipants[master[1]].scanb5090124 = slave;
+  if (ebus::contains(master, SCAN_b5090125))
+    allParticipants[master[1]].scanb5090125 = slave;
+  if (ebus::contains(master, SCAN_b5090126))
+    allParticipants[master[1]].scanb5090126 = slave;
+  if (ebus::contains(master, SCAN_b5090127))
+    allParticipants[master[1]].scanb5090127 = slave;
+}
+
+void Schedule::nextScanCommand() {
+  while (scanIndex <= 0xff) {
+    scanIndex++;
+    if (scanIndex == 0xff) {
+      fullScan = false;
+      scanIndex = 0;
+      break;
+    }
+    if (ebus::isSlave(scanIndex) &&
+        scanIndex != ebusHandler.getSlaveAddress()) {
+      std::vector<uint8_t> command;
+      command = {scanIndex};
+      command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());
+      scanCommands.push_back(command);
+      break;
+    }
+  }
 }
