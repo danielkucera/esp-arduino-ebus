@@ -407,7 +407,7 @@ void saveParamsCallback() {
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
   mqtt.setHASupport(haSupportParam.isChecked());
-  mqtt.publisHA();
+  mqtt.publishHA();
 }
 
 void connectWifi(const char* ssid, const char* password) {

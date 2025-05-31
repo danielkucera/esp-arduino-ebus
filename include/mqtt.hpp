@@ -34,7 +34,7 @@ class Mqtt {
   void publishResponse(const std::string &id, const std::string &status,
                        const size_t &bytes = 0);
 
-  void publisHA() const;
+  void publishHA() const;
 
   void publishCommands();
   void publishHASensors(const bool remove);

@@ -61,7 +61,7 @@ void Mqtt::publishResponse(const std::string &id, const std::string &status,
   publish("response", 0, false, payload.c_str());
 }
 
-void Mqtt::publisHA() const {
+void Mqtt::publishHA() const {
   mqtt.publishHADiagnostic("Uptime", !haSupport,
                            "{{timedelta(seconds=((value|float)/1000)|int)}}",
                            true);
@@ -128,7 +128,7 @@ void Mqtt::onConnect(bool sessionPresent) {
   mqtt.publish(topicWill.c_str(), 0, true, "online", false);
   mqtt.setWill(topicWill.c_str(), 0, true, "offline");
 
-  mqtt.publisHA();
+  mqtt.publishHA();
 }
 
 void Mqtt::onMessage(const char *topic, const char *payload,
