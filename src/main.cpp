@@ -75,6 +75,7 @@ char ipAddressValue[STRING_LEN];
 char gatewayValue[STRING_LEN];
 char netmaskValue[STRING_LEN];
 
+uint32_t pwm;
 char pwm_value[NUMBER_LEN];
 
 char ebus_address[NUMBER_LEN];
@@ -154,43 +155,15 @@ bool needMqttConnect = false;
 uint32_t lastMqttConnectionAttempt = 0;
 uint32_t lastMqttUpdate = 0;
 
-// ebus/<unique_id>/settings
-Track<uint32_t> pwm("settings/pwm", 0, 300);
-#ifdef EBUS_INTERNAL
-Track<String> ebusAddress("settings/ebus_address", 0, 300);
-Track<String> commandDistance("settings/command_distance", 0, 300);
-Track<size_t> activeCommands("settings/active_commands", 0, 300);
-Track<size_t> passiveCommands("settings/passive_commands", 0, 300);
-#endif
-
-// ebus/<unique_id>/firmware
-Track<String> version("firmware/version", 0, 300);
-Track<String> sdk("firmware/sdk", 0, 300);
-Track<String> async("firmware/async", 0, 300);
-Track<String> software_serial("firmware/software_serial", 0, 300);
-
-// ebus/<unique_id>/state
-Track<uint32_t> reset_code("state/reset_code", 0, 300);
+// status
+uint32_t reset_code = 0;
 Track<uint32_t> uptime("state/uptime", 10);
 Track<uint32_t> loopDuration("state/loop_duration", 10);
-Track<uint32_t> maxLoopDuration("state/loop_duration_max", 10);
-Track<uint32_t> free_heap("state/free_heap", 10);
+uint32_t maxLoopDuration;
 
-// ebus/<unique_id>/state/wifi
-Track<uint32_t> last_connect("state/wifi/last_connect", 30);
-Track<int> reconnect_count("state/wifi/reconnect_count", 30);
-Track<int8_t> rssi("state/wifi/rssi", 30);
-
-// ebus/<unique_id>/state/arbitration
-Track<int> nbrArbitrations("state/arbitration/total", 10);
-Track<int> nbrRestarts1("state/arbitration/restarts1", 10);
-Track<int> nbrRestarts2("state/arbitration/restarts2", 10);
-Track<int> nbrWon1("state/arbitration/won1", 10);
-Track<int> nbrWon2("state/arbitration/won2", 10);
-Track<int> nbrLost1("state/arbitration/lost1", 10);
-Track<int> nbrLost2("state/arbitration/lost2", 10);
-Track<int> nbrLate("state/arbitration/late", 10);
-Track<int> nbrErrors("state/arbitration/errors", 10);
+// wifi
+uint32_t last_connect = 0;
+int reconnect_count = 0;
 
 bool connectMqtt() {
   if (mqtt.connected()) return true;
@@ -300,7 +273,7 @@ void loop_duration() {
 
   loopDuration = ((1 - alpha) * loopDuration.value() + (alpha * delta));
 
-  if (delta > maxLoopDuration.value()) {
+  if (delta > maxLoopDuration) {
     maxLoopDuration = delta;
   }
 }
@@ -396,10 +369,7 @@ void saveParamsCallback() {
 
 #ifdef EBUS_INTERNAL
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
-  ebusAddress = ebus_address;
-
   schedule.setDistance(atoi(command_distance));
-  commandDistance = command_distance;
 #endif
 
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
@@ -437,19 +407,19 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
   pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
-                  last_connect.value());
+                  last_connect);
   pos += snprintf(status + pos, bufferSize - pos, "reconnect_count: %d \n",
-                  reconnect_count.value());
+                  reconnect_count);
   pos +=
       snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n",
-                  free_heap.value());
-  pos += snprintf(status + pos, bufferSize - pos, "reset_code: %u\n",
-                  reset_code.value());
+                  ESP.getFreeHeap());
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "reset_code: %u\n", reset_code);
   pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
                   loopDuration.value());
   pos += snprintf(status + pos, bufferSize - pos,
-                  "max_loop_duration: %u us\r\n", maxLoopDuration.value());
+                  "max_loop_duration: %u us\r\n", maxLoopDuration);
   pos +=
       snprintf(status + pos, bufferSize - pos, "version: %s\r\n", AUTO_VERSION);
 
@@ -482,71 +452,77 @@ char* status_string() {
   return status;
 }
 
-void publishStatus() {
-  // ebus/<unique_id>/settings
-  pwm = get_pwm();
+const std::string getAdapterJson() {
+  std::string payload;
+  JsonDocument doc;
+
+  doc["Unique_ID"] = unique_id;
+
+  // Firmware
+  JsonObject Firmware = doc["Firmware"].to<JsonObject>();
+  Firmware["Version"] = AUTO_VERSION;
+  Firmware["SDK"] = ESP.getSdkVersion();
+  Firmware["Async"] = USE_ASYNCHRONOUS ? true : false;
+  Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
+
+  // Settings
+  JsonObject Settings = doc["Settings"].to<JsonObject>();
+  Settings["PWM"] = get_pwm();
 #ifdef EBUS_INTERNAL
-  ebusAddress = ebus_address;
-  commandDistance = command_distance;
-  activeCommands = store.getActiveCommands();
-  passiveCommands = store.getPassiveCommands();
+  Settings["Ebus_Address"] = ebus_address;
+  Settings["Command_Distance"] = atoi(command_distance);
+  Settings["Active_Commands"] = store.getActiveCommands();
+  Settings["Passive_Commands"] = store.getPassiveCommands();
 #endif
 
-  // ebus/<unique_id>/firmware
-  version = AUTO_VERSION;
-  sdk = ESP.getSdkVersion();
-  async = USE_ASYNCHRONOUS ? "true" : "false";
-  software_serial = USE_SOFTWARE_SERIAL ? "true" : "false";
+  // Mqtt
+  JsonObject Mqtt = doc["Mqtt"].to<JsonObject>();
+  Mqtt["Server"] = mqtt_server;
+  Mqtt["User"] = mqtt_user;
+  Mqtt["Connected"] = mqtt.connected();
 
-  // ebus/<unique_id>/
-  reset_code.publish();
-  uptime.publish();
-  loopDuration.publish();
-  maxLoopDuration.publish();
-  free_heap = ESP.getFreeHeap();
+  // HomeAssistant
+  JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
+  HomeAssistant["Support"] = haSupportParam.isChecked();
 
-  // ebus/<unique_id>/state/wifi
-  last_connect.publish();
-  reconnect_count.publish();
-  rssi = WiFi.RSSI();
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload;
 }
 
-void publishValues() {
-  // ebus/<unique_id>/settings
-  pwm.touch();
-#ifdef EBUS_INTERNAL
-  ebusAddress.touch();
-  commandDistance.touch();
-  activeCommands = store.getActiveCommands();
-  passiveCommands = store.getPassiveCommands();
-#endif
+const std::string getStatusJson() {
+  std::string payload;
+  JsonDocument doc;
 
-  // ebus/<unique_id>/firmware
-  version.touch();
-  sdk.touch();
-  async.touch();
-  software_serial.touch();
+  doc["Reset_Code"] = reset_code;
+  doc["Uptime"] = uptime.value();
+  doc["Loop_Duration"] = loopDuration.value();
+  doc["Loop_Duration_Max"] = maxLoopDuration;
+  doc["Free_Heap"] = ESP.getFreeHeap();
 
-  // ebus/<unique_id>/state
-  reset_code.touch();
-  maxLoopDuration.touch();
-  free_heap = ESP.getFreeHeap();
+  // WIFI
+  JsonObject WIFI = doc["WIFI"].to<JsonObject>();
+  WIFI["Last_Connect"] = last_connect;
+  WIFI["Reconnect_Count"] = reconnect_count;
+  WIFI["RSSI"] = WiFi.RSSI();
 
-  // ebus/<unique_id>/state/wifi
-  last_connect.touch();
-  reconnect_count.touch();
-  rssi = WiFi.RSSI();
+  // Arbitration
+  JsonObject Arbitration = doc["Arbitration"].to<JsonObject>();
+  Arbitration["Total"] = static_cast<int>(Bus._nbrArbitrations);
+  Arbitration["Restarts1"] = static_cast<int>(Bus._nbrRestarts1);
+  Arbitration["Restarts2"] = static_cast<int>(Bus._nbrRestarts2);
+  Arbitration["Won1"] = static_cast<int>(Bus._nbrWon1);
+  Arbitration["Won2"] = static_cast<int>(Bus._nbrWon2);
+  Arbitration["Lost1"] = static_cast<int>(Bus._nbrLost1);
+  Arbitration["Lost2"] = static_cast<int>(Bus._nbrLost2);
+  Arbitration["Late"] = static_cast<int>(Bus._nbrLate);
+  Arbitration["Errors"] = static_cast<int>(Bus._nbrErrors);
 
-  // ebus/<unique_id>/state/arbitration
-  nbrArbitrations = Bus._nbrArbitrations;
-  nbrRestarts1 = Bus._nbrRestarts1;
-  nbrRestarts2 = Bus._nbrRestarts2;
-  nbrWon1 = Bus._nbrWon1;
-  nbrWon2 = Bus._nbrWon2;
-  nbrLost1 = Bus._nbrLost1;
-  nbrLost2 = Bus._nbrLost2;
-  nbrLate = Bus._nbrLate;
-  nbrErrors = Bus._nbrErrors;
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload;
 }
 
 bool handleStatusServerRequests() {
@@ -706,10 +682,8 @@ void loop() {
 #endif
 
   if (needMqttConnect) {
-    if (connectMqtt()) {
-      needMqttConnect = false;
-      publishStatus();
-    }
+    if (connectMqtt()) needMqttConnect = false;
+
   } else if ((iotWebConf.getState() == iotwebconf::OnLine) &&
              (!mqtt.connected())) {
     needMqttConnect = true;
@@ -719,7 +693,6 @@ void loop() {
     uint32_t currentMillis = millis();
     if (currentMillis > lastMqttUpdate + 5 * 1000) {
       lastMqttUpdate = currentMillis;
-      publishValues();
 
 #ifdef EBUS_INTERNAL
       schedule.publishCounters();

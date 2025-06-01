@@ -17,73 +17,65 @@ const std::vector<uint8_t> SCAN_b5090125 = {0xb5, 0x09, 0x01, 0x25};
 const std::vector<uint8_t> SCAN_b5090126 = {0xb5, 0x09, 0x01, 0x26};
 const std::vector<uint8_t> SCAN_b5090127 = {0xb5, 0x09, 0x01, 0x27};
 
-// ebus/<unique_id>/state/internal/messages
-Track<uint32_t> messagesTotal("state/internal/messages", 10);
-
-Track<uint32_t> messagesPassiveMasterSlave(
-    "state/internal/messages/passiveMasterSlave", 10);
-Track<uint32_t> messagesPassiveMasterMaster(
-    "state/internal/messages/passiveMasterMaster", 10);
-
-Track<uint32_t> messagesReactiveMasterSlave(
-    "state/internal/messages/reactiveMasterSlave", 10);
-Track<uint32_t> messagesReactiveMasterMaster(
-    "state/internal/messages/reactiveMasterMaster", 10);
-Track<uint32_t> messagesReactiveBroadcast(
-    "state/internal/messages/reactiveBroadcast", 10);
-
-Track<uint32_t> messagesActiveMasterSlave(
-    "state/internal/messages/activeMasterSlave", 10);
-Track<uint32_t> messagesActiveMasterMaster(
-    "state/internal/messages/activeMasterMaster", 10);
-Track<uint32_t> messagesActiveBroadcast(
-    "state/internal/messages/activeBroadcast", 10);
-
-// ebus/<unique_id>/state/internal/errors
-Track<uint32_t> errorsTotal("state/internal/errors", 10);
-
-Track<uint32_t> errorsPassive("state/internal/errors/passive", 10);
-Track<uint32_t> errorsPassiveMaster("state/internal/errors/passive/master", 10);
-Track<uint32_t> errorsPassiveMasterACK(
-    "state/internal/errors/passive/masterACK", 10);
-Track<uint32_t> errorsPassiveSlave("state/internal/errors/passive/slave", 10);
-Track<uint32_t> errorsPassiveSlaveACK("state/internal/errors/passive/slaveACK",
-                                      10);
-
-Track<uint32_t> errorsReactive("state/internal/errors/reactive", 10);
-Track<uint32_t> errorsReactiveMaster("state/internal/errors/reactive/master",
-                                     10);
-Track<uint32_t> errorsReactiveMasterACK(
-    "state/internal/errors/reactive/masterACK", 10);
-Track<uint32_t> errorsReactiveSlave("state/internal/errors/reactive/slave", 10);
-Track<uint32_t> errorsReactiveSlaveACK(
-    "state/internal/errors/reactive/slaveACK", 10);
-
-Track<uint32_t> errorsActive("state/internal/errors/active", 10);
-Track<uint32_t> errorsActiveMaster("state/internal/errors/active/master", 10);
-Track<uint32_t> errorsActiveMasterACK("state/internal/errors/active/masterACK",
-                                      10);
-Track<uint32_t> errorsActiveSlave("state/internal/errors/active/slave", 10);
-Track<uint32_t> errorsActiveSlaveACK("state/internal/errors/active/slaveACK",
-                                     10);
-
-// ebus/<unique_id>/state/internal/resets
-Track<uint32_t> resetsTotal("state/internal/resets", 10);
-Track<uint32_t> resetsPassive00("state/internal/resets/passive00", 10);
-Track<uint32_t> resetsPassive0704("state/internal/resets/passive0704", 10);
-Track<uint32_t> resetsPassive("state/internal/resets/passive", 10);
-Track<uint32_t> resetsActive("state/internal/resets/active", 10);
-
-// ebus/<unique_id>/state/internal/requests
-Track<uint32_t> requestsTotal("state/internal/requests", 10);
-Track<uint32_t> requestsWon("state/internal/requests/won", 10);
-Track<uint32_t> requestsLost("state/internal/requests/lost", 10);
-Track<uint32_t> requestsRetry("state/internal/requests/retry", 10);
-Track<uint32_t> requestsError("state/internal/requests/error", 10);
-
-// ebus/<unique_id>/state/internal/addresses
+// ebus/<unique_id>/state/addresses
 std::map<uint8_t, uint32_t> seenMasters;
 std::map<uint8_t, uint32_t> seenSlaves;
+
+// ebus/<unique_id>/state/messages
+Track<uint32_t> messagesTotal("state/messages", 10);
+
+Track<uint32_t> messagesPassiveMasterSlave("state/messages/passiveMasterSlave",
+                                           10);
+Track<uint32_t> messagesPassiveMasterMaster(
+    "state/messages/passiveMasterMaster", 10);
+
+Track<uint32_t> messagesReactiveMasterSlave(
+    "state/messages/reactiveMasterSlave", 10);
+Track<uint32_t> messagesReactiveMasterMaster(
+    "state/messages/reactiveMasterMaster", 10);
+Track<uint32_t> messagesReactiveBroadcast("state/messages/reactiveBroadcast",
+                                          10);
+
+Track<uint32_t> messagesActiveMasterSlave("state/messages/activeMasterSlave",
+                                          10);
+Track<uint32_t> messagesActiveMasterMaster("state/messages/activeMasterMaster",
+                                           10);
+Track<uint32_t> messagesActiveBroadcast("state/messages/activeBroadcast", 10);
+
+// ebus/<unique_id>/state/requests
+Track<uint32_t> requestsTotal("state/requests", 10);
+Track<uint32_t> requestsWon("state/requests/won", 10);
+Track<uint32_t> requestsLost("state/requests/lost", 10);
+Track<uint32_t> requestsRetry("state/requests/retry", 10);
+Track<uint32_t> requestsError("state/requests/error", 10);
+
+// ebus/<unique_id>/state/resets
+Track<uint32_t> resetsTotal("state/resets", 10);
+Track<uint32_t> resetsPassive00("state/resets/passive00", 10);
+Track<uint32_t> resetsPassive0704("state/resets/passive0704", 10);
+Track<uint32_t> resetsPassive("state/resets/passive", 10);
+Track<uint32_t> resetsActive("state/resets/active", 10);
+
+// ebus/<unique_id>/state/errors
+Track<uint32_t> errorsTotal("state/errors", 10);
+
+Track<uint32_t> errorsPassive("state/errors/passive", 10);
+Track<uint32_t> errorsPassiveMaster("state/errors/passive/master", 10);
+Track<uint32_t> errorsPassiveMasterACK("state/errors/passive/masterACK", 10);
+Track<uint32_t> errorsPassiveSlave("state/errors/passive/slave", 10);
+Track<uint32_t> errorsPassiveSlaveACK("state/errors/passive/slaveACK", 10);
+
+Track<uint32_t> errorsReactive("state/errors/reactive", 10);
+Track<uint32_t> errorsReactiveMaster("state/errors/reactive/master", 10);
+Track<uint32_t> errorsReactiveMasterACK("state/errors/reactive/masterACK", 10);
+Track<uint32_t> errorsReactiveSlave("state/errors/reactive/slave", 10);
+Track<uint32_t> errorsReactiveSlaveACK("state/errors/reactive/slaveACK", 10);
+
+Track<uint32_t> errorsActive("state/errors/active", 10);
+Track<uint32_t> errorsActiveMaster("state/errors/active/master", 10);
+Track<uint32_t> errorsActiveMasterACK("state/errors/active/masterACK", 10);
+Track<uint32_t> errorsActiveSlave("state/errors/active/slave", 10);
+Track<uint32_t> errorsActiveSlaveACK("state/errors/active/slaveACK", 10);
 
 Schedule schedule;
 
@@ -195,9 +187,23 @@ void Schedule::processData(const uint8_t byte) { ebusHandler.run(byte); }
 void Schedule::resetCounters() { ebusHandler.resetCounters(); }
 
 void Schedule::publishCounters() {
+  // Addresses Master
+  for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
+    std::string topic =
+        "state/addresses/master/" + ebus::to_string(master.first);
+    mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
+  }
+
+  // Addresses Slave
+  for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) {
+    std::string topic = "state/addresses/slave/" + ebus::to_string(slave.first);
+    mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
+  }
+
+  // Counters
   ebus::Counters counters = ebusHandler.getCounters();
 
-  // messages
+  // Messages
   messagesTotal = counters.messagesTotal;
 
   messagesPassiveMasterSlave = counters.messagesPassiveMasterSlave;
@@ -211,7 +217,21 @@ void Schedule::publishCounters() {
   messagesActiveMasterMaster = counters.messagesActiveMasterMaster;
   messagesActiveBroadcast = counters.messagesActiveBroadcast;
 
-  // errors
+  // Requests
+  requestsTotal = counters.requestsTotal;
+  requestsWon = counters.requestsWon;
+  requestsLost = counters.requestsLost;
+  requestsRetry = counters.requestsRetry;
+  requestsError = counters.requestsError;
+
+  // Resets
+  resetsTotal = counters.resetsTotal;
+  resetsPassive00 = counters.resetsPassive00;
+  resetsPassive0704 = counters.resetsPassive0704;
+  resetsPassive = counters.resetsPassive;
+  resetsActive = counters.resetsActive;
+
+  // Errors
   errorsTotal = counters.errorsTotal;
 
   errorsPassive = counters.errorsPassive;
@@ -231,34 +251,87 @@ void Schedule::publishCounters() {
   errorsActiveMasterACK = counters.errorsActiveMasterACK;
   errorsActiveSlave = counters.errorsActiveSlave;
   errorsActiveSlaveACK = counters.errorsActiveSlaveACK;
+}
 
-  // resets
-  resetsTotal = counters.resetsTotal;
-  resetsPassive00 = counters.resetsPassive00;
-  resetsPassive0704 = counters.resetsPassive0704;
-  resetsPassive = counters.resetsPassive;
-  resetsActive = counters.resetsActive;
+const std::string Schedule::getCountersJson() {
+  std::string payload;
+  JsonDocument doc;
 
-  // requests
-  requestsTotal = counters.requestsTotal;
-  requestsWon = counters.requestsWon;
-  requestsLost = counters.requestsLost;
-  requestsRetry = counters.requestsRetry;
-  requestsError = counters.requestsError;
+  // Addresses Master
+  JsonObject Addresses_Master = doc["Addresses"]["Master"].to<JsonObject>();
 
-  // master addresses
-  for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
-    std::string topic =
-        "state/internal/addresses/master/" + ebus::to_string(master.first);
-    mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
-  }
+  for (const std::pair<uint8_t, uint32_t> master : seenMasters)
+    Addresses_Master[ebus::to_string(master.first)] = master.second;
 
-  // slave addresses
-  for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) {
-    std::string topic =
-        "state/internal/addresses/slave/" + ebus::to_string(slave.first);
-    mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
-  }
+  // Addresses Slave
+  JsonObject Addresses_Slave = doc["Addresses"]["Slave"].to<JsonObject>();
+
+  for (const std::pair<uint8_t, uint32_t> slave : seenSlaves)
+    Addresses_Slave[ebus::to_string(slave.first)] = slave.second;
+
+  // Counters
+  ebus::Counters counters = ebusHandler.getCounters();
+
+  // Messages
+  JsonObject Messages = doc["Messages"].to<JsonObject>();
+  Messages["Total"] = counters.messagesTotal;
+  Messages["Passive_Master_Slave"] = counters.messagesPassiveMasterSlave;
+  Messages["Passive_Master_Master"] = counters.messagesPassiveMasterMaster;
+  Messages["Reactive_Master_Slave"] = counters.messagesReactiveMasterSlave;
+  Messages["Reactive_Master_Master"] = counters.messagesReactiveMasterMaster;
+  Messages["Reactive_Broadcast"] = counters.messagesReactiveBroadcast;
+  Messages["Active_Master_Slave"] = counters.messagesActiveMasterSlave;
+  Messages["Active_Master_Master"] = counters.messagesActiveMasterMaster;
+  Messages["Active_Broadcast"] = counters.messagesActiveBroadcast;
+
+  // Requests
+  JsonObject Requests = doc["Requests"].to<JsonObject>();
+  Requests["Total"] = counters.requestsTotal;
+  Requests["Won"] = counters.requestsWon;
+  Requests["Lost"] = counters.requestsLost;
+  Requests["Retry"] = counters.requestsRetry;
+  Requests["Error"] = counters.requestsError;
+
+  // Resets
+  JsonObject Resets = doc["Resets"].to<JsonObject>();
+  Resets["Total"] = counters.resetsTotal;
+  Resets["Passive_00"] = counters.resetsPassive00;
+  Resets["Passive_0704"] = counters.resetsPassive0704;
+  Resets["Passive"] = counters.resetsPassive;
+  Resets["Active"] = counters.resetsActive;
+
+  // Errors
+  JsonObject Errors = doc["Errors"].to<JsonObject>();
+  Errors["Total"] = counters.errorsTotal;
+
+  // Errors Passive
+  JsonObject Errors_Passive = doc["Errors"]["Passive"].to<JsonObject>();
+  Errors_Passive["Total"] = counters.errorsPassive;
+  Errors_Passive["Master"] = counters.errorsPassiveMaster;
+  Errors_Passive["Master_ACK"] = counters.errorsPassiveMasterACK;
+  Errors_Passive["Slave"] = counters.errorsPassiveSlave;
+  Errors_Passive["Slave_ACK"] = counters.errorsPassiveSlaveACK;
+
+  // Erros Reactive
+  JsonObject Errors_Reactive = doc["Errors"]["Reactive"].to<JsonObject>();
+  Errors_Reactive["Total"] = counters.errorsReactive;
+  Errors_Reactive["Master"] = counters.errorsReactiveMaster;
+  Errors_Reactive["Master_ACK"] = counters.errorsReactiveMasterACK;
+  Errors_Reactive["Slave"] = counters.errorsReactiveSlave;
+  Errors_Reactive["Slave_ACK"] = counters.errorsReactiveSlaveACK;
+
+  // Erros Active
+  JsonObject Errors_Active = doc["Errors"]["Active"].to<JsonObject>();
+  Errors_Active["Total"] = counters.errorsActive;
+  Errors_Active["Master"] = counters.errorsActiveMaster;
+  Errors_Active["Master_ACK"] = counters.errorsActiveMasterACK;
+  Errors_Active["Slave"] = counters.errorsActiveSlave;
+  Errors_Active["Slave_ACK"] = counters.errorsActiveSlaveACK;
+
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload;
 }
 
 JsonDocument Schedule::getParticipantJson(const Participant *participant) {
@@ -372,7 +445,7 @@ void Schedule::onTelegramCallback(const ebus::MessageType &messageType,
 }
 
 void Schedule::onErrorCallback(const std::string &str) {
-  std::string topic = "state/internal/resets/last";
+  std::string topic = "state/resets/last";
   std::string payload = str;
   mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }

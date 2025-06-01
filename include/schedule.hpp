@@ -48,6 +48,7 @@ class Schedule {
 
   void resetCounters();
   void publishCounters();
+  const std::string getCountersJson();
 
   static JsonDocument getParticipantJson(const Participant *participant);
   const std::string getParticipantsJson() const;

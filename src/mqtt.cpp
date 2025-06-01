@@ -44,8 +44,7 @@ void Mqtt::doLoop() {
 
 uint16_t Mqtt::publish(const char *topic, uint8_t qos, bool retain,
                        const char *payload, bool prefix) {
-  std::string mqttTopic = topic;
-  if (prefix) mqttTopic = rootTopic + topic;
+  std::string mqttTopic = prefix ? rootTopic + topic : topic;
   return client.publish(mqttTopic.c_str(), qos, retain, payload);
 }
 

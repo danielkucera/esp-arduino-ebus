@@ -8,6 +8,16 @@ WebServer configServer(80);
 
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
 
+void handleGetAdapter() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    getAdapterJson().c_str());
+}
+
+void handleGetStatus() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    getStatusJson().c_str());
+}
+
 #ifdef EBUS_INTERNAL
 void handleCommandsList() {
   configServer.send(200, "application/json;charset=utf-8",
@@ -123,6 +133,11 @@ void handleParicipantsList() {
   configServer.send(200, "application/json;charset=utf-8",
                     schedule.getParticipantsJson().c_str());
 }
+
+void handleGetCounters() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    schedule.getCountersJson().c_str());
+}
 #endif
 
 void handleRoot() {
@@ -176,6 +191,8 @@ void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
+  configServer.on("/api/v1/GetAdapter", [] { handleGetAdapter(); });
+  configServer.on("/api/v1/GetStatus", [] { handleGetStatus(); });
 #ifdef EBUS_INTERNAL
   configServer.on("/commands/list", [] { handleCommandsList(); });
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
@@ -190,6 +207,7 @@ void SetupHttpHandlers() {
   configServer.on("/participants/scanfull",
                   [] { handleParicipantsScanFull(); });
   configServer.on("/participants/list", [] { handleParicipantsList(); });
+  configServer.on("/api/v1/GetCounters", [] { handleGetCounters(); });
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
