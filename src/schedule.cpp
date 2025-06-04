@@ -190,11 +190,10 @@ void Schedule::setPublishCounters(const bool enable) {
 
 void Schedule::resetCounters() {
   // Addresses Master
-  for (std::pair<const uint8_t, uint32_t> &master : seenMasters)
-    master.second = 0;
+  seenMasters.clear();
 
   // Addresses Slave
-  for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) slave.second = 0;
+  seenSlaves.clear();
 
   ebusHandler.resetCounters();
 }
