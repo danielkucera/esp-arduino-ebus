@@ -46,8 +46,8 @@ class Schedule {
   void nextCommand();
   void processData(const uint8_t byte);
 
-  void resetCounters();
   void setPublishCounters(const bool enable);
+  void resetCounters();
   void fetchCounters();
   const std::string getCountersJson();
 

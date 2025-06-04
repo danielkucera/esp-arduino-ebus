@@ -184,10 +184,19 @@ void Schedule::nextCommand() {
 
 void Schedule::processData(const uint8_t byte) { ebusHandler.run(byte); }
 
-void Schedule::resetCounters() { ebusHandler.resetCounters(); }
-
 void Schedule::setPublishCounters(const bool enable) {
   publishCounters = enable;
+}
+
+void Schedule::resetCounters() {
+  // Addresses Master
+  for (std::pair<const uint8_t, uint32_t> &master : seenMasters)
+    master.second = 0;
+
+  // Addresses Slave
+  for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) slave.second = 0;
+
+  ebusHandler.resetCounters();
 }
 
 void Schedule::fetchCounters() {
