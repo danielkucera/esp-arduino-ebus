@@ -186,71 +186,78 @@ void Schedule::processData(const uint8_t byte) { ebusHandler.run(byte); }
 
 void Schedule::resetCounters() { ebusHandler.resetCounters(); }
 
-void Schedule::publishCounters() {
-  // Addresses Master
-  for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
-    std::string topic =
-        "state/addresses/master/" + ebus::to_string(master.first);
-    mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
+void Schedule::setPublishCounters(const bool enable) {
+  publishCounters = enable;
+}
+
+void Schedule::fetchCounters() {
+  if (publishCounters) {
+    // Addresses Master
+    for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
+      std::string topic =
+          "state/addresses/master/" + ebus::to_string(master.first);
+      mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
+    }
+
+    // Addresses Slave
+    for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) {
+      std::string topic =
+          "state/addresses/slave/" + ebus::to_string(slave.first);
+      mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
+    }
+
+    // Counters
+    ebus::Counters counters = ebusHandler.getCounters();
+
+    // Messages
+    messagesTotal = counters.messagesTotal;
+
+    messagesPassiveMasterSlave = counters.messagesPassiveMasterSlave;
+    messagesPassiveMasterMaster = counters.messagesPassiveMasterMaster;
+
+    messagesReactiveMasterSlave = counters.messagesReactiveMasterSlave;
+    messagesReactiveMasterMaster = counters.messagesReactiveMasterMaster;
+    messagesReactiveBroadcast = counters.messagesReactiveBroadcast;
+
+    messagesActiveMasterSlave = counters.messagesActiveMasterSlave;
+    messagesActiveMasterMaster = counters.messagesActiveMasterMaster;
+    messagesActiveBroadcast = counters.messagesActiveBroadcast;
+
+    // Requests
+    requestsTotal = counters.requestsTotal;
+    requestsWon = counters.requestsWon;
+    requestsLost = counters.requestsLost;
+    requestsRetry = counters.requestsRetry;
+    requestsError = counters.requestsError;
+
+    // Resets
+    resetsTotal = counters.resetsTotal;
+    resetsPassive00 = counters.resetsPassive00;
+    resetsPassive0704 = counters.resetsPassive0704;
+    resetsPassive = counters.resetsPassive;
+    resetsActive = counters.resetsActive;
+
+    // Errors
+    errorsTotal = counters.errorsTotal;
+
+    errorsPassive = counters.errorsPassive;
+    errorsPassiveMaster = counters.errorsPassiveMaster;
+    errorsPassiveMasterACK = counters.errorsPassiveMasterACK;
+    errorsPassiveSlave = counters.errorsPassiveSlave;
+    errorsPassiveSlaveACK = counters.errorsPassiveSlaveACK;
+
+    errorsReactive = counters.errorsReactive;
+    errorsReactiveMaster = counters.errorsReactiveMaster;
+    errorsReactiveMasterACK = counters.errorsReactiveMasterACK;
+    errorsReactiveSlave = counters.errorsReactiveSlave;
+    errorsReactiveSlaveACK = counters.errorsReactiveSlaveACK;
+
+    errorsActive = counters.errorsActive;
+    errorsActiveMaster = counters.errorsActiveMaster;
+    errorsActiveMasterACK = counters.errorsActiveMasterACK;
+    errorsActiveSlave = counters.errorsActiveSlave;
+    errorsActiveSlaveACK = counters.errorsActiveSlaveACK;
   }
-
-  // Addresses Slave
-  for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) {
-    std::string topic = "state/addresses/slave/" + ebus::to_string(slave.first);
-    mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
-  }
-
-  // Counters
-  ebus::Counters counters = ebusHandler.getCounters();
-
-  // Messages
-  messagesTotal = counters.messagesTotal;
-
-  messagesPassiveMasterSlave = counters.messagesPassiveMasterSlave;
-  messagesPassiveMasterMaster = counters.messagesPassiveMasterMaster;
-
-  messagesReactiveMasterSlave = counters.messagesReactiveMasterSlave;
-  messagesReactiveMasterMaster = counters.messagesReactiveMasterMaster;
-  messagesReactiveBroadcast = counters.messagesReactiveBroadcast;
-
-  messagesActiveMasterSlave = counters.messagesActiveMasterSlave;
-  messagesActiveMasterMaster = counters.messagesActiveMasterMaster;
-  messagesActiveBroadcast = counters.messagesActiveBroadcast;
-
-  // Requests
-  requestsTotal = counters.requestsTotal;
-  requestsWon = counters.requestsWon;
-  requestsLost = counters.requestsLost;
-  requestsRetry = counters.requestsRetry;
-  requestsError = counters.requestsError;
-
-  // Resets
-  resetsTotal = counters.resetsTotal;
-  resetsPassive00 = counters.resetsPassive00;
-  resetsPassive0704 = counters.resetsPassive0704;
-  resetsPassive = counters.resetsPassive;
-  resetsActive = counters.resetsActive;
-
-  // Errors
-  errorsTotal = counters.errorsTotal;
-
-  errorsPassive = counters.errorsPassive;
-  errorsPassiveMaster = counters.errorsPassiveMaster;
-  errorsPassiveMasterACK = counters.errorsPassiveMasterACK;
-  errorsPassiveSlave = counters.errorsPassiveSlave;
-  errorsPassiveSlaveACK = counters.errorsPassiveSlaveACK;
-
-  errorsReactive = counters.errorsReactive;
-  errorsReactiveMaster = counters.errorsReactiveMaster;
-  errorsReactiveMasterACK = counters.errorsReactiveMasterACK;
-  errorsReactiveSlave = counters.errorsReactiveSlave;
-  errorsReactiveSlaveACK = counters.errorsReactiveSlaveACK;
-
-  errorsActive = counters.errorsActive;
-  errorsActiveMaster = counters.errorsActiveMaster;
-  errorsActiveMasterACK = counters.errorsActiveMasterACK;
-  errorsActiveSlave = counters.errorsActiveSlave;
-  errorsActiveSlaveACK = counters.errorsActiveSlaveACK;
 }
 
 const std::string Schedule::getCountersJson() {
@@ -445,9 +452,11 @@ void Schedule::onTelegramCallback(const ebus::MessageType &messageType,
 }
 
 void Schedule::onErrorCallback(const std::string &str) {
-  std::string topic = "state/resets/last";
-  std::string payload = str;
-  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
+  if (schedule.publishCounters) {
+    std::string topic = "state/resets/last";
+    std::string payload = str;
+    mqtt.publish(topic.c_str(), 0, false, payload.c_str());
+  }
 }
 
 void Schedule::processActive(const std::vector<uint8_t> &master,

@@ -47,7 +47,8 @@ class Schedule {
   void processData(const uint8_t byte);
 
   void resetCounters();
-  void publishCounters();
+  void setPublishCounters(const bool enable);
+  void fetchCounters();
   const std::string getCountersJson();
 
   static JsonDocument getParticipantJson(const Participant *participant);
@@ -76,6 +77,8 @@ class Schedule {
 
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;
+
+  bool publishCounters = false;
 
   static void onWriteCallback(const uint8_t byte);
   static int isDataAvailableCallback();

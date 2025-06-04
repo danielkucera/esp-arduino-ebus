@@ -89,6 +89,7 @@ char command_distance[NUMBER_LEN];
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
+char mqttPublishCountersValue[STRING_LEN];
 
 char haSupportValue[STRING_LEN];
 
@@ -131,6 +132,10 @@ iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
     "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", DUMMY_MQTT_USER);
 iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
     "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", DUMMY_MQTT_PASS);
+iotwebconf::CheckboxParameter mqttPublishCountersParam =
+    iotwebconf::CheckboxParameter("Publish Counters to MQTT",
+                                  "mqttPublishCountersParam",
+                                  mqttPublishCountersValue, STRING_LEN);
 
 iotwebconf::ParameterGroup haGroup =
     iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
@@ -376,6 +381,8 @@ void saveParamsCallback() {
 
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
+  schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
+
   mqtt.setHASupport(haSupportParam.isChecked());
   mqtt.publishHA();
 }
@@ -444,6 +451,12 @@ char* status_string() {
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_user: %s\r\n", mqtt_user);
 
+#ifdef EBUS_INTERNAL
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "mqtt_publish_counters: %s\r\n",
+               mqttPublishCountersParam.isChecked() ? "true" : "false");
+#endif
+
   pos += snprintf(status + pos, bufferSize - pos, "ha_support: %s\r\n",
                   haSupportParam.isChecked() ? "true" : "false");
 
@@ -480,6 +493,9 @@ const std::string getAdapterJson() {
   Mqtt["Server"] = mqtt_server;
   Mqtt["User"] = mqtt_user;
   Mqtt["Connected"] = mqtt.connected();
+#ifdef EBUS_INTERNAL
+  Mqtt["Publish_Counters"] = mqttPublishCountersParam.isChecked();
+#endif
 
   // HomeAssistant
   JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
@@ -579,6 +595,9 @@ void setup() {
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
+#ifdef EBUS_INTERNAL
+  mqttGroup.addItem(&mqttPublishCountersParam);
+#endif
 
   haGroup.addItem(&haSupportParam);
 
@@ -639,6 +658,8 @@ void setup() {
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
+  schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
+
   mqtt.setHASupport(haSupportParam.isChecked());
 
   wifiServer.begin();
@@ -695,7 +716,7 @@ void loop() {
       lastMqttUpdate = currentMillis;
 
 #ifdef EBUS_INTERNAL
-      schedule.publishCounters();
+      schedule.fetchCounters();
 #endif
     }
 #ifdef EBUS_INTERNAL
