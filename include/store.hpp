@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ArduinoJson.h>
-#include <Datatypes.h>
+#include <Ebus.h>
 
 #include <string>
 #include <vector>
@@ -21,7 +21,7 @@ struct Command {
   std::vector<uint8_t> data;  // received raw data (INTERNAL)
   bool master;                // value of interest is in master or slave part
   size_t position;            // starting position in the interested part
-  ebus::Datatype datatype;    // ebus datatype
+  ebus::DataType datatype;    // ebus data type
   size_t length;              // length of interested part (INTERNAL)
   bool numeric;               // indicate numeric types (INTERNAL)
   float divider;              // divider for value conversion
@@ -64,7 +64,6 @@ class Store {
                                     const std::vector<uint8_t> &slave);
 
   static JsonDocument getValueJson(const Command *command);
-
   const std::string getValuesJson() const;
 
  private:
