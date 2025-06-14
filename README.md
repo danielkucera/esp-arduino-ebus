@@ -249,6 +249,7 @@ The following topics are available.
 |state/internal/errors          |errors of finite state machine  
 |state/internal/resets          |resets of finite state machine 
 |state/internal/requests        |bus requests (arbitration)
+|state/internal/addresses       |collected ebus addresses
 
 
 ### Details of MQTT commands
@@ -268,6 +269,8 @@ Available MQTT commands.
 |load             |Loading (Installing) saved commands                           |x
 |save             |Saving the currently installed commands                       |x
 |wipe             |Wiping of the saved commands                                  |x
+|scan             |Scanning of ebus participants                                 |x
+|participants     |Publishing scanned ebus participants                          |x
 |send             |Sending ebus commands once                                    |x
 |forward          |Activate/deactivate data forwarding (including filtering)     |x
 
@@ -387,6 +390,34 @@ payload:
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe","value":true}'
+```
+
+**Scanning of ebus participants**
+```
+payload:
+{
+  "id": "scan",
+  "full": false
+  "addresses": [
+    "ZZ",
+    ...
+  ]
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"scan","full":false,"addresses":["05","15"]}'
+```
+
+**Publishing scanned ebus participants**
+```
+payload:
+{
+  "id": "participants",
+  "value": true
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"participants","value":true}'
 ```
 
 **Sending ebus commands once**

@@ -7,6 +7,7 @@
 #include <tuple>
 #include <vector>
 
+#include "schedule.hpp"
 #include "store.hpp"
 
 // The MQTT class acts as a wrapper for the entire MQTT subsystem. It provides
@@ -33,10 +34,11 @@ class Mqtt {
   void publishResponse(const std::string &id, const std::string &status,
                        const size_t &bytes = 0);
 
-  void publisHA() const;
+  void publishHA() const;
 
   void publishCommands();
   void publishHASensors(const bool remove);
+  void publishParticipants();
 
   static void publishData(const std::string &id,
                           const std::vector<uint8_t> &master,
@@ -67,6 +69,10 @@ class Mqtt {
   uint32_t distanceHASensors = 200;
   uint32_t lastHASensors = 0;
 
+  std::deque<const Participant *> pubParticipants;
+  uint32_t distanceParticipants = 200;
+  uint32_t lastParticipants = 0;
+
   void setWill(const char *topic, uint8_t qos, bool retain,
                const char *payload = nullptr, size_t length = 0);
 
@@ -92,10 +98,13 @@ class Mqtt {
 
   void checkPublishCommands();
   void checkPublishHASensors();
+  void checkPublishParticipants();
 
   static void loadCommands();
   static void saveCommands();
   static void wipeCommands();
+
+  static void initScan(const bool full, const JsonArray &addresses);
 
   void publishCommand(const Command *command);
 
@@ -105,6 +114,8 @@ class Mqtt {
   void publishHAConfigButton(const char *name, const bool remove);
 
   void publishHASensor(const Command *command, const bool remove);
+
+  void publishParticipant(const Participant *participant);
 };
 
 extern Mqtt mqtt;

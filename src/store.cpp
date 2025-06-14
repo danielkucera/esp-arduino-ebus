@@ -1,7 +1,6 @@
 #include "store.hpp"
 
 #include <Preferences.h>
-#include <Sequence.h>
 
 Store store;
 
@@ -9,7 +8,7 @@ Command Store::createCommand(const JsonDocument &doc) {
   Command command;
   // TODO(yuhu-): check incoming data for completeness
   command.key = doc["key"].as<std::string>();
-  command.command = ebus::Sequence::to_vector(doc["command"].as<std::string>());
+  command.command = ebus::to_vector(doc["command"].as<std::string>());
   command.unit = doc["unit"].as<std::string>();
   command.active = doc["active"].as<bool>();
   command.interval =
@@ -128,7 +127,7 @@ JsonDocument Store::getCommandJson(const Command *command) {
   JsonDocument doc;
 
   doc["key"] = command->key;
-  doc["command"] = ebus::Sequence::to_string(command->command);
+  doc["command"] = ebus::to_string(command->command);
   doc["unit"] = command->unit;
   doc["active"] = command->active;
   doc["interval"] = command->interval;
@@ -204,7 +203,7 @@ std::vector<Command *> Store::findPassiveCommands(
   std::vector<Command *> commands;
 
   for (Command &command : allCommands) {
-    if (!command.active && ebus::Sequence::contains(master, command.command))
+    if (!command.active && ebus::contains(master, command.command))
       commands.push_back(&(command));
   }
 
@@ -225,9 +224,9 @@ std::vector<Command *> Store::updateData(Command *command,
     cmd->last = millis();
 
     if (cmd->master)
-      cmd->data = ebus::Sequence::range(master, 4 + cmd->position, cmd->length);
+      cmd->data = ebus::range(master, 4 + cmd->position, cmd->length);
     else
-      cmd->data = ebus::Sequence::range(slave, cmd->position, cmd->length);
+      cmd->data = ebus::range(slave, cmd->position, cmd->length);
   }
 
   return commands;
@@ -293,7 +292,7 @@ const std::string Store::serializeCommands() const {
       JsonArray array = doc.add<JsonArray>();
 
       array.add(command.key);
-      array.add(ebus::Sequence::to_string(command.command));
+      array.add(ebus::to_string(command.command));
       array.add(command.unit);
       array.add(command.active);
       array.add(command.interval);
@@ -350,40 +349,40 @@ const double Store::getValueDouble(const Command *command) {
   double value = 0;
 
   switch (command->datatype) {
-    case ebus::Datatype::BCD:
+    case ebus::DataType::BCD:
       value = ebus::byte_2_bcd(command->data);
       break;
-    case ebus::Datatype::UINT8:
+    case ebus::DataType::UINT8:
       value = ebus::byte_2_uint8(command->data);
       break;
-    case ebus::Datatype::INT8:
+    case ebus::DataType::INT8:
       value = ebus::byte_2_int8(command->data);
       break;
-    case ebus::Datatype::UINT16:
+    case ebus::DataType::UINT16:
       value = ebus::byte_2_uint16(command->data);
       break;
-    case ebus::Datatype::INT16:
+    case ebus::DataType::INT16:
       value = ebus::byte_2_int16(command->data);
       break;
-    case ebus::Datatype::UINT32:
+    case ebus::DataType::UINT32:
       value = ebus::byte_2_uint32(command->data);
       break;
-    case ebus::Datatype::INT32:
+    case ebus::DataType::INT32:
       value = ebus::byte_2_int32(command->data);
       break;
-    case ebus::Datatype::DATA1B:
+    case ebus::DataType::DATA1B:
       value = ebus::byte_2_data1b(command->data);
       break;
-    case ebus::Datatype::DATA1C:
+    case ebus::DataType::DATA1C:
       value = ebus::byte_2_data1c(command->data);
       break;
-    case ebus::Datatype::DATA2B:
+    case ebus::DataType::DATA2B:
       value = ebus::byte_2_data2b(command->data);
       break;
-    case ebus::Datatype::DATA2C:
+    case ebus::DataType::DATA2C:
       value = ebus::byte_2_data2c(command->data);
       break;
-    case ebus::Datatype::FLOAT:
+    case ebus::DataType::FLOAT:
       value = ebus::byte_2_float(command->data);
       break;
     default:

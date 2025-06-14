@@ -3,6 +3,8 @@
 #include <WiFiClient.h>
 #include <WiFiServer.h>
 
+#include <string>
+
 #define MAX_SRV_CLIENTS 4
 
 #ifdef ESP32
@@ -25,7 +27,8 @@ int DEBUG_LOG_IMPL(const char *format, ...);
 
 bool handleNewClient(WiFiServer *server, WiFiClient clients[]);
 int pushClient(WiFiClient *client, uint8_t B);
-void handleClient(WiFiClient *client); 
-char* status_string();
+void handleClient(WiFiClient *client);
+char *status_string();
 void restart();
-
+const std::string getAdapterJson();
+const std::string getStatusJson();
