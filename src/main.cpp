@@ -165,6 +165,7 @@ uint32_t reset_code = 0;
 Track<uint32_t> uptime("state/uptime", 10);
 Track<uint32_t> loopDuration("state/loop_duration", 10);
 uint32_t maxLoopDuration;
+Track<uint32_t> free_heap("state/free_heap", 10);
 
 // wifi
 uint32_t last_connect = 0;
@@ -420,7 +421,7 @@ char* status_string() {
   pos +=
       snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n",
-                  ESP.getFreeHeap());
+                  free_heap.value());
   pos +=
       snprintf(status + pos, bufferSize - pos, "reset_code: %u\n", reset_code);
   pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
@@ -515,7 +516,7 @@ const std::string getStatusJson() {
   doc["Uptime"] = uptime.value();
   doc["Loop_Duration"] = loopDuration.value();
   doc["Loop_Duration_Max"] = maxLoopDuration;
-  doc["Free_Heap"] = ESP.getFreeHeap();
+  doc["Free_Heap"] = free_heap.value();
 
   // WIFI
   JsonObject WIFI = doc["WIFI"].to<JsonObject>();
@@ -725,6 +726,7 @@ void loop() {
   }
 
   uptime = millis();
+  free_heap = ESP.getFreeHeap();
 
   if (millis() > last_comms + 200 * 1000) {
     restart();
