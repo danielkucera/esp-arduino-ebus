@@ -1,10 +1,22 @@
 #include "http.hpp"
 
 #include "main.hpp"
+#include "schedule.hpp"
+#include "store.hpp"
 
 WebServer configServer(80);
 
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
+
+void handleGetAdapter() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    getAdapterJson().c_str());
+}
+
+void handleGetStatus() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    getStatusJson().c_str());
+}
 
 #ifdef EBUS_INTERNAL
 void handleCommandsList() {
@@ -46,9 +58,9 @@ void handleCommandsUpload() {
 }
 
 void handleCommandsDownload() {
-  String s = "{ \"id\": \"insert\",\n   \"commands\": ";
+  String s = "{\"id\":\"insert\",\"commands\":";
   s += store.getCommandsJson().c_str();
-  s += "\n}";
+  s += "}";
   configServer.send(200, "application/json", s);
 }
 
@@ -106,6 +118,26 @@ void handleValues() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getValuesJson().c_str());
 }
+
+void handleParicipantsScanSeen() {
+  schedule.handleScanSeen();
+  configServer.send(200, "text/html", "Scan initiated");
+}
+
+void handleParicipantsScanFull() {
+  schedule.handleScanFull();
+  configServer.send(200, "text/html", "Scan full initiated");
+}
+
+void handleParicipantsList() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    schedule.getParticipantsJson().c_str());
+}
+
+void handleGetCounters() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    schedule.getCountersJson().c_str());
+}
 #endif
 
 void handleRoot() {
@@ -134,6 +166,11 @@ void handleRoot() {
   s += "<a href='/commands/wipe' onclick=\"return "
        "confirmAction('wipe commands');\">Wipe commands</a><br>";
   s += "<a href='/values'>Values</a><br>";
+  s += "<a href='/participants/scan' onclick=\"return "
+       "confirmAction('scan');\">Scan</a><br>";
+  s += "<a href='/participants/scanfull' onclick=\"return "
+       "confirmAction('scan full');\">Scan full</a><br>";
+  s += "<a href='/participants/list'>Participants</a><br>";
 #endif
   s += "<a href='/restart' onclick=\"return "
        "confirmAction('restart');\">Restart</a><br>";
@@ -154,6 +191,8 @@ void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
+  configServer.on("/api/v1/GetAdapter", [] { handleGetAdapter(); });
+  configServer.on("/api/v1/GetStatus", [] { handleGetStatus(); });
 #ifdef EBUS_INTERNAL
   configServer.on("/commands/list", [] { handleCommandsList(); });
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
@@ -163,6 +202,12 @@ void SetupHttpHandlers() {
   configServer.on("/commands/save", [] { handleCommandsSave(); });
   configServer.on("/commands/wipe", [] { handleCommandsWipe(); });
   configServer.on("/values", [] { handleValues(); });
+  configServer.on("/participants/scanseen",
+                  [] { handleParicipantsScanSeen(); });
+  configServer.on("/participants/scanfull",
+                  [] { handleParicipantsScanFull(); });
+  configServer.on("/participants/list", [] { handleParicipantsList(); });
+  configServer.on("/api/v1/GetCounters", [] { handleGetCounters(); });
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });

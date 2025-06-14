@@ -3,7 +3,6 @@
 #include <ArduinoJson.h>
 
 #include "main.hpp"
-#include "schedule.hpp"
 
 Mqtt mqtt;
 
@@ -40,12 +39,12 @@ void Mqtt::doLoop() {
   checkRemoveCommands();
   checkPublishCommands();
   checkPublishHASensors();
+  checkPublishParticipants();
 }
 
 uint16_t Mqtt::publish(const char *topic, uint8_t qos, bool retain,
                        const char *payload, bool prefix) {
-  std::string mqttTopic = topic;
-  if (prefix) mqttTopic = rootTopic + topic;
+  std::string mqttTopic = prefix ? rootTopic + topic : topic;
   return client.publish(mqttTopic.c_str(), qos, retain, payload);
 }
 
@@ -61,7 +60,7 @@ void Mqtt::publishResponse(const std::string &id, const std::string &status,
   publish("response", 0, false, payload.c_str());
 }
 
-void Mqtt::publisHA() const {
+void Mqtt::publishHA() const {
   mqtt.publishHADiagnostic("Uptime", !haSupport,
                            "{{timedelta(seconds=((value|float)/1000)|int)}}",
                            true);
@@ -78,14 +77,19 @@ void Mqtt::publishHASensors(const bool remove) {
     pubHASensors.push_back(std::make_tuple(command, remove));
 }
 
+void Mqtt::publishParticipants() {
+  for (Participant *participant : schedule.getParticipants())
+    pubParticipants.push_back(participant);
+}
+
 void Mqtt::publishData(const std::string &id,
                        const std::vector<uint8_t> &master,
                        const std::vector<uint8_t> &slave) {
   std::string payload;
   JsonDocument doc;
   doc["id"] = id;
-  doc["master"] = ebus::Sequence::to_string(master);
-  doc["slave"] = ebus::Sequence::to_string(slave);
+  doc["master"] = ebus::to_string(master);
+  doc["slave"] = ebus::to_string(slave);
   doc.shrinkToFit();
   serializeJson(doc, payload);
   mqtt.publish("response", 0, false, payload.c_str());
@@ -123,7 +127,7 @@ void Mqtt::onConnect(bool sessionPresent) {
   mqtt.publish(topicWill.c_str(), 0, true, "online", false);
   mqtt.setWill(topicWill.c_str(), 0, true, "offline");
 
-  mqtt.publisHA();
+  mqtt.publishHA();
 }
 
 void Mqtt::onMessage(const char *topic, const char *payload,
@@ -164,6 +168,13 @@ void Mqtt::onMessage(const char *topic, const char *payload,
     } else if (id.compare("wipe") == 0) {
       boolean value = doc["value"].as<boolean>();
       if (value) wipeCommands();
+    } else if (id.compare("scan") == 0) {
+      boolean full = doc["full"].as<boolean>();
+      JsonArray addresses = doc["addresses"].as<JsonArray>();
+      mqtt.initScan(full, addresses);
+    } else if (id.compare("participants") == 0) {
+      boolean value = doc["value"].as<boolean>();
+      if (value) mqtt.publishParticipants();
     } else if (id.compare("send") == 0) {
       JsonArray commands = doc["commands"].as<JsonArray>();
       if (commands.isNull() || commands.size() == 0)
@@ -249,6 +260,16 @@ void Mqtt::checkPublishHASensors() {
   }
 }
 
+void Mqtt::checkPublishParticipants() {
+  if (pubParticipants.size() > 0) {
+    if (millis() > lastParticipants + distanceParticipants) {
+      lastParticipants = millis();
+      mqtt.publishParticipant(pubParticipants.front());
+      pubParticipants.pop_front();
+    }
+  }
+}
+
 void Mqtt::loadCommands() {
   int64_t bytes = store.loadCommands();
   if (bytes > 0)
@@ -277,6 +298,17 @@ void Mqtt::wipeCommands() {
     mqtt.publishResponse("wipe", "failed");
   else
     mqtt.publishResponse("wipe", "no data");
+}
+
+void Mqtt::initScan(const bool full, const JsonArray &addresses) {
+  if (full)
+    schedule.handleScanFull();
+  else if (addresses.isNull() || addresses.size() == 0)
+    schedule.handleScanSeen();
+  else
+    schedule.handleScanAddresses(addresses);
+
+  mqtt.publishResponse("scan", "initiated");
 }
 
 void Mqtt::publishCommand(const Command *command) {
@@ -399,4 +431,11 @@ void Mqtt::publishHASensor(const Command *command, const bool remove) {
 
   if (remove || haSupport)
     publish(topic.c_str(), 0, true, payload.c_str(), false);
+}
+
+void Mqtt::publishParticipant(const Participant *participant) {
+  std::string topic = "participants/" + ebus::to_string(participant->slave);
+  std::string payload;
+  serializeJson(schedule.getParticipantJson(participant), payload);
+  publish(topic.c_str(), 0, false, payload.c_str());
 }
