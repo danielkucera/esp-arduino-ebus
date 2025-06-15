@@ -90,6 +90,7 @@ char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
 char mqttPublishCountersValue[STRING_LEN];
+char mqttPublishTimingsValue[STRING_LEN];
 
 char haSupportValue[STRING_LEN];
 
@@ -136,6 +137,10 @@ iotwebconf::CheckboxParameter mqttPublishCountersParam =
     iotwebconf::CheckboxParameter("Publish Counters to MQTT",
                                   "mqttPublishCountersParam",
                                   mqttPublishCountersValue, STRING_LEN);
+iotwebconf::CheckboxParameter mqttPublishTimingsParam =
+    iotwebconf::CheckboxParameter("Publish Timings to MQTT",
+                                  "mqttPublishTimingsParam",
+                                  mqttPublishTimingsValue, STRING_LEN);
 
 iotwebconf::ParameterGroup haGroup =
     iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
@@ -383,6 +388,7 @@ void saveParamsCallback() {
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
   schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
+  schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
 
   mqtt.setHASupport(haSupportParam.isChecked());
   mqtt.publishHA();
@@ -456,6 +462,9 @@ char* status_string() {
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_publish_counters: %s\r\n",
                mqttPublishCountersParam.isChecked() ? "true" : "false");
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "mqtt_publish_timings: %s\r\n",
+               mqttPublishTimingsParam.isChecked() ? "true" : "false");
 #endif
 
   pos += snprintf(status + pos, bufferSize - pos, "ha_support: %s\r\n",
@@ -496,6 +505,7 @@ const std::string getAdapterJson() {
   Mqtt["Connected"] = mqtt.connected();
 #ifdef EBUS_INTERNAL
   Mqtt["Publish_Counters"] = mqttPublishCountersParam.isChecked();
+  Mqtt["Publish_Timings"] = mqttPublishTimingsParam.isChecked();
 #endif
 
   // HomeAssistant
@@ -598,6 +608,7 @@ void setup() {
   mqttGroup.addItem(&mqttPasswordParam);
 #ifdef EBUS_INTERNAL
   mqttGroup.addItem(&mqttPublishCountersParam);
+  mqttGroup.addItem(&mqttPublishTimingsParam);
 #endif
 
   haGroup.addItem(&haSupportParam);
@@ -660,6 +671,7 @@ void setup() {
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
   schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
+  schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
 
   mqtt.setHASupport(haSupportParam.isChecked());
 
@@ -718,6 +730,7 @@ void loop() {
 
 #ifdef EBUS_INTERNAL
       schedule.fetchCounters();
+      schedule.fetchTimings();
 #endif
     }
 #ifdef EBUS_INTERNAL
