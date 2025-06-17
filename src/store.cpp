@@ -215,10 +215,12 @@ std::vector<Command *> Store::updateData(Command *command,
                                          const std::vector<uint8_t> &slave) {
   std::vector<Command *> commands;
 
-  if (command == nullptr)
+  if (command == nullptr) {
     commands = findPassiveCommands(master);
-  else
+  } else {
+    commands.reserve(1);
     commands.push_back(command);
+  }
 
   for (Command *cmd : commands) {
     cmd->last = millis();
