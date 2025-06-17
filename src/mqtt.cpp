@@ -304,7 +304,7 @@ void Mqtt::initScan(const bool full, const JsonArray &addresses) {
   if (full)
     schedule.handleScanFull();
   else if (addresses.isNull() || addresses.size() == 0)
-    schedule.handleScanSeen();
+    schedule.handleScan();
   else
     schedule.handleScanAddresses(addresses);
 

@@ -119,8 +119,8 @@ void handleValues() {
                     store.getValuesJson().c_str());
 }
 
-void handleParicipantsScanSeen() {
-  schedule.handleScanSeen();
+void handleParicipantsScan() {
+  schedule.handleScan();
   configServer.send(200, "text/html", "Scan initiated");
 }
 
@@ -206,8 +206,7 @@ void SetupHttpHandlers() {
   configServer.on("/commands/save", [] { handleCommandsSave(); });
   configServer.on("/commands/wipe", [] { handleCommandsWipe(); });
   configServer.on("/values", [] { handleValues(); });
-  configServer.on("/participants/scanseen",
-                  [] { handleParicipantsScanSeen(); });
+  configServer.on("/participants/scan", [] { handleParicipantsScan(); });
   configServer.on("/participants/scanfull",
                   [] { handleParicipantsScanFull(); });
   configServer.on("/participants/list", [] { handleParicipantsList(); });

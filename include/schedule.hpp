@@ -35,7 +35,7 @@ class Schedule {
   void setDistance(const uint8_t distance);
 
   void handleScanFull();
-  void handleScanSeen();
+  void handleScan();
   void handleScanAddresses(const JsonArray &addresses);
 
   void handleSend(const JsonArray &commands);
