@@ -92,6 +92,27 @@ TRACK_TIMING(passiveFirst, "passive/first")
 TRACK_TIMING(passiveData, "passive/data")
 TRACK_TIMING(activeFirst, "active/first")
 TRACK_TIMING(activeData, "active/data")
+TRACK_TIMING(resetPassive, "reset/passive");
+TRACK_TIMING(resetActive, "reset/active");
+TRACK_TIMING(callbackWrite, "callback/write");
+TRACK_TIMING(callbackError, "callback/error");
+
+TRACK_TIMING(callbackTelegramPassiveMasterSlave,
+             "callback/telegram/passiveMasterSlave");
+TRACK_TIMING(callbackTelegramPassiveMasterMaster,
+             "callback/telegram/passiveMasterMaster");
+TRACK_TIMING(callbackTelegramReactiveMasterSlave,
+             "callback/telegram/reactiveMasterSlave");
+TRACK_TIMING(callbackTelegramReactiveMasterMaster,
+             "callback/telegram/reactiveMasterMaster");
+TRACK_TIMING(callbackTelegramReactiveBroadcast,
+             "callback/telegram/reactiveBroadcast");
+TRACK_TIMING(callbackTelegramActiveMasterSlave,
+             "callback/telegram/activeMasterSlave");
+TRACK_TIMING(callbackTelegramActiveMasterMaster,
+             "callback/telegram/activeMasterMaster");
+TRACK_TIMING(callbackTelegramActiveBroadcast,
+             "callback/telegram/activeBroadcast");
 
 // FSM state timings
 TRACK_TIMING(passiveReceiveMaster, "fsmstate/passiveReceiveMaster")
@@ -400,6 +421,18 @@ void Schedule::fetchTimings() {
   ASSIGN_TIMING(passiveData)
   ASSIGN_TIMING(activeFirst)
   ASSIGN_TIMING(activeData)
+  ASSIGN_TIMING(resetPassive)
+  ASSIGN_TIMING(resetActive)
+  ASSIGN_TIMING(callbackWrite)
+  ASSIGN_TIMING(callbackError)
+  ASSIGN_TIMING(callbackTelegramPassiveMasterSlave)
+  ASSIGN_TIMING(callbackTelegramPassiveMasterMaster)
+  ASSIGN_TIMING(callbackTelegramReactiveMasterSlave)
+  ASSIGN_TIMING(callbackTelegramReactiveMasterMaster)
+  ASSIGN_TIMING(callbackTelegramReactiveBroadcast)
+  ASSIGN_TIMING(callbackTelegramActiveMasterSlave)
+  ASSIGN_TIMING(callbackTelegramActiveMasterMaster)
+  ASSIGN_TIMING(callbackTelegramActiveBroadcast)
 
   ebus::StateTimingStatsResults stats =
       ebusHandler.getStateTimingStatsResults();
@@ -448,18 +481,79 @@ const std::string Schedule::getTimingsJson() {
 
   addTiming(doc["Sync"].to<JsonObject>(), timings.syncLast, timings.syncMean,
             timings.syncStdDev, timings.syncCount);
+
   addTiming(doc["Passive"]["First"].to<JsonObject>(), timings.passiveFirstLast,
             timings.passiveFirstMean, timings.passiveFirstStdDev,
             timings.passiveFirstCount);
   addTiming(doc["Passive"]["Data"].to<JsonObject>(), timings.passiveDataLast,
             timings.passiveDataMean, timings.passiveDataStdDev,
             timings.passiveDataCount);
+
   addTiming(doc["Active"]["First"].to<JsonObject>(), timings.activeFirstLast,
             timings.activeFirstMean, timings.activeFirstStdDev,
             timings.activeFirstCount);
   addTiming(doc["Active"]["Data"].to<JsonObject>(), timings.activeDataLast,
             timings.activeDataMean, timings.activeDataStdDev,
             timings.activeDataCount);
+
+  addTiming(doc["Reset"]["Passive"].to<JsonObject>(), timings.resetPassiveLast,
+            timings.resetPassiveMean, timings.resetPassiveStdDev,
+            timings.resetPassiveCount);
+  addTiming(doc["Reset"]["Active"].to<JsonObject>(), timings.resetActiveLast,
+            timings.resetActiveMean, timings.resetActiveStdDev,
+            timings.resetActiveCount);
+
+  addTiming(doc["Callback"]["Write"].to<JsonObject>(),
+            timings.callbackWriteLast, timings.callbackWriteMean,
+            timings.callbackWriteStdDev, timings.callbackWriteCount);
+
+  addTiming(doc["Callback"]["Error"].to<JsonObject>(),
+            timings.callbackErrorLast, timings.callbackErrorMean,
+            timings.callbackErrorStdDev, timings.callbackErrorCount);
+
+  addTiming(doc["Callback"]["Telegram"]["passiveMasterSlave"].to<JsonObject>(),
+            timings.callbackTelegramPassiveMasterSlaveLast,
+            timings.callbackTelegramPassiveMasterSlaveMean,
+            timings.callbackTelegramPassiveMasterSlaveStdDev,
+            timings.callbackTelegramPassiveMasterSlaveCount);
+  addTiming(doc["Callback"]["Telegram"]["passiveMasterMaster"].to<JsonObject>(),
+            timings.callbackTelegramPassiveMasterMasterLast,
+            timings.callbackTelegramPassiveMasterMasterMean,
+            timings.callbackTelegramPassiveMasterMasterStdDev,
+            timings.callbackTelegramPassiveMasterMasterCount);
+
+  addTiming(doc["Callback"]["Telegram"]["reactiveMasterSlave"].to<JsonObject>(),
+            timings.callbackTelegramReactiveMasterSlaveLast,
+            timings.callbackTelegramReactiveMasterSlaveMean,
+            timings.callbackTelegramReactiveMasterSlaveStdDev,
+            timings.callbackTelegramReactiveMasterSlaveCount);
+  addTiming(
+      doc["Callback"]["Telegram"]["reactiveMasterMaster"].to<JsonObject>(),
+      timings.callbackTelegramReactiveMasterMasterLast,
+      timings.callbackTelegramReactiveMasterMasterMean,
+      timings.callbackTelegramReactiveMasterMasterStdDev,
+      timings.callbackTelegramReactiveMasterMasterCount);
+  addTiming(doc["Callback"]["Telegram"]["reactiveBroadcast"].to<JsonObject>(),
+            timings.callbackTelegramReactiveBroadcastLast,
+            timings.callbackTelegramReactiveBroadcastMean,
+            timings.callbackTelegramReactiveBroadcastStdDev,
+            timings.callbackTelegramReactiveBroadcastCount);
+
+  addTiming(doc["Callback"]["Telegram"]["activeMasterSlave"].to<JsonObject>(),
+            timings.callbackTelegramActiveMasterSlaveLast,
+            timings.callbackTelegramActiveMasterSlaveMean,
+            timings.callbackTelegramActiveMasterSlaveStdDev,
+            timings.callbackTelegramActiveMasterSlaveCount);
+  addTiming(doc["Callback"]["Telegram"]["activeMasterMaster"].to<JsonObject>(),
+            timings.callbackTelegramActiveMasterMasterLast,
+            timings.callbackTelegramActiveMasterMasterMean,
+            timings.callbackTelegramActiveMasterMasterStdDev,
+            timings.callbackTelegramActiveMasterMasterCount);
+  addTiming(doc["Callback"]["Telegram"]["activeBroadcast"].to<JsonObject>(),
+            timings.callbackTelegramActiveBroadcastLast,
+            timings.callbackTelegramActiveBroadcastMean,
+            timings.callbackTelegramActiveBroadcastStdDev,
+            timings.callbackTelegramActiveBroadcastCount);
 
   ebus::StateTimingStatsResults stats =
       ebusHandler.getStateTimingStatsResults();

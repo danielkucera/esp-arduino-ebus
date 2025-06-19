@@ -186,6 +186,12 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       if (!filters.isNull()) schedule.handleForwadFilter(filters);
       boolean value = doc["value"].as<boolean>();
       schedule.toggleForward(value);
+    } else if (id.compare("reset") == 0) {
+      boolean value = doc["value"].as<boolean>();
+      if (value) {
+        schedule.resetCounters();
+        schedule.resetTimings();
+      }
     }
 #endif
     else {  // NOLINT

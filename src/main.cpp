@@ -231,6 +231,7 @@ void set_pwm(uint8_t value) {
   ledcWrite(PWM_CHANNEL, value);
 #ifdef EBUS_INTERNAL
   schedule.resetCounters();
+  schedule.resetTimings();
 #endif
 #endif
 }
@@ -445,9 +446,9 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
                   atoi(command_distance));
-  pos += snprintf(status + pos, bufferSize - pos, "active_commands: %u\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
-  pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %u\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
                   store.getPassiveCommands());
 #endif
 

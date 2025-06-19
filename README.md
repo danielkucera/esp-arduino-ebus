@@ -273,6 +273,7 @@ Available MQTT commands.
 |participants     |Publishing scanned ebus participants                          |x
 |send             |Sending ebus commands once                                    |x
 |forward          |Activate/deactivate data forwarding (including filtering)     |x
+|reset            |Resetting counter and timing values                           |x
 
 
 ### Examples
@@ -452,6 +453,18 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":tru
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":false}'
+```
+
+**Resetting counter and timing values **
+```
+payload:
+{
+  "id": "reset",
+  "value": true
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"reset","value":true}' 
 ```
 
 ### Home Assistant Support
