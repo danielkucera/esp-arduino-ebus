@@ -244,24 +244,26 @@ std::vector<Command *> Store::findPassiveCommands(
 std::vector<Command *> Store::updateData(Command *command,
                                          const std::vector<uint8_t> &master,
                                          const std::vector<uint8_t> &slave) {
-  std::vector<Command *> commands;
-
-  if (command == nullptr) {
-    commands = findPassiveCommands(master);
-  } else {
-    commands.reserve(1);
-    commands.push_back(command);
+  if (command) {
+    command->last = millis();
+    if (command->master)
+      command->data =
+          ebus::range(master, 4 + command->position, command->length);
+    else
+      command->data = ebus::range(slave, command->position, command->length);
+    // Return a vector with just this command, but avoid heap allocation
+    return {command};
   }
 
+  // Passive: potentially multiple matches
+  std::vector<Command *> commands = findPassiveCommands(master);
   for (Command *cmd : commands) {
     cmd->last = millis();
-
     if (cmd->master)
       cmd->data = ebus::range(master, 4 + cmd->position, cmd->length);
     else
       cmd->data = ebus::range(slave, cmd->position, cmd->length);
   }
-
   return commands;
 }
 
