@@ -161,7 +161,10 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       if (value) mqtt.publishCommands();
     } else if (id.compare("load") == 0) {
       boolean value = doc["value"].as<boolean>();
-      if (value) loadCommands();
+      if (value) {
+        loadCommands();
+        mqtt.publishHASensors(false);
+      }
     } else if (id.compare("save") == 0) {
       boolean value = doc["value"].as<boolean>();
       if (value) saveCommands();

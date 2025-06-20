@@ -1,6 +1,7 @@
 #include "http.hpp"
 
 #include "main.hpp"
+#include "mqtt.hpp"
 #include "schedule.hpp"
 #include "store.hpp"
 
@@ -210,7 +211,10 @@ void SetupHttpHandlers() {
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
   configServer.on("/commands/upload", [] { handleCommandsUpload(); });
   configServer.on("/commands/insert", [] { handleCommandsInsert(); });
-  configServer.on("/commands/load", [] { handleCommandsLoad(); });
+  configServer.on("/commands/load", [] {
+    handleCommandsLoad();
+    mqtt.publishHASensors(false);
+  });
   configServer.on("/commands/save", [] { handleCommandsSave(); });
   configServer.on("/commands/wipe", [] { handleCommandsWipe(); });
   configServer.on("/values", [] { handleValues(); });
