@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined(EBUS_INTERNAL)
 #include <ArduinoJson.h>
 #include <Ebus.h>
 #include <WiFiClient.h>
@@ -29,10 +30,14 @@ struct Participant {
 
 class Schedule {
  public:
-  Schedule();
+  Schedule() = default;
+
+  void setHandler(ebus::Handler *handler);
 
   void setAddress(const uint8_t source);
   void setDistance(const uint8_t distance);
+
+  static void stopRunner();
 
   void handleScanFull();
   void handleScan();
@@ -42,9 +47,6 @@ class Schedule {
 
   void toggleForward(const bool enable);
   void handleForwadFilter(const JsonArray &filters);
-
-  void nextCommand();
-  void processData(const uint8_t byte);
 
   void setPublishCounters(const bool enable);
   void resetCounters();
@@ -62,7 +64,7 @@ class Schedule {
   const std::vector<Participant *> getParticipants();
 
  private:
-  ebus::Handler ebusHandler;
+  ebus::Handler *ebusHandler = nullptr;
 
   Command *scheduleCommand = nullptr;
 
@@ -86,17 +88,34 @@ class Schedule {
   bool publishCounters = false;
   bool publishTimings = false;
 
-  static void onWriteCallback(const uint8_t byte);
-  static int isDataAvailableCallback();
+  enum class CallbackType { telegram, error };
 
-  static void onTelegramCallback(const ebus::MessageType &messageType,
-                                 const ebus::TelegramType &telegramType,
-                                 const std::vector<uint8_t> &master,
-                                 std::vector<uint8_t> *const slave);
+  struct CallbackEvent {
+    CallbackType type;
+    Mode mode;
+    struct {
+      ebus::MessageType messageType;
+      ebus::TelegramType telegramType;
+      std::vector<uint8_t> master;
+      std::vector<uint8_t> slave;
+      std::string error;
+    } data;
+  };
 
-  static void onErrorCallback(const std::string &str);
+  ebus::Queue<CallbackEvent *> eventQueue{8};
 
-  void processActive(const std::vector<uint8_t> &master,
+  TaskHandle_t scheduleTask;
+
+  void nextCommand();
+
+  void nextScanCommand();
+
+  void handleEvents();
+
+  static void reactiveMasterSlaveCallback(const std::vector<uint8_t> &master,
+                                          std::vector<uint8_t> *const slave);
+
+  void processActive(const Mode &mode, const std::vector<uint8_t> &master,
                      const std::vector<uint8_t> &slave);
 
   void processPassive(const std::vector<uint8_t> &master,
@@ -104,8 +123,7 @@ class Schedule {
 
   void processScan(const std::vector<uint8_t> &master,
                    const std::vector<uint8_t> &slave);
-
-  void nextScanCommand();
 };
 
 extern Schedule schedule;
+#endif

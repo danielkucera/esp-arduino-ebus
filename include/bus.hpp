@@ -26,7 +26,7 @@ bool setArbitrationClient(WiFiClient*& client, uint8_t& address);
 void arbitrationDone();
 WiFiClient* arbitrationRequested(uint8_t& address);
 
-#ifdef ESP32
+#if defined(ESP32)
 #include "atomic"
 #define ATOMIC_INT std::atomic<int>
 #else

@@ -35,11 +35,13 @@ void Mqtt::connect() { client.connect(); }
 bool Mqtt::connected() const { return client.connected(); }
 
 void Mqtt::doLoop() {
+#if defined(EBUS_INTERNAL)
   checkInsertCommands();
   checkRemoveCommands();
   checkPublishCommands();
   checkPublishHASensors();
   checkPublishParticipants();
+#endif
 }
 
 uint16_t Mqtt::publish(const char *topic, uint8_t qos, bool retain,
@@ -68,6 +70,7 @@ void Mqtt::publishHA() const {
   mqtt.publishHAConfigButton("Restart", !haSupport);
 }
 
+#if defined(EBUS_INTERNAL)
 void Mqtt::publishCommands() {
   for (Command *command : store.getCommands()) pubCommands.push_back(command);
 }
@@ -109,6 +112,7 @@ void Mqtt::publishValue(Command *command, const JsonDocument &doc) {
 
   mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }
+#endif
 
 void Mqtt::setWill(const char *topic, uint8_t qos, bool retain,
                    const char *payload, size_t length) {
@@ -149,7 +153,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       boolean value = doc["value"].as<boolean>();
       if (value) restart();
     }
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
     else if (id.compare("insert") == 0) {  // NOLINT
       JsonArray commands = doc["commands"].as<JsonArray>();
       if (commands != nullptr) mqtt.insertCommands(commands);
@@ -208,6 +212,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
   }
 }
 
+#if defined(EBUS_INTERNAL)
 void Mqtt::insertCommands(const JsonArray &commands) {
   for (JsonVariant command : commands)
     insCommands.push_back(store.createCommand(command));
@@ -326,6 +331,7 @@ void Mqtt::publishCommand(const Command *command) {
   serializeJson(store.getCommandJson(command), payload);
   publish(topic.c_str(), 0, false, payload.c_str());
 }
+#endif
 
 void Mqtt::publishHADiagnostic(const char *name, const bool remove,
                                const char *value_template, const bool full) {
@@ -401,6 +407,7 @@ void Mqtt::publishHAConfigButton(const char *name, const bool remove) {
   }
 }
 
+#if defined(EBUS_INTERNAL)
 void Mqtt::publishHASensor(const Command *command, const bool remove) {
   std::string stateTopic = command->topic;
   std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
@@ -448,3 +455,4 @@ void Mqtt::publishParticipant(const Participant *participant) {
   serializeJson(schedule.getParticipantJson(participant), payload);
   publish(topic.c_str(), 0, false, payload.c_str());
 }
+#endif

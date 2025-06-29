@@ -1,20 +1,23 @@
 #include "main.hpp"
 
+#include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <IotWebConf.h>
 #include <Preferences.h>
 
+#if defined(EBUS_INTERNAL)
+#include "busisr.hpp"
+#include "schedule.hpp"
+#else
 #include "bus.hpp"
 #include "enhanced.hpp"
+#endif
+
 #include "http.hpp"
 #include "mqtt.hpp"
 #include "track.hpp"
 
-#ifdef EBUS_INTERNAL
-#include "schedule.hpp"
-#endif
-
-#ifdef ESP32
+#if defined(ESP32)
 #include <ESPmDNS.h>
 #include <IotWebConfESP32HTTPUpdateServer.h>
 #include <esp_task_wdt.h>
@@ -22,7 +25,13 @@
 #include "esp32c3/rom/rtc.h"
 
 HTTPUpdateServer httpUpdater;
+
+#if defined(ESP32) && !defined(EBUS_INTERNAL)
+TaskHandle_t Task1;
+#endif
+
 #else
+// ESP8266 platfrom
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266TrueRandom.h>
 #include <ESP8266mDNS.h>
@@ -62,10 +71,6 @@ Preferences preferences;
 #define DUMMY_MQTT_USER "roger"
 #define DUMMY_MQTT_PASS "password"
 
-#ifdef ESP32
-TaskHandle_t Task1;
-#endif
-
 char unique_id[7]{};
 
 DNSServer dnsServer;
@@ -78,6 +83,7 @@ char netmaskValue[STRING_LEN];
 uint32_t pwm;
 char pwm_value[NUMBER_LEN];
 
+#if defined(EBUS_INTERNAL)
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
     "00", "10", "30", "70", "f0", "01", "11", "31", "71",
@@ -85,13 +91,16 @@ static char ebus_address_values[][NUMBER_LEN] = {
     "77", "f7", "0f", "1f", "3f", "7f", "ff"};
 
 char command_distance[NUMBER_LEN];
+char request_window[NUMBER_LEN];
+#endif
 
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
+#if defined(EBUS_INTERNAL)
 char mqttPublishCountersValue[STRING_LEN];
 char mqttPublishTimingsValue[STRING_LEN];
-
+#endif
 char haSupportValue[STRING_LEN];
 
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, DEFAULT_APMODE_PASS,
@@ -113,7 +122,7 @@ iotwebconf::ParameterGroup ebusGroup =
 iotwebconf::NumberParameter pwmParam =
     iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
                                 "130", "1..255", "min='1' max='255' step='1'");
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
 iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     "eBUS address", "ebus_address", ebus_address, NUMBER_LEN,
     reinterpret_cast<char*>(ebus_address_values),
@@ -121,7 +130,10 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     "Command distance", "command_distance", command_distance, NUMBER_LEN, "2",
-    "0..60", "min='0' max='60' step='1'");
+    "1..60", "min='1' max='60' step='1'");
+iotwebconf::NumberParameter requestWindowParam = iotwebconf::NumberParameter(
+    "Request window", "request_window", request_window, NUMBER_LEN, "4300",
+    "4167..4456", "min='4167' max='4456' step='1'");
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =
@@ -133,6 +145,8 @@ iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
     "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", DUMMY_MQTT_USER);
 iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
     "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", DUMMY_MQTT_PASS);
+
+#if defined(EBUS_INTERNAL)
 iotwebconf::CheckboxParameter mqttPublishCountersParam =
     iotwebconf::CheckboxParameter("Publish Counters to MQTT",
                                   "mqttPublishCountersParam",
@@ -141,6 +155,7 @@ iotwebconf::CheckboxParameter mqttPublishTimingsParam =
     iotwebconf::CheckboxParameter("Publish Timings to MQTT",
                                   "mqttPublishTimingsParam",
                                   mqttPublishTimingsValue, STRING_LEN);
+#endif
 
 iotwebconf::ParameterGroup haGroup =
     iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
@@ -151,13 +166,17 @@ IPAddress ipAddress;
 IPAddress gateway;
 IPAddress netmask;
 
+#if !defined(EBUS_INTERNAL)
 WiFiServer wifiServer(3333);
-WiFiServer wifiServerRO(3334);
-WiFiServer wifiServerEnh(3335);
-WiFiServer statusServer(5555);
 WiFiClient serverClients[MAX_SRV_CLIENTS];
-WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
+
+WiFiServer wifiServerEnh(3335);
 WiFiClient enhClients[MAX_SRV_CLIENTS];
+#endif
+WiFiServer wifiServerRO(3334);
+WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
+
+WiFiServer statusServer(5555);
 
 uint32_t last_comms = 0;
 
@@ -198,7 +217,7 @@ void wifiConnected() {
 }
 
 void wdt_start() {
-#ifdef ESP32
+#if defined(ESP32)
   esp_task_wdt_init(6, true);
 #else
   ESP.wdtDisable();
@@ -206,7 +225,7 @@ void wdt_start() {
 }
 
 void wdt_feed() {
-#ifdef ESP32
+#if defined(ESP32)
   esp_task_wdt_reset();
 #else
   ESP.wdtFeed();
@@ -214,22 +233,22 @@ void wdt_feed() {
 }
 
 inline void disableTX() {
-#ifdef TX_DISABLE_PIN
+#if defined(TX_DISABLE_PIN)
   pinMode(TX_DISABLE_PIN, OUTPUT);
   digitalWrite(TX_DISABLE_PIN, HIGH);
 #endif
 }
 
 inline void enableTX() {
-#ifdef TX_DISABLE_PIN
+#if defined(TX_DISABLE_PIN)
   digitalWrite(TX_DISABLE_PIN, LOW);
 #endif
 }
 
 void set_pwm(uint8_t value) {
-#ifdef PWM_PIN
+#if defined(PWM_PIN)
   ledcWrite(PWM_CHANNEL, value);
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   schedule.resetCounters();
   schedule.resetTimings();
 #endif
@@ -237,7 +256,7 @@ void set_pwm(uint8_t value) {
 }
 
 uint32_t get_pwm() {
-#ifdef PWM_PIN
+#if defined(PWM_PIN)
   return ledcRead(PWM_CHANNEL);
 #else
   return 0;
@@ -246,7 +265,7 @@ uint32_t get_pwm() {
 
 void calcUniqueId() {
   uint32_t id = 0;
-#ifdef ESP32
+#if defined(ESP32)
   for (int i = 0; i < 6; ++i) {
     id |= ((ESP.getEfuseMac() >> (8 * (5 - i))) & 0xff) << (8 * i);
   }
@@ -290,8 +309,9 @@ void loop_duration() {
   }
 }
 
+#if !defined(EBUS_INTERNAL)
 void data_process() {
-  loop_duration();
+  // loop_duration();
 
   // check clients for data
   for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
@@ -299,21 +319,9 @@ void data_process() {
     handleEnhClient(&enhClients[i]);
   }
 
-#ifdef EBUS_INTERNAL
-  // check schedule for data
-  schedule.nextCommand();
-#endif
-
   // check queue for data
   BusType::data d;
   if (Bus.read(d)) {
-#ifdef EBUS_INTERNAL
-    if (!d._enhanced) {
-      schedule.processData(d._d);
-      last_comms = millis();
-    }
-#endif
-
     for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
       if (d._enhanced) {
         if (d._client == &enhClients[i]) {
@@ -344,6 +352,7 @@ void data_loop(void* pvParameters) {
     data_process();
   }
 }
+#endif
 
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   bool valid = true;
@@ -379,17 +388,20 @@ void saveParamsCallback() {
   set_pwm(atoi(pwm_value));
   pwm = get_pwm();
 
-#ifdef EBUS_INTERNAL
-  schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+#if defined(EBUS_INTERNAL)
+  ebusHandler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(command_distance));
+  setRequestWindow(atoi(request_window));
 #endif
 
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
 
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
+#if defined(EBUS_INTERNAL)
   schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
   schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
+#endif
 
   mqtt.setHASupport(haSupportParam.isChecked());
   mqtt.publishHA();
@@ -413,12 +425,14 @@ char* status_string() {
   char* status = new char[bufferSize];
   if (!status) return nullptr;
 
-  int pos = 0;
+  size_t pos = 0;
 
+#if !defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "async_mode: %s\n",
                   USE_ASYNCHRONOUS ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "software_serial_mode: %s\n",
                   USE_SOFTWARE_SERIAL ? "true" : "false");
+#endif
   pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
   pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
@@ -441,11 +455,13 @@ char* status_string() {
   pos +=
       snprintf(status + pos, bufferSize - pos, "pwm_value: %u\r\n", get_pwm());
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
                   ebus_address);
   pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
                   atoi(command_distance));
+  pos += snprintf(status + pos, bufferSize - pos, "request_window: %u\r\n",
+                  atoi(request_window));
   pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
@@ -459,7 +475,7 @@ char* status_string() {
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_user: %s\r\n", mqtt_user);
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_publish_counters: %s\r\n",
                mqttPublishCountersParam.isChecked() ? "true" : "false");
@@ -476,65 +492,18 @@ char* status_string() {
   return status;
 }
 
-const std::string getAdapterJson() {
-  std::string payload;
-  JsonDocument doc;
-
-  doc["Unique_ID"] = unique_id;
-
-  // Firmware
-  JsonObject Firmware = doc["Firmware"].to<JsonObject>();
-  Firmware["Version"] = AUTO_VERSION;
-  Firmware["SDK"] = ESP.getSdkVersion();
-  Firmware["Async"] = USE_ASYNCHRONOUS ? true : false;
-  Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
-
-  // Settings
-  JsonObject Settings = doc["Settings"].to<JsonObject>();
-  Settings["PWM"] = get_pwm();
-#ifdef EBUS_INTERNAL
-  Settings["Ebus_Address"] = ebus_address;
-  Settings["Command_Distance"] = atoi(command_distance);
-  Settings["Active_Commands"] = store.getActiveCommands();
-  Settings["Passive_Commands"] = store.getPassiveCommands();
-#endif
-
-  // Mqtt
-  JsonObject Mqtt = doc["Mqtt"].to<JsonObject>();
-  Mqtt["Server"] = mqtt_server;
-  Mqtt["User"] = mqtt_user;
-  Mqtt["Connected"] = mqtt.connected();
-#ifdef EBUS_INTERNAL
-  Mqtt["Publish_Counters"] = mqttPublishCountersParam.isChecked();
-  Mqtt["Publish_Timings"] = mqttPublishTimingsParam.isChecked();
-#endif
-
-  // HomeAssistant
-  JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
-  HomeAssistant["Support"] = haSupportParam.isChecked();
-
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
-
-  return payload;
-}
-
 const std::string getStatusJson() {
   std::string payload;
   JsonDocument doc;
 
-  doc["Reset_Code"] = reset_code;
-  doc["Uptime"] = uptime.value();
-  doc["Loop_Duration"] = loopDuration.value();
-  doc["Loop_Duration_Max"] = maxLoopDuration;
-  doc["Free_Heap"] = free_heap.value();
+  JsonObject Status = doc["Status"].to<JsonObject>();
+  Status["Reset_Code"] = reset_code;
+  Status["Uptime"] = uptime.value();
+  Status["Loop_Duration"] = loopDuration.value();
+  Status["Loop_Duration_Max"] = maxLoopDuration;
+  Status["Free_Heap"] = free_heap.value();
 
-  // WIFI
-  JsonObject WIFI = doc["WIFI"].to<JsonObject>();
-  WIFI["Last_Connect"] = last_connect;
-  WIFI["Reconnect_Count"] = reconnect_count;
-  WIFI["RSSI"] = WiFi.RSSI();
-
+#if !defined(EBUS_INTERNAL)
   // Arbitration
   JsonObject Arbitration = doc["Arbitration"].to<JsonObject>();
   Arbitration["Total"] = static_cast<int>(Bus._nbrArbitrations);
@@ -546,6 +515,65 @@ const std::string getStatusJson() {
   Arbitration["Lost2"] = static_cast<int>(Bus._nbrLost2);
   Arbitration["Late"] = static_cast<int>(Bus._nbrLate);
   Arbitration["Errors"] = static_cast<int>(Bus._nbrErrors);
+#endif
+
+  // Firmware
+  JsonObject Firmware = doc["Firmware"].to<JsonObject>();
+  Firmware["Version"] = AUTO_VERSION;
+  Firmware["SDK"] = ESP.getSdkVersion();
+#if !defined(EBUS_INTERNAL)
+  Firmware["Async"] = USE_ASYNCHRONOUS ? true : false;
+  Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
+#endif
+  Firmware["Unique_ID"] = unique_id;
+
+  // WIFI
+  JsonObject WIFI = doc["WIFI"].to<JsonObject>();
+  WIFI["Last_Connect"] = last_connect;
+  WIFI["Reconnect_Count"] = reconnect_count;
+  WIFI["RSSI"] = WiFi.RSSI();
+
+  if (staticIPParam.isChecked()) {
+    WIFI["Static_IP"] = true;
+    WIFI["IP_Address"] = ipAddress.toString();
+    WIFI["Gateway"] = gateway.toString();
+    WIFI["Netmask"] = netmask.toString();
+  } else {
+    WIFI["Static_IP"] = false;
+    WIFI["IP_Address"] = WiFi.localIP().toString();
+    WIFI["Gateway"] = WiFi.gatewayIP().toString();
+    WIFI["Netmask"] = WiFi.subnetMask().toString();
+  }
+  WIFI["SSID"] = WiFi.SSID();
+  WIFI["BSSID"] = WiFi.BSSIDstr();
+  WIFI["Channel"] = WiFi.channel();
+  WIFI["Hostname"] = WiFi.getHostname();
+  WIFI["MAC_Address"] = WiFi.macAddress();
+
+  // Ebus
+  JsonObject Ebus = doc["Ebus"].to<JsonObject>();
+  Ebus["PWM"] = get_pwm();
+#if defined(EBUS_INTERNAL)
+  Ebus["Ebus_Address"] = ebus_address;
+  Ebus["Command_Distance"] = atoi(command_distance);
+  Ebus["Request_Window"] = atoi(request_window);
+  Ebus["Active_Commands"] = store.getActiveCommands();
+  Ebus["Passive_Commands"] = store.getPassiveCommands();
+#endif
+
+  // Mqtt
+  JsonObject Mqtt = doc["Mqtt"].to<JsonObject>();
+  Mqtt["Server"] = mqtt_server;
+  Mqtt["User"] = mqtt_user;
+  Mqtt["Connected"] = mqtt.connected();
+#if defined(EBUS_INTERNAL)
+  Mqtt["Publish_Counters"] = mqttPublishCountersParam.isChecked();
+  Mqtt["Publish_Timings"] = mqttPublishTimingsParam.isChecked();
+#endif
+
+  // HomeAssistant
+  JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
+  HomeAssistant["Support"] = haSupportParam.isChecked();
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
@@ -567,11 +595,14 @@ bool handleStatusServerRequests() {
 }
 
 void setup() {
+  DebugSer.begin(115200);
+  DebugSer.setDebugOutput(true);
+
   preferences.begin("esp-ebus", false);
 
   check_reset();
 
-#ifdef ESP32
+#if defined(ESP32)
   reset_code = rtc_get_reset_reason(0);
 #else
   reset_code = ESP.getResetInfoPtr()->reason;
@@ -579,14 +610,15 @@ void setup() {
 
   calcUniqueId();
 
+#if defined(EBUS_INTERNAL)
+  setupBusIsr();
+#else
   Bus.begin();
-
-  DebugSer.begin(115200);
-  DebugSer.setDebugOutput(true);
+#endif
 
   disableTX();
 
-#ifdef PWM_PIN
+#if defined(PWM_PIN)
   ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
@@ -599,15 +631,16 @@ void setup() {
 
   ebusGroup.addItem(&pwmParam);
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   ebusGroup.addItem(&ebusAddressParam);
   ebusGroup.addItem(&commandDistanceParam);
+  ebusGroup.addItem(&requestWindowParam);
 #endif
 
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   mqttGroup.addItem(&mqttPublishCountersParam);
   mqttGroup.addItem(&mqttPublishTimingsParam);
 #endif
@@ -625,7 +658,7 @@ void setup() {
   iotWebConf.setWifiConnectionHandler(&connectWifi);
   iotWebConf.setWifiConnectionCallback(&wifiConnected);
 
-#ifdef STATUS_LED_PIN
+#if defined(STATUS_LED_PIN)
   iotWebConf.setStatusPin(STATUS_LED_PIN);
 #endif
 
@@ -658,11 +691,6 @@ void setup() {
 
   set_pwm(atoi(pwm_value));
 
-#ifdef EBUS_INTERNAL
-  schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
-  schedule.setDistance(atoi(command_distance));
-#endif
-
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
     iotWebConf.doLoop();
   }
@@ -671,19 +699,14 @@ void setup() {
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
-  schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
-  schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
-
   mqtt.setHASupport(haSupportParam.isChecked());
 
+#if !defined(EBUS_INTERNAL)
   wifiServer.begin();
-  wifiServerRO.begin();
   wifiServerEnh.begin();
-  statusServer.begin();
-
-#ifdef ESP32
-  ArduinoOTA.onStart([]() { vTaskDelete(Task1); });
 #endif
+  wifiServerRO.begin();
+  statusServer.begin();
 
   ArduinoOTA.begin();
   MDNS.begin(HOSTNAME);
@@ -692,27 +715,49 @@ void setup() {
   last_comms = millis();
   enableTX();
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
+  ebusHandler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
+  schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
+  schedule.setDistance(atoi(command_distance));
+  schedule.setHandler(ebusHandler);
+  setRequestWindow(atoi(request_window));
+  serviceRunner->start();
+
+  serviceRunner->addByteListener([](const uint8_t& byte) {
+    loop_duration();
+    last_comms = millis();
+
+    for (int i = 0; i < MAX_SRV_CLIENTS; i++)
+      pushClient(&serverClientsRO[i], byte);
+  });
+
+  ArduinoOTA.onStart([]() {
+    serviceRunner->stop();
+    schedule.stopRunner();
+  });
+
   store.loadCommands();  // install saved commands
   mqtt.publishHASensors(false);
-#endif
-
-#ifdef ESP32
+#else
+#if defined(ESP32)
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
+  ArduinoOTA.onStart([]() { vTaskDelete(Task1); });
+#endif
 #endif
 }
 
 void loop() {
   ArduinoOTA.handle();
 
-#ifdef ESP8266
+#if defined(ESP8266)
   MDNS.update();
   data_process();
 #endif
 
   wdt_feed();
 
-#ifdef ESP32
+#if defined(ESP32)
   iotWebConf.doLoop();
 #endif
 
@@ -729,12 +774,12 @@ void loop() {
     if (currentMillis > lastMqttUpdate + 5 * 1000) {
       lastMqttUpdate = currentMillis;
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
       schedule.fetchCounters();
       schedule.fetchTimings();
 #endif
     }
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
     mqtt.doLoop();
 #endif
   }
@@ -748,14 +793,18 @@ void loop() {
 
   // Check if new client on the status server
   if (handleStatusServerRequests()) {
+#if !defined(EBUS_INTERNAL)
     // exclude handleStatusServerRequests from maxLoopDuration calculation
     // as it skews the typical loop duration and set maxLoopDuration to 0
     loop_duration();
     maxLoopDuration = 0;
+#endif
   }
 
   // Check if there are any new clients on the eBUS servers
+#if !defined(EBUS_INTERNAL)
   handleNewClient(&wifiServer, serverClients);
   handleNewClient(&wifiServerEnh, enhClients);
+#endif
   handleNewClient(&wifiServerRO, serverClientsRO);
 }

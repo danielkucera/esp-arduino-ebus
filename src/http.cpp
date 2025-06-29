@@ -9,17 +9,12 @@ WebServer configServer(80);
 
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
 
-void handleGetAdapter() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    getAdapterJson().c_str());
-}
-
 void handleGetStatus() {
   configServer.send(200, "application/json;charset=utf-8",
                     getStatusJson().c_str());
 }
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
 void handleCommandsList() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getCommandsJson().c_str());
@@ -145,7 +140,7 @@ void handleGetTimings() {
                     schedule.getTimingsJson().c_str());
 }
 
-void handleReset() {
+void handleResetStatistic() {
   schedule.resetCounters();
   schedule.resetTimings();
 }
@@ -166,7 +161,7 @@ void handleRoot() {
   s += "  </script>\n";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   s += "<a href='/commands/list'>List commands</a><br>";
   s += "<a href='/commands/upload'>Upload commands</a><br>";
   s += "<a href='/commands/download'>Download commands</a><br>";
@@ -183,7 +178,7 @@ void handleRoot() {
        "confirmAction('scan full');\">Scan full</a><br>";
   s += "<a href='/participants/list'>Participants</a><br>";
   s += "<a href='/reset' onclick=\"return "
-       "confirmAction('reset');\">Reset</a><br>";
+       "confirmAction('reset');\">Reset statistic</a><br>";
 #endif
   s += "<a href='/restart' onclick=\"return "
        "confirmAction('restart');\">Restart</a><br>";
@@ -204,9 +199,8 @@ void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
-  configServer.on("/api/v1/GetAdapter", [] { handleGetAdapter(); });
   configServer.on("/api/v1/GetStatus", [] { handleGetStatus(); });
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   configServer.on("/commands/list", [] { handleCommandsList(); });
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
   configServer.on("/commands/upload", [] { handleCommandsUpload(); });
@@ -224,7 +218,7 @@ void SetupHttpHandlers() {
   configServer.on("/participants/list", [] { handleParicipantsList(); });
   configServer.on("/api/v1/GetCounters", [] { handleGetCounters(); });
   configServer.on("/api/v1/GetTimings", [] { handleGetTimings(); });
-  configServer.on("/reset", [] { handleReset(); });
+  configServer.on("/reset", [] { handleResetStatistic(); });
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
