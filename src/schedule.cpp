@@ -39,10 +39,13 @@ TRACK_U32(messagesActiveBroadcast, "messages/activeBroadcast")
 
 // Requests
 TRACK_U32(requestsTotal, "requests")
-TRACK_U32(requestsWon, "requests/won")
-TRACK_U32(requestsLost, "requests/lost")
-TRACK_U32(requestsRetry, "requests/retry")
-TRACK_U32(requestsError, "requests/error")
+TRACK_U32(requestsWon1, "requests/won1")
+TRACK_U32(requestsWon2, "requests/won2")
+TRACK_U32(requestsLost1, "requests/lost1")
+TRACK_U32(requestsLost2, "requests/lost2")
+TRACK_U32(requestsError1, "requests/error1")
+TRACK_U32(requestsError2, "requests/error2")
+TRACK_U32(requestsErrorRetry, "requests/errorRetry")
 
 // Resets
 TRACK_U32(resetsTotal, "resets")
@@ -277,10 +280,13 @@ void Schedule::fetchCounters() {
 
   // Requests
   ASSIGN_COUNTER(requestsTotal)
-  ASSIGN_COUNTER(requestsWon)
-  ASSIGN_COUNTER(requestsLost)
-  ASSIGN_COUNTER(requestsRetry)
-  ASSIGN_COUNTER(requestsError)
+  ASSIGN_COUNTER(requestsWon1)
+  ASSIGN_COUNTER(requestsWon2)
+  ASSIGN_COUNTER(requestsLost1)
+  ASSIGN_COUNTER(requestsLost2)
+  ASSIGN_COUNTER(requestsError1)
+  ASSIGN_COUNTER(requestsError2)
+  ASSIGN_COUNTER(requestsErrorRetry)
 
   // Resets
   ASSIGN_COUNTER(resetsTotal)
@@ -342,10 +348,13 @@ const std::string Schedule::getCountersJson() {
   // Requests
   JsonObject Requests = doc["Requests"].to<JsonObject>();
   Requests["Total"] = counters.requestsTotal;
-  Requests["Won"] = counters.requestsWon;
-  Requests["Lost"] = counters.requestsLost;
-  Requests["Retry"] = counters.requestsRetry;
-  Requests["Error"] = counters.requestsError;
+  Requests["Won1"] = counters.requestsWon1;
+  Requests["Won2"] = counters.requestsWon2;
+  Requests["Lost1"] = counters.requestsLost1;
+  Requests["Lost2"] = counters.requestsLost2;
+  Requests["Error1"] = counters.requestsError1;
+  Requests["Error2"] = counters.requestsError2;
+  Requests["ErrorRetry"] = counters.requestsErrorRetry;
 
   // Resets
   JsonObject Resets = doc["Resets"].to<JsonObject>();
