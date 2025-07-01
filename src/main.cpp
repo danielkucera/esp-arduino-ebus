@@ -611,7 +611,7 @@ void setup() {
   calcUniqueId();
 
 #if defined(EBUS_INTERNAL)
-  setupBusIsr();
+  setupBusIsr(UART_RX, UART_TX);
 #else
   Bus.begin();
 #endif
