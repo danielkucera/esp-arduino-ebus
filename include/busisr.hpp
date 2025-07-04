@@ -1,12 +1,12 @@
 #pragma once
 
-#if defined(EBUS_INTERNAL) && !defined(USE_IDF_UART)
+#if defined(EBUS_INTERNAL)
 #include <Ebus.h>
 
-extern ebus::Bus* bus;
 extern ebus::Handler* ebusHandler;
 extern ebus::ServiceRunner* serviceRunner;
 
-void setupBusIsr(const int rx_pin, const int tx_pin);
+void setupBusIsr(HardwareSerial* serial, const int8_t& rxPin,
+                 const int8_t& txPin);
 void setRequestWindow(const uint16_t& delay);
 #endif
