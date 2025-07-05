@@ -91,7 +91,7 @@ static char ebus_address_values[][NUMBER_LEN] = {
     "77", "f7", "0f", "1f", "3f", "7f", "ff"};
 
 char command_distance[NUMBER_LEN];
-char request_window[NUMBER_LEN];
+char request_offset[NUMBER_LEN];
 #endif
 
 char mqtt_server[STRING_LEN];
@@ -131,9 +131,9 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     "Command distance", "command_distance", command_distance, NUMBER_LEN, "2",
     "1..60", "min='1' max='60' step='1'");
-iotwebconf::NumberParameter requestWindowParam = iotwebconf::NumberParameter(
-    "Request window", "request_window", request_window, NUMBER_LEN, "4300",
-    "4167..4456", "min='4167' max='4456' step='1'");
+iotwebconf::NumberParameter requestOffsetParam = iotwebconf::NumberParameter(
+    "Request offset", "request_offset", request_offset, NUMBER_LEN, "350",
+    "0..1000", "min='0' max='700' step='1'");
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =
@@ -391,7 +391,7 @@ void saveParamsCallback() {
 #if defined(EBUS_INTERNAL)
   ebusHandler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(command_distance));
-  setRequestWindow(atoi(request_window));
+  setRequestOffset(atoi(request_offset));
 #endif
 
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
@@ -460,8 +460,8 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
                   atoi(command_distance));
-  pos += snprintf(status + pos, bufferSize - pos, "request_window: %u\r\n",
-                  atoi(request_window));
+  pos += snprintf(status + pos, bufferSize - pos, "request_offset: %u\r\n",
+                  atoi(request_offset));
   pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
@@ -556,7 +556,7 @@ const std::string getStatusJson() {
 #if defined(EBUS_INTERNAL)
   Ebus["Ebus_Address"] = ebus_address;
   Ebus["Command_Distance"] = atoi(command_distance);
-  Ebus["Request_Window"] = atoi(request_window);
+  Ebus["Request_Offset"] = atoi(request_offset);
   Ebus["Active_Commands"] = store.getActiveCommands();
   Ebus["Passive_Commands"] = store.getPassiveCommands();
 #endif
@@ -634,7 +634,7 @@ void setup() {
 #if defined(EBUS_INTERNAL)
   ebusGroup.addItem(&ebusAddressParam);
   ebusGroup.addItem(&commandDistanceParam);
-  ebusGroup.addItem(&requestWindowParam);
+  ebusGroup.addItem(&requestOffsetParam);
 #endif
 
   mqttGroup.addItem(&mqttServerParam);
@@ -721,7 +721,7 @@ void setup() {
   schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
   schedule.setDistance(atoi(command_distance));
   schedule.setHandler(ebusHandler);
-  setRequestWindow(atoi(request_window));
+  setRequestOffset(atoi(request_offset));
   serviceRunner->start();
 
   serviceRunner->addByteListener([](const uint8_t& byte) {

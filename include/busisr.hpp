@@ -8,5 +8,5 @@ extern ebus::ServiceRunner* serviceRunner;
 
 void setupBusIsr(HardwareSerial* serial, const int8_t& rxPin,
                  const int8_t& txPin);
-void setRequestWindow(const uint16_t& delay);
+void setRequestOffset(const uint16_t& offset);
 #endif

@@ -6,9 +6,13 @@ hw_timer_t* requestBusTimer = nullptr;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
 // This value can be adjusted if the bus request is not working as expected.
-volatile uint16_t requestWindow = 4300;  // default 4300us
+volatile uint16_t requestOffset = 350;
+
 volatile bool requestBusPending = false;
 volatile bool requestBusDone = false;
+
+volatile uint32_t microsLastFallingEdge = 0;
+volatile uint32_t microsLastStartBitAutoSyn = 0;
 
 static HardwareSerial* hwSerial = nullptr;
 
@@ -23,9 +27,6 @@ void IRAM_ATTR onUartRx() {
 
   // Read all available bytes as quickly as possible
   while (hwSerial->available()) {
-    // Pre-calculate start bit time only once per byte
-    uint32_t micorsStartBit = micros() - 4167;  // 4167us = 2400 baud, 10 bit
-
     // Handle bus request done flag
     portENTER_CRITICAL_ISR(&timerMux);
     if (requestBusDone) {
@@ -40,14 +41,14 @@ void IRAM_ATTR onUartRx() {
 
     // Handle bus request logic only if needed
     if (byte == ebus::sym_syn && ebusHandler->busRequest()) {
-      int32_t delay = requestWindow - (micros() - micorsStartBit);
-      if (delay > 0) {
+      uint32_t delay = micros() - microsLastStartBitAutoSyn - requestOffset;
+      if (delay < 4300) {
         portENTER_CRITICAL_ISR(&timerMux);
         requestBusPending = true;
         portEXIT_CRITICAL_ISR(&timerMux);
         timerAlarmWrite(requestBusTimer, delay, false);
         timerAlarmEnable(requestBusTimer);
-      } else {
+      } else if (delay < 4456) {
         // Only write if TX buffer is empty
         if (!hwSerial->available()) {
           portENTER_CRITICAL_ISR(&timerMux);
@@ -73,6 +74,15 @@ void IRAM_ATTR onRequestBusTimer() {
   timerAlarmDisable(requestBusTimer);
 }
 
+// ISR: Save the timestamp of the first bit (falling edge) from AutoSyn
+void IRAM_ATTR onFallingEdge() {
+  uint32_t now = micros();
+  uint32_t duration = now - microsLastFallingEdge;
+  if (duration > 35000)  // AutoSyn usually ~43000-45000us
+    microsLastStartBitAutoSyn = now;
+  microsLastFallingEdge = now;
+}
+
 void setupBusIsr(HardwareSerial* serial, const int8_t& rxPin,
                  const int8_t& txPin) {
   if (serial) {
@@ -85,7 +95,7 @@ void setupBusIsr(HardwareSerial* serial, const int8_t& rxPin,
     serviceRunner = new ebus::ServiceRunner(*ebusHandler, *byteQueue);
 
     // Attach the ISR to the UART receive event
-    hwSerial->onReceive(onUartRx);
+    hwSerial->onReceive(&onUartRx);
 
     // Request bus timer: one-shot, armed as needed
     uint32_t timer_clk = APB_CLK_FREQ;       // Usually 80 MHz
@@ -93,8 +103,12 @@ void setupBusIsr(HardwareSerial* serial, const int8_t& rxPin,
     requestBusTimer = timerBegin(0, divider, true);
     timerAttachInterrupt(requestBusTimer, &onRequestBusTimer, true);
     timerAlarmDisable(requestBusTimer);
+
+    // Attach the ISR to the GPIO event
+    pinMode(rxPin, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(rxPin), &onFallingEdge, FALLING);
   }
 }
 
-void setRequestWindow(const uint16_t& delay) { requestWindow = delay; }
+void setRequestOffset(const uint16_t& offset) { requestOffset = offset; }
 #endif
