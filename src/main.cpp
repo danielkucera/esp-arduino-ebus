@@ -132,8 +132,8 @@ iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     "Command distance", "command_distance", command_distance, NUMBER_LEN, "2",
     "1..60", "min='1' max='60' step='1'");
 iotwebconf::NumberParameter requestOffsetParam = iotwebconf::NumberParameter(
-    "Request offset", "request_offset", request_offset, NUMBER_LEN, "350",
-    "0..1000", "min='0' max='700' step='1'");
+    "Request offset", "request_offset", request_offset, NUMBER_LEN, "325",
+    "0..600", "min='0' max='600' step='1'");
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =

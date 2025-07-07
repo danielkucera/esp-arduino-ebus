@@ -6,7 +6,7 @@ hw_timer_t* requestBusTimer = nullptr;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
 // This value can be adjusted if the bus request is not working as expected.
-volatile uint16_t requestOffset = 350;
+volatile uint16_t requestOffset = 325;
 
 volatile bool requestBusPending = false;
 volatile bool requestBusDone = false;
