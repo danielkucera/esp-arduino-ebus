@@ -421,9 +421,8 @@ void connectWifi(const char* ssid, const char* password) {
 }
 
 char* status_string() {
-  size_t bufferSize = 2048;
-  char* status = new char[bufferSize];
-  if (!status) return nullptr;
+  const size_t bufferSize = 1024;
+  static char status[bufferSize];
 
   size_t pos = 0;
 
