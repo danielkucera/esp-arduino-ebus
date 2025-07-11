@@ -143,6 +143,7 @@ void handleGetTimings() {
 void handleResetStatistic() {
   schedule.resetCounters();
   schedule.resetTimings();
+  configServer.send(200, "text/html", "Statistic reset");
 }
 #endif
 
