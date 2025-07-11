@@ -8,7 +8,6 @@ portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 // This value can be adjusted if the bus request is not working as expected.
 volatile uint16_t requestOffset = 325;
 
-volatile bool requestBusPending = false;
 volatile bool requestBusDone = false;
 
 volatile uint32_t microsLastFallingEdge = 0;
@@ -43,16 +42,12 @@ void IRAM_ATTR onUartRx() {
     if (byte == ebus::sym_syn && ebusHandler->busRequest()) {
       uint32_t delay = micros() - microsLastStartBitAutoSyn - requestOffset;
       if (delay < 4300) {
-        portENTER_CRITICAL_ISR(&timerMux);
-        requestBusPending = true;
-        portEXIT_CRITICAL_ISR(&timerMux);
         timerAlarmWrite(requestBusTimer, delay, false);
         timerAlarmEnable(requestBusTimer);
       } else if (delay < 4456) {
         // Only write if TX buffer is empty
         if (!hwSerial->available()) {
           portENTER_CRITICAL_ISR(&timerMux);
-          requestBusPending = false;
           requestBusDone = true;
           portEXIT_CRITICAL_ISR(&timerMux);
           hwSerial->write(ebusHandler->getAddress());
@@ -65,8 +60,7 @@ void IRAM_ATTR onUartRx() {
 // ISR: Write request byte at the exact time
 void IRAM_ATTR onRequestBusTimer() {
   portENTER_CRITICAL_ISR(&timerMux);
-  if (requestBusPending && !hwSerial->available()) {
-    requestBusPending = false;
+  if (!hwSerial->available()) {
     requestBusDone = true;
     hwSerial->write(ebusHandler->getAddress());
   }
