@@ -308,7 +308,7 @@ Key facts:
 - Pattern-recognized messages can be forwarded via MQTT.
 
 ## Structure of the internal command store
-For an example of how to install a command, see `Inserting (Installing) of new commands` under `Examples of MQTT commands`.
+For an example of how to install a command, see `Inserting (Installing) of new commands`.
 
 ```
 struct Command {
@@ -562,7 +562,7 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":tru
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":false}'
 ```
 
-**Resetting counter and timing values **
+**Resetting counter and timing values**
 ```
 payload:
 {
