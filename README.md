@@ -406,7 +406,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart","value":true}' 
 ```
 
-**Inserting (Installation) of new commands**
+**Inserting (Installing) of new commands**
 ```
 payload:
 {
