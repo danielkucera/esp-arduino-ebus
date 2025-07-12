@@ -6,7 +6,8 @@
 #include <Preferences.h>
 
 #if defined(EBUS_INTERNAL)
-#include "busisr.hpp"
+#include <Ebus.hpp>
+
 #include "schedule.hpp"
 #else
 #include "bus.hpp"
@@ -389,9 +390,9 @@ void saveParamsCallback() {
   pwm = get_pwm();
 
 #if defined(EBUS_INTERNAL)
-  ebusHandler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebus::handler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(command_distance));
-  setRequestOffset(atoi(request_offset));
+  ebus::setRequestOffset(atoi(request_offset));
 #endif
 
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
@@ -610,7 +611,7 @@ void setup() {
   calcUniqueId();
 
 #if defined(EBUS_INTERNAL)
-  setupBusIsr(&BusSer, UART_RX, UART_TX);
+  ebus::setupBusIsr(&BusSer, UART_RX, UART_TX);
 #else
   Bus.begin();
 #endif
@@ -715,15 +716,15 @@ void setup() {
   enableTX();
 
 #if defined(EBUS_INTERNAL)
-  ebusHandler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebus::handler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
   schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
   schedule.setDistance(atoi(command_distance));
-  schedule.setHandler(ebusHandler);
-  setRequestOffset(atoi(request_offset));
-  serviceRunner->start();
+  schedule.setHandler(ebus::handler);
+  ebus::setRequestOffset(atoi(request_offset));
+  ebus::serviceRunner->start();
 
-  serviceRunner->addByteListener([](const uint8_t& byte) {
+  ebus::serviceRunner->addByteListener([](const uint8_t& byte) {
     loop_duration();
     last_comms = millis();
 
@@ -732,7 +733,7 @@ void setup() {
   });
 
   ArduinoOTA.onStart([]() {
-    serviceRunner->stop();
+    ebus::serviceRunner->stop();
     schedule.stopRunner();
   });
 
