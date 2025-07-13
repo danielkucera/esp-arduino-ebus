@@ -296,19 +296,21 @@ payload:
 }
 ``` 
 
-# Firmware with EBUS_INTERNAL=1
-Firmware with `EBUS_INTERNAL=1` enables the device to operate as a standalone eBUS participant without external control software such as ebusd. To evaluate passively received or actively sent commands, they must be installed to the internal command store via HTTP/MQTT. Installed commands can be stored in the NVS memory and are automatically loaded upon reboot. Detected messages from installed commands are evaluated and the results are published to MQTT.
+# Firmware with EBUS_INTERNAL
+Firmware with `EBUS_INTERNAL` is an alternative firmware that enables the device to operate as an independent eBUS device without external control software such as ebusd. In order to be able to evaluate passively received or actively sent commands, these must be installed in the internal command store. The results of the evaluated messages are also stored in the internal store or are actively sent via MQTT or can be retrieved via HTTP.
 
 Key facts:
 - Compared to conventional firmware, write access via port 3333 and port 3335 is disabled.
 - Status queries via port 5555 and read access to port 3334 is supported.
-- Received/Sent message are evaluated and the results are published to MQTT.
+- Installing commands via MQTT or HTTP upload.
+- Installed commands can be stored in NVS memory and are automatically loaded on restart.
+- Received or sent messages are evaluated and the results are published to MQTT.
 - Sending of non-installed commands is supported via MQTT.
-- Scanning of E-Bus devices is supported.
+- Scanning of eBUS devices is supported.
 - Pattern-recognized messages can be forwarded via MQTT.
 
 ## Structure of the internal command store
-For an example of how to install a command, see `Inserting (Installing) of new commands`.
+For an example of how to install a command via MQTT, see `Inserting (Installing) of new commands`.
 
 ```
 struct Command {
@@ -336,7 +338,7 @@ Available ebus data tyeps:
 - numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (values as 1/1000)
 - character: CHAR1, CHAR2, CHAR3, CHAR4, CHAR5, CHAR6, CHAR7, CHAR8
 
-### MQTT interface with `EBUS_INTERNAL=1`
+### MQTT interface with `EBUS_INTERNAL`
 
 The following sub topics are available and are published regularly.
 |***topic***                    |***description***
@@ -365,7 +367,7 @@ Available MQTT commands
 |reset                          |Resetting counter and timing values                           
 
 
-### Home Assistant Support with `EBUS_INTERNAL=1`
+### Home Assistant Support with `EBUS_INTERNAL`
 **MQTT Device - Sensors**
 - When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. 
 - A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
