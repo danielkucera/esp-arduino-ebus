@@ -92,14 +92,15 @@ TRACK_U32(errorsActiveSlaveACK, "errors/active/slaveACK")
 
 // General timings
 TRACK_TIMING(sync, "sync")
-TRACK_TIMING(write, "write");
+TRACK_TIMING(delay, "delay")
+TRACK_TIMING(write, "write")
 TRACK_TIMING(passiveFirst, "passive/first")
 TRACK_TIMING(passiveData, "passive/data")
 TRACK_TIMING(activeFirst, "active/first")
 TRACK_TIMING(activeData, "active/data")
-TRACK_TIMING(callbackReactive, "callback/reactive");
-TRACK_TIMING(callbackTelegram, "callback/telegram");
-TRACK_TIMING(callbackError, "callback/error");
+TRACK_TIMING(callbackReactive, "callback/reactive")
+TRACK_TIMING(callbackTelegram, "callback/telegram")
+TRACK_TIMING(callbackError, "callback/error")
 
 // FSM state timings
 TRACK_TIMING(passiveReceiveMaster, "fsmstate/passiveReceiveMaster")
@@ -411,6 +412,7 @@ void Schedule::fetchTimings() {
   ebus::Timings timings = ebusHandler->getTimings();
 
   ASSIGN_TIMING(sync)
+  ASSIGN_TIMING(delay)
   ASSIGN_TIMING(write)
   ASSIGN_TIMING(passiveFirst)
   ASSIGN_TIMING(passiveData)
@@ -465,6 +467,9 @@ const std::string Schedule::getTimingsJson() {
 
   addTiming(doc["Sync"].to<JsonObject>(), timings.syncLast, timings.syncMean,
             timings.syncStdDev, timings.syncCount);
+
+  addTiming(doc["Delay"].to<JsonObject>(), timings.delayLast, timings.delayMean,
+            timings.delayStdDev, timings.delayCount);
 
   addTiming(doc["Write"].to<JsonObject>(), timings.writeLast, timings.writeMean,
             timings.writeStdDev, timings.writeCount);
