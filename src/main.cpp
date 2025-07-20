@@ -131,14 +131,14 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
-    "Command distance (seconds)", "command_distance", command_distance, NUMBER_LEN, "2",
-    "1..60", "min='1' max='60' step='1'");
+    "Command distance (seconds)", "command_distance", command_distance,
+    NUMBER_LEN, "2", "1..60", "min='1' max='60' step='1'");
 iotwebconf::NumberParameter busIsrWindowParam = iotwebconf::NumberParameter(
-    "Bus ISR window (micro seconds)", "busisr_window", busisr_window, NUMBER_LEN, "4300",
-    "4200..4600", "min='4200' max='4600' step='1'");
+    "Bus ISR window (micro seconds)", "busisr_window", busisr_window,
+    NUMBER_LEN, "4300", "4200..4600", "min='4200' max='4600' step='1'");
 iotwebconf::NumberParameter busIsrOffsetParam = iotwebconf::NumberParameter(
-    "Bus ISR offset (micro seconds)", "busisr_offset", busisr_offset, NUMBER_LEN, "80",
-    "0..200", "min='0' max='200' step='1'");
+    "Bus ISR offset (micro seconds)", "busisr_offset", busisr_offset,
+    NUMBER_LEN, "80", "0..200", "min='0' max='200' step='1'");
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =
@@ -439,10 +439,12 @@ char* status_string() {
                   USE_SOFTWARE_SERIAL ? "true" : "false");
 #endif
   pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
+#if defined(ESP_32)
   pos += snprintf(status + pos, bufferSize - pos, "clock_speed: %u Mhz\n",
                   getCpuFrequencyMhz());
   pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %u Hz\n",
                   getApbFrequency());
+#endif
   pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
                   last_connect);
@@ -537,8 +539,10 @@ const std::string getStatusJson() {
   Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
 #endif
   Firmware["Unique_ID"] = unique_id;
+#if defined(ESP32)
   Firmware["Clock_Speed"] = getCpuFrequencyMhz();
   Firmware["Apb_Speed"] = getApbFrequency();
+#endif
 
   // WIFI
   JsonObject WIFI = doc["WIFI"].to<JsonObject>();
