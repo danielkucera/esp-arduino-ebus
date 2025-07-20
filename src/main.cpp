@@ -92,7 +92,8 @@ static char ebus_address_values[][NUMBER_LEN] = {
     "77", "f7", "0f", "1f", "3f", "7f", "ff"};
 
 char command_distance[NUMBER_LEN];
-char request_offset[NUMBER_LEN];
+char busisr_window[NUMBER_LEN];
+char busisr_offset[NUMBER_LEN];
 #endif
 
 char mqtt_server[STRING_LEN];
@@ -130,11 +131,14 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
-    "Command distance", "command_distance", command_distance, NUMBER_LEN, "2",
+    "Command distance (seconds)", "command_distance", command_distance, NUMBER_LEN, "2",
     "1..60", "min='1' max='60' step='1'");
-iotwebconf::NumberParameter requestOffsetParam = iotwebconf::NumberParameter(
-    "Request offset", "request_offset", request_offset, NUMBER_LEN, "100",
-    "0..500", "min='0' max='500' step='1'");
+iotwebconf::NumberParameter busIsrWindowParam = iotwebconf::NumberParameter(
+    "Bus ISR window (micro seconds)", "busisr_window", busisr_window, NUMBER_LEN, "4300",
+    "4200..4600", "min='4200' max='4600' step='1'");
+iotwebconf::NumberParameter busIsrOffsetParam = iotwebconf::NumberParameter(
+    "Bus ISR offset (micro seconds)", "busisr_offset", busisr_offset, NUMBER_LEN, "80",
+    "0..200", "min='0' max='200' step='1'");
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =
@@ -392,7 +396,8 @@ void saveParamsCallback() {
 #if defined(EBUS_INTERNAL)
   ebus::handler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(command_distance));
-  ebus::setRequestOffset(atoi(request_offset));
+  ebus::setBusIsrWindow(atoi(busisr_window));
+  ebus::setBusIsrOffset(atoi(busisr_offset));
 #endif
 
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
@@ -434,6 +439,10 @@ char* status_string() {
                   USE_SOFTWARE_SERIAL ? "true" : "false");
 #endif
   pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
+  pos += snprintf(status + pos, bufferSize - pos, "clock_speed: %u Mhz\n",
+                  getCpuFrequencyMhz());
+  pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %u Hz\n",
+                  getApbFrequency());
   pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
                   last_connect);
@@ -460,8 +469,10 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
                   atoi(command_distance));
-  pos += snprintf(status + pos, bufferSize - pos, "request_offset: %u\r\n",
-                  atoi(request_offset));
+  pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %u us\r\n",
+                  atoi(busisr_window));
+  pos += snprintf(status + pos, bufferSize - pos, "busisr_offset: %u us\r\n",
+                  atoi(busisr_offset));
   pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
@@ -526,6 +537,8 @@ const std::string getStatusJson() {
   Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
 #endif
   Firmware["Unique_ID"] = unique_id;
+  Firmware["Clock_Speed"] = getCpuFrequencyMhz();
+  Firmware["Apb_Speed"] = getApbFrequency();
 
   // WIFI
   JsonObject WIFI = doc["WIFI"].to<JsonObject>();
@@ -556,7 +569,8 @@ const std::string getStatusJson() {
 #if defined(EBUS_INTERNAL)
   Ebus["Ebus_Address"] = ebus_address;
   Ebus["Command_Distance"] = atoi(command_distance);
-  Ebus["Request_Offset"] = atoi(request_offset);
+  Ebus["BusIsr_Window"] = atoi(busisr_window);
+  Ebus["BusIsr_Offset"] = atoi(busisr_offset);
   Ebus["Active_Commands"] = store.getActiveCommands();
   Ebus["Passive_Commands"] = store.getPassiveCommands();
 #endif
@@ -611,7 +625,7 @@ void setup() {
   calcUniqueId();
 
 #if defined(EBUS_INTERNAL)
-  ebus::setupBusIsr(&BusSer, UART_RX, UART_TX);
+  ebus::setupBusIsr(&BusSer, UART_RX, UART_TX, 1);
 #else
   Bus.begin();
 #endif
@@ -634,7 +648,8 @@ void setup() {
 #if defined(EBUS_INTERNAL)
   ebusGroup.addItem(&ebusAddressParam);
   ebusGroup.addItem(&commandDistanceParam);
-  ebusGroup.addItem(&requestOffsetParam);
+  ebusGroup.addItem(&busIsrWindowParam);
+  ebusGroup.addItem(&busIsrOffsetParam);
 #endif
 
   mqttGroup.addItem(&mqttServerParam);
@@ -721,7 +736,10 @@ void setup() {
   schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
   schedule.setDistance(atoi(command_distance));
   schedule.setHandler(ebus::handler);
-  ebus::setRequestOffset(atoi(request_offset));
+
+  ebus::setBusIsrWindow(atoi(busisr_window));
+  ebus::setBusIsrOffset(atoi(busisr_offset));
+
   ebus::serviceRunner->start();
 
   ebus::serviceRunner->addByteListener([](const uint8_t& byte) {

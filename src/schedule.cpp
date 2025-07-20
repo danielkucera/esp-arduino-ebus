@@ -37,6 +37,12 @@ TRACK_U32(messagesActiveMasterSlave, "messages/activeMasterSlave")
 TRACK_U32(messagesActiveMasterMaster, "messages/activeMasterMaster")
 TRACK_U32(messagesActiveBroadcast, "messages/activeBroadcast")
 
+// BusIsrs
+TRACK_U32(busIsrsTotal, "busIsrs")
+TRACK_U32(busIsrsDelayMin, "busIsrs/delayMin")
+TRACK_U32(busIsrsDelayMax, "busIsrs/delayMax")
+TRACK_U32(busIsrsTimer, "busIsrs/timer")
+
 // Requests
 TRACK_U32(requestsTotal, "requests")
 TRACK_U32(requestsWon1, "requests/won1")
@@ -92,8 +98,9 @@ TRACK_U32(errorsActiveSlaveACK, "errors/active/slaveACK")
 
 // General timings
 TRACK_TIMING(sync, "sync")
-TRACK_TIMING(delay, "delay")
 TRACK_TIMING(write, "write")
+TRACK_TIMING(busIsrDelay, "busIsr/delay")
+TRACK_TIMING(busIsrWindow, "busIsr/window")
 TRACK_TIMING(passiveFirst, "passive/first")
 TRACK_TIMING(passiveData, "passive/data")
 TRACK_TIMING(activeFirst, "active/first")
@@ -279,6 +286,12 @@ void Schedule::fetchCounters() {
   ASSIGN_COUNTER(messagesActiveMasterMaster)
   ASSIGN_COUNTER(messagesActiveBroadcast)
 
+  // BusIsrs
+  ASSIGN_COUNTER(busIsrsTotal)
+  ASSIGN_COUNTER(busIsrsDelayMin)
+  ASSIGN_COUNTER(busIsrsDelayMax)
+  ASSIGN_COUNTER(busIsrsTimer)
+
   // Requests
   ASSIGN_COUNTER(requestsTotal)
   ASSIGN_COUNTER(requestsWon1)
@@ -346,6 +359,13 @@ const std::string Schedule::getCountersJson() {
   Messages["Active_Master_Master"] = counters.messagesActiveMasterMaster;
   Messages["Active_Broadcast"] = counters.messagesActiveBroadcast;
 
+  // BusIsrs
+  JsonObject BusIsrs = doc["BusIsrs"].to<JsonObject>();
+  BusIsrs["Total"] = counters.busIsrsTotal;
+  BusIsrs["DelayMin"] = counters.busIsrsDelayMin;
+  BusIsrs["DelayMax"] = counters.busIsrsDelayMax;
+  BusIsrs["Timer"] = counters.busIsrsTimer;
+
   // Requests
   JsonObject Requests = doc["Requests"].to<JsonObject>();
   Requests["Total"] = counters.requestsTotal;
@@ -412,8 +432,9 @@ void Schedule::fetchTimings() {
   ebus::Timings timings = ebusHandler->getTimings();
 
   ASSIGN_TIMING(sync)
-  ASSIGN_TIMING(delay)
   ASSIGN_TIMING(write)
+  ASSIGN_TIMING(busIsrDelay)
+  ASSIGN_TIMING(busIsrWindow)
   ASSIGN_TIMING(passiveFirst)
   ASSIGN_TIMING(passiveData)
   ASSIGN_TIMING(activeFirst)
@@ -468,15 +489,21 @@ const std::string Schedule::getTimingsJson() {
   addTiming(doc["Sync"].to<JsonObject>(), timings.syncLast, timings.syncMean,
             timings.syncStdDev, timings.syncCount);
 
-  addTiming(doc["Delay"].to<JsonObject>(), timings.delayLast, timings.delayMean,
-            timings.delayStdDev, timings.delayCount);
-
   addTiming(doc["Write"].to<JsonObject>(), timings.writeLast, timings.writeMean,
             timings.writeStdDev, timings.writeCount);
+
+  addTiming(doc["BusIsr"]["Delay"].to<JsonObject>(), timings.busIsrDelayLast,
+            timings.busIsrDelayMean, timings.busIsrDelayStdDev,
+            timings.busIsrDelayCount);
+
+  addTiming(doc["BusIsr"]["Window"].to<JsonObject>(), timings.busIsrWindowLast,
+            timings.busIsrWindowMean, timings.busIsrWindowStdDev,
+            timings.busIsrWindowCount);
 
   addTiming(doc["Passive"]["First"].to<JsonObject>(), timings.passiveFirstLast,
             timings.passiveFirstMean, timings.passiveFirstStdDev,
             timings.passiveFirstCount);
+
   addTiming(doc["Passive"]["Data"].to<JsonObject>(), timings.passiveDataLast,
             timings.passiveDataMean, timings.passiveDataStdDev,
             timings.passiveDataCount);
@@ -484,6 +511,7 @@ const std::string Schedule::getTimingsJson() {
   addTiming(doc["Active"]["First"].to<JsonObject>(), timings.activeFirstLast,
             timings.activeFirstMean, timings.activeFirstStdDev,
             timings.activeFirstCount);
+
   addTiming(doc["Active"]["Data"].to<JsonObject>(), timings.activeDataLast,
             timings.activeDataMean, timings.activeDataStdDev,
             timings.activeDataCount);
