@@ -439,7 +439,7 @@ char* status_string() {
                   USE_SOFTWARE_SERIAL ? "true" : "false");
 #endif
   pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
-#if defined(ESP_32)
+#if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "clock_speed: %u Mhz\n",
                   getCpuFrequencyMhz());
   pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %u Hz\n",
@@ -539,7 +539,7 @@ const std::string getStatusJson() {
   Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
 #endif
   Firmware["Unique_ID"] = unique_id;
-#if defined(ESP32)
+#if defined(EBUS_INTERNAL)
   Firmware["Clock_Speed"] = getCpuFrequencyMhz();
   Firmware["Apb_Speed"] = getApbFrequency();
 #endif
@@ -567,26 +567,26 @@ const std::string getStatusJson() {
   WIFI["Hostname"] = WiFi.getHostname();
   WIFI["MAC_Address"] = WiFi.macAddress();
 
-  // Ebus
-  JsonObject Ebus = doc["Ebus"].to<JsonObject>();
-  Ebus["PWM"] = get_pwm();
+  // eBUS
+  JsonObject eBUS = doc["eBUS"].to<JsonObject>();
+  eBUS["PWM"] = get_pwm();
 #if defined(EBUS_INTERNAL)
-  Ebus["Ebus_Address"] = ebus_address;
-  Ebus["Command_Distance"] = atoi(command_distance);
-  Ebus["BusIsr_Window"] = atoi(busisr_window);
-  Ebus["BusIsr_Offset"] = atoi(busisr_offset);
-  Ebus["Active_Commands"] = store.getActiveCommands();
-  Ebus["Passive_Commands"] = store.getPassiveCommands();
+  eBUS["Ebus_Address"] = ebus_address;
+  eBUS["Command_Distance"] = atoi(command_distance);
+  eBUS["BusIsr_Window"] = atoi(busisr_window);
+  eBUS["BusIsr_Offset"] = atoi(busisr_offset);
+  eBUS["Active_Commands"] = store.getActiveCommands();
+  eBUS["Passive_Commands"] = store.getPassiveCommands();
 #endif
 
-  // Mqtt
-  JsonObject Mqtt = doc["Mqtt"].to<JsonObject>();
-  Mqtt["Server"] = mqtt_server;
-  Mqtt["User"] = mqtt_user;
-  Mqtt["Connected"] = mqtt.connected();
+  // MQTT
+  JsonObject MQTT = doc["MQTT"].to<JsonObject>();
+  MQTT["Server"] = mqtt_server;
+  MQTT["User"] = mqtt_user;
+  MQTT["Connected"] = mqtt.connected();
 #if defined(EBUS_INTERNAL)
-  Mqtt["Publish_Counters"] = mqttPublishCountersParam.isChecked();
-  Mqtt["Publish_Timings"] = mqttPublishTimingsParam.isChecked();
+  MQTT["Publish_Counters"] = mqttPublishCountersParam.isChecked();
+  MQTT["Publish_Timings"] = mqttPublishTimingsParam.isChecked();
 #endif
 
   // HomeAssistant
