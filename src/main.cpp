@@ -629,7 +629,7 @@ void setup() {
   calcUniqueId();
 
 #if defined(EBUS_INTERNAL)
-  ebus::setupBusIsr(&BusSer, UART_RX, UART_TX, 1);
+  ebus::setupBusIsr(UART_NUM_1, UART_RX, UART_TX, 1);
 #else
   Bus.begin();
 #endif

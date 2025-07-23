@@ -39,8 +39,7 @@ TRACK_U32(messagesActiveBroadcast, "messages/activeBroadcast")
 
 // BusIsrs
 TRACK_U32(busIsrsTotal, "busIsrs")
-TRACK_U32(busIsrsDelayMin, "busIsrs/delayMin")
-TRACK_U32(busIsrsDelayMax, "busIsrs/delayMax")
+TRACK_U32(busIsrsExpected, "busIsrs/expected")
 TRACK_U32(busIsrsTimer, "busIsrs/timer")
 
 // Requests
@@ -288,8 +287,7 @@ void Schedule::fetchCounters() {
 
   // BusIsrs
   ASSIGN_COUNTER(busIsrsTotal)
-  ASSIGN_COUNTER(busIsrsDelayMin)
-  ASSIGN_COUNTER(busIsrsDelayMax)
+  ASSIGN_COUNTER(busIsrsExpected)
   ASSIGN_COUNTER(busIsrsTimer)
 
   // Requests
@@ -362,8 +360,7 @@ const std::string Schedule::getCountersJson() {
   // BusIsrs
   JsonObject BusIsrs = doc["BusIsrs"].to<JsonObject>();
   BusIsrs["Total"] = counters.busIsrsTotal;
-  BusIsrs["DelayMin"] = counters.busIsrsDelayMin;
-  BusIsrs["DelayMax"] = counters.busIsrsDelayMax;
+  BusIsrs["Expected"] = counters.busIsrsExpected;
   BusIsrs["Timer"] = counters.busIsrsTimer;
 
   // Requests
