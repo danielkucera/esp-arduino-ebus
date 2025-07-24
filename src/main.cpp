@@ -135,7 +135,7 @@ iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     NUMBER_LEN, "2", "1..60", "min='1' max='60' step='1'");
 iotwebconf::NumberParameter busIsrWindowParam = iotwebconf::NumberParameter(
     "Bus ISR window (micro seconds)", "busisr_window", busisr_window,
-    NUMBER_LEN, "4300", "4200..4600", "min='4200' max='4600' step='1'");
+    NUMBER_LEN, "4300", "4250..4500", "min='4250' max='4500' step='1'");
 iotwebconf::NumberParameter busIsrOffsetParam = iotwebconf::NumberParameter(
     "Bus ISR offset (micro seconds)", "busisr_offset", busisr_offset,
     NUMBER_LEN, "80", "0..200", "min='0' max='200' step='1'");

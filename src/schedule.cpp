@@ -37,11 +37,6 @@ TRACK_U32(messagesActiveMasterSlave, "messages/activeMasterSlave")
 TRACK_U32(messagesActiveMasterMaster, "messages/activeMasterMaster")
 TRACK_U32(messagesActiveBroadcast, "messages/activeBroadcast")
 
-// BusIsrs
-TRACK_U32(busIsrsTotal, "busIsrs")
-TRACK_U32(busIsrsExpected, "busIsrs/expected")
-TRACK_U32(busIsrsTimer, "busIsrs/timer")
-
 // Requests
 TRACK_U32(requestsTotal, "requests")
 TRACK_U32(requestsWon1, "requests/won1")
@@ -51,6 +46,7 @@ TRACK_U32(requestsLost2, "requests/lost2")
 TRACK_U32(requestsError1, "requests/error1")
 TRACK_U32(requestsError2, "requests/error2")
 TRACK_U32(requestsErrorRetry, "requests/errorRetry")
+TRACK_U32(requestsStartBit, "requests/startBit")
 
 // Resets
 TRACK_U32(resetsTotal, "resets")
@@ -285,11 +281,6 @@ void Schedule::fetchCounters() {
   ASSIGN_COUNTER(messagesActiveMasterMaster)
   ASSIGN_COUNTER(messagesActiveBroadcast)
 
-  // BusIsrs
-  ASSIGN_COUNTER(busIsrsTotal)
-  ASSIGN_COUNTER(busIsrsExpected)
-  ASSIGN_COUNTER(busIsrsTimer)
-
   // Requests
   ASSIGN_COUNTER(requestsTotal)
   ASSIGN_COUNTER(requestsWon1)
@@ -299,6 +290,7 @@ void Schedule::fetchCounters() {
   ASSIGN_COUNTER(requestsError1)
   ASSIGN_COUNTER(requestsError2)
   ASSIGN_COUNTER(requestsErrorRetry)
+  ASSIGN_COUNTER(requestsStartBit)
 
   // Resets
   ASSIGN_COUNTER(resetsTotal)
@@ -357,12 +349,6 @@ const std::string Schedule::getCountersJson() {
   Messages["Active_Master_Master"] = counters.messagesActiveMasterMaster;
   Messages["Active_Broadcast"] = counters.messagesActiveBroadcast;
 
-  // BusIsrs
-  JsonObject BusIsrs = doc["BusIsrs"].to<JsonObject>();
-  BusIsrs["Total"] = counters.busIsrsTotal;
-  BusIsrs["Expected"] = counters.busIsrsExpected;
-  BusIsrs["Timer"] = counters.busIsrsTimer;
-
   // Requests
   JsonObject Requests = doc["Requests"].to<JsonObject>();
   Requests["Total"] = counters.requestsTotal;
@@ -373,6 +359,7 @@ const std::string Schedule::getCountersJson() {
   Requests["Error1"] = counters.requestsError1;
   Requests["Error2"] = counters.requestsError2;
   Requests["ErrorRetry"] = counters.requestsErrorRetry;
+  Requests["StartBit"] = counters.requestsStartBit;
 
   // Resets
   JsonObject Resets = doc["Resets"].to<JsonObject>();
