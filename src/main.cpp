@@ -471,9 +471,9 @@ char* status_string() {
                   ebus_address);
   pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
                   atoi(command_distance));
-  pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %u us\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %i us\r\n",
                   atoi(busisr_window));
-  pos += snprintf(status + pos, bufferSize - pos, "busisr_offset: %u us\r\n",
+  pos += snprintf(status + pos, bufferSize - pos, "busisr_offset: %i us\r\n",
                   atoi(busisr_offset));
   pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
