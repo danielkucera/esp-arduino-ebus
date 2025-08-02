@@ -32,7 +32,7 @@ class Schedule {
  public:
   Schedule() = default;
 
-  void setHandler(ebus::Handler *handler);
+  void setup(ebus::Request *request, ebus::Handler *handler);
 
   void setAddress(const uint8_t source);
   void setDistance(const uint8_t distance);
@@ -48,15 +48,15 @@ class Schedule {
   void toggleForward(const bool enable);
   void handleForwadFilter(const JsonArray &filters);
 
-  void setPublishCounters(const bool enable);
-  void resetCounters();
-  void fetchCounters();
-  const std::string getCountersJson();
+  void setPublishCounter(const bool enable);
+  void resetCounter();
+  void fetchCounter();
+  const std::string getCounterJson();
 
-  void setPublishTimings(const bool enable);
-  void resetTimings();
-  void fetchTimings();
-  const std::string getTimingsJson();
+  void setPublishTiming(const bool enable);
+  void resetTiming();
+  void fetchTiming();
+  const std::string getTimingJson();
 
   static JsonDocument getParticipantJson(const Participant *participant);
   const std::string getParticipantsJson() const;
@@ -64,6 +64,7 @@ class Schedule {
   const std::vector<Participant *> getParticipants();
 
  private:
+  ebus::Request *ebusRequest = nullptr;
   ebus::Handler *ebusHandler = nullptr;
 
   Command *scheduleCommand = nullptr;
@@ -85,8 +86,8 @@ class Schedule {
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;
 
-  bool publishCounters = false;
-  bool publishTimings = false;
+  bool publishCounter = false;
+  bool publishTiming = false;
 
   enum class CallbackType { telegram, error };
 

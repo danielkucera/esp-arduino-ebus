@@ -196,8 +196,8 @@ void Mqtt::onMessage(const char *topic, const char *payload,
     } else if (id.compare("reset") == 0) {
       boolean value = doc["value"].as<boolean>();
       if (value) {
-        schedule.resetCounters();
-        schedule.resetTimings();
+        schedule.resetCounter();
+        schedule.resetTiming();
       }
     }
 #endif
