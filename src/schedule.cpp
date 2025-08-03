@@ -256,6 +256,7 @@ void Schedule::resetCounter() {
   seenMasters.clear();
   seenSlaves.clear();
 
+  if (ebusRequest) ebusRequest->resetCounter();
   if (ebusHandler) ebusHandler->resetCounter();
 }
 
@@ -349,21 +350,6 @@ const std::string Schedule::getCounterJson() {
   ebus::Handler::Counter handlerCounter = ebusHandler->getCounter();
   ebus::Request::Counter requestCounter = ebusRequest->getCounter();
 
-  // Requests
-  JsonObject Requests = doc["Requests"].to<JsonObject>();
-  Requests["Total"] = requestCounter.requestsTotal;
-  Requests["StartBit"] = requestCounter.requestsStartBit;
-  Requests["FirstSyn"] = requestCounter.requestsFirstSyn;
-  Requests["FirstWon"] = requestCounter.requestsFirstWon;
-  Requests["FirstRetry"] = requestCounter.requestsFirstRetry;
-  Requests["FirstLost"] = requestCounter.requestsFirstLost;
-  Requests["FirstError"] = requestCounter.requestsFirstError;
-  Requests["RetrySyn"] = requestCounter.requestsRetrySyn;
-  Requests["RetryError"] = requestCounter.requestsRetryError;
-  Requests["SecondLost"] = requestCounter.requestsSecondLost;
-  Requests["SecondWon"] = requestCounter.requestsSecondWon;
-  Requests["SecondError"] = requestCounter.requestsSecondError;
-
   // Messages
   JsonObject Messages = doc["Messages"].to<JsonObject>();
   Messages["Total"] = handlerCounter.messagesTotal;
@@ -379,6 +365,21 @@ const std::string Schedule::getCounterJson() {
   Messages["Active_Master_Master"] = handlerCounter.messagesActiveMasterMaster;
   Messages["Active_Broadcast"] = handlerCounter.messagesActiveBroadcast;
 
+  // Requests
+  JsonObject Requests = doc["Requests"].to<JsonObject>();
+  Requests["Total"] = requestCounter.requestsTotal;
+  Requests["StartBit"] = requestCounter.requestsStartBit;
+  Requests["FirstSyn"] = requestCounter.requestsFirstSyn;
+  Requests["FirstWon"] = requestCounter.requestsFirstWon;
+  Requests["FirstRetry"] = requestCounter.requestsFirstRetry;
+  Requests["FirstLost"] = requestCounter.requestsFirstLost;
+  Requests["FirstError"] = requestCounter.requestsFirstError;
+  Requests["RetrySyn"] = requestCounter.requestsRetrySyn;
+  Requests["RetryError"] = requestCounter.requestsRetryError;
+  Requests["SecondLost"] = requestCounter.requestsSecondLost;
+  Requests["SecondWon"] = requestCounter.requestsSecondWon;
+  Requests["SecondError"] = requestCounter.requestsSecondError;
+
   // Reset
   JsonObject Reset = doc["Reset"].to<JsonObject>();
   Reset["Total"] = handlerCounter.resetTotal;
@@ -388,8 +389,8 @@ const std::string Schedule::getCounterJson() {
   Reset["Active"] = handlerCounter.resetActive;
 
   // Error
-  JsonObject Errors = doc["Error"].to<JsonObject>();
-  Errors["Total"] = handlerCounter.errorTotal;
+  JsonObject Error = doc["Error"].to<JsonObject>();
+  Error["Total"] = handlerCounter.errorTotal;
 
   // Error Passive
   JsonObject Error_Passive = doc["Error"]["Passive"].to<JsonObject>();
@@ -424,6 +425,7 @@ const std::string Schedule::getCounterJson() {
 void Schedule::setPublishTiming(const bool enable) { publishTiming = enable; }
 
 void Schedule::resetTiming() {
+  if (ebusRequest) ebusRequest->resetTiming();
   if (ebusHandler) ebusHandler->resetTiming();
 }
 
