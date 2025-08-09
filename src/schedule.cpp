@@ -204,11 +204,11 @@ void Schedule::handleScan() {
   std::set<uint8_t> slaves;
 
   for (const std::pair<uint8_t, uint32_t> master : seenMasters)
-    if (master.first != ebusHandler->getAddress())
+    if (master.first != ebusRequest->getAddress())
       slaves.insert(ebus::slaveOf(master.first));
 
   for (const std::pair<uint8_t, uint32_t> slave : seenSlaves)
-    if (slave.first != ebusHandler->getSlaveAddress())
+    if (slave.first != ebusRequest->getSlaveAddress())
       slaves.insert(slave.first);
 
   for (const uint8_t slave : slaves) {
@@ -225,7 +225,7 @@ void Schedule::handleScanAddresses(const JsonArray &addresses) {
 
   for (JsonVariant address : addresses) {
     uint8_t firstByte = ebus::to_vector(address.as<std::string>())[0];
-    if (ebus::isSlave(firstByte) && firstByte != ebusHandler->getSlaveAddress())
+    if (ebus::isSlave(firstByte) && firstByte != ebusRequest->getSlaveAddress())
       slaves.insert(firstByte);
   }
 
@@ -664,30 +664,28 @@ const std::vector<Participant *> Schedule::getParticipants() {
 
 void Schedule::nextCommand() {
   if (scanCommands.size() > 0 || sendCommands.size() > 0 || store.active()) {
-    if (!ebusHandler->isActive()) {
-      uint32_t currentMillis = millis();
-      if (currentMillis > lastCommand + distanceCommands) {
-        lastCommand = currentMillis;
+    uint32_t currentMillis = millis();
+    if (currentMillis > lastCommand + distanceCommands) {
+      lastCommand = currentMillis;
 
-        std::vector<uint8_t> command;
-        if (scanCommands.size() > 0) {
-          mode = Mode::scan;
-          command = scanCommands.front();
-          scanCommands.pop_front();
-          if (fullScan && scanCommands.size() == 0) nextScanCommand();
-        } else if (sendCommands.size() > 0) {
-          mode = Mode::send;
-          command = sendCommands.front();
-          sendCommands.pop_front();
-        } else {
-          mode = Mode::normal;
-          scheduleCommand = store.nextActiveCommand();
-          if (scheduleCommand != nullptr) command = scheduleCommand->command;
-        }
+      std::vector<uint8_t> command;
+      if (scanCommands.size() > 0) {
+        mode = Mode::scan;
+        command = scanCommands.front();
+        scanCommands.pop_front();
+        if (fullScan && scanCommands.size() == 0) nextScanCommand();
+      } else if (sendCommands.size() > 0) {
+        mode = Mode::send;
+        command = sendCommands.front();
+        sendCommands.pop_front();
+      } else {
+        mode = Mode::normal;
+        scheduleCommand = store.nextActiveCommand();
+        if (scheduleCommand != nullptr) command = scheduleCommand->command;
+      }
 
-        if (command.size() > 0) {
-          ebusHandler->enque(command);
-        }
+      if (command.size() > 0) {
+        ebusHandler->enqueueActiveMessage(command);
       }
     }
   }
@@ -702,7 +700,7 @@ void Schedule::nextScanCommand() {
       break;
     }
     if (ebus::isSlave(scanIndex) &&
-        scanIndex != ebusHandler->getSlaveAddress()) {
+        scanIndex != ebusRequest->getSlaveAddress()) {
       std::vector<uint8_t> command;
       command = {scanIndex};
       command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());

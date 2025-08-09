@@ -393,7 +393,7 @@ void saveParamsCallback() {
   pwm = get_pwm();
 
 #if defined(EBUS_INTERNAL)
-  ebus::handler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebus::request->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(command_distance));
   ebus::setBusIsrWindow(atoi(busisr_window));
   ebus::setBusIsrOffset(atoi(busisr_offset));
@@ -733,7 +733,7 @@ void setup() {
   enableTX();
 
 #if defined(EBUS_INTERNAL)
-  ebus::handler->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebus::request->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
   schedule.setDistance(atoi(command_distance));
@@ -745,6 +745,11 @@ void setup() {
   ebus::serviceRunner->start();
 
   ebus::serviceRunner->addByteListener([](const uint8_t& byte) {
+    // for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+    // handleClient(&serverClients[i]);
+    // while (serverClients[i].available() && Bus.availableForWrite() > 0) {
+    // }
+
     loop_duration();
     last_comms = millis();
 
