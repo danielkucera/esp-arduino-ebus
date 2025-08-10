@@ -376,8 +376,8 @@ const std::string Schedule::getCounterJson() {
   Requests["FirstError"] = requestCounter.requestsFirstError;
   Requests["RetrySyn"] = requestCounter.requestsRetrySyn;
   Requests["RetryError"] = requestCounter.requestsRetryError;
-  Requests["SecondLost"] = requestCounter.requestsSecondLost;
   Requests["SecondWon"] = requestCounter.requestsSecondWon;
+  Requests["SecondLost"] = requestCounter.requestsSecondLost;
   Requests["SecondError"] = requestCounter.requestsSecondError;
 
   // Reset
