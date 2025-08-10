@@ -46,8 +46,8 @@ TRACK_U32(requestsFirstLost, "requests/firstLost")
 TRACK_U32(requestsFirstError, "requests/firstError")
 TRACK_U32(requestsRetrySyn, "requests/retrySyn")
 TRACK_U32(requestsRetryError, "requests/retryError")
-TRACK_U32(requestsSecondLost, "requests/secondLost")
 TRACK_U32(requestsSecondWon, "requests/secondWon")
+TRACK_U32(requestsSecondLost, "requests/secondLost")
 TRACK_U32(requestsSecondError, "requests/secondError")
 
 // Reset
@@ -300,8 +300,8 @@ void Schedule::fetchCounter() {
   ASSIGN_REQUEST_COUNTER(requestsFirstError)
   ASSIGN_REQUEST_COUNTER(requestsRetrySyn)
   ASSIGN_REQUEST_COUNTER(requestsRetryError)
-  ASSIGN_REQUEST_COUNTER(requestsSecondLost)
   ASSIGN_REQUEST_COUNTER(requestsSecondWon)
+  ASSIGN_REQUEST_COUNTER(requestsSecondLost)
   ASSIGN_REQUEST_COUNTER(requestsSecondError)
 
   // Reset
@@ -717,7 +717,7 @@ void Schedule::handleEvents() {
       switch (event->type) {
         case CallbackType::error:
           if (schedule.publishCounter) {
-            std::string topic = "state/resets/last";
+            std::string topic = "state/reset/last";
             std::string payload = event->data.error + " : master '" +
                                   ebus::to_string(event->data.master) +
                                   "' slave '" +
