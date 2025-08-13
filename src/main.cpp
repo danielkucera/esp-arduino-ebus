@@ -393,7 +393,8 @@ void saveParamsCallback() {
   pwm = get_pwm();
 
 #if defined(EBUS_INTERNAL)
-  ebus::request->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebus::handler->setSourceAddress(
+      uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(command_distance));
   ebus::setBusIsrWindow(atoi(busisr_window));
   ebus::setBusIsrOffset(atoi(busisr_offset));
@@ -733,7 +734,8 @@ void setup() {
   enableTX();
 
 #if defined(EBUS_INTERNAL)
-  ebus::request->setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebus::handler->setSourceAddress(
+      uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
   schedule.setDistance(atoi(command_distance));

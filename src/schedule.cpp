@@ -38,7 +38,6 @@ TRACK_U32(messagesActiveMasterMaster, "messages/activeMasterMaster")
 TRACK_U32(messagesActiveBroadcast, "messages/activeBroadcast")
 
 // Requests
-TRACK_U32(requestsTotal, "requests")
 TRACK_U32(requestsStartBit, "requests/startBit")
 TRACK_U32(requestsFirstWon, "requests/firstWon")
 TRACK_U32(requestsFirstRetry, "requests/firstRetry")
@@ -204,11 +203,11 @@ void Schedule::handleScan() {
   std::set<uint8_t> slaves;
 
   for (const std::pair<uint8_t, uint32_t> master : seenMasters)
-    if (master.first != ebusRequest->getAddress())
+    if (master.first != ebusHandler->getSourceAddress())
       slaves.insert(ebus::slaveOf(master.first));
 
   for (const std::pair<uint8_t, uint32_t> slave : seenSlaves)
-    if (slave.first != ebusRequest->getSlaveAddress())
+    if (slave.first != ebusHandler->getTargetAddress())
       slaves.insert(slave.first);
 
   for (const uint8_t slave : slaves) {
@@ -225,7 +224,8 @@ void Schedule::handleScanAddresses(const JsonArray &addresses) {
 
   for (JsonVariant address : addresses) {
     uint8_t firstByte = ebus::to_vector(address.as<std::string>())[0];
-    if (ebus::isSlave(firstByte) && firstByte != ebusRequest->getSlaveAddress())
+    if (ebus::isSlave(firstByte) &&
+        firstByte != ebusHandler->getTargetAddress())
       slaves.insert(firstByte);
   }
 
@@ -292,7 +292,6 @@ void Schedule::fetchCounter() {
   ASSIGN_HANDLER_COUNTER(messagesActiveBroadcast)
 
   // Requests
-  ASSIGN_REQUEST_COUNTER(requestsTotal)
   ASSIGN_REQUEST_COUNTER(requestsStartBit)
   ASSIGN_REQUEST_COUNTER(requestsFirstWon)
   ASSIGN_REQUEST_COUNTER(requestsFirstRetry)
@@ -367,7 +366,6 @@ const std::string Schedule::getCounterJson() {
 
   // Requests
   JsonObject Requests = doc["Requests"].to<JsonObject>();
-  Requests["Total"] = requestCounter.requestsTotal;
   Requests["StartBit"] = requestCounter.requestsStartBit;
   Requests["FirstSyn"] = requestCounter.requestsFirstSyn;
   Requests["FirstWon"] = requestCounter.requestsFirstWon;
@@ -700,7 +698,7 @@ void Schedule::nextScanCommand() {
       break;
     }
     if (ebus::isSlave(scanIndex) &&
-        scanIndex != ebusRequest->getSlaveAddress()) {
+        scanIndex != ebusHandler->getTargetAddress()) {
       std::vector<uint8_t> command;
       command = {scanIndex};
       command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());
