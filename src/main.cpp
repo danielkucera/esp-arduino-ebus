@@ -11,9 +11,9 @@
 #include "schedule.hpp"
 #else
 #include "bus.hpp"
-#include "enhanced.hpp"
 #endif
 
+#include "client.hpp"
 #include "http.hpp"
 #include "mqtt.hpp"
 #include "track.hpp"
@@ -356,6 +356,26 @@ void data_loop(void* pvParameters) {
     data_process();
   }
 }
+#else
+
+void client_loop(const uint8_t& byte) {
+  // for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+  //   handleClient(&serverClients[i]);
+  //   while (serverClients[i].available() && Bus.availableForWrite() > 0) {
+  //     // working char by char is not very efficient
+  //     Bus.write(client->read());
+  //   }
+  // }
+
+  loop_duration();
+  last_comms = millis();
+
+  for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+    pushClient(&serverClients[i], byte);
+    pushClient(&serverClientsRO[i], byte);
+  }
+}
+
 #endif
 
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
@@ -746,20 +766,7 @@ void setup() {
 
   ebus::serviceRunner->start();
 
-  ebus::serviceRunner->addByteListener([](const uint8_t& byte) {
-    // for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
-    // handleClient(&serverClients[i]);
-    // while (serverClients[i].available() && Bus.availableForWrite() > 0) {
-    // }
-
-    loop_duration();
-    last_comms = millis();
-
-    for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
-      pushClient(&serverClients[i], byte);
-      pushClient(&serverClientsRO[i], byte);
-    }
-  });
+  ebus::serviceRunner->addByteListener(client_loop);
 
   ArduinoOTA.onStart([]() {
     ebus::serviceRunner->stop();

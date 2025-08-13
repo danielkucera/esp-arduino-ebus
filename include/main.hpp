@@ -28,9 +28,6 @@ int DEBUG_LOG_IMPL(const char *format, ...);
 // #define DEBUG_LOG DEBUG_LOG_IMPL
 // #define DEBUG_LOG(...) Serial.printf(__VA_ARGS__)
 
-bool handleNewClient(WiFiServer *server, WiFiClient clients[]);
-int pushClient(WiFiClient *client, uint8_t B);
-void handleClient(WiFiClient *client);
 char *status_string();
 void restart();
 const std::string getStatusJson();
