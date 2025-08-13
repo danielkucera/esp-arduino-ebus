@@ -39,6 +39,7 @@ TRACK_U32(messagesActiveBroadcast, "messages/activeBroadcast")
 
 // Requests
 TRACK_U32(requestsStartBit, "requests/startBit")
+TRACK_U32(requestsFirstSyn, "requests/firstSyn")
 TRACK_U32(requestsFirstWon, "requests/firstWon")
 TRACK_U32(requestsFirstRetry, "requests/firstRetry")
 TRACK_U32(requestsFirstLost, "requests/firstLost")
@@ -293,6 +294,7 @@ void Schedule::fetchCounter() {
 
   // Requests
   ASSIGN_REQUEST_COUNTER(requestsStartBit)
+  ASSIGN_REQUEST_COUNTER(requestsFirstSyn)
   ASSIGN_REQUEST_COUNTER(requestsFirstWon)
   ASSIGN_REQUEST_COUNTER(requestsFirstRetry)
   ASSIGN_REQUEST_COUNTER(requestsFirstLost)
