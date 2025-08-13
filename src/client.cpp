@@ -15,7 +15,7 @@ bool handleNewClient(WiFiServer* server, WiFiClient clients[]) {
 
   // Find free/disconnected slot
   int i;
-  for (i = 0; i < MAX_SRV_CLIENTS; i++) {
+  for (i = 0; i < MAX_WIFI_CLIENTS; i++) {
     if (!clients[i]) {  // equivalent to !serverClients[i].connected()
       clients[i] = server->accept();
       clients[i].setNoDelay(true);
@@ -24,7 +24,7 @@ bool handleNewClient(WiFiServer* server, WiFiClient clients[]) {
   }
 
   // No free/disconnected slot so reject
-  if (i == MAX_SRV_CLIENTS) {
+  if (i == MAX_WIFI_CLIENTS) {
     server->accept().println("busy");
     // hints: server.available() is a WiFiClient with short-term scope
     // when out of scope, a WiFiClient will

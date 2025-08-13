@@ -5,7 +5,7 @@
 
 #include <string>
 
-#define MAX_SRV_CLIENTS 4
+#define MAX_WIFI_CLIENTS 4
 
 #if defined(ESP32)
 #define UART_TX 20

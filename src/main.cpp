@@ -172,13 +172,15 @@ IPAddress gateway;
 IPAddress netmask;
 
 WiFiServer wifiServer(3333);
-WiFiClient serverClients[MAX_SRV_CLIENTS];
+WiFiClient wifiClients[MAX_WIFI_CLIENTS];
+
 #if !defined(EBUS_INTERNAL)
-WiFiServer wifiServerEnh(3335);
-WiFiClient enhClients[MAX_SRV_CLIENTS];
+WiFiServer wifiServerENH(3335);
+WiFiClient wifiClientsENH[MAX_WIFI_CLIENTS];
 #endif
+
 WiFiServer wifiServerRO(3334);
-WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
+WiFiClient wifiClientsRO[MAX_WIFI_CLIENTS];
 
 WiFiServer statusServer(5555);
 
@@ -318,31 +320,31 @@ void data_process() {
   // loop_duration();
 
   // check clients for data
-  for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
-    handleClient(&serverClients[i]);
-    handleEnhClient(&enhClients[i]);
+  for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+    handleClient(&wifiClients[i]);
+    handleEnhClient(&wifiClientsENH[i]);
   }
 
   // check queue for data
   BusType::data d;
   if (Bus.read(d)) {
-    for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+    for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
       if (d._enhanced) {
-        if (d._client == &enhClients[i]) {
-          if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
+        if (d._client == &wifiClientsENH[i]) {
+          if (pushEnhClient(&wifiClientsENH[i], d._c, d._d, true)) {
             last_comms = millis();
           }
         }
       } else {
-        if (pushClient(&serverClients[i], d._d)) {
+        if (pushClient(&wifiClients[i], d._d)) {
           last_comms = millis();
         }
-        if (pushClient(&serverClientsRO[i], d._d)) {
+        if (pushClient(&wifiClientsRO[i], d._d)) {
           last_comms = millis();
         }
-        if (d._client != &enhClients[i]) {
-          if (pushEnhClient(&enhClients[i], d._c, d._d,
-                            d._logtoclient == &enhClients[i])) {
+        if (d._client != &wifiClientsENH[i]) {
+          if (pushEnhClient(&wifiClientsENH[i], d._c, d._d,
+                            d._logtoclient == &wifiClientsENH[i])) {
             last_comms = millis();
           }
         }
@@ -357,25 +359,23 @@ void data_loop(void* pvParameters) {
   }
 }
 #else
-
 void client_loop(const uint8_t& byte) {
-  // for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
-  //   handleClient(&serverClients[i]);
-  //   while (serverClients[i].available() && Bus.availableForWrite() > 0) {
-  //     // working char by char is not very efficient
-  //     Bus.write(client->read());
-  //   }
-  // }
+  for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+    //   handleClient(&serverClients[i]);
+    //   while (serverClients[i].available() && Bus.availableForWrite() > 0) {
+    //     // working char by char is not very efficient
+    //     Bus.write(client->read());
+    //   }
+  }
 
   loop_duration();
   last_comms = millis();
 
-  for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
-    pushClient(&serverClients[i], byte);
-    pushClient(&serverClientsRO[i], byte);
+  for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+    pushClient(&wifiClients[i], byte);
+    pushClient(&wifiClientsRO[i], byte);
   }
 }
-
 #endif
 
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
@@ -741,7 +741,7 @@ void setup() {
 
   wifiServer.begin();
 #if !defined(EBUS_INTERNAL)
-  wifiServerEnh.begin();
+  wifiServerENH.begin();
 #endif
   wifiServerRO.begin();
   statusServer.begin();
@@ -838,9 +838,9 @@ void loop() {
   }
 
   // Check if there are any new clients on the eBUS servers
-  handleNewClient(&wifiServer, serverClients);
+  handleNewClient(&wifiServer, wifiClients);
 #if !defined(EBUS_INTERNAL)
-  handleNewClient(&wifiServerEnh, enhClients);
+  handleNewClient(&wifiServerENH, wifiClientsENH);
 #endif
-  handleNewClient(&wifiServerRO, serverClientsRO);
+  handleNewClient(&wifiServerRO, wifiClientsRO);
 }
