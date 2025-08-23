@@ -42,9 +42,17 @@ void handleClient(WiFiClient* client) {
   }
 }
 
-int pushClient(WiFiClient* client, uint8_t B) {
+bool getClientData(WiFiClient* client, uint8_t& byte) {
+  if (client->available()) {
+    byte = client->read();
+    return true;
+  }
+  return false;
+}
+
+int pushClient(WiFiClient* client, uint8_t byte) {
   if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client->write(B);
+    client->write(byte);
     return 1;
   }
   return 0;
@@ -153,7 +161,7 @@ bool read_cmd(WiFiClient* client, uint8_t (&data)[2]) {
   return true;
 }
 
-void handleEnhClient(WiFiClient* client) {
+void handleClientEnhanced(WiFiClient* client) {
   while (client->available()) {
     uint8_t data[2];
     if (read_cmd(client, data)) {
@@ -162,7 +170,7 @@ void handleEnhClient(WiFiClient* client) {
   }
 }
 
-int pushEnhClient(WiFiClient* client, uint8_t c, uint8_t d, bool log) {
+int pushClientEnhanced(WiFiClient* client, uint8_t c, uint8_t d, bool log) {
   if (log) {
     DEBUG_LOG("DATA           0x%02x 0x%02x\n", c, d);
   }

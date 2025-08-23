@@ -6,7 +6,8 @@
 bool handleNewClient(WiFiServer *server, WiFiClient clients[]);
 
 void handleClient(WiFiClient *client);
-int pushClient(WiFiClient *client, uint8_t B);
+bool getClientData(WiFiClient *client, uint8_t &byte);
+int pushClient(WiFiClient *client, uint8_t byte);
 
-void handleEnhClient(WiFiClient *client);
-int pushEnhClient(WiFiClient *client, uint8_t c, uint8_t d, bool log);
+void handleClientEnhanced(WiFiClient *client);
+int pushClientEnhanced(WiFiClient *client, uint8_t c, uint8_t d, bool log);

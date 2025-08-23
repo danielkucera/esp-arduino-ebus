@@ -6,7 +6,7 @@
 #include <Preferences.h>
 
 #if defined(EBUS_INTERNAL)
-#include <Ebus.hpp>
+#include <Ebus.h>
 
 #include "schedule.hpp"
 #else
@@ -26,6 +26,12 @@
 #include "esp32c3/rom/rtc.h"
 
 HTTPUpdateServer httpUpdater;
+
+#if defined(EBUS_INTERNAL)
+TaskHandle_t clientTaskHandle;
+ebus::Queue<uint8_t>* clientByteQueue = nullptr;
+volatile bool busRequested = false;
+#endif
 
 #if defined(ESP32) && !defined(EBUS_INTERNAL)
 TaskHandle_t Task1;
@@ -175,12 +181,12 @@ WiFiServer wifiServer(3333);
 WiFiClient wifiClients[MAX_WIFI_CLIENTS];
 
 #if !defined(EBUS_INTERNAL)
-WiFiServer wifiServerENH(3335);
-WiFiClient wifiClientsENH[MAX_WIFI_CLIENTS];
+WiFiServer wifiServerEnhanced(3335);
+WiFiClient wifiClientsEnhanced[MAX_WIFI_CLIENTS];
 #endif
 
-WiFiServer wifiServerRO(3334);
-WiFiClient wifiClientsRO[MAX_WIFI_CLIENTS];
+WiFiServer wifiServerReadOnly(3334);
+WiFiClient wifiClientsReadOnly[MAX_WIFI_CLIENTS];
 
 WiFiServer statusServer(5555);
 
@@ -322,7 +328,7 @@ void data_process() {
   // check clients for data
   for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
     handleClient(&wifiClients[i]);
-    handleEnhClient(&wifiClientsENH[i]);
+    handleClientEnhanced(&wifiClientsEnhanced[i]);
   }
 
   // check queue for data
@@ -330,8 +336,8 @@ void data_process() {
   if (Bus.read(d)) {
     for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
       if (d._enhanced) {
-        if (d._client == &wifiClientsENH[i]) {
-          if (pushEnhClient(&wifiClientsENH[i], d._c, d._d, true)) {
+        if (d._client == &wifiClientsEnhanced[i]) {
+          if (pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d, true)) {
             last_comms = millis();
           }
         }
@@ -339,12 +345,12 @@ void data_process() {
         if (pushClient(&wifiClients[i], d._d)) {
           last_comms = millis();
         }
-        if (pushClient(&wifiClientsRO[i], d._d)) {
+        if (pushClient(&wifiClientsReadOnly[i], d._d)) {
           last_comms = millis();
         }
-        if (d._client != &wifiClientsENH[i]) {
-          if (pushEnhClient(&wifiClientsENH[i], d._c, d._d,
-                            d._logtoclient == &wifiClientsENH[i])) {
+        if (d._client != &wifiClientsEnhanced[i]) {
+          if (pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d,
+                                 d._logtoclient == &wifiClientsEnhanced[i])) {
             last_comms = millis();
           }
         }
@@ -359,21 +365,91 @@ void data_loop(void* pvParameters) {
   }
 }
 #else
-void client_loop(const uint8_t& byte) {
-  for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
-    //   handleClient(&serverClients[i]);
-    //   while (serverClients[i].available() && Bus.availableForWrite() > 0) {
-    //     // working char by char is not very efficient
-    //     Bus.write(client->read());
-    //   }
-  }
+void clientRunner(void* arg) {
+  WiFiClient* activeClient = nullptr;
+  bool availableForNextByte = false;
+  uint8_t receivedByte;
 
-  loop_duration();
-  last_comms = millis();
+  while (1) {
+    // Check if activeClient is still valid
+    if (activeClient && !activeClient->connected()) {
+      activeClient->stop();
+      activeClient = nullptr;
+      availableForNextByte = false;
+      busRequested = false;
+    }
 
-  for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
-    pushClient(&wifiClients[i], byte);
-    pushClient(&wifiClientsRO[i], byte);
+    // Check clients for new data and request the bus if necessary
+    if (!activeClient) {
+      for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+        if (wifiClients[i].connected() && wifiClients[i].available() &&
+            ebus::request->busAvailable()) {
+          uint8_t clientByte;
+          if (getClientData(&wifiClients[i], clientByte)) {
+            activeClient = &wifiClients[i];
+            availableForNextByte = false;
+            ebus::request->requestBus(clientByte, true);
+            break;
+          }
+        }
+      }
+    }
+    // Process data from activeClient
+    else {
+      if (availableForNextByte) {
+        uint8_t clientByte;
+        if (getClientData(activeClient, clientByte)) {
+          availableForNextByte = false;
+          ebus::bus->writeByte(clientByte);
+        }
+      }
+    }
+
+    // Consume all bytes from clientByteQueue
+    while (clientByteQueue->try_pop(receivedByte)) {
+      loop_duration();
+      last_comms = millis();
+
+      // Evaulate request state
+      if (activeClient && busRequested) {
+        std::string result =
+            " 0x" + ebus::to_string(receivedByte) +
+            std::string(ebus::getRequestResultText(ebus::request->getResult()));
+        mqtt.publish("clientRunner", 0, false, result.c_str());
+        switch (ebus::request->getResult()) {
+          case ebus::RequestResult::observeSyn:
+          case ebus::RequestResult::firstLost:
+          case ebus::RequestResult::firstError:
+          case ebus::RequestResult::retryError:
+          case ebus::RequestResult::secondLost:
+          case ebus::RequestResult::secondError:
+            activeClient = nullptr;
+            availableForNextByte = false;
+            busRequested = false;
+            break;
+          case ebus::RequestResult::observeData:
+          case ebus::RequestResult::firstSyn:
+          case ebus::RequestResult::firstRetry:
+          case ebus::RequestResult::retrySyn:
+          case ebus::RequestResult::firstWon:
+          case ebus::RequestResult::secondWon:
+            pushClient(activeClient, receivedByte);
+            availableForNextByte = true;
+            break;
+          default:
+            break;
+        }
+      }
+
+      // Push received bytes to all clients
+      for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+        if (activeClient != &wifiClients[i])
+          pushClient(&wifiClients[i], receivedByte);
+        pushClient(&wifiClientsReadOnly[i], receivedByte);
+      }
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1));  // Short delay to yield CPU
   }
 }
 #endif
@@ -741,9 +817,9 @@ void setup() {
 
   wifiServer.begin();
 #if !defined(EBUS_INTERNAL)
-  wifiServerENH.begin();
+  wifiServerEnhanced.begin();
 #endif
-  wifiServerRO.begin();
+  wifiServerReadOnly.begin();
   statusServer.begin();
 
   ArduinoOTA.begin();
@@ -761,16 +837,26 @@ void setup() {
   schedule.setDistance(atoi(command_distance));
   schedule.setup(ebus::request, ebus::handler);
 
+  ebus::request->setExternalBusRequestedCallback([]() { busRequested = true; });
+
   ebus::setBusIsrWindow(atoi(busisr_window));
   ebus::setBusIsrOffset(atoi(busisr_offset));
 
   ebus::serviceRunner->start();
 
-  ebus::serviceRunner->addByteListener(client_loop);
+  // Prepare clientRunner
+  clientByteQueue = new ebus::Queue<uint8_t>();
+  ebus::serviceRunner->addByteListener([](const uint8_t& byte) {
+    // Push received byte to clientByteQueue
+    clientByteQueue->try_push(byte);
+  });
+
+  xTaskCreate(clientRunner, "clientRunner", 4096, NULL, 2, &clientTaskHandle);
 
   ArduinoOTA.onStart([]() {
     ebus::serviceRunner->stop();
     schedule.stopRunner();
+    vTaskDelete(clientTaskHandle);
   });
 
   store.loadCommands();  // install saved commands
@@ -840,7 +926,7 @@ void loop() {
   // Check if there are any new clients on the eBUS servers
   handleNewClient(&wifiServer, wifiClients);
 #if !defined(EBUS_INTERNAL)
-  handleNewClient(&wifiServerENH, wifiClientsENH);
+  handleNewClient(&wifiServerEnhanced, wifiClientsEnhanced);
 #endif
-  handleNewClient(&wifiServerRO, wifiClientsRO);
+  handleNewClient(&wifiServerReadOnly, wifiClientsReadOnly);
 }
