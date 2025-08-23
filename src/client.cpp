@@ -170,6 +170,37 @@ void handleClientEnhanced(WiFiClient* client) {
   }
 }
 
+bool getClientDataEnhanced(WiFiClient* client, uint8_t& byte) {
+  while (client->available()) {
+    uint8_t data[2];
+    if (read_cmd(client, data)) {
+      uint8_t c = data[0];
+      uint8_t d = data[1];
+      if (c == CMD_INIT) {
+        send_res(client, RESETTED, 0x0);
+        return true;
+      }
+      if (c == CMD_START) {
+        if (d == SYN) {
+          return false;
+        } else {
+          // start request
+          byte = d;
+          return true;
+        }
+      }
+      if (c == CMD_SEND) {
+        byte = d;
+        return true;
+      }
+      if (c == CMD_INFO) {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
 int pushClientEnhanced(WiFiClient* client, uint8_t c, uint8_t d, bool log) {
   if (log) {
     DEBUG_LOG("DATA           0x%02x 0x%02x\n", c, d);

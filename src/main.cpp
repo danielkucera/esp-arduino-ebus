@@ -180,10 +180,8 @@ IPAddress netmask;
 WiFiServer wifiServer(3333);
 WiFiClient wifiClients[MAX_WIFI_CLIENTS];
 
-#if !defined(EBUS_INTERNAL)
 WiFiServer wifiServerEnhanced(3335);
 WiFiClient wifiClientsEnhanced[MAX_WIFI_CLIENTS];
-#endif
 
 WiFiServer wifiServerReadOnly(3334);
 WiFiClient wifiClientsReadOnly[MAX_WIFI_CLIENTS];
@@ -323,7 +321,7 @@ void loop_duration() {
 
 #if !defined(EBUS_INTERNAL)
 void data_process() {
-  // loop_duration();
+  loop_duration();
 
   // check clients for data
   for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
@@ -367,7 +365,9 @@ void data_loop(void* pvParameters) {
 #else
 void clientRunner(void* arg) {
   WiFiClient* activeClient = nullptr;
+  bool enhancedClient = false;
   bool availableForNextByte = false;
+  uint8_t commandByte;
   uint8_t receivedByte;
 
   while (1) {
@@ -375,76 +375,168 @@ void clientRunner(void* arg) {
     if (activeClient && !activeClient->connected()) {
       activeClient->stop();
       activeClient = nullptr;
+      enhancedClient = false;
       availableForNextByte = false;
       busRequested = false;
+      ebus::request->reset();
     }
 
-    // Check clients for new data and request the bus if necessary
+    // If no active client, check all clients for new requests
     if (!activeClient) {
       for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+        // Regular client
         if (wifiClients[i].connected() && wifiClients[i].available() &&
             ebus::request->busAvailable()) {
           uint8_t clientByte;
           if (getClientData(&wifiClients[i], clientByte)) {
             activeClient = &wifiClients[i];
+            enhancedClient = false;
             availableForNextByte = false;
+            commandByte = clientByte;
+            ebus::request->requestBus(clientByte, true);
+            break;
+          }
+        }
+        // Enhanced client
+        if (wifiClientsEnhanced[i].connected() &&
+            wifiClientsEnhanced[i].available() &&
+            ebus::request->busAvailable()) {
+          uint8_t clientByte;
+          if (getClientDataEnhanced(&wifiClientsEnhanced[i], clientByte)) {
+            activeClient = &wifiClientsEnhanced[i];
+            enhancedClient = true;
+            availableForNextByte = false;
+            commandByte = clientByte;
             ebus::request->requestBus(clientByte, true);
             break;
           }
         }
       }
     }
-    // Process data from activeClient
+    // If active client, handle telegram flow
     else {
       if (availableForNextByte) {
         uint8_t clientByte;
-        if (getClientData(activeClient, clientByte)) {
+        bool gotByte = false;
+        if (enhancedClient)
+          gotByte = getClientDataEnhanced(activeClient, clientByte);
+        else
+          gotByte = getClientData(activeClient, clientByte);
+
+        if (gotByte) {
           availableForNextByte = false;
           ebus::bus->writeByte(clientByte);
         }
       }
     }
 
-    // Consume all bytes from clientByteQueue
+    // Consume all bytes from clientByteQueue (from ServiceRunner)
     while (clientByteQueue->try_pop(receivedByte)) {
       loop_duration();
       last_comms = millis();
 
-      // Evaulate request state
+      // Evaluate request state and handle telegram completion
       if (activeClient && busRequested) {
         std::string result =
-            " 0x" + ebus::to_string(receivedByte) +
+            "0x" + ebus::to_string(receivedByte) + " " +
             std::string(ebus::getRequestResultText(ebus::request->getResult()));
         mqtt.publish("clientRunner", 0, false, result.c_str());
-        switch (ebus::request->getResult()) {
-          case ebus::RequestResult::observeSyn:
-          case ebus::RequestResult::firstLost:
-          case ebus::RequestResult::firstError:
-          case ebus::RequestResult::retryError:
-          case ebus::RequestResult::secondLost:
-          case ebus::RequestResult::secondError:
-            activeClient = nullptr;
-            availableForNextByte = false;
-            busRequested = false;
-            break;
-          case ebus::RequestResult::observeData:
-          case ebus::RequestResult::firstSyn:
-          case ebus::RequestResult::firstRetry:
-          case ebus::RequestResult::retrySyn:
-          case ebus::RequestResult::firstWon:
-          case ebus::RequestResult::secondWon:
-            pushClient(activeClient, receivedByte);
-            availableForNextByte = true;
-            break;
-          default:
-            break;
+        if (enhancedClient) {
+          switch (ebus::request->getResult()) {
+            case ebus::RequestResult::observeSyn:
+            case ebus::RequestResult::firstLost:
+            case ebus::RequestResult::secondLost:
+              // send only to the arbitrating client
+              // push({true, FAILED, _busState._master, _client, _client});
+              commandByte = 0xa;  // FAILED
+              pushClientEnhanced(activeClient, commandByte, receivedByte,
+                                 false);
+
+              activeClient = nullptr;
+              enhancedClient = false;
+              availableForNextByte = false;
+              busRequested = false;
+              ebus::request->reset();
+              break;
+            case ebus::RequestResult::firstError:
+            case ebus::RequestResult::retryError:
+            case ebus::RequestResult::secondError:
+              // send only to the arbitrating client
+              // push({true, ERROR_EBUS, ERR_FRAMING, _client, _client});
+              commandByte = 0xb;   // ERROR_EBUS
+              receivedByte = 0x0;  // ERR_FRAMING
+              pushClientEnhanced(activeClient, commandByte, receivedByte,
+                                 false);
+
+              activeClient = nullptr;
+              enhancedClient = false;
+              availableForNextByte = false;
+              busRequested = false;
+              ebus::request->reset();
+              break;
+            case ebus::RequestResult::observeData:
+              commandByte = 0x1;  // RECEIVED
+              pushClientEnhanced(activeClient, commandByte, receivedByte,
+                                 false);
+              availableForNextByte = true;
+              break;
+            case ebus::RequestResult::firstSyn:
+            case ebus::RequestResult::firstRetry:
+            case ebus::RequestResult::retrySyn:
+              // Waiting for arbitration, do nothing
+              break;
+            case ebus::RequestResult::firstWon:
+            case ebus::RequestResult::secondWon:
+              // send only to the arbitrating client
+              // push({true, STARTED, _busState._master, _client, _client});
+              commandByte = 0x2;  // STARTED
+              pushClientEnhanced(activeClient, commandByte, receivedByte,
+                                 false);
+              availableForNextByte = true;
+              break;
+            default:
+              break;
+          }
+        } else {
+          switch (ebus::request->getResult()) {
+            case ebus::RequestResult::observeSyn:
+            case ebus::RequestResult::firstLost:
+            case ebus::RequestResult::firstError:
+            case ebus::RequestResult::retryError:
+            case ebus::RequestResult::secondLost:
+            case ebus::RequestResult::secondError:
+              activeClient = nullptr;
+              enhancedClient = false;
+              availableForNextByte = false;
+              busRequested = false;
+              ebus::request->reset();
+              break;
+            case ebus::RequestResult::observeData:
+            case ebus::RequestResult::firstSyn:
+            case ebus::RequestResult::firstRetry:
+            case ebus::RequestResult::retrySyn:
+            case ebus::RequestResult::firstWon:
+            case ebus::RequestResult::secondWon:
+              pushClient(activeClient, receivedByte);
+              availableForNextByte = true;
+              break;
+            default:
+              break;
+          }
         }
       }
 
-      // Push received bytes to all clients
+      commandByte = 0x1;  // RECEIVED
+
+      // Push received bytes to all clients except sender
       for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+        if (activeClient != &wifiClientsEnhanced[i])
+          pushClientEnhanced(&wifiClientsEnhanced[i], commandByte, receivedByte,
+                             false);
+
         if (activeClient != &wifiClients[i])
           pushClient(&wifiClients[i], receivedByte);
+
         pushClient(&wifiClientsReadOnly[i], receivedByte);
       }
     }
@@ -816,9 +908,7 @@ void setup() {
   mqtt.setHASupport(haSupportParam.isChecked());
 
   wifiServer.begin();
-#if !defined(EBUS_INTERNAL)
   wifiServerEnhanced.begin();
-#endif
   wifiServerReadOnly.begin();
   statusServer.begin();
 
@@ -925,8 +1015,6 @@ void loop() {
 
   // Check if there are any new clients on the eBUS servers
   handleNewClient(&wifiServer, wifiClients);
-#if !defined(EBUS_INTERNAL)
   handleNewClient(&wifiServerEnhanced, wifiClientsEnhanced);
-#endif
   handleNewClient(&wifiServerReadOnly, wifiClientsReadOnly);
 }
