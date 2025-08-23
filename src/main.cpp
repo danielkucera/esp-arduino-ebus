@@ -446,8 +446,6 @@ void clientRunner(void* arg) {
             case ebus::RequestResult::observeSyn:
             case ebus::RequestResult::firstLost:
             case ebus::RequestResult::secondLost:
-              // send only to the arbitrating client
-              // push({true, FAILED, _busState._master, _client, _client});
               commandByte = 0xa;  // FAILED
               pushClientEnhanced(activeClient, commandByte, receivedByte,
                                  false);
@@ -461,8 +459,6 @@ void clientRunner(void* arg) {
             case ebus::RequestResult::firstError:
             case ebus::RequestResult::retryError:
             case ebus::RequestResult::secondError:
-              // send only to the arbitrating client
-              // push({true, ERROR_EBUS, ERR_FRAMING, _client, _client});
               commandByte = 0xb;   // ERROR_EBUS
               receivedByte = 0x0;  // ERR_FRAMING
               pushClientEnhanced(activeClient, commandByte, receivedByte,
@@ -487,8 +483,6 @@ void clientRunner(void* arg) {
               break;
             case ebus::RequestResult::firstWon:
             case ebus::RequestResult::secondWon:
-              // send only to the arbitrating client
-              // push({true, STARTED, _busState._master, _client, _client});
               commandByte = 0x2;  // STARTED
               pushClientEnhanced(activeClient, commandByte, receivedByte,
                                  false);
