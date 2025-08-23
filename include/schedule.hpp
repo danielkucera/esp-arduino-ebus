@@ -105,7 +105,7 @@ class Schedule {
 
   ebus::Queue<CallbackEvent *> eventQueue{8};
 
-  TaskHandle_t scheduleTask;
+  TaskHandle_t scheduleTaskHandle;
 
   void nextCommand();
 

@@ -175,15 +175,15 @@ void Schedule::setup(ebus::Request *request, ebus::Handler *handler) {
     // Start the scheduleRunner task
     xTaskCreate(
         [](void *arg) {
-          auto *sched = static_cast<Schedule *>(arg);
+          auto *schedule = static_cast<Schedule *>(arg);
           for (;;) {
             if (runnerShouldStop) vTaskDelete(NULL);
-            sched->handleEvents();
-            sched->nextCommand();
+            schedule->handleEvents();
+            schedule->nextCommand();
             vTaskDelay(pdMS_TO_TICKS(10));  // adjust delay as needed
           }
         },
-        "scheduleRunner", 4096, this, 2, &scheduleTask);
+        "scheduleRunner", 4096, this, 2, &scheduleTaskHandle);
   }
 }
 
