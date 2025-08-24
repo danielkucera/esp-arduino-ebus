@@ -34,7 +34,6 @@ class Schedule {
 
   void setup(ebus::Request *request, ebus::Handler *handler);
 
-  void setAddress(const uint8_t source);
   void setDistance(const uint8_t distance);
 
   static void stopRunner();
