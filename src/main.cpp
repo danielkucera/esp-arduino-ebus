@@ -919,7 +919,7 @@ void setup() {
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
   schedule.setDistance(atoi(command_distance));
-  schedule.setup(ebus::request, ebus::handler);
+  schedule.start(ebus::request, ebus::handler);
 
   ebus::request->setExternalBusRequestedCallback([]() { busRequested = true; });
 
@@ -939,7 +939,7 @@ void setup() {
 
   ArduinoOTA.onStart([]() {
     ebus::serviceRunner->stop();
-    schedule.stopRunner();
+    schedule.stop();
     vTaskDelete(clientTaskHandle);
   });
 

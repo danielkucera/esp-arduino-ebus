@@ -32,11 +32,11 @@ class Schedule {
  public:
   Schedule() = default;
 
-  void setup(ebus::Request *request, ebus::Handler *handler);
+  void start(ebus::Request *request, ebus::Handler *handler);
+
+  static void stop();
 
   void setDistance(const uint8_t distance);
-
-  static void stopRunner();
 
   void handleScanFull();
   void handleScan();
@@ -105,6 +105,8 @@ class Schedule {
   ebus::Queue<CallbackEvent *> eventQueue{8};
 
   TaskHandle_t scheduleTaskHandle;
+
+  static void taskFunc(void *arg);
 
   void nextCommand();
 

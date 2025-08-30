@@ -15,7 +15,7 @@ const std::vector<uint8_t> SCAN_b5090125 = {0xb5, 0x09, 0x01, 0x25};
 const std::vector<uint8_t> SCAN_b5090126 = {0xb5, 0x09, 0x01, 0x26};
 const std::vector<uint8_t> SCAN_b5090127 = {0xb5, 0x09, 0x01, 0x27};
 
-volatile bool runnerShouldStop = false;
+volatile bool stopRunner = false;
 
 // ebus/<unique_id>/state/addresses
 std::map<uint8_t, uint32_t> seenMasters;
@@ -140,7 +140,7 @@ TRACK_TIMING(releaseBus, "handlerState/releaseBus");
 
 Schedule schedule;
 
-void Schedule::setup(ebus::Request *request, ebus::Handler *handler) {
+void Schedule::start(ebus::Request *request, ebus::Handler *handler) {
   ebusRequest = request;
   ebusHandler = handler;
   if (ebusRequest && ebusHandler) {
@@ -151,7 +151,7 @@ void Schedule::setup(ebus::Request *request, ebus::Handler *handler) {
                const ebus::TelegramType &telegramType,
                const std::vector<uint8_t> &master,
                const std::vector<uint8_t> &slave) {
-          auto *event = new CallbackEvent();
+          CallbackEvent *event = new CallbackEvent();
           event->type = CallbackType::telegram;
           event->mode = mode;
           event->data.messageType = messageType;
@@ -164,7 +164,7 @@ void Schedule::setup(ebus::Request *request, ebus::Handler *handler) {
     ebusHandler->setErrorCallback([this](const std::string &error,
                                          const std::vector<uint8_t> &master,
                                          const std::vector<uint8_t> &slave) {
-      auto *event = new CallbackEvent();
+      CallbackEvent *event = new CallbackEvent();
       event->type = CallbackType::error;
       event->data.error = error;
       event->data.master = master;
@@ -173,25 +173,16 @@ void Schedule::setup(ebus::Request *request, ebus::Handler *handler) {
     });
 
     // Start the scheduleRunner task
-    xTaskCreate(
-        [](void *arg) {
-          auto *schedule = static_cast<Schedule *>(arg);
-          for (;;) {
-            if (runnerShouldStop) vTaskDelete(NULL);
-            schedule->handleEvents();
-            schedule->nextCommand();
-            vTaskDelay(pdMS_TO_TICKS(10));  // adjust delay as needed
-          }
-        },
-        "scheduleRunner", 4096, this, 2, &scheduleTaskHandle);
+    xTaskCreate(&Schedule::taskFunc, "scheduleRunner", 4096, this, 2,
+                &scheduleTaskHandle);
   }
 }
+
+void Schedule::stop() { stopRunner = true; }
 
 void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
 }
-
-void Schedule::stopRunner() { runnerShouldStop = true; }
 
 void Schedule::handleScanFull() {
   scanCommands.clear();
@@ -660,6 +651,16 @@ const std::vector<Participant *> Schedule::getParticipants() {
   for (std::pair<const uint8_t, Participant> &participant : allParticipants)
     participants.push_back(&(participant.second));
   return participants;
+}
+
+void Schedule::taskFunc(void *arg) {
+  Schedule *self = static_cast<Schedule *>(arg);
+  for (;;) {
+    if (stopRunner) vTaskDelete(NULL);
+    self->handleEvents();
+    self->nextCommand();
+    vTaskDelay(pdMS_TO_TICKS(10));  // adjust delay as needed
+  }
 }
 
 void Schedule::nextCommand() {
