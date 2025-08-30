@@ -177,6 +177,7 @@ IPAddress ipAddress;
 IPAddress gateway;
 IPAddress netmask;
 
+#if !defined(EBUS_INTERNAL)
 WiFiServer wifiServer(3333);
 WiFiClient wifiClients[MAX_WIFI_CLIENTS];
 
@@ -185,10 +186,11 @@ WiFiClient wifiClientsEnhanced[MAX_WIFI_CLIENTS];
 
 WiFiServer wifiServerReadOnly(3334);
 WiFiClient wifiClientsReadOnly[MAX_WIFI_CLIENTS];
+#endif
 
 WiFiServer statusServer(5555);
 
-uint32_t last_comms = 0;
+volatile uint32_t last_comms = 0;
 
 bool needMqttConnect = false;
 uint32_t lastMqttConnectionAttempt = 0;
@@ -304,6 +306,8 @@ void check_reset() {
   }
 }
 
+void updateLastComms() { last_comms = millis(); }
+
 void loop_duration() {
   static uint32_t lastTime = 0;
   uint32_t now = micros();
@@ -363,6 +367,7 @@ void data_loop(void* pvParameters) {
   }
 }
 #else
+/*
 void clientRunner(void* arg) {
   WiFiClient* activeClient = nullptr;
   bool enhancedClient = false;
@@ -538,6 +543,7 @@ void clientRunner(void* arg) {
     vTaskDelay(pdMS_TO_TICKS(1));  // Short delay to yield CPU
   }
 }
+  */
 #endif
 
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
@@ -901,9 +907,12 @@ void setup() {
 
   mqtt.setHASupport(haSupportParam.isChecked());
 
+#if !defined(EBUS_INTERNAL)
   wifiServer.begin();
   wifiServerEnhanced.begin();
   wifiServerReadOnly.begin();
+#endif
+
   statusServer.begin();
 
   ArduinoOTA.begin();
@@ -935,12 +944,16 @@ void setup() {
     clientByteQueue->try_push(byte);
   });
 
-  xTaskCreate(clientRunner, "clientRunner", 4096, NULL, 2, &clientTaskHandle);
+  clientManager.start(clientByteQueue);
+
+  // xTaskCreate(clientRunner, "clientRunner", 4096, NULL, 2,
+  // &clientTaskHandle);
 
   ArduinoOTA.onStart([]() {
     ebus::serviceRunner->stop();
     schedule.stop();
-    vTaskDelete(clientTaskHandle);
+    // vTaskDelete(clientTaskHandle);
+    clientManager.stop();
   });
 
   store.loadCommands();  // install saved commands
@@ -1007,8 +1020,10 @@ void loop() {
 #endif
   }
 
+#if !defined(EBUS_INTERNAL)
   // Check if there are any new clients on the eBUS servers
   handleNewClient(&wifiServer, wifiClients);
   handleNewClient(&wifiServerEnhanced, wifiClientsEnhanced);
   handleNewClient(&wifiServerReadOnly, wifiClientsReadOnly);
+#endif
 }

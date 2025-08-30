@@ -211,3 +211,243 @@ int pushClientEnhanced(WiFiClient* client, uint8_t c, uint8_t d, bool log) {
   }
   return 0;
 }
+
+#if defined(EBUS_INTERNAL)
+#include <algorithm>
+
+volatile bool stopClientManagerRunner = false;
+
+AbstractClient::AbstractClient(WiFiClient* client, bool write)
+    : client(client), write(write) {}
+
+bool AbstractClient::isWriteCapable() const { return write; }
+
+bool AbstractClient::isConnected() const {
+  return client && client->connected();
+}
+
+void AbstractClient::stop() {
+  if (client) client->stop();
+}
+
+RegularClient::RegularClient(WiFiClient* client)
+    : AbstractClient(client, true) {}
+
+bool RegularClient::available() const { return client && client->available(); }
+
+bool RegularClient::readByte(uint8_t& byte) {
+  if (available()) {
+    byte = client->read();
+    return true;
+  }
+  return false;
+}
+
+bool RegularClient::writeBytes(const std::vector<uint8_t>& bytes) {
+  if (isConnected()) {
+    for (size_t i = 0; i < bytes.size(); ++i) client->write(bytes[i]);
+    return true;
+  }
+  return false;
+}
+
+ReadOnlyClient::ReadOnlyClient(WiFiClient* client)
+    : AbstractClient(client, false) {}
+
+bool ReadOnlyClient::available() const { return false; }
+
+bool ReadOnlyClient::readByte(uint8_t&) { return false; }
+
+bool ReadOnlyClient::writeBytes(const std::vector<uint8_t>& bytes) {
+  if (isConnected()) {
+    client->write(&bytes[0], bytes.size());
+    return true;
+  }
+  return false;
+}
+
+EnhancedClient::EnhancedClient(WiFiClient* client)
+    : AbstractClient(client, true) {}
+
+bool EnhancedClient::available() const { return client && client->available(); }
+
+bool EnhancedClient::readByte(uint8_t& byte) {
+  if (!available()) return false;
+  int b1 = client->peek();
+  if (b1 < 0) return false;
+
+  if (b1 < 0x80) {
+    // Short form: just a data byte, no prefix
+    byte = client->read();
+    return true;
+  }
+
+  // Full enhanced protocol: need two bytes
+  if (client->available() < 2) return false;
+  b1 = client->read();
+  int b2 = client->read();
+
+  // Check signatures
+  if ((b1 & 0xC0) != 0xC0 || (b2 & 0xC0) != 0x80) {
+    // Invalid signature, protocol error
+    return false;
+  }
+
+  // Decode command and data according to enhanced protocol
+  uint8_t cmd = (b1 >> 2) & 0x0F;
+  uint8_t data = ((b1 & 0x03) << 6) | (b2 & 0x3F);
+
+  // For <SEND> requests, just return the data byte
+  if (cmd == 1) {  // CMD_SEND
+    byte = data;
+    return true;
+  }
+  // You can handle other commands (INIT, START, INFO, etc.) here if needed
+
+  return false;
+}
+
+bool EnhancedClient::writeBytes(const std::vector<uint8_t>& bytes) {
+  if (!isConnected()) return false;
+  for (size_t i = 0; i < bytes.size(); ++i) {
+    uint8_t data = bytes[i];
+    if (data < 0x80) {
+      // Short form: just the data byte
+      client->write(data);
+    } else {
+      // Full form: <RECEIVED> prefix
+      uint8_t cmd =
+          1;  // <RECEIVED> is CMD_RECEIVED (use correct value if different)
+      uint8_t out[2];
+      out[0] = 0xC0 | (cmd << 2) | (data >> 6);
+      out[1] = 0x80 | (data & 0x3F);
+      client->write(out, 2);
+    }
+  }
+  return true;
+}
+
+ClientManager clientManager;
+
+ClientManager::ClientManager()
+    : regularServer(3333), readonlyServer(3334), enhancedServer(3335) {}
+
+void ClientManager::start(ebus::Queue<uint8_t>* clientByteQueue) {
+  regularServer.begin();
+  readonlyServer.begin();
+  enhancedServer.begin();
+
+  this->clientByteQueue = clientByteQueue;
+
+  // Start the clientManagerRunner task
+  xTaskCreate(&ClientManager::taskFunc, "clientManagerRunner", 4096, this, 3,
+              &clientManagerTaskHandle);
+}
+
+void ClientManager::stop() { stopClientManagerRunner = true; }
+
+void ClientManager::taskFunc(void* arg) {
+  ClientManager* self = static_cast<ClientManager*>(arg);
+  for (;;) {
+    if (stopClientManagerRunner) vTaskDelete(NULL);
+
+    self->acceptClients();
+    self->processClients();
+    self->processBusData();
+
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+}
+
+void ClientManager::acceptClients() {
+  // Accept regular clients
+  while (regularServer.hasClient()) {
+    WiFiClient* c = new WiFiClient(regularServer.accept());
+    c->setNoDelay(true);
+    clients.push_back(make_unique<RegularClient>(c));
+  }
+  // Accept read-only clients
+  while (readonlyServer.hasClient()) {
+    WiFiClient* c = new WiFiClient(readonlyServer.accept());
+    c->setNoDelay(true);
+    clients.push_back(make_unique<ReadOnlyClient>(c));
+  }
+  // Accept enhanced clients
+  while (enhancedServer.hasClient()) {
+    WiFiClient* c = new WiFiClient(enhancedServer.accept());
+    c->setNoDelay(true);
+    clients.push_back(make_unique<EnhancedClient>(c));
+  }
+
+  // Clean up disconnected clients
+  clients.erase(
+      std::remove_if(clients.begin(), clients.end(),
+                     [](const std::unique_ptr<AbstractClient>& client) {
+                       return !client->isConnected();
+                     }),
+      clients.end());
+}
+
+void ClientManager::processClients() {
+  for (size_t i = 0; i < clients.size(); ++i) {
+    const AbstractClient* client = clients[i].get();
+    if (!client->isConnected() || !client->isWriteCapable()) continue;
+
+    // std::vector<uint8_t> masterBytes;
+    // uint8_t byte;
+    // // Collect bytes until we have a valid master telegram
+    // while (client->readByte(byte)) {
+    //   masterBytes.push_back(byte);
+    //   if (masterBytes.size() >= 5) {  // Minimum telegram size
+    //     // Try to parse telegram
+    //     ebus::Telegram telegram;
+    //     telegram.createMaster(masterBytes[0], masterBytes);  // QQ = src
+    //     if (telegram.getMasterState() == ebus::SequenceState::seq_ok) {
+    //       // Forward CRC and ACK to client
+    //       std::vector<uint8_t> crcAck;
+    //       crcAck.push_back(telegram.getMasterCRC());
+    //       crcAck.push_back(telegram.getMasterACK());
+    //       client->writeBytes(crcAck);
+
+    //       // Request bus and send master part
+    //       handler->enqueueActiveMessage(masterBytes);
+    //       // Handler will handle bus arbitration and sending
+
+    //       // Wait for slave part (simulate: poll handler for slave
+    //       telegram) while (handler->getState() !=
+    //       ebus::HandlerState::releaseBus) {
+    //         // Optionally: add timeout
+    //       }
+    //       auto slaveSeq = handler->activeTelegram.getSlave();
+    //       std::vector<uint8_t> slaveBytes = slaveSeq.to_vector();
+    //       // Forward slave part, CRC, and ACK to client
+    //       if (!slaveBytes.empty()) {
+    //         client->writeBytes(slaveBytes);
+    //         std::vector<uint8_t> slaveCrcAck;
+    //         slaveCrcAck.push_back(handler->activeTelegram.getSlaveCRC());
+    //         slaveCrcAck.push_back(handler->activeTelegram.getSlaveACK());
+    //         client->writeBytes(slaveCrcAck);
+    //       }
+    //       break;  // Done with this telegram
+    //     }
+    //   }
+    // }
+  }
+}
+
+void ClientManager::processBusData() {
+  uint8_t busByte;
+  while (clientByteQueue->try_pop(busByte)) {
+    std::vector<uint8_t> busData{busByte};
+    // Forward to all clients (including read-only)
+    for (size_t i = 0; i < clients.size(); ++i) {
+      AbstractClient* client = clients[i].get();
+      if (client->isConnected()) {
+        client->writeBytes(busData);
+      }
+    }
+  }
+  updateLastComms();
+}
+
+#endif

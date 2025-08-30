@@ -15,7 +15,7 @@ const std::vector<uint8_t> SCAN_b5090125 = {0xb5, 0x09, 0x01, 0x25};
 const std::vector<uint8_t> SCAN_b5090126 = {0xb5, 0x09, 0x01, 0x26};
 const std::vector<uint8_t> SCAN_b5090127 = {0xb5, 0x09, 0x01, 0x27};
 
-volatile bool stopRunner = false;
+volatile bool stopScheduleRunner = false;
 
 // ebus/<unique_id>/state/addresses
 std::map<uint8_t, uint32_t> seenMasters;
@@ -178,7 +178,7 @@ void Schedule::start(ebus::Request *request, ebus::Handler *handler) {
   }
 }
 
-void Schedule::stop() { stopRunner = true; }
+void Schedule::stop() { stopScheduleRunner = true; }
 
 void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
@@ -656,7 +656,7 @@ const std::vector<Participant *> Schedule::getParticipants() {
 void Schedule::taskFunc(void *arg) {
   Schedule *self = static_cast<Schedule *>(arg);
   for (;;) {
-    if (stopRunner) vTaskDelete(NULL);
+    if (stopScheduleRunner) vTaskDelete(NULL);
     self->handleEvents();
     self->nextCommand();
     vTaskDelay(pdMS_TO_TICKS(10));  // adjust delay as needed

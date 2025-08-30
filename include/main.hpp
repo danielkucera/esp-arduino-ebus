@@ -31,3 +31,4 @@ int DEBUG_LOG_IMPL(const char *format, ...);
 char *status_string();
 void restart();
 const std::string getStatusJson();
+void updateLastComms();
