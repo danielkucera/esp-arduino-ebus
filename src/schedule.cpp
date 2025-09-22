@@ -15,8 +15,6 @@ const std::vector<uint8_t> SCAN_b5090125 = {0xb5, 0x09, 0x01, 0x25};
 const std::vector<uint8_t> SCAN_b5090126 = {0xb5, 0x09, 0x01, 0x26};
 const std::vector<uint8_t> SCAN_b5090127 = {0xb5, 0x09, 0x01, 0x27};
 
-volatile bool stopScheduleRunner = false;
-
 // ebus/<unique_id>/state/addresses
 std::map<uint8_t, uint32_t> seenMasters;
 std::map<uint8_t, uint32_t> seenSlaves;
@@ -178,7 +176,7 @@ void Schedule::start(ebus::Request *request, ebus::Handler *handler) {
   }
 }
 
-void Schedule::stop() { stopScheduleRunner = true; }
+void Schedule::stop() { stopRunner = true; }
 
 void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
@@ -606,8 +604,7 @@ JsonDocument Schedule::getParticipantJson(const Participant *participant) {
   doc["address"] = ebus::to_string(participant->slave);
   doc["manufacturer"] =
       ebus::to_string(ebus::range(participant->scan070400, 1, 1));
-  doc["unitid"] =
-      ebus::byte_2_string(ebus::range(participant->scan070400, 2, 5));
+  doc["unitid"] = ebus::byte_2_char(ebus::range(participant->scan070400, 2, 5));
   doc["software"] = ebus::to_string(ebus::range(participant->scan070400, 7, 2));
   doc["hardware"] = ebus::to_string(ebus::range(participant->scan070400, 9, 2));
 
@@ -616,10 +613,10 @@ JsonDocument Schedule::getParticipantJson(const Participant *participant) {
       participant->scanb5090126.size() > 0 &&
       participant->scanb5090127.size() > 0) {
     std::string serial =
-        ebus::byte_2_string(ebus::range(participant->scanb5090124, 2, 8));
-    serial += ebus::byte_2_string(ebus::range(participant->scanb5090125, 1, 9));
-    serial += ebus::byte_2_string(ebus::range(participant->scanb5090126, 1, 9));
-    serial += ebus::byte_2_string(ebus::range(participant->scanb5090127, 1, 2));
+        ebus::byte_2_char(ebus::range(participant->scanb5090124, 2, 8));
+    serial += ebus::byte_2_char(ebus::range(participant->scanb5090125, 1, 9));
+    serial += ebus::byte_2_char(ebus::range(participant->scanb5090126, 1, 9));
+    serial += ebus::byte_2_char(ebus::range(participant->scanb5090127, 1, 2));
 
     doc["serial"] = serial;
     doc["article"] = serial.substr(6, 10);
@@ -656,7 +653,7 @@ const std::vector<Participant *> Schedule::getParticipants() {
 void Schedule::taskFunc(void *arg) {
   Schedule *self = static_cast<Schedule *>(arg);
   for (;;) {
-    if (stopScheduleRunner) vTaskDelete(NULL);
+    if (self->stopRunner) vTaskDelete(NULL);
     self->handleEvents();
     self->nextCommand();
     vTaskDelay(pdMS_TO_TICKS(10));  // adjust delay as needed

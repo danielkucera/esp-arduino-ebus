@@ -34,7 +34,7 @@ class Schedule {
 
   void start(ebus::Request *request, ebus::Handler *handler);
 
-  static void stop();
+  void stop();
 
   void setDistance(const uint8_t distance);
 
@@ -65,6 +65,8 @@ class Schedule {
  private:
   ebus::Request *ebusRequest = nullptr;
   ebus::Handler *ebusHandler = nullptr;
+
+  volatile bool stopRunner = false;
 
   Command *scheduleCommand = nullptr;
 
