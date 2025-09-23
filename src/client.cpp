@@ -1,6 +1,5 @@
 #include "client.hpp"
 
-#include <Ebus.h>
 #include <WiFiClient.h>
 
 #include "bus.hpp"
