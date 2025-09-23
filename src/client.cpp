@@ -361,12 +361,12 @@ bool EnhancedClient::handleBusData(const uint8_t& byte) {
 ClientManager clientManager;
 
 ClientManager::ClientManager()
-    : regularServer(3333), readonlyServer(3334), enhancedServer(3335) {}
+    : readonlyServer(3334), regularServer(3333), enhancedServer(3335) {}
 
 void ClientManager::start(ebus::Bus* bus, ebus::Request* request,
                           ebus::ServiceRunnerFreeRtos* serviceRunner) {
-  regularServer.begin();
   readonlyServer.begin();
+  regularServer.begin();
   enhancedServer.begin();
 
   this->request = request;

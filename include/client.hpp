@@ -93,8 +93,8 @@ class ClientManager {
   volatile bool stopRunner = false;
   volatile bool busRequested = false;
 
-  ebus::Request* request;
-  ebus::ServiceRunnerFreeRtos* serviceRunner;
+  ebus::Request* request = nullptr;
+  ebus::ServiceRunnerFreeRtos* serviceRunner = nullptr;
 
   std::vector<std::unique_ptr<AbstractClient>> clients;
 
