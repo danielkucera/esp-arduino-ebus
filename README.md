@@ -334,9 +334,9 @@ struct Command {
 };
 ```
 
-Available ebus data tyeps: 
-- numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (values as 1/1000)
-- character: CHAR1, CHAR2, CHAR3, CHAR4, CHAR5, CHAR6, CHAR7, CHAR8
+Available ebus data types: 
+- numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (IEEE 754)
+- character: CHAR1 - CHAR8, HEX1 - HEX8
 
 ### MQTT interface with `EBUS_INTERNAL`
 
