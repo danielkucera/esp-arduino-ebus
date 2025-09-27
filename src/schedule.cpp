@@ -648,8 +648,13 @@ JsonDocument Schedule::getParticipantJson(const Participant *participant) {
     serial += ebus::byte_2_char(ebus::range(participant->scanb5090126, 1, 9));
     serial += ebus::byte_2_char(ebus::range(participant->scanb5090127, 1, 2));
 
-    doc["serial"] = serial;
-    doc["article"] = serial.substr(6, 10);
+    doc["prefix"] = serial.substr(0, 2);
+    doc["year"] = serial.substr(2, 2);
+    doc["week"] = serial.substr(4, 2);
+    doc["product"] = serial.substr(6, 10);
+    doc["supplier"] = serial.substr(16, 4);
+    doc["counter"] = serial.substr(20, 6);
+    doc["suffix"] = serial.substr(26, 2);
   }
 
   doc.shrinkToFit();
