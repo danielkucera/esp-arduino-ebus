@@ -556,7 +556,7 @@ payload:
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","enable":true,"filters":["0700","fe"]}'
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":false}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","enable":false}'
 ```
 
 **Resetting counter and timing values**
