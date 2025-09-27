@@ -400,12 +400,11 @@ The provided examples were created using `Mosquitto` in a `Linux shell`. The `se
 ```
 payload:
 {
-  "id": "restart",
-  "value": true
+  "id": "restart"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart","value":true}' 
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart"}' 
 ```
 
 **Inserting (Installing) of new commands**
@@ -458,48 +457,44 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01"
 ```
 payload:
 {
-  "id": "publish",
-  "value": true
+  "id": "publish"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"publish","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"publish"}'
 ```
 
 **Loading (Installing) saved commands**
 ```
 payload:
 {
-  "id": "load",
-  "value": true
+  "id": "load"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"load","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"load"}'
 ```
 
 **Saving the currently installed commands**
 ```
 payload:
 {
-  "id": "save",
-  "value": true
+  "id": "save"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"save","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"save"}'
 ```
 
 **Wiping of the saved commands**
 ```
 payload:
 {
-  "id": "wipe",
-  "value": true
+  "id": "wipe"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe"}'
 ```
 
 **Scanning of ebus participants**
@@ -507,27 +502,27 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe","value":true}'
 payload:
 {
   "id": "scan",
-  "full": false
-  "addresses": [
+  "full": false,                         // optional
+  "vendor": false,                       // optional
+  "addresses": [                         // optional
     "ZZ",
     ...
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"scan","full":false,"addresses":["05","15"]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"scan","full":false,"vendor":false,"addresses":["05","15"]}'
 ```
 
 **Publishing scanned ebus participants**
 ```
 payload:
 {
-  "id": "participants",
-  "value": true
+  "id": "participants"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"participants","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"participants"}'
 ```
 
 **Sending ebus commands once**
@@ -550,15 +545,15 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"send","commands":["0
 payload:
 {
   "id": "forward",
-  "value": true,
-  "filters": [
+  "enable": true,
+  "filters": [                           // optional
     "DB(x)",
     ...
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":true,"filters":["0700","fe"]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","enable":true,"filters":["0700","fe"]}'
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":false}'
@@ -568,10 +563,9 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":fal
 ```
 payload:
 {
-  "id": "reset",
-  "value": true
+  "id": "reset"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"reset","value":true}' 
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"reset"}' 
 ```

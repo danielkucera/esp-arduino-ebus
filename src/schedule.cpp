@@ -6,8 +6,6 @@
 #include "mqtt.hpp"
 #include "track.hpp"
 
-constexpr uint8_t SCAN_VENDOR_VAILLANT = 0xb5;
-
 const std::vector<uint8_t> SCAN_070400 = {0x07, 0x04, 0x00};
 const std::vector<uint8_t> SCAN_b50901 = {0xb5, 0x09, 0x01};
 const std::vector<uint8_t> SCAN_b5090124 = {0xb5, 0x09, 0x01, 0x24};
@@ -224,6 +222,41 @@ void Schedule::handleScanAddresses(const JsonArray &addresses) {
     command = {slave};
     command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());
     scanCommands.push_back(command);
+  }
+}
+
+void Schedule::handleScanVendor() {
+  for (const std::pair<uint8_t, Participant> &participant : allParticipants) {
+    if (participant.second.isVaillant()) {
+      if (participant.second.scanb5090124.size() == 0) {
+        std::vector<uint8_t> command;
+        command = {participant.first};
+        command.insert(command.end(), SCAN_b5090124.begin(),
+                       SCAN_b5090124.end());
+        scanCommands.push_back(command);
+      }
+      if (participant.second.scanb5090125.size() == 0) {
+        std::vector<uint8_t> command;
+        command = {participant.first};
+        command.insert(command.end(), SCAN_b5090125.begin(),
+                       SCAN_b5090125.end());
+        scanCommands.push_back(command);
+      }
+      if (participant.second.scanb5090126.size() == 0) {
+        std::vector<uint8_t> command;
+        command = {participant.first};
+        command.insert(command.end(), SCAN_b5090126.begin(),
+                       SCAN_b5090126.end());
+        scanCommands.push_back(command);
+      }
+      if (participant.second.scanb5090127.size() == 0) {
+        std::vector<uint8_t> command;
+        command = {participant.first};
+        command.insert(command.end(), SCAN_b5090127.begin(),
+                       SCAN_b5090127.end());
+        scanCommands.push_back(command);
+      }
+    }
   }
 }
 
@@ -608,10 +641,7 @@ JsonDocument Schedule::getParticipantJson(const Participant *participant) {
   doc["software"] = ebus::to_string(ebus::range(participant->scan070400, 7, 2));
   doc["hardware"] = ebus::to_string(ebus::range(participant->scan070400, 9, 2));
 
-  if (participant->scanb5090124.size() > 0 &&
-      participant->scanb5090125.size() > 0 &&
-      participant->scanb5090126.size() > 0 &&
-      participant->scanb5090127.size() > 0) {
+  if (participant->isVaillant() && participant->isVaillantValid()) {
     std::string serial =
         ebus::byte_2_char(ebus::range(participant->scanb5090124, 2, 8));
     serial += ebus::byte_2_char(ebus::range(participant->scanb5090125, 1, 9));
@@ -802,16 +832,6 @@ void Schedule::processScan(const std::vector<uint8_t> &master,
   if (ebus::contains(master, SCAN_070400)) {
     allParticipants[master[1]].slave = master[1];
     allParticipants[master[1]].scan070400 = slave;
-
-    if (!fullScan && slave[1] == SCAN_VENDOR_VAILLANT) {
-      for (uint8_t pos = 0x27; pos >= 0x24; pos--) {
-        std::vector<uint8_t> command;
-        command = {master[1]};
-        command.insert(command.end(), SCAN_b50901.begin(), SCAN_b50901.end());
-        command.push_back(pos);
-        scanCommands.push_front(command);
-      }
-    }
   }
 
   if (ebus::contains(master, SCAN_b5090124))

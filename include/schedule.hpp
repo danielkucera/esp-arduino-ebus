@@ -19,6 +19,8 @@
 // along with the command as raw data. Defined messages (filter function) can be
 // forwarded. Scanning of eBUS participants is also available.
 
+constexpr uint8_t SCAN_VENDOR_VAILLANT = 0xb5;
+
 struct Participant {
   uint8_t slave;
   std::vector<uint8_t> scan070400;
@@ -26,6 +28,17 @@ struct Participant {
   std::vector<uint8_t> scanb5090125;
   std::vector<uint8_t> scanb5090126;
   std::vector<uint8_t> scanb5090127;
+
+  bool isValid() const { return scan070400.size() > 0; }
+
+  bool isVaillant() const {
+    return (scan070400.size() > 1 && scan070400[1] == SCAN_VENDOR_VAILLANT);
+  }
+
+  bool isVaillantValid() const {
+    return (scanb5090124.size() > 0 && scanb5090125.size() > 0 &&
+            scanb5090126.size() > 0 && scanb5090127.size() > 0);
+  }
 };
 
 class Schedule {
@@ -41,6 +54,7 @@ class Schedule {
   void handleScanFull();
   void handleScan();
   void handleScanAddresses(const JsonArray &addresses);
+  void handleScanVendor();
 
   void handleSend(const JsonArray &commands);
 

@@ -150,8 +150,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
   } else {
     std::string id = doc["id"].as<std::string>();
     if (id.compare("restart") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) restart();
+      restart();
     }
 #if defined(EBUS_INTERNAL)
     else if (id.compare("insert") == 0) {  // NOLINT
@@ -161,27 +160,21 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       JsonArray keys = doc["keys"].as<JsonArray>();
       if (keys != nullptr) mqtt.removeCommands(keys);
     } else if (id.compare("publish") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) mqtt.publishCommands();
+      mqtt.publishCommands();
     } else if (id.compare("load") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) {
-        loadCommands();
-        mqtt.publishHASensors(false);
-      }
+      loadCommands();
+      mqtt.publishHASensors(false);
     } else if (id.compare("save") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) saveCommands();
+      saveCommands();
     } else if (id.compare("wipe") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) wipeCommands();
+      wipeCommands();
     } else if (id.compare("scan") == 0) {
       boolean full = doc["full"].as<boolean>();
+      boolean vendor = doc["vendor"].as<boolean>();
       JsonArray addresses = doc["addresses"].as<JsonArray>();
-      mqtt.initScan(full, addresses);
+      mqtt.initScan(full, vendor, addresses);
     } else if (id.compare("participants") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) mqtt.publishParticipants();
+      mqtt.publishParticipants();
     } else if (id.compare("send") == 0) {
       JsonArray commands = doc["commands"].as<JsonArray>();
       if (commands.isNull() || commands.size() == 0)
@@ -191,14 +184,11 @@ void Mqtt::onMessage(const char *topic, const char *payload,
     } else if (id.compare("forward") == 0) {
       JsonArray filters = doc["filters"].as<JsonArray>();
       if (!filters.isNull()) schedule.handleForwadFilter(filters);
-      boolean value = doc["value"].as<boolean>();
-      schedule.toggleForward(value);
+      boolean enable = doc["enable"].as<boolean>();
+      schedule.toggleForward(enable);
     } else if (id.compare("reset") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) {
-        schedule.resetCounter();
-        schedule.resetTiming();
-      }
+      schedule.resetCounter();
+      schedule.resetTiming();
     }
 #endif
     else {  // NOLINT
@@ -314,9 +304,12 @@ void Mqtt::wipeCommands() {
     mqtt.publishResponse("wipe", "no data");
 }
 
-void Mqtt::initScan(const bool full, const JsonArray &addresses) {
+void Mqtt::initScan(const bool full, const bool vendor,
+                    const JsonArray &addresses) {
   if (full)
     schedule.handleScanFull();
+  else if (vendor)
+    schedule.handleScanVendor();
   else if (addresses.isNull() || addresses.size() == 0)
     schedule.handleScan();
   else
