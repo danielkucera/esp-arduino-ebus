@@ -825,6 +825,8 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
 
   for (Command *command : pasCommands)
     mqtt.publishValue(command, store.getValueJson(command));
+
+  processScan(master, slave);
 }
 
 void Schedule::processScan(const std::vector<uint8_t> &master,
