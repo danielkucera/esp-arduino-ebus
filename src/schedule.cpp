@@ -660,6 +660,49 @@ void Schedule::taskFunc(void *arg) {
   }
 }
 
+void Schedule::handleEvents() {
+  CallbackEvent *event = nullptr;
+  while (eventQueue.try_pop(event)) {
+    if (event) {
+      switch (event->type) {
+        case CallbackType::error:
+          if (schedule.publishCounter) {
+            std::string topic = "state/reset/last";
+            std::string payload = event->data.error + " : master '" +
+                                  ebus::to_string(event->data.master) +
+                                  "' slave '" +
+                                  ebus::to_string(event->data.slave) + "'";
+
+            mqtt.publish(topic.c_str(), 0, false, payload.c_str());
+          }
+          break;
+        case CallbackType::telegram:
+          if (!event->data.master.empty()) {
+            seenMasters[event->data.master[0]] += 1;
+            if (event->data.master.size() > 1 &&
+                ebus::isSlave(event->data.master[1]))
+              seenSlaves[event->data.master[1]] += 1;
+          }
+
+          switch (event->data.messageType) {
+            case ebus::MessageType::active:
+              schedule.processActive(event->mode,
+                                     std::vector<uint8_t>(event->data.master),
+                                     std::vector<uint8_t>(event->data.slave));
+              break;
+            case ebus::MessageType::passive:
+            case ebus::MessageType::reactive:
+              schedule.processPassive(std::vector<uint8_t>(event->data.master),
+                                      std::vector<uint8_t>(event->data.slave));
+              break;
+          }
+          break;
+      }
+      delete event;
+    }
+  }
+}
+
 void Schedule::nextCommand() {
   if (scanCommands.size() > 0 || sendCommands.size() > 0 || store.active()) {
     uint32_t currentMillis = millis();
@@ -704,49 +747,6 @@ void Schedule::nextScanCommand() {
       command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());
       scanCommands.push_back(command);
       break;
-    }
-  }
-}
-
-void Schedule::handleEvents() {
-  CallbackEvent *event = nullptr;
-  while (eventQueue.try_pop(event)) {
-    if (event) {
-      switch (event->type) {
-        case CallbackType::error:
-          if (schedule.publishCounter) {
-            std::string topic = "state/reset/last";
-            std::string payload = event->data.error + " : master '" +
-                                  ebus::to_string(event->data.master) +
-                                  "' slave '" +
-                                  ebus::to_string(event->data.slave) + "'";
-
-            mqtt.publish(topic.c_str(), 0, false, payload.c_str());
-          }
-          break;
-        case CallbackType::telegram:
-          if (!event->data.master.empty()) {
-            seenMasters[event->data.master[0]] += 1;
-            if (event->data.master.size() > 1 &&
-                ebus::isSlave(event->data.master[1]))
-              seenSlaves[event->data.master[1]] += 1;
-          }
-
-          switch (event->data.messageType) {
-            case ebus::MessageType::active:
-              schedule.processActive(event->mode,
-                                     std::vector<uint8_t>(event->data.master),
-                                     std::vector<uint8_t>(event->data.slave));
-              break;
-            case ebus::MessageType::passive:
-            case ebus::MessageType::reactive:
-              schedule.processPassive(std::vector<uint8_t>(event->data.master),
-                                      std::vector<uint8_t>(event->data.slave));
-              break;
-          }
-          break;
-      }
-      delete event;
     }
   }
 }

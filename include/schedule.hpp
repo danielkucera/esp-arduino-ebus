@@ -110,11 +110,11 @@ class Schedule {
 
   static void taskFunc(void *arg);
 
+  void handleEvents();
+
   void nextCommand();
 
   void nextScanCommand();
-
-  void handleEvents();
 
   static void reactiveMasterSlaveCallback(const std::vector<uint8_t> &master,
                                           std::vector<uint8_t> *const slave);

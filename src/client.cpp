@@ -295,7 +295,6 @@ bool EnhancedClient::readByte(uint8_t& byte) {
       byte = data;
       return true;
     case CMD_INFO:
-      // writeBytes({INFO, 0x0});
       return false;
     default:
       break;
