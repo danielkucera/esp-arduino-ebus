@@ -19,25 +19,25 @@
 // along with the command as raw data. Defined messages (filter function) can be
 // forwarded. Scanning of eBUS participants is also available.
 
-constexpr uint8_t SCAN_VENDOR_VAILLANT = 0xb5;
+constexpr uint8_t VENDOR_VAILLANT = 0xb5;
 
 struct Participant {
   uint8_t slave;
-  std::vector<uint8_t> scan070400;
-  std::vector<uint8_t> scanb5090124;
-  std::vector<uint8_t> scanb5090125;
-  std::vector<uint8_t> scanb5090126;
-  std::vector<uint8_t> scanb5090127;
+  std::vector<uint8_t> vec_070400;
+  std::vector<uint8_t> vec_b5090124;
+  std::vector<uint8_t> vec_b5090125;
+  std::vector<uint8_t> vec_b5090126;
+  std::vector<uint8_t> vec_b5090127;
 
-  bool isValid() const { return scan070400.size() > 0; }
+  bool isValid() const { return vec_070400.size() > 0; }
 
   bool isVaillant() const {
-    return (scan070400.size() > 1 && scan070400[1] == SCAN_VENDOR_VAILLANT);
+    return (vec_070400.size() > 1 && vec_070400[1] == VENDOR_VAILLANT);
   }
 
   bool isVaillantValid() const {
-    return (scanb5090124.size() > 0 && scanb5090125.size() > 0 &&
-            scanb5090126.size() > 0 && scanb5090127.size() > 0);
+    return (vec_b5090124.size() > 0 && vec_b5090125.size() > 0 &&
+            vec_b5090126.size() > 0 && vec_b5090127.size() > 0);
   }
 };
 
@@ -88,6 +88,8 @@ class Schedule {
   uint32_t lastCommand = 0;
 
   std::map<uint8_t, Participant> allParticipants;
+
+  bool sendInquiryOfExistence = true;
 
   enum class Mode { scan, send, normal };
   Mode mode = Mode::normal;

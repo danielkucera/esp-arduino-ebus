@@ -6,12 +6,18 @@
 #include "mqtt.hpp"
 #include "track.hpp"
 
-const std::vector<uint8_t> SCAN_070400 = {0x07, 0x04, 0x00};
-const std::vector<uint8_t> SCAN_b50901 = {0xb5, 0x09, 0x01};
-const std::vector<uint8_t> SCAN_b5090124 = {0xb5, 0x09, 0x01, 0x24};
-const std::vector<uint8_t> SCAN_b5090125 = {0xb5, 0x09, 0x01, 0x25};
-const std::vector<uint8_t> SCAN_b5090126 = {0xb5, 0x09, 0x01, 0x26};
-const std::vector<uint8_t> SCAN_b5090127 = {0xb5, 0x09, 0x01, 0x27};
+// Identification (Service 07h 04h)
+const std::vector<uint8_t> VEC_070400 = {0x07, 0x04, 0x00};
+
+// Vaillant identification (Service B5h 09h 01h + 24h-27h)
+const std::vector<uint8_t> VEC_b50901 = {0xb5, 0x09, 0x01};
+const std::vector<uint8_t> VEC_b5090124 = {0xb5, 0x09, 0x01, 0x24};
+const std::vector<uint8_t> VEC_b5090125 = {0xb5, 0x09, 0x01, 0x25};
+const std::vector<uint8_t> VEC_b5090126 = {0xb5, 0x09, 0x01, 0x26};
+const std::vector<uint8_t> VEC_b5090127 = {0xb5, 0x09, 0x01, 0x27};
+
+// Inquiry of Existence (Service 07h FEh)
+const std::vector<uint8_t> VEC_07fe00 = {0x07, 0xfe, 0x00};
 
 // ebus/<unique_id>/state/addresses
 std::map<uint8_t, uint32_t> seenMasters;
@@ -201,7 +207,7 @@ void Schedule::handleScan() {
   for (const uint8_t slave : slaves) {
     std::vector<uint8_t> command;
     command = {slave};
-    command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());
+    command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
     scanCommands.push_back(command);
   }
 }
@@ -220,7 +226,7 @@ void Schedule::handleScanAddresses(const JsonArray &addresses) {
   for (const uint8_t slave : slaves) {
     std::vector<uint8_t> command;
     command = {slave};
-    command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());
+    command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
     scanCommands.push_back(command);
   }
 }
@@ -228,32 +234,28 @@ void Schedule::handleScanAddresses(const JsonArray &addresses) {
 void Schedule::handleScanVendor() {
   for (const std::pair<uint8_t, Participant> &participant : allParticipants) {
     if (participant.second.isVaillant()) {
-      if (participant.second.scanb5090124.size() == 0) {
+      if (participant.second.vec_b5090124.size() == 0) {
         std::vector<uint8_t> command;
         command = {participant.first};
-        command.insert(command.end(), SCAN_b5090124.begin(),
-                       SCAN_b5090124.end());
+        command.insert(command.end(), VEC_b5090124.begin(), VEC_b5090124.end());
         scanCommands.push_back(command);
       }
-      if (participant.second.scanb5090125.size() == 0) {
+      if (participant.second.vec_b5090125.size() == 0) {
         std::vector<uint8_t> command;
         command = {participant.first};
-        command.insert(command.end(), SCAN_b5090125.begin(),
-                       SCAN_b5090125.end());
+        command.insert(command.end(), VEC_b5090125.begin(), VEC_b5090125.end());
         scanCommands.push_back(command);
       }
-      if (participant.second.scanb5090126.size() == 0) {
+      if (participant.second.vec_b5090126.size() == 0) {
         std::vector<uint8_t> command;
         command = {participant.first};
-        command.insert(command.end(), SCAN_b5090126.begin(),
-                       SCAN_b5090126.end());
+        command.insert(command.end(), VEC_b5090126.begin(), VEC_b5090126.end());
         scanCommands.push_back(command);
       }
-      if (participant.second.scanb5090127.size() == 0) {
+      if (participant.second.vec_b5090127.size() == 0) {
         std::vector<uint8_t> command;
         command = {participant.first};
-        command.insert(command.end(), SCAN_b5090127.begin(),
-                       SCAN_b5090127.end());
+        command.insert(command.end(), VEC_b5090127.begin(), VEC_b5090127.end());
         scanCommands.push_back(command);
       }
     }
@@ -636,17 +638,17 @@ JsonDocument Schedule::getParticipantJson(const Participant *participant) {
 
   doc["address"] = ebus::to_string(participant->slave);
   doc["manufacturer"] =
-      ebus::to_string(ebus::range(participant->scan070400, 1, 1));
-  doc["unitid"] = ebus::byte_2_char(ebus::range(participant->scan070400, 2, 5));
-  doc["software"] = ebus::to_string(ebus::range(participant->scan070400, 7, 2));
-  doc["hardware"] = ebus::to_string(ebus::range(participant->scan070400, 9, 2));
+      ebus::to_string(ebus::range(participant->vec_070400, 1, 1));
+  doc["unitid"] = ebus::byte_2_char(ebus::range(participant->vec_070400, 2, 5));
+  doc["software"] = ebus::to_string(ebus::range(participant->vec_070400, 7, 2));
+  doc["hardware"] = ebus::to_string(ebus::range(participant->vec_070400, 9, 2));
 
   if (participant->isVaillant() && participant->isVaillantValid()) {
     std::string serial =
-        ebus::byte_2_char(ebus::range(participant->scanb5090124, 2, 8));
-    serial += ebus::byte_2_char(ebus::range(participant->scanb5090125, 1, 9));
-    serial += ebus::byte_2_char(ebus::range(participant->scanb5090126, 1, 9));
-    serial += ebus::byte_2_char(ebus::range(participant->scanb5090127, 1, 2));
+        ebus::byte_2_char(ebus::range(participant->vec_b5090124, 2, 8));
+    serial += ebus::byte_2_char(ebus::range(participant->vec_b5090125, 1, 9));
+    serial += ebus::byte_2_char(ebus::range(participant->vec_b5090126, 1, 9));
+    serial += ebus::byte_2_char(ebus::range(participant->vec_b5090127, 1, 2));
 
     doc["prefix"] = serial.substr(0, 2);
     doc["year"] = serial.substr(2, 2);
@@ -739,6 +741,13 @@ void Schedule::handleEvents() {
 }
 
 void Schedule::nextCommand() {
+  // send Broadcast Inquiry of Existence (07h FEh) after 15s
+  // to discover all participants on the bus
+  if (sendInquiryOfExistence && millis() > 15 * 1000) {
+    sendInquiryOfExistence = false;
+    sendCommands.push_front(ebus::to_vector("fe07fe00"));
+  }
+
   if (scanCommands.size() > 0 || sendCommands.size() > 0 || store.active()) {
     uint32_t currentMillis = millis();
     if (currentMillis > lastCommand + distanceCommands) {
@@ -779,7 +788,7 @@ void Schedule::nextScanCommand() {
         scanIndex != ebusHandler->getTargetAddress()) {
       std::vector<uint8_t> command;
       command = {scanIndex};
-      command.insert(command.end(), SCAN_070400.begin(), SCAN_070400.end());
+      command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
       scanCommands.push_back(command);
       break;
     }
@@ -797,9 +806,8 @@ void Schedule::reactiveMasterSlaveCallback(const std::vector<uint8_t> &master,
   // vv...Hardware version (BCD)
   // hh...Revision (BCD)
   // Example:
-  // const std::vector<uint8_t> SEARCH_0704 = {0x07, 0x04};
-  // if (ebus::Sequence::contains(master, SEARCH_0704))
-  //   *slave = ebus::Sequence::to_vector("0ahhggggggggggssrrhhrr");
+  // if (ebus::contains(master, VEC_070400, 2))
+  //   *slave = ebus::to_vector("0ahhggggggggggssrrhhrr");
 }
 
 void Schedule::processActive(const Mode &mode,
@@ -832,22 +840,27 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
     mqtt.publishValue(command, store.getValueJson(command));
 
   processScan(master, slave);
+
+  // send Broadcast Sign of Life (Service 07h FFh)
+  // in response to an Inquiry of Existence (Service 07h FEh)
+  if (ebus::contains(master, VEC_07fe00, 2))
+    sendCommands.push_front(ebus::to_vector("fe07ff00"));
 }
 
 void Schedule::processScan(const std::vector<uint8_t> &master,
                            const std::vector<uint8_t> &slave) {
-  if (ebus::contains(master, SCAN_070400)) {
+  if (ebus::contains(master, VEC_070400, 2)) {
     allParticipants[master[1]].slave = master[1];
-    allParticipants[master[1]].scan070400 = slave;
+    allParticipants[master[1]].vec_070400 = slave;
   }
 
-  if (ebus::contains(master, SCAN_b5090124))
-    allParticipants[master[1]].scanb5090124 = slave;
-  if (ebus::contains(master, SCAN_b5090125))
-    allParticipants[master[1]].scanb5090125 = slave;
-  if (ebus::contains(master, SCAN_b5090126))
-    allParticipants[master[1]].scanb5090126 = slave;
-  if (ebus::contains(master, SCAN_b5090127))
-    allParticipants[master[1]].scanb5090127 = slave;
+  if (ebus::contains(master, VEC_b5090124, 2))
+    allParticipants[master[1]].vec_b5090124 = slave;
+  if (ebus::contains(master, VEC_b5090125, 2))
+    allParticipants[master[1]].vec_b5090125 = slave;
+  if (ebus::contains(master, VEC_b5090126, 2))
+    allParticipants[master[1]].vec_b5090126 = slave;
+  if (ebus::contains(master, VEC_b5090127, 2))
+    allParticipants[master[1]].vec_b5090127 = slave;
 }
 #endif
