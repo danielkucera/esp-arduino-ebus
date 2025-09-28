@@ -183,7 +183,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
         schedule.handleSend(commands);
     } else if (id.compare("forward") == 0) {
       JsonArray filters = doc["filters"].as<JsonArray>();
-      if (!filters.isNull()) schedule.handleForwadFilter(filters);
+      if (!filters.isNull()) schedule.handleForwardFilter(filters);
       boolean enable = doc["enable"].as<boolean>();
       schedule.toggleForward(enable);
     } else if (id.compare("reset") == 0) {

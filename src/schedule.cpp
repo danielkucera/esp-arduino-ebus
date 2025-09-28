@@ -269,7 +269,7 @@ void Schedule::handleSend(const JsonArray &commands) {
 
 void Schedule::toggleForward(const bool enable) { forward = enable; }
 
-void Schedule::handleForwadFilter(const JsonArray &filters) {
+void Schedule::handleForwardFilter(const JsonArray &filters) {
   forwardfilters.clear();
   for (JsonVariant filter : filters)
     forwardfilters.push_back(ebus::to_vector(filter));
@@ -741,28 +741,40 @@ void Schedule::handleEvents() {
 }
 
 void Schedule::nextCommand() {
-  // send Broadcast Inquiry of Existence (07h FEh) after 15s
-  // to discover all participants on the bus
-  if (sendInquiryOfExistence && millis() > 15 * 1000) {
+  uint32_t currentMillis = millis();
+
+  // enqueue Inquiry of Existence (07h FEh) at startup
+  // to discover all participants on the bus (first message after startup)
+  if (sendInquiryOfExistence) {
     sendInquiryOfExistence = false;
     sendCommands.push_front(ebus::to_vector("fe07fe00"));
   }
 
-  if (scanCommands.size() > 0 || sendCommands.size() > 0 || store.active()) {
+  // scan participants
+  if (currentScan < maxScans && currentMillis > lastScan + distanceScans) {
+    currentScan++;
+    lastScan = currentMillis;
+    distanceScans = 3 * 60 * 1000;  // repeat scan in 3 minutes
+    handleScan();
+    handleScanVendor();
+  }
+
+  // determine next command to send
+  if (sendCommands.size() > 0 || scanCommands.size() > 0 || store.active()) {
     uint32_t currentMillis = millis();
     if (currentMillis > lastCommand + distanceCommands) {
       lastCommand = currentMillis;
 
       std::vector<uint8_t> command;
-      if (scanCommands.size() > 0) {
+      if (sendCommands.size() > 0) {
+        mode = Mode::send;
+        command = sendCommands.front();
+        sendCommands.pop_front();
+      } else if (scanCommands.size() > 0) {
         mode = Mode::scan;
         command = scanCommands.front();
         scanCommands.pop_front();
         if (fullScan && scanCommands.size() == 0) nextScanCommand();
-      } else if (sendCommands.size() > 0) {
-        mode = Mode::send;
-        command = sendCommands.front();
-        sendCommands.pop_front();
       } else {
         mode = Mode::normal;
         scheduleCommand = store.nextActiveCommand();
@@ -841,8 +853,8 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
 
   processScan(master, slave);
 
-  // send Broadcast Sign of Life (Service 07h FFh)
-  // in response to an Inquiry of Existence (Service 07h FEh)
+  // send Sign of Life (Service 07h FFh) in response
+  // to an Inquiry of Existence (Service 07h FEh)
   if (ebus::contains(master, VEC_07fe00, 2))
     sendCommands.push_front(ebus::to_vector("fe07ff00"));
 }

@@ -59,7 +59,7 @@ class Schedule {
   void handleSend(const JsonArray &commands);
 
   void toggleForward(const bool enable);
-  void handleForwadFilter(const JsonArray &filters);
+  void handleForwardFilter(const JsonArray &filters);
 
   void setPublishCounter(const bool enable);
   void resetCounter();
@@ -82,20 +82,25 @@ class Schedule {
 
   volatile bool stopRunner = false;
 
-  Command *scheduleCommand = nullptr;
-
-  uint32_t distanceCommands = 0;
-  uint32_t lastCommand = 0;
-
-  std::map<uint8_t, Participant> allParticipants;
-
   bool sendInquiryOfExistence = true;
 
   enum class Mode { scan, send, normal };
   Mode mode = Mode::normal;
 
+  Command *scheduleCommand = nullptr;
+
+  uint32_t distanceCommands = 0;     // in milliseconds
+  uint32_t lastCommand = 15 * 1000;  // 15 seconds after start
+
+  uint32_t distanceScans = 15 * 1000;  // 15 seconds after start
+  uint32_t lastScan = 0;               // in milliseconds
+  uint8_t maxScans = 5;                // maximum number of scans
+  uint8_t currentScan = 0;             // current scan count
+
   bool fullScan = false;
   uint8_t scanIndex = 0;
+
+  std::map<uint8_t, Participant> allParticipants;
 
   std::deque<std::vector<uint8_t>> scanCommands;
   std::deque<std::vector<uint8_t>> sendCommands;
