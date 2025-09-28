@@ -506,7 +506,11 @@ void ClientManager::acceptClients() {
   clients.erase(
       std::remove_if(clients.begin(), clients.end(),
                      [](const std::unique_ptr<AbstractClient>& client) {
-                       return !client->isConnected();
+                       if (!client->isConnected()) {
+                         client->stop();  // <-- ensure socket is closed
+                         return true;
+                       }
+                       return false;
                      }),
       clients.end());
 }
