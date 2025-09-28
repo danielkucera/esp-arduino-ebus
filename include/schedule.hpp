@@ -90,9 +90,9 @@ class Schedule {
   Command *scheduleCommand = nullptr;
 
   uint32_t distanceCommands = 0;     // in milliseconds
-  uint32_t lastCommand = 15 * 1000;  // 15 seconds after start
+  uint32_t lastCommand = 10 * 1000;  // 10 seconds after start
 
-  uint32_t distanceScans = 15 * 1000;  // 15 seconds after start
+  uint32_t distanceScans = 11 * 1000;  // 11 seconds after start
   uint32_t lastScan = 0;               // in milliseconds
   uint8_t maxScans = 5;                // maximum number of scans
   uint8_t currentScan = 0;             // current scan count
