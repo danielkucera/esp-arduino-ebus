@@ -300,13 +300,15 @@ payload:
 Firmware with `EBUS_INTERNAL` is an alternative firmware that enables the device to operate as an independent eBUS device without external control software such as ebusd. In order to be able to evaluate passively received or actively sent commands, these must be installed in the internal command store. The results of the evaluated messages are also stored in the internal store or are actively sent via MQTT or can be retrieved via HTTP.
 
 Key facts:
-- Compared to conventional firmware, write access via port 3333 and port 3335 is disabled.
-- Status queries via port 5555 and read access to port 3334 is supported.
+- Read and write access via port 3333, 3334 and port 3335 (ebusd enhanced protocol) is supported.
+- Status queries via port 5555 3334 is supported.
+- Internal command store.
 - Installing commands via MQTT or HTTP upload.
 - Installed commands can be stored in NVS memory and are automatically loaded on restart.
 - Received or sent messages are evaluated and the results are published to MQTT.
 - Sending of non-installed commands is supported via MQTT.
 - Scanning of eBUS devices is supported.
+- Automatic scan of eBUS devices at startup.
 - Pattern-recognized messages can be forwarded via MQTT.
 
 ## Structure of the internal command store
