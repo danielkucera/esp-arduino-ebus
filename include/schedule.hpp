@@ -29,8 +29,6 @@ struct Participant {
   std::vector<uint8_t> vec_b5090126;
   std::vector<uint8_t> vec_b5090127;
 
-  bool isValid() const { return vec_070400.size() > 0; }
-
   bool isVaillant() const {
     return (vec_070400.size() > 1 && vec_070400[1] == VENDOR_VAILLANT);
   }
