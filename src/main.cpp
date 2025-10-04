@@ -404,9 +404,8 @@ void saveParamsCallback() {
   ebus::setBusIsrOffset(atoi(busisr_offset));
 #endif
 
-  if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
-
-  if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
+  mqtt.setServer(mqtt_server, 1883);
+  mqtt.setCredentials(mqtt_user, mqtt_pass);
 
 #if defined(EBUS_INTERNAL)
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
@@ -718,9 +717,8 @@ void setup() {
   }
 
   mqtt.setUniqueId(unique_id);
-  if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
-  if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
-
+  mqtt.setServer(mqtt_server, 1883);
+  mqtt.setCredentials(mqtt_user, mqtt_pass);
   mqtt.setHASupport(haSupportParam.isChecked());
 
 #if !defined(EBUS_INTERNAL)

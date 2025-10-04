@@ -17,10 +17,11 @@ class Mqtt {
  public:
   Mqtt();
 
+  void setUniqueId(const char *id);
+
   void setServer(const char *host, uint16_t port);
   void setCredentials(const char *username, const char *password = nullptr);
 
-  void setUniqueId(const char *id);
   void setHASupport(const bool enable);
 
   void connect();
@@ -52,6 +53,7 @@ class Mqtt {
   AsyncMqttClient client;
   std::string uniqueId;
   std::string rootTopic;
+  std::string topicWill;
 
   bool haSupport = false;
 
@@ -76,9 +78,6 @@ class Mqtt {
   uint32_t distanceParticipants = 200;
   uint32_t lastParticipants = 0;
 #endif
-
-  void setWill(const char *topic, uint8_t qos, bool retain,
-               const char *payload = nullptr, size_t length = 0);
 
   uint16_t subscribe(const char *topic, uint8_t qos);
 

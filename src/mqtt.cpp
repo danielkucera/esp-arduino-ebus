@@ -15,17 +15,19 @@ Mqtt::Mqtt() {
   client.onPublish(onPublish);
 }
 
+void Mqtt::setUniqueId(const char *id) {
+  uniqueId = id;
+  rootTopic = "ebus/" + uniqueId + "/";
+  topicWill = mqtt.rootTopic + "state/available";
+  client.setWill(topicWill.c_str(), 0, true, "offline");
+}
+
 void Mqtt::setServer(const char *host, uint16_t port) {
   client.setServer(host, port);
 }
 
 void Mqtt::setCredentials(const char *username, const char *password) {
   client.setCredentials(username, password);
-}
-
-void Mqtt::setUniqueId(const char *id) {
-  uniqueId = id;
-  rootTopic = "ebus/" + uniqueId + "/";
 }
 
 void Mqtt::setHASupport(const bool enable) { haSupport = enable; }
@@ -114,11 +116,6 @@ void Mqtt::publishValue(Command *command, const JsonDocument &doc) {
 }
 #endif
 
-void Mqtt::setWill(const char *topic, uint8_t qos, bool retain,
-                   const char *payload, size_t length) {
-  client.setWill(topic, qos, retain, payload, length);
-}
-
 uint16_t Mqtt::subscribe(const char *topic, uint8_t qos) {
   return client.subscribe(topic, qos);
 }
@@ -127,9 +124,7 @@ void Mqtt::onConnect(bool sessionPresent) {
   std::string topicRequest = mqtt.rootTopic + "request";
   mqtt.subscribe(topicRequest.c_str(), 0);
 
-  std::string topicWill = mqtt.rootTopic + "state/available";
-  mqtt.publish(topicWill.c_str(), 0, true, "online", false);
-  mqtt.setWill(topicWill.c_str(), 0, true, "offline");
+  mqtt.publish(mqtt.topicWill.c_str(), 0, true, "online", false);
 
   mqtt.publishHA();
 }
