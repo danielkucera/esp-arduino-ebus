@@ -186,10 +186,6 @@ WiFiServer statusServer(5555);
 
 volatile uint32_t last_comms = 0;
 
-bool needMqttConnect = false;
-uint32_t lastMqttConnectionAttempt = 0;
-uint32_t lastMqttUpdate = 0;
-
 // status
 uint32_t reset_code = 0;
 Track<uint32_t> uptime("state/uptime", 10);
@@ -200,6 +196,12 @@ Track<uint32_t> free_heap("state/free_heap", 10);
 // wifi
 uint32_t last_connect = 0;
 int reconnect_count = 0;
+
+// mqtt
+bool needMqttConnect = false;
+int mqtt_reconnect_count = 0;
+uint32_t lastMqttConnectionAttempt = 0;
+uint32_t lastMqttUpdate = 0;
 
 bool connectMqtt() {
   if (mqtt.connected()) return true;
@@ -486,6 +488,8 @@ char* status_string() {
 
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.connected() ? "true" : "false");
+  pos += snprintf(status + pos, bufferSize - pos, "mqtt_reconnect_count: %d \n",
+                  mqtt_reconnect_count);
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_server: %s\r\n",
                   mqtt_server);
   pos +=
@@ -586,6 +590,7 @@ const std::string getStatusJson() {
   MQTT["Server"] = mqtt_server;
   MQTT["User"] = mqtt_user;
   MQTT["Connected"] = mqtt.connected();
+  MQTT["Reconnect_Count"] = mqtt_reconnect_count;
 #if defined(EBUS_INTERNAL)
   MQTT["Publish_Counter"] = mqttPublishCounterParam.isChecked();
   MQTT["Publish_Timing"] = mqttPublishTimingParam.isChecked();
@@ -782,7 +787,10 @@ void loop() {
 #endif
 
   if (needMqttConnect) {
-    if (connectMqtt()) needMqttConnect = false;
+    if (connectMqtt()) {
+      needMqttConnect = false;
+      ++mqtt_reconnect_count;
+    }
 
   } else if ((iotWebConf.getState() == iotwebconf::OnLine) &&
              (!mqtt.connected())) {
