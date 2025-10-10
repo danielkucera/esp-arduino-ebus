@@ -5,7 +5,7 @@
 #include <Preferences.h>
 
 #include "bus.hpp"
-#include "enhanced.hpp"
+#include "client.hpp"
 #include "http.hpp"
 #include "mqtt.hpp"
 #include "track.hpp"
@@ -147,12 +147,15 @@ IPAddress gateway;
 IPAddress netmask;
 
 WiFiServer wifiServer(3333);
-WiFiServer wifiServerRO(3334);
-WiFiServer wifiServerEnh(3335);
+WiFiClient wifiClients[MAX_WIFI_CLIENTS];
+
+WiFiServer wifiServerEnhanced(3335);
+WiFiClient wifiClientsEnhanced[MAX_WIFI_CLIENTS];
+
+WiFiServer wifiServerReadOnly(3334);
+WiFiClient wifiClientsReadOnly[MAX_WIFI_CLIENTS];
+
 WiFiServer statusServer(5555);
-WiFiClient serverClients[MAX_SRV_CLIENTS];
-WiFiClient serverClientsRO[MAX_SRV_CLIENTS];
-WiFiClient enhClients[MAX_SRV_CLIENTS];
 
 uint32_t last_comms = 0;
 
@@ -288,9 +291,9 @@ void data_process() {
   loop_duration();
 
   // check clients for data
-  for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
-    handleClient(&serverClients[i]);
-    handleEnhClient(&enhClients[i]);
+  for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+    handleClient(&wifiClients[i]);
+    handleClientEnhanced(&wifiClientsEnhanced[i]);
   }
 
 #ifdef EBUS_INTERNAL
@@ -308,23 +311,23 @@ void data_process() {
     }
 #endif
 
-    for (int i = 0; i < MAX_SRV_CLIENTS; i++) {
+    for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
       if (d._enhanced) {
-        if (d._client == &enhClients[i]) {
-          if (pushEnhClient(&enhClients[i], d._c, d._d, true)) {
+        if (d._client == &wifiClientsEnhanced[i]) {
+          if (pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d, true)) {
             last_comms = millis();
           }
         }
       } else {
-        if (pushClient(&serverClients[i], d._d)) {
+        if (pushClient(&wifiClients[i], d._d)) {
           last_comms = millis();
         }
-        if (pushClient(&serverClientsRO[i], d._d)) {
+        if (pushClient(&wifiClientsReadOnly[i], d._d)) {
           last_comms = millis();
         }
-        if (d._client != &enhClients[i]) {
-          if (pushEnhClient(&enhClients[i], d._c, d._d,
-                            d._logtoclient == &enhClients[i])) {
+        if (d._client != &wifiClientsEnhanced[i]) {
+          if (pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d,
+                                 d._logtoclient == &wifiClientsEnhanced[i])) {
             last_comms = millis();
           }
         }
@@ -664,8 +667,9 @@ void setup() {
   mqtt.setHASupport(haSupportParam.isChecked());
 
   wifiServer.begin();
-  wifiServerRO.begin();
-  wifiServerEnh.begin();
+  wifiServerEnhanced.begin();
+  wifiServerReadOnly.begin();
+
   statusServer.begin();
 
 #ifdef ESP32
@@ -741,7 +745,7 @@ void loop() {
   }
 
   // Check if there are any new clients on the eBUS servers
-  handleNewClient(&wifiServer, serverClients);
-  handleNewClient(&wifiServerEnh, enhClients);
-  handleNewClient(&wifiServerRO, serverClientsRO);
+  handleNewClient(&wifiServer, wifiClients);
+  handleNewClient(&wifiServerEnhanced, wifiClientsEnhanced);
+  handleNewClient(&wifiServerReadOnly, wifiClientsReadOnly);
 }
