@@ -3,13 +3,26 @@
 #include <ArduinoJson.h>
 #include <Ebus.h>
 
+#include <functional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // This Store class stores both active and passive eBUS commands. For permanent
 // storage (NVS), functions for saving, loading, and deleting commands are
 // available. Permanently stored commands are automatically loaded when the
 // device is restarted.
+
+// Hash for std::vector<uint8_t>
+struct VectorHash {
+  std::size_t operator()(const std::vector<uint8_t> &vec) const {
+    std::size_t hash = vec.size();
+    for (const uint8_t &h : vec) {
+      hash ^= std::hash<uint8_t>()(h) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+    }
+    return hash;
+  }
+};
 
 struct Command {
   std::string key;               // unique key of command
@@ -33,8 +46,6 @@ struct Command {
 
 class Store {
  public:
-  Store() = default;
-
   Command createCommand(const JsonDocument &doc);
 
   void insertCommand(const Command &command);
@@ -67,12 +78,13 @@ class Store {
   const std::string getValuesJson() const;
 
  private:
-  std::vector<Command> allCommands;
-
-  size_t activeCommands = 0;
-  size_t passiveCommands = 0;
-
-  void countCommands();
+  // Use unordered_map for fast key lookup
+  std::unordered_map<std::string, Command> allCommandsByKey;
+  // For passive commands, use command.command as key
+  std::unordered_map<std::vector<uint8_t>, Command *, VectorHash>
+      passiveCommands;
+  // For active commands, just keep a vector of pointers
+  std::vector<Command *> activeCommands;
 
   const std::string serializeCommands() const;
   void deserializeCommands(const char *payload);
