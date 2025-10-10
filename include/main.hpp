@@ -5,7 +5,7 @@
 
 #include <string>
 
-#define MAX_SRV_CLIENTS 4
+#define MAX_WIFI_CLIENTS 4
 
 #ifdef ESP32
 #define UART_TX 20
@@ -25,9 +25,6 @@ inline int DEBUG_LOG(const char *format, ...) { return 0; }
 int DEBUG_LOG_IMPL(const char *format, ...);
 // #define DEBUG_LOG DEBUG_LOG_IMPL
 
-bool handleNewClient(WiFiServer *server, WiFiClient clients[]);
-int pushClient(WiFiClient *client, uint8_t B);
-void handleClient(WiFiClient *client);
 char *status_string();
 void restart();
 const std::string getAdapterJson();
