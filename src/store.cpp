@@ -37,37 +37,64 @@ Command Store::createCommand(const JsonDocument &doc) {
 }
 
 void Store::insertCommand(const Command &command) {
-  std::string key = command.key;
-  const std::vector<Command>::iterator it =
-      std::find_if(allCommands.begin(), allCommands.end(),
-                   [&key](const Command &cmd) { return cmd.key == key; });
+  // Insert or update in allCommandsByKey
+  std::unordered_map<std::string, Command>::iterator it =
+      allCommandsByKey.find(command.key);
+  if (it != allCommandsByKey.end())
+    it->second = command;
+  else
+    allCommandsByKey.insert(std::make_pair(command.key, command));
 
-  if (it != allCommands.end()) {
-    *it = command;
-  } else {
-    allCommands.push_back(command);
-    countCommands();
+  // Remove from previous index if exists
+  for (std::unordered_map<std::vector<uint8_t>, Command *, VectorHash>::iterator
+           itp = passiveCommands.begin();
+       itp != passiveCommands.end();) {
+    if (itp->second->key == command.key)
+      itp = passiveCommands.erase(itp);
+    else
+      ++itp;
   }
+
+  activeCommands.erase(
+      std::remove_if(
+          activeCommands.begin(), activeCommands.end(),
+          [&](const Command *cmd) { return cmd->key == command.key; }),
+      activeCommands.end());
+
+  // Add to passive or active index
+  Command *cmdPtr = &allCommandsByKey[command.key];
+  if (command.active)
+    activeCommands.push_back(cmdPtr);
+  else
+    passiveCommands[command.command] = cmdPtr;
 }
 
 void Store::removeCommand(const std::string &key) {
-  const std::vector<Command>::const_iterator it =
-      std::find_if(allCommands.cbegin(), allCommands.cend(),
-                   [&key](const Command &cmd) { return cmd.key == key; });
-
-  if (it != allCommands.end()) {
-    allCommands.erase(it);
-    countCommands();
+  std::unordered_map<std::string, Command>::iterator it =
+      allCommandsByKey.find(key);
+  if (it != allCommandsByKey.end()) {
+    // Remove from indexes
+    for (std::unordered_map<std::vector<uint8_t>, Command *,
+                            VectorHash>::iterator itp = passiveCommands.begin();
+         itp != passiveCommands.end();) {
+      if (itp->second->key == key)
+        itp = passiveCommands.erase(itp);
+      else
+        ++itp;
+    }
+    activeCommands.erase(
+        std::remove_if(activeCommands.begin(), activeCommands.end(),
+                       [&](const Command *cmd) { return cmd->key == key; }),
+        activeCommands.end());
+    allCommandsByKey.erase(it);
   }
 }
 
 const Command *Store::findCommand(const std::string &key) {
-  const std::vector<Command>::const_iterator it =
-      std::find_if(allCommands.cbegin(), allCommands.cend(),
-                   [&key](const Command &cmd) { return cmd.key == key; });
-
-  if (it != allCommands.end())
-    return &(*it);
+  std::unordered_map<std::string, Command>::iterator it =
+      allCommandsByKey.find(key);
+  if (it != allCommandsByKey.end())
+    return &(it->second);
   else
     return nullptr;
 }
@@ -148,9 +175,9 @@ const std::string Store::getCommandsJson() const {
   std::string payload;
   JsonDocument doc;
 
-  if (allCommands.size() > 0) {
-    for (const Command &command : allCommands)
-      doc.add(getCommandJson(&command));
+  if (!allCommandsByKey.empty()) {
+    for (const std::pair<const std::string, Command> &kv : allCommandsByKey)
+      doc.add(getCommandJson(&kv.second));
   }
 
   if (doc.isNull()) doc.to<JsonArray>();
@@ -163,37 +190,35 @@ const std::string Store::getCommandsJson() const {
 
 const std::vector<Command *> Store::getCommands() {
   std::vector<Command *> commands;
-  for (Command &command : allCommands) commands.push_back(&(command));
+  for (std::pair<const std::string, Command> &kv : allCommandsByKey)
+    commands.push_back(&(kv.second));
   return commands;
 }
 
-const size_t Store::getActiveCommands() const { return activeCommands; }
-const size_t Store::getPassiveCommands() const { return passiveCommands; }
+const size_t Store::getActiveCommands() const { return activeCommands.size(); }
 
-const bool Store::active() const { return activeCommands > 0; }
+const size_t Store::getPassiveCommands() const {
+  return passiveCommands.size();
+}
+
+const bool Store::active() const { return !activeCommands.empty(); }
 
 Command *Store::nextActiveCommand() {
   Command *next = nullptr;
   bool init = false;
-
-  for (Command &cmd : allCommands) {
-    if (cmd.active) {
-      if (cmd.last == 0) {
-        next = &cmd;
-        init = true;
-        break;
-      }
-
-      if (next == nullptr) {
-        next = &cmd;
-      } else {
-        if (cmd.last + cmd.interval * 1000 < next->last + next->interval * 1000)
-          next = &cmd;
-      }
+  for (Command *cmd : activeCommands) {
+    if (cmd->last == 0) {
+      next = cmd;
+      init = true;
+      break;
     }
+    if (next == nullptr ||
+        (cmd->last + cmd->interval * 1000 < next->last + next->interval * 1000))
+      next = cmd;
   }
 
-  if (!init && millis() < next->last + next->interval * 1000) next = nullptr;
+  if (!init && next && millis() < next->last + next->interval * 1000)
+    next = nullptr;
 
   return next;
 }
@@ -201,34 +226,44 @@ Command *Store::nextActiveCommand() {
 std::vector<Command *> Store::findPassiveCommands(
     const std::vector<uint8_t> &master) {
   std::vector<Command *> commands;
-
-  for (Command &command : allCommands) {
-    if (!command.active && ebus::contains(master, command.command))
-      commands.push_back(&(command));
+  // Fast lookup by command pattern
+  std::unordered_map<std::vector<uint8_t>, Command *, VectorHash>::iterator it =
+      passiveCommands.find(master);
+  if (it != passiveCommands.end()) {
+    commands.push_back(it->second);
+  } else {
+    // fallback: scan for all that match (if needed)
+    for (const std::pair<const std::vector<uint8_t>, Command *> &kv :
+         passiveCommands) {
+      if (ebus::contains(master, kv.first)) commands.push_back(kv.second);
+    }
   }
-
   return commands;
 }
 
 std::vector<Command *> Store::updateData(Command *command,
                                          const std::vector<uint8_t> &master,
                                          const std::vector<uint8_t> &slave) {
-  std::vector<Command *> commands;
+  if (command) {
+    command->last = millis();
+    if (command->master)
+      command->data =
+          ebus::range(master, 4 + command->position, command->length);
+    else
+      command->data = ebus::range(slave, command->position, command->length);
+    // Return a vector with just this command, but avoid heap allocation
+    return {command};
+  }
 
-  if (command == nullptr)
-    commands = findPassiveCommands(master);
-  else
-    commands.push_back(command);
-
+  // Passive: potentially multiple matches
+  std::vector<Command *> commands = findPassiveCommands(master);
   for (Command *cmd : commands) {
     cmd->last = millis();
-
     if (cmd->master)
       cmd->data = ebus::range(master, 4 + cmd->position, cmd->length);
     else
       cmd->data = ebus::range(slave, cmd->position, cmd->length);
   }
-
   return commands;
 }
 
@@ -250,11 +285,12 @@ const std::string Store::getValuesJson() const {
 
   JsonArray results = doc["results"].to<JsonArray>();
 
-  if (allCommands.size() > 0) {
+  if (!allCommandsByKey.empty()) {
     size_t index = 0;
     uint32_t now = millis();
 
-    for (const Command &command : allCommands) {
+    for (const std::pair<const std::string, Command> &kv : allCommandsByKey) {
+      const Command &command = kv.second;
       JsonArray array = results[index][command.key].to<JsonArray>();
       if (command.numeric)
         array.add(store.getValueDouble(&command));
@@ -276,19 +312,13 @@ const std::string Store::getValuesJson() const {
   return payload;
 }
 
-void Store::countCommands() {
-  activeCommands = std::count_if(allCommands.begin(), allCommands.end(),
-                                 [](const Command &cmd) { return cmd.active; });
-
-  passiveCommands = allCommands.size() - activeCommands;
-}
-
 const std::string Store::serializeCommands() const {
   std::string payload;
   JsonDocument doc;
 
-  if (allCommands.size() > 0) {
-    for (const Command &command : allCommands) {
+  if (!allCommandsByKey.empty()) {
+    for (const std::pair<const std::string, Command> &kv : allCommandsByKey) {
+      const Command &command = kv.second;
       JsonArray array = doc.add<JsonArray>();
 
       array.add(command.key);
