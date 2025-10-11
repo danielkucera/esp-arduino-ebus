@@ -21,61 +21,125 @@ const std::vector<uint8_t> SCAN_b5090127 = {0xb5, 0x09, 0x01, 0x27};
 std::map<uint8_t, uint32_t> seenMasters;
 std::map<uint8_t, uint32_t> seenSlaves;
 
-// ebus/<unique_id>/state/messages
-Track<uint32_t> messagesTotal("state/messages", 10);
+#define TRACK_U32(NAME, PATH) Track<uint32_t> NAME("state/" PATH, 10);
 
-Track<uint32_t> messagesPassiveMasterSlave("state/messages/passiveMasterSlave",
-                                           10);
-Track<uint32_t> messagesPassiveMasterMaster(
-    "state/messages/passiveMasterMaster", 10);
+#define ASSIGN_COUNTER(NAME) NAME = counters.NAME;
 
-Track<uint32_t> messagesReactiveMasterSlave(
-    "state/messages/reactiveMasterSlave", 10);
-Track<uint32_t> messagesReactiveMasterMaster(
-    "state/messages/reactiveMasterMaster", 10);
-Track<uint32_t> messagesReactiveBroadcast("state/messages/reactiveBroadcast",
-                                          10);
+// Messages
+TRACK_U32(messagesTotal, "messages")
+TRACK_U32(messagesPassiveMasterSlave, "messages/passiveMasterSlave")
+TRACK_U32(messagesPassiveMasterMaster, "messages/passiveMasterMaster")
+TRACK_U32(messagesReactiveMasterSlave, "messages/reactiveMasterSlave")
+TRACK_U32(messagesReactiveMasterMaster, "messages/reactiveMasterMaster")
+TRACK_U32(messagesReactiveBroadcast, "messages/reactiveBroadcast")
+TRACK_U32(messagesActiveMasterSlave, "messages/activeMasterSlave")
+TRACK_U32(messagesActiveMasterMaster, "messages/activeMasterMaster")
+TRACK_U32(messagesActiveBroadcast, "messages/activeBroadcast")
 
-Track<uint32_t> messagesActiveMasterSlave("state/messages/activeMasterSlave",
-                                          10);
-Track<uint32_t> messagesActiveMasterMaster("state/messages/activeMasterMaster",
-                                           10);
-Track<uint32_t> messagesActiveBroadcast("state/messages/activeBroadcast", 10);
+// Requests
+TRACK_U32(requestsTotal, "requests")
+TRACK_U32(requestsWon, "requests/won")
+TRACK_U32(requestsLost, "requests/lost")
+TRACK_U32(requestsRetry, "requests/retry")
+TRACK_U32(requestsError, "requests/error")
 
-// ebus/<unique_id>/state/requests
-Track<uint32_t> requestsTotal("state/requests", 10);
-Track<uint32_t> requestsWon("state/requests/won", 10);
-Track<uint32_t> requestsLost("state/requests/lost", 10);
-Track<uint32_t> requestsRetry("state/requests/retry", 10);
-Track<uint32_t> requestsError("state/requests/error", 10);
+// Resets
+TRACK_U32(resetsTotal, "resets")
+TRACK_U32(resetsPassive00, "resets/passive00")
+TRACK_U32(resetsPassive0704, "resets/passive0704")
+TRACK_U32(resetsPassive, "resets/passive")
+TRACK_U32(resetsActive, "resets/active")
 
-// ebus/<unique_id>/state/resets
-Track<uint32_t> resetsTotal("state/resets", 10);
-Track<uint32_t> resetsPassive00("state/resets/passive00", 10);
-Track<uint32_t> resetsPassive0704("state/resets/passive0704", 10);
-Track<uint32_t> resetsPassive("state/resets/passive", 10);
-Track<uint32_t> resetsActive("state/resets/active", 10);
+// Errors
+TRACK_U32(errorsTotal, "errors")
+TRACK_U32(errorsPassive, "errors/passive")
+TRACK_U32(errorsPassiveMaster, "errors/passive/master")
+TRACK_U32(errorsPassiveMasterACK, "errors/passive/masterACK")
+TRACK_U32(errorsPassiveSlave, "errors/passive/slave")
+TRACK_U32(errorsPassiveSlaveACK, "errors/passive/slaveACK")
+TRACK_U32(errorsReactive, "errors/reactive")
+TRACK_U32(errorsReactiveMaster, "errors/reactive/master")
+TRACK_U32(errorsReactiveMasterACK, "errors/reactive/masterACK")
+TRACK_U32(errorsReactiveSlave, "errors/reactive/slave")
+TRACK_U32(errorsReactiveSlaveACK, "errors/reactive/slaveACK")
+TRACK_U32(errorsActive, "errors/active")
+TRACK_U32(errorsActiveMaster, "errors/active/master")
+TRACK_U32(errorsActiveMasterACK, "errors/active/masterACK")
+TRACK_U32(errorsActiveSlave, "errors/active/slave")
+TRACK_U32(errorsActiveSlaveACK, "errors/active/slaveACK")
 
-// ebus/<unique_id>/state/errors
-Track<uint32_t> errorsTotal("state/errors", 10);
+#define TRACK_TIMING(NAME, PATH)                                    \
+  Track<int64_t> NAME##Last("state/timings/" PATH "/last", 10);     \
+  Track<int64_t> NAME##Mean("state/timings/" PATH "/mean", 10);     \
+  Track<int64_t> NAME##StdDev("state/timings/" PATH "/stddev", 10); \
+  Track<uint64_t> NAME##Count("state/timings/" PATH "/count", 10);
 
-Track<uint32_t> errorsPassive("state/errors/passive", 10);
-Track<uint32_t> errorsPassiveMaster("state/errors/passive/master", 10);
-Track<uint32_t> errorsPassiveMasterACK("state/errors/passive/masterACK", 10);
-Track<uint32_t> errorsPassiveSlave("state/errors/passive/slave", 10);
-Track<uint32_t> errorsPassiveSlaveACK("state/errors/passive/slaveACK", 10);
+#define ASSIGN_TIMING(NAME)            \
+  NAME##Last = timings.NAME##Last;     \
+  NAME##Mean = timings.NAME##Mean;     \
+  NAME##StdDev = timings.NAME##StdDev; \
+  NAME##Count = timings.NAME##Count;
 
-Track<uint32_t> errorsReactive("state/errors/reactive", 10);
-Track<uint32_t> errorsReactiveMaster("state/errors/reactive/master", 10);
-Track<uint32_t> errorsReactiveMasterACK("state/errors/reactive/masterACK", 10);
-Track<uint32_t> errorsReactiveSlave("state/errors/reactive/slave", 10);
-Track<uint32_t> errorsReactiveSlaveACK("state/errors/reactive/slaveACK", 10);
+#define ASSIGN_STATE_TIMING(NAME, STATE_ENUM)                     \
+  NAME##Last = stats.states[ebus::FsmState::STATE_ENUM].last;     \
+  NAME##Mean = stats.states[ebus::FsmState::STATE_ENUM].mean;     \
+  NAME##StdDev = stats.states[ebus::FsmState::STATE_ENUM].stddev; \
+  NAME##Count = stats.states[ebus::FsmState::STATE_ENUM].count;
 
-Track<uint32_t> errorsActive("state/errors/active", 10);
-Track<uint32_t> errorsActiveMaster("state/errors/active/master", 10);
-Track<uint32_t> errorsActiveMasterACK("state/errors/active/masterACK", 10);
-Track<uint32_t> errorsActiveSlave("state/errors/active/slave", 10);
-Track<uint32_t> errorsActiveSlaveACK("state/errors/active/slaveACK", 10);
+// General timings
+TRACK_TIMING(sync, "sync")
+TRACK_TIMING(passiveFirst, "passive/first")
+TRACK_TIMING(passiveData, "passive/data")
+TRACK_TIMING(activeFirst, "active/first")
+TRACK_TIMING(activeData, "active/data")
+TRACK_TIMING(resetPassive, "reset/passive");
+TRACK_TIMING(resetActive, "reset/active");
+TRACK_TIMING(callbackWrite, "callback/write");
+TRACK_TIMING(callbackError, "callback/error");
+
+TRACK_TIMING(callbackTelegramPassiveMasterSlave,
+             "callback/telegram/passiveMasterSlave");
+TRACK_TIMING(callbackTelegramPassiveMasterMaster,
+             "callback/telegram/passiveMasterMaster");
+TRACK_TIMING(callbackTelegramReactiveMasterSlave,
+             "callback/telegram/reactiveMasterSlave");
+TRACK_TIMING(callbackTelegramReactiveMasterMaster,
+             "callback/telegram/reactiveMasterMaster");
+TRACK_TIMING(callbackTelegramReactiveBroadcast,
+             "callback/telegram/reactiveBroadcast");
+TRACK_TIMING(callbackTelegramActiveMasterSlave,
+             "callback/telegram/activeMasterSlave");
+TRACK_TIMING(callbackTelegramActiveMasterMaster,
+             "callback/telegram/activeMasterMaster");
+TRACK_TIMING(callbackTelegramActiveBroadcast,
+             "callback/telegram/activeBroadcast");
+
+// FSM state timings
+TRACK_TIMING(passiveReceiveMaster, "fsmstate/passiveReceiveMaster")
+TRACK_TIMING(passiveReceiveMasterAcknowledge,
+             "fsmstate/passiveReceiveMasterAcknowledge")
+TRACK_TIMING(passiveReceiveSlave, "fsmstate/passiveReceiveSlave")
+TRACK_TIMING(passiveReceiveSlaveAcknowledge,
+             "fsmstate/passiveReceiveSlaveAcknowledge")
+TRACK_TIMING(reactiveSendMasterPositiveAcknowledge,
+             "fsmstate/reactiveSendMasterPositiveAcknowledge")
+TRACK_TIMING(reactiveSendMasterNegativeAcknowledge,
+             "fsmstate/reactiveSendMasterNegativeAcknowledge")
+TRACK_TIMING(reactiveSendSlave, "fsmstate/reactiveSendSlave")
+TRACK_TIMING(reactiveReceiveSlaveAcknowledge,
+             "fsmstate/reactiveReceiveSlaveAcknowledge")
+TRACK_TIMING(requestBusFirstTry, "fsmstate/requestBusFirstTry")
+TRACK_TIMING(requestBusPriorityRetry, "fsmstate/requestBusPriorityRetry")
+TRACK_TIMING(requestBusSecondTry, "fsmstate/requestBusSecondTry")
+TRACK_TIMING(activeSendMaster, "fsmstate/activeSendMaster")
+TRACK_TIMING(activeReceiveMasterAcknowledge,
+             "fsmstate/activeReceiveMasterAcknowledge")
+TRACK_TIMING(activeReceiveSlave, "fsmstate/activeReceiveSlave")
+TRACK_TIMING(activeSendSlavePositiveAcknowledge,
+             "fsmstate/activeSendSlavePositiveAcknowledge")
+TRACK_TIMING(activeSendSlaveNegativeAcknowledge,
+             "fsmstate/activeSendSlaveNegativeAcknowledge")
+TRACK_TIMING(releaseBus, "fsmstate/releaseBus");
 
 Schedule schedule;
 
@@ -199,73 +263,66 @@ void Schedule::resetCounters() {
 }
 
 void Schedule::fetchCounters() {
-  if (publishCounters) {
-    // Addresses Master
-    for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
-      std::string topic =
-          "state/addresses/master/" + ebus::to_string(master.first);
-      mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
-    }
+  if (!publishCounters) return;
 
-    // Addresses Slave
-    for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) {
-      std::string topic =
-          "state/addresses/slave/" + ebus::to_string(slave.first);
-      mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
-    }
-
-    // Counters
-    ebus::Counters counters = ebusHandler.getCounters();
-
-    // Messages
-    messagesTotal = counters.messagesTotal;
-
-    messagesPassiveMasterSlave = counters.messagesPassiveMasterSlave;
-    messagesPassiveMasterMaster = counters.messagesPassiveMasterMaster;
-
-    messagesReactiveMasterSlave = counters.messagesReactiveMasterSlave;
-    messagesReactiveMasterMaster = counters.messagesReactiveMasterMaster;
-    messagesReactiveBroadcast = counters.messagesReactiveBroadcast;
-
-    messagesActiveMasterSlave = counters.messagesActiveMasterSlave;
-    messagesActiveMasterMaster = counters.messagesActiveMasterMaster;
-    messagesActiveBroadcast = counters.messagesActiveBroadcast;
-
-    // Requests
-    requestsTotal = counters.requestsTotal;
-    requestsWon = counters.requestsWon;
-    requestsLost = counters.requestsLost;
-    requestsRetry = counters.requestsRetry;
-    requestsError = counters.requestsError;
-
-    // Resets
-    resetsTotal = counters.resetsTotal;
-    resetsPassive00 = counters.resetsPassive00;
-    resetsPassive0704 = counters.resetsPassive0704;
-    resetsPassive = counters.resetsPassive;
-    resetsActive = counters.resetsActive;
-
-    // Errors
-    errorsTotal = counters.errorsTotal;
-
-    errorsPassive = counters.errorsPassive;
-    errorsPassiveMaster = counters.errorsPassiveMaster;
-    errorsPassiveMasterACK = counters.errorsPassiveMasterACK;
-    errorsPassiveSlave = counters.errorsPassiveSlave;
-    errorsPassiveSlaveACK = counters.errorsPassiveSlaveACK;
-
-    errorsReactive = counters.errorsReactive;
-    errorsReactiveMaster = counters.errorsReactiveMaster;
-    errorsReactiveMasterACK = counters.errorsReactiveMasterACK;
-    errorsReactiveSlave = counters.errorsReactiveSlave;
-    errorsReactiveSlaveACK = counters.errorsReactiveSlaveACK;
-
-    errorsActive = counters.errorsActive;
-    errorsActiveMaster = counters.errorsActiveMaster;
-    errorsActiveMasterACK = counters.errorsActiveMasterACK;
-    errorsActiveSlave = counters.errorsActiveSlave;
-    errorsActiveSlaveACK = counters.errorsActiveSlaveACK;
+  // Addresses Master
+  for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
+    std::string topic =
+        "state/addresses/master/" + ebus::to_string(master.first);
+    mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
   }
+
+  // Addresses Slave
+  for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) {
+    std::string topic = "state/addresses/slave/" + ebus::to_string(slave.first);
+    mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
+  }
+
+  // Counters
+  ebus::Counters counters = ebusHandler.getCounters();
+
+  // Messages
+  ASSIGN_COUNTER(messagesTotal)
+  ASSIGN_COUNTER(messagesPassiveMasterSlave)
+  ASSIGN_COUNTER(messagesPassiveMasterMaster)
+  ASSIGN_COUNTER(messagesReactiveMasterSlave)
+  ASSIGN_COUNTER(messagesReactiveMasterMaster)
+  ASSIGN_COUNTER(messagesReactiveBroadcast)
+  ASSIGN_COUNTER(messagesActiveMasterSlave)
+  ASSIGN_COUNTER(messagesActiveMasterMaster)
+  ASSIGN_COUNTER(messagesActiveBroadcast)
+
+  // Requests
+  ASSIGN_COUNTER(requestsTotal)
+  ASSIGN_COUNTER(requestsWon)
+  ASSIGN_COUNTER(requestsLost)
+  ASSIGN_COUNTER(requestsRetry)
+  ASSIGN_COUNTER(requestsError)
+
+  // Resets
+  ASSIGN_COUNTER(resetsTotal)
+  ASSIGN_COUNTER(resetsPassive00)
+  ASSIGN_COUNTER(resetsPassive0704)
+  ASSIGN_COUNTER(resetsPassive)
+  ASSIGN_COUNTER(resetsActive)
+
+  // Errors
+  ASSIGN_COUNTER(errorsTotal)
+  ASSIGN_COUNTER(errorsPassive)
+  ASSIGN_COUNTER(errorsPassiveMaster)
+  ASSIGN_COUNTER(errorsPassiveMasterACK)
+  ASSIGN_COUNTER(errorsPassiveSlave)
+  ASSIGN_COUNTER(errorsPassiveSlaveACK)
+  ASSIGN_COUNTER(errorsReactive)
+  ASSIGN_COUNTER(errorsReactiveMaster)
+  ASSIGN_COUNTER(errorsReactiveMasterACK)
+  ASSIGN_COUNTER(errorsReactiveSlave)
+  ASSIGN_COUNTER(errorsReactiveSlaveACK)
+  ASSIGN_COUNTER(errorsActive)
+  ASSIGN_COUNTER(errorsActiveMaster)
+  ASSIGN_COUNTER(errorsActiveMasterACK)
+  ASSIGN_COUNTER(errorsActiveSlave)
+  ASSIGN_COUNTER(errorsActiveSlaveACK)
 }
 
 const std::string Schedule::getCountersJson() {
@@ -342,6 +399,217 @@ const std::string Schedule::getCountersJson() {
   Errors_Active["Master_ACK"] = counters.errorsActiveMasterACK;
   Errors_Active["Slave"] = counters.errorsActiveSlave;
   Errors_Active["Slave_ACK"] = counters.errorsActiveSlaveACK;
+
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload;
+}
+
+void Schedule::setPublishTimings(const bool enable) { publishTimings = enable; }
+
+void Schedule::resetTimings() { ebusHandler.resetTimings(); }
+
+void Schedule::fetchTimings() {
+  if (!publishTimings) return;
+
+  // Timings
+  ebus::Timings timings = ebusHandler.getTimings();
+
+  ASSIGN_TIMING(sync)
+  ASSIGN_TIMING(passiveFirst)
+  ASSIGN_TIMING(passiveData)
+  ASSIGN_TIMING(activeFirst)
+  ASSIGN_TIMING(activeData)
+  ASSIGN_TIMING(resetPassive)
+  ASSIGN_TIMING(resetActive)
+  ASSIGN_TIMING(callbackWrite)
+  ASSIGN_TIMING(callbackError)
+  ASSIGN_TIMING(callbackTelegramPassiveMasterSlave)
+  ASSIGN_TIMING(callbackTelegramPassiveMasterMaster)
+  ASSIGN_TIMING(callbackTelegramReactiveMasterSlave)
+  ASSIGN_TIMING(callbackTelegramReactiveMasterMaster)
+  ASSIGN_TIMING(callbackTelegramReactiveBroadcast)
+  ASSIGN_TIMING(callbackTelegramActiveMasterSlave)
+  ASSIGN_TIMING(callbackTelegramActiveMasterMaster)
+  ASSIGN_TIMING(callbackTelegramActiveBroadcast)
+
+  ebus::StateTimingStatsResults stats =
+      ebusHandler.getStateTimingStatsResults();
+
+  ASSIGN_STATE_TIMING(passiveReceiveMaster, passiveReceiveMaster)
+  ASSIGN_STATE_TIMING(passiveReceiveMasterAcknowledge,
+                      passiveReceiveMasterAcknowledge)
+  ASSIGN_STATE_TIMING(passiveReceiveSlave, passiveReceiveSlave)
+  ASSIGN_STATE_TIMING(passiveReceiveSlaveAcknowledge,
+                      passiveReceiveSlaveAcknowledge)
+  ASSIGN_STATE_TIMING(reactiveSendMasterPositiveAcknowledge,
+                      reactiveSendMasterPositiveAcknowledge)
+  ASSIGN_STATE_TIMING(reactiveSendMasterNegativeAcknowledge,
+                      reactiveSendMasterNegativeAcknowledge)
+  ASSIGN_STATE_TIMING(reactiveSendSlave, reactiveSendSlave)
+  ASSIGN_STATE_TIMING(reactiveReceiveSlaveAcknowledge,
+                      reactiveReceiveSlaveAcknowledge)
+  ASSIGN_STATE_TIMING(requestBusFirstTry, requestBusFirstTry)
+  ASSIGN_STATE_TIMING(requestBusPriorityRetry, requestBusPriorityRetry)
+  ASSIGN_STATE_TIMING(requestBusSecondTry, requestBusSecondTry)
+  ASSIGN_STATE_TIMING(activeSendMaster, activeSendMaster)
+  ASSIGN_STATE_TIMING(activeReceiveMasterAcknowledge,
+                      activeReceiveMasterAcknowledge)
+  ASSIGN_STATE_TIMING(activeReceiveSlave, activeReceiveSlave)
+  ASSIGN_STATE_TIMING(activeSendSlavePositiveAcknowledge,
+                      activeSendSlavePositiveAcknowledge)
+  ASSIGN_STATE_TIMING(activeSendSlaveNegativeAcknowledge,
+                      activeSendSlaveNegativeAcknowledge)
+  ASSIGN_STATE_TIMING(releaseBus, releaseBus)
+}
+
+const std::string Schedule::getTimingsJson() {
+  std::string payload;
+  JsonDocument doc;
+
+  ebus::Timings timings = ebusHandler.getTimings();
+
+  // Helper lambda to add timing stats to a JsonObject
+  auto addTiming = [](JsonObject obj, int64_t last, int64_t mean,
+                      int64_t stddev, uint64_t count) {
+    obj["Last"] = last;
+    obj["Mean"] = mean;
+    obj["StdDev"] = stddev;
+    obj["Count"] = count;
+  };
+
+  addTiming(doc["Sync"].to<JsonObject>(), timings.syncLast, timings.syncMean,
+            timings.syncStdDev, timings.syncCount);
+
+  addTiming(doc["Passive"]["First"].to<JsonObject>(), timings.passiveFirstLast,
+            timings.passiveFirstMean, timings.passiveFirstStdDev,
+            timings.passiveFirstCount);
+  addTiming(doc["Passive"]["Data"].to<JsonObject>(), timings.passiveDataLast,
+            timings.passiveDataMean, timings.passiveDataStdDev,
+            timings.passiveDataCount);
+
+  addTiming(doc["Active"]["First"].to<JsonObject>(), timings.activeFirstLast,
+            timings.activeFirstMean, timings.activeFirstStdDev,
+            timings.activeFirstCount);
+  addTiming(doc["Active"]["Data"].to<JsonObject>(), timings.activeDataLast,
+            timings.activeDataMean, timings.activeDataStdDev,
+            timings.activeDataCount);
+
+  addTiming(doc["Reset"]["Passive"].to<JsonObject>(), timings.resetPassiveLast,
+            timings.resetPassiveMean, timings.resetPassiveStdDev,
+            timings.resetPassiveCount);
+  addTiming(doc["Reset"]["Active"].to<JsonObject>(), timings.resetActiveLast,
+            timings.resetActiveMean, timings.resetActiveStdDev,
+            timings.resetActiveCount);
+
+  addTiming(doc["Callback"]["Write"].to<JsonObject>(),
+            timings.callbackWriteLast, timings.callbackWriteMean,
+            timings.callbackWriteStdDev, timings.callbackWriteCount);
+
+  addTiming(doc["Callback"]["Error"].to<JsonObject>(),
+            timings.callbackErrorLast, timings.callbackErrorMean,
+            timings.callbackErrorStdDev, timings.callbackErrorCount);
+
+  addTiming(doc["Callback"]["Telegram"]["passiveMasterSlave"].to<JsonObject>(),
+            timings.callbackTelegramPassiveMasterSlaveLast,
+            timings.callbackTelegramPassiveMasterSlaveMean,
+            timings.callbackTelegramPassiveMasterSlaveStdDev,
+            timings.callbackTelegramPassiveMasterSlaveCount);
+  addTiming(doc["Callback"]["Telegram"]["passiveMasterMaster"].to<JsonObject>(),
+            timings.callbackTelegramPassiveMasterMasterLast,
+            timings.callbackTelegramPassiveMasterMasterMean,
+            timings.callbackTelegramPassiveMasterMasterStdDev,
+            timings.callbackTelegramPassiveMasterMasterCount);
+
+  addTiming(doc["Callback"]["Telegram"]["reactiveMasterSlave"].to<JsonObject>(),
+            timings.callbackTelegramReactiveMasterSlaveLast,
+            timings.callbackTelegramReactiveMasterSlaveMean,
+            timings.callbackTelegramReactiveMasterSlaveStdDev,
+            timings.callbackTelegramReactiveMasterSlaveCount);
+  addTiming(
+      doc["Callback"]["Telegram"]["reactiveMasterMaster"].to<JsonObject>(),
+      timings.callbackTelegramReactiveMasterMasterLast,
+      timings.callbackTelegramReactiveMasterMasterMean,
+      timings.callbackTelegramReactiveMasterMasterStdDev,
+      timings.callbackTelegramReactiveMasterMasterCount);
+  addTiming(doc["Callback"]["Telegram"]["reactiveBroadcast"].to<JsonObject>(),
+            timings.callbackTelegramReactiveBroadcastLast,
+            timings.callbackTelegramReactiveBroadcastMean,
+            timings.callbackTelegramReactiveBroadcastStdDev,
+            timings.callbackTelegramReactiveBroadcastCount);
+
+  addTiming(doc["Callback"]["Telegram"]["activeMasterSlave"].to<JsonObject>(),
+            timings.callbackTelegramActiveMasterSlaveLast,
+            timings.callbackTelegramActiveMasterSlaveMean,
+            timings.callbackTelegramActiveMasterSlaveStdDev,
+            timings.callbackTelegramActiveMasterSlaveCount);
+  addTiming(doc["Callback"]["Telegram"]["activeMasterMaster"].to<JsonObject>(),
+            timings.callbackTelegramActiveMasterMasterLast,
+            timings.callbackTelegramActiveMasterMasterMean,
+            timings.callbackTelegramActiveMasterMasterStdDev,
+            timings.callbackTelegramActiveMasterMasterCount);
+  addTiming(doc["Callback"]["Telegram"]["activeBroadcast"].to<JsonObject>(),
+            timings.callbackTelegramActiveBroadcastLast,
+            timings.callbackTelegramActiveBroadcastMean,
+            timings.callbackTelegramActiveBroadcastStdDev,
+            timings.callbackTelegramActiveBroadcastCount);
+
+  ebus::StateTimingStatsResults stats =
+      ebusHandler.getStateTimingStatsResults();
+
+  // Output FSM state timings
+  auto addStateTiming =
+      [](JsonObject obj,
+         const ebus::StateTimingStatsResults::StateStats &state) {
+        obj["Last"] = static_cast<int64_t>(state.last);
+        obj["Mean"] = static_cast<int64_t>(state.mean);
+        obj["StdDev"] = static_cast<int64_t>(state.stddev);
+        obj["Count"] = state.count;
+      };
+
+  addStateTiming(doc["FsmState"]["passiveReceiveMaster"].to<JsonObject>(),
+                 stats.states.at(ebus::FsmState::passiveReceiveMaster));
+  addStateTiming(
+      doc["FsmState"]["passiveReceiveMasterAcknowledge"].to<JsonObject>(),
+      stats.states.at(ebus::FsmState::passiveReceiveMasterAcknowledge));
+  addStateTiming(doc["FsmState"]["passiveReceiveSlave"].to<JsonObject>(),
+                 stats.states.at(ebus::FsmState::passiveReceiveSlave));
+  addStateTiming(
+      doc["FsmState"]["passiveReceiveSlaveAcknowledge"].to<JsonObject>(),
+      stats.states.at(ebus::FsmState::passiveReceiveSlaveAcknowledge));
+  addStateTiming(
+      doc["FsmState"]["reactiveSendMasterPositiveAcknowledge"].to<JsonObject>(),
+      stats.states.at(ebus::FsmState::reactiveSendMasterPositiveAcknowledge));
+  addStateTiming(
+      doc["FsmState"]["reactiveSendMasterNegativeAcknowledge"].to<JsonObject>(),
+      stats.states.at(ebus::FsmState::reactiveSendMasterNegativeAcknowledge));
+  addStateTiming(doc["FsmState"]["reactiveSendSlave"].to<JsonObject>(),
+                 stats.states.at(ebus::FsmState::reactiveSendSlave));
+  addStateTiming(
+      doc["FsmState"]["reactiveReceiveSlaveAcknowledge"].to<JsonObject>(),
+      stats.states.at(ebus::FsmState::reactiveReceiveSlaveAcknowledge));
+  addStateTiming(doc["FsmState"]["requestBusFirstTry"].to<JsonObject>(),
+                 stats.states.at(ebus::FsmState::requestBusFirstTry));
+  addStateTiming(doc["FsmState"]["requestBusPriorityRetry"].to<JsonObject>(),
+                 stats.states.at(ebus::FsmState::requestBusPriorityRetry));
+  addStateTiming(doc["FsmState"]["requestBusSecondTry"].to<JsonObject>(),
+                 stats.states.at(ebus::FsmState::requestBusSecondTry));
+  addStateTiming(doc["FsmState"]["activeSendMaster"].to<JsonObject>(),
+                 stats.states.at(ebus::FsmState::activeSendMaster));
+  addStateTiming(
+      doc["FsmState"]["activeReceiveMasterAcknowledge"].to<JsonObject>(),
+      stats.states.at(ebus::FsmState::activeReceiveMasterAcknowledge));
+  addStateTiming(doc["FsmState"]["activeReceiveSlave"].to<JsonObject>(),
+                 stats.states.at(ebus::FsmState::activeReceiveSlave));
+  addStateTiming(
+      doc["FsmState"]["activeSendSlavePositiveAcknowledge"].to<JsonObject>(),
+      stats.states.at(ebus::FsmState::activeSendSlavePositiveAcknowledge));
+  addStateTiming(
+      doc["FsmState"]["activeSendSlaveNegativeAcknowledge"].to<JsonObject>(),
+      stats.states.at(ebus::FsmState::activeSendSlaveNegativeAcknowledge));
+  addStateTiming(doc["FsmState"]["releaseBus"].to<JsonObject>(),
+                 stats.states.at(ebus::FsmState::releaseBus));
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
