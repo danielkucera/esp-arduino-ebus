@@ -138,6 +138,12 @@ void handleGetCounters() {
   configServer.send(200, "application/json;charset=utf-8",
                     schedule.getCountersJson().c_str());
 }
+
+void handleGetTimings() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    schedule.getTimingsJson().c_str());
+}
+
 #endif
 
 void handleRoot() {
@@ -208,6 +214,7 @@ void SetupHttpHandlers() {
                   [] { handleParicipantsScanFull(); });
   configServer.on("/participants/list", [] { handleParicipantsList(); });
   configServer.on("/api/v1/GetCounters", [] { handleGetCounters(); });
+  configServer.on("/api/v1/GetTimings", [] { handleGetTimings(); });
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
