@@ -125,6 +125,11 @@ void handleScanFull() {
   configServer.send(200, "text/html", "Full scan initiated");
 }
 
+void handleScanVendor() {
+  schedule.handleScanVendor();
+  configServer.send(200, "text/html", "Vendor scan initiated");
+}
+
 void handleParticipants() {
   configServer.send(200, "application/json;charset=utf-8",
                     schedule.getParticipantsJson().c_str());
@@ -177,6 +182,8 @@ void handleRoot() {
        "confirmAction('scan');\">Scan</a><br>";
   s += "<a href='/scanfull' onclick=\"return "
        "confirmAction('scan full');\">Scan full</a><br>";
+  s += "<a href='/scanvendor' onclick=\"return "
+       "confirmAction('scan vendor');\">Scan vendor</a><br>";
   s += "<a href='/participants'>Participants</a><br>";
   s += "<a href='/reset' onclick=\"return "
        "confirmAction('reset');\">Reset statistic</a><br>";
@@ -215,6 +222,7 @@ void SetupHttpHandlers() {
   configServer.on("/values", [] { handleValues(); });
   configServer.on("/scan", [] { handleScan(); });
   configServer.on("/scanfull", [] { handleScanFull(); });
+  configServer.on("/scanvendor", [] { handleScanVendor(); });
   configServer.on("/participants", [] { handleParticipants(); });
   configServer.on("/api/v1/GetCounters", [] { handleGetCounters(); });
   configServer.on("/api/v1/GetTimings", [] { handleGetTimings(); });

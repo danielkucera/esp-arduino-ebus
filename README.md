@@ -394,6 +394,7 @@ payload:
 {
   "id": "scan",
   "full": false,                         // optional
+  "vendor": false,                       // optional
   "addresses": [                         // optional
     "ZZ",
     ...
@@ -401,7 +402,7 @@ payload:
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"scan","full":false,"addresses":["05","15"]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"scan","full":false,"vendor":false,"addresses":["05","15"]}'
 ```
 
 **Publishing scanned ebus participants**

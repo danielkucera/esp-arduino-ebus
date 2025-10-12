@@ -161,8 +161,9 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       wipeCommands();
     } else if (id.compare("scan") == 0) {
       boolean full = doc["full"].as<boolean>();
+      boolean vendor = doc["vendor"].as<boolean>();
       JsonArray addresses = doc["addresses"].as<JsonArray>();
-      mqtt.initScan(full, addresses);
+      mqtt.initScan(full, vendor, addresses);
     } else if (id.compare("participants") == 0) {
       mqtt.publishParticipants();
     } else if (id.compare("send") == 0) {
@@ -293,9 +294,12 @@ void Mqtt::wipeCommands() {
     mqtt.publishResponse("wipe", "no data");
 }
 
-void Mqtt::initScan(const bool full, const JsonArray &addresses) {
+void Mqtt::initScan(const bool full, const bool vendor,
+                    const JsonArray &addresses) {
   if (full)
     schedule.handleScanFull();
+  else if (vendor)
+    schedule.handleScanVendor();
   else if (addresses.isNull() || addresses.size() == 0)
     schedule.handleScan();
   else
