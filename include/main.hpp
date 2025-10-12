@@ -7,7 +7,7 @@
 
 #define MAX_WIFI_CLIENTS 4
 
-#ifdef ESP32
+#if defined(ESP32)
 #define UART_TX 20
 #define UART_RX 21
 #define USE_SOFTWARE_SERIAL 1

@@ -14,7 +14,7 @@ void handleGetStatus() {
                     getStatusJson().c_str());
 }
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
 void handleCommandsList() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getCommandsJson().c_str());
@@ -167,7 +167,7 @@ void handleRoot() {
   s += "  </script>\n";
   s += "</head><body>";
   s += "<a href='/status'>Adapter status</a><br>";
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   s += "<a href='/commands/list'>List commands</a><br>";
   s += "<a href='/commands/upload'>Upload commands</a><br>";
   s += "<a href='/commands/download'>Download commands</a><br>";
@@ -208,7 +208,7 @@ void SetupHttpHandlers() {
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
   configServer.on("/api/v1/GetStatus", [] { handleGetStatus(); });
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   configServer.on("/commands/list", [] { handleCommandsList(); });
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
   configServer.on("/commands/upload", [] { handleCommandsUpload(); });

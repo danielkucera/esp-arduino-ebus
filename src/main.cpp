@@ -1,5 +1,6 @@
 #include "main.hpp"
 
+#include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <IotWebConf.h>
 #include <Preferences.h>
@@ -10,11 +11,11 @@
 #include "mqtt.hpp"
 #include "track.hpp"
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
 #include "schedule.hpp"
 #endif
 
-#ifdef ESP32
+#if defined(ESP32)
 #include <ESPmDNS.h>
 #include <IotWebConfESP32HTTPUpdateServer.h>
 #include <esp_task_wdt.h>
@@ -22,6 +23,9 @@
 #include "esp32c3/rom/rtc.h"
 
 HTTPUpdateServer httpUpdater;
+
+TaskHandle_t Task1;
+
 #else
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266TrueRandom.h>
@@ -62,10 +66,6 @@ Preferences preferences;
 #define DUMMY_MQTT_USER "roger"
 #define DUMMY_MQTT_PASS "password"
 
-#ifdef ESP32
-TaskHandle_t Task1;
-#endif
-
 char unique_id[7]{};
 
 DNSServer dnsServer;
@@ -78,6 +78,7 @@ char netmaskValue[STRING_LEN];
 uint32_t pwm;
 char pwm_value[NUMBER_LEN];
 
+#if defined(EBUS_INTERNAL)
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
     "00", "10", "30", "70", "f0", "01", "11", "31", "71",
@@ -85,12 +86,15 @@ static char ebus_address_values[][NUMBER_LEN] = {
     "77", "f7", "0f", "1f", "3f", "7f", "ff"};
 
 char command_distance[NUMBER_LEN];
+#endif
 
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
+#if defined(EBUS_INTERNAL)
 char mqttPublishCountersValue[STRING_LEN];
 char mqttPublishTimingsValue[STRING_LEN];
+#endif
 
 char haSupportValue[STRING_LEN];
 
@@ -113,15 +117,15 @@ iotwebconf::ParameterGroup ebusGroup =
 iotwebconf::NumberParameter pwmParam =
     iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
                                 "130", "1..255", "min='1' max='255' step='1'");
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
 iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     "eBUS address", "ebus_address", ebus_address, NUMBER_LEN,
     reinterpret_cast<char*>(ebus_address_values),
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
-    "Command distance", "command_distance", command_distance, NUMBER_LEN, "2",
-    "0..60", "min='0' max='60' step='1'");
+    "Command distance (seconds)", "command_distance", command_distance,
+    NUMBER_LEN, "2", "1..60", "min='1' max='60' step='1'");
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =
@@ -133,6 +137,8 @@ iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
     "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", DUMMY_MQTT_USER);
 iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
     "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", DUMMY_MQTT_PASS);
+
+#if defined(EBUS_INTERNAL)
 iotwebconf::CheckboxParameter mqttPublishCountersParam =
     iotwebconf::CheckboxParameter("Publish Counters to MQTT",
                                   "mqttPublishCountersParam",
@@ -141,6 +147,7 @@ iotwebconf::CheckboxParameter mqttPublishTimingsParam =
     iotwebconf::CheckboxParameter("Publish Timings to MQTT",
                                   "mqttPublishTimingsParam",
                                   mqttPublishTimingsValue, STRING_LEN);
+#endif
 
 iotwebconf::ParameterGroup haGroup =
     iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
@@ -203,7 +210,7 @@ void wifiConnected() {
 }
 
 void wdt_start() {
-#ifdef ESP32
+#if defined(ESP32)
   esp_task_wdt_init(6, true);
 #else
   ESP.wdtDisable();
@@ -211,7 +218,7 @@ void wdt_start() {
 }
 
 void wdt_feed() {
-#ifdef ESP32
+#if defined(ESP32)
   esp_task_wdt_reset();
 #else
   ESP.wdtFeed();
@@ -219,22 +226,22 @@ void wdt_feed() {
 }
 
 inline void disableTX() {
-#ifdef TX_DISABLE_PIN
+#if defined(TX_DISABLE_PIN)
   pinMode(TX_DISABLE_PIN, OUTPUT);
   digitalWrite(TX_DISABLE_PIN, HIGH);
 #endif
 }
 
 inline void enableTX() {
-#ifdef TX_DISABLE_PIN
+#if defined(TX_DISABLE_PIN)
   digitalWrite(TX_DISABLE_PIN, LOW);
 #endif
 }
 
 void set_pwm(uint8_t value) {
-#ifdef PWM_PIN
+#if defined(PWM_PIN)
   ledcWrite(PWM_CHANNEL, value);
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   schedule.resetCounters();
   schedule.resetTimings();
 #endif
@@ -242,7 +249,7 @@ void set_pwm(uint8_t value) {
 }
 
 uint32_t get_pwm() {
-#ifdef PWM_PIN
+#if defined(PWM_PIN)
   return ledcRead(PWM_CHANNEL);
 #else
   return 0;
@@ -251,7 +258,7 @@ uint32_t get_pwm() {
 
 void calcUniqueId() {
   uint32_t id = 0;
-#ifdef ESP32
+#if defined(ESP32)
   for (int i = 0; i < 6; ++i) {
     id |= ((ESP.getEfuseMac() >> (8 * (5 - i))) & 0xff) << (8 * i);
   }
@@ -304,7 +311,7 @@ void data_process() {
     handleClientEnhanced(&wifiClientsEnhanced[i]);
   }
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   // check schedule for data
   schedule.nextCommand();
 #endif
@@ -312,7 +319,7 @@ void data_process() {
   // check queue for data
   BusType::data d;
   if (Bus.read(d)) {
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
     if (!d._enhanced) {
       schedule.processData(d._d);
       last_comms = millis();
@@ -384,7 +391,7 @@ void saveParamsCallback() {
   set_pwm(atoi(pwm_value));
   pwm = get_pwm();
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(command_distance));
 #endif
@@ -393,8 +400,10 @@ void saveParamsCallback() {
 
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
+#if defined(EBUS_INTERNAL)
   schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
   schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
+#endif
 
   mqtt.setHASupport(haSupportParam.isChecked());
   mqtt.publishHA();
@@ -446,7 +455,7 @@ char* status_string() {
   pos +=
       snprintf(status + pos, bufferSize - pos, "pwm_value: %u\r\n", get_pwm());
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
                   ebus_address);
   pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
@@ -464,7 +473,7 @@ char* status_string() {
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_user: %s\r\n", mqtt_user);
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_publish_counters: %s\r\n",
                mqttPublishCountersParam.isChecked() ? "true" : "false");
@@ -603,7 +612,7 @@ void setup() {
 
   disableTX();
 
-#ifdef PWM_PIN
+#if defined(PWM_PIN)
   ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
@@ -616,7 +625,7 @@ void setup() {
 
   ebusGroup.addItem(&pwmParam);
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   ebusGroup.addItem(&ebusAddressParam);
   ebusGroup.addItem(&commandDistanceParam);
 #endif
@@ -624,7 +633,7 @@ void setup() {
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   mqttGroup.addItem(&mqttPublishCountersParam);
   mqttGroup.addItem(&mqttPublishTimingsParam);
 #endif
@@ -642,7 +651,7 @@ void setup() {
   iotWebConf.setWifiConnectionHandler(&connectWifi);
   iotWebConf.setWifiConnectionCallback(&wifiConnected);
 
-#ifdef STATUS_LED_PIN
+#if defined(STATUS_LED_PIN)
   iotWebConf.setStatusPin(STATUS_LED_PIN);
 #endif
 
@@ -675,7 +684,7 @@ void setup() {
 
   set_pwm(atoi(pwm_value));
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   schedule.setAddress(uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   schedule.setDistance(atoi(command_distance));
 #endif
@@ -688,8 +697,10 @@ void setup() {
   if (mqtt_server[0] != '\0') mqtt.setServer(mqtt_server, 1883);
   if (mqtt_user[0] != '\0') mqtt.setCredentials(mqtt_user, mqtt_pass);
 
+#if defined(EBUS_INTERNAL)
   schedule.setPublishCounters(mqttPublishCountersParam.isChecked());
   schedule.setPublishTimings(mqttPublishTimingsParam.isChecked());
+#endif
 
   mqtt.setHASupport(haSupportParam.isChecked());
 
@@ -710,12 +721,12 @@ void setup() {
   last_comms = millis();
   enableTX();
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
   store.loadCommands();  // install saved commands
   mqtt.publishHASensors(false);
 #endif
 
-#ifdef ESP32
+#if defined(ESP32)
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
 #endif
 }
@@ -723,14 +734,14 @@ void setup() {
 void loop() {
   ArduinoOTA.handle();
 
-#ifdef ESP8266
+#if defined(ESP8266)
   MDNS.update();
   data_process();
 #endif
 
   wdt_feed();
 
-#ifdef ESP32
+#if defined(ESP32)
   iotWebConf.doLoop();
 #endif
 
@@ -750,12 +761,12 @@ void loop() {
     if (currentMillis > lastMqttUpdate + 5 * 1000) {
       lastMqttUpdate = currentMillis;
 
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
       schedule.fetchCounters();
       schedule.fetchTimings();
 #endif
     }
-#ifdef EBUS_INTERNAL
+#if defined(EBUS_INTERNAL)
     mqtt.doLoop();
 #endif
   }

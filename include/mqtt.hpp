@@ -37,6 +37,7 @@ class Mqtt {
 
   void publishHA() const;
 
+#if defined(EBUS_INTERNAL)
   void publishCommands();
   void publishHASensors(const bool remove);
   void publishParticipants();
@@ -46,6 +47,7 @@ class Mqtt {
                           const std::vector<uint8_t> &slave);
 
   static void publishValue(Command *command, const JsonDocument &doc);
+#endif
 
  private:
   AsyncMqttClient client;
@@ -55,6 +57,7 @@ class Mqtt {
 
   bool haSupport = false;
 
+#if defined(EBUS_INTERNAL)
   std::deque<Command> insCommands;
   uint32_t distanceInsert = 300;
   uint32_t lastInsert = 0;
@@ -74,6 +77,7 @@ class Mqtt {
   std::deque<const Participant *> pubParticipants;
   uint32_t distanceParticipants = 200;
   uint32_t lastParticipants = 0;
+#endif
 
   uint16_t subscribe(const char *topic, uint8_t qos);
 
@@ -89,6 +93,7 @@ class Mqtt {
 
   static void onPublish(uint16_t packetId) {}
 
+#if defined(EBUS_INTERNAL)
   void insertCommands(const JsonArray &commands);
   void removeCommands(const JsonArray &keys);
 
@@ -107,15 +112,18 @@ class Mqtt {
                        const JsonArray &addresses);
 
   void publishCommand(const Command *command);
+#endif
 
   void publishHADiagnostic(const char *name, const bool remove,
                            const char *value_template, const bool full = false);
 
   void publishHAConfigButton(const char *name, const bool remove);
 
+#if defined(EBUS_INTERNAL)
   void publishHASensor(const Command *command, const bool remove);
 
   void publishParticipant(const Participant *participant);
+#endif
 };
 
 extern Mqtt mqtt;

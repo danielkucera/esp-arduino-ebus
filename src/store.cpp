@@ -1,3 +1,4 @@
+#if defined(EBUS_INTERNAL)
 #include "store.hpp"
 
 #include <Preferences.h>
@@ -428,3 +429,4 @@ const double Store::getValueDouble(const Command *command) {
 const std::string Store::getValueString(const Command *command) {
   return ebus::byte_2_string(command->data);
 }
+#endif
