@@ -27,5 +27,4 @@ int DEBUG_LOG_IMPL(const char *format, ...);
 
 char *status_string();
 void restart();
-const std::string getAdapterJson();
 const std::string getStatusJson();
