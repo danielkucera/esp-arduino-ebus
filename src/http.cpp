@@ -1,17 +1,13 @@
 #include "http.hpp"
 
 #include "main.hpp"
+#include "mqtt.hpp"
 #include "schedule.hpp"
 #include "store.hpp"
 
 WebServer configServer(80);
 
 void handleStatus() { configServer.send(200, "text/plain", status_string()); }
-
-void handleGetAdapter() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    getAdapterJson().c_str());
-}
 
 void handleGetStatus() {
   configServer.send(200, "application/json;charset=utf-8",
@@ -119,17 +115,17 @@ void handleValues() {
                     store.getValuesJson().c_str());
 }
 
-void handleParicipantsScanSeen() {
-  schedule.handleScanSeen();
+void handleScan() {
+  schedule.handleScan();
   configServer.send(200, "text/html", "Scan initiated");
 }
 
-void handleParicipantsScanFull() {
+void handleScanFull() {
   schedule.handleScanFull();
-  configServer.send(200, "text/html", "Scan full initiated");
+  configServer.send(200, "text/html", "Full scan initiated");
 }
 
-void handleParicipantsList() {
+void handleParticipants() {
   configServer.send(200, "application/json;charset=utf-8",
                     schedule.getParticipantsJson().c_str());
 }
@@ -144,6 +140,11 @@ void handleGetTimings() {
                     schedule.getTimingsJson().c_str());
 }
 
+void handleResetStatistic() {
+  schedule.resetCounters();
+  schedule.resetTimings();
+  configServer.send(200, "text/html", "Statistic reset");
+}
 #endif
 
 void handleRoot() {
@@ -172,11 +173,13 @@ void handleRoot() {
   s += "<a href='/commands/wipe' onclick=\"return "
        "confirmAction('wipe commands');\">Wipe commands</a><br>";
   s += "<a href='/values'>Values</a><br>";
-  s += "<a href='/participants/scan' onclick=\"return "
+  s += "<a href='/scan' onclick=\"return "
        "confirmAction('scan');\">Scan</a><br>";
-  s += "<a href='/participants/scanfull' onclick=\"return "
+  s += "<a href='/scanfull' onclick=\"return "
        "confirmAction('scan full');\">Scan full</a><br>";
-  s += "<a href='/participants/list'>Participants</a><br>";
+  s += "<a href='/participants'>Participants</a><br>";
+  s += "<a href='/reset' onclick=\"return "
+       "confirmAction('reset');\">Reset statistic</a><br>";
 #endif
   s += "<a href='/restart' onclick=\"return "
        "confirmAction('restart');\">Restart</a><br>";
@@ -197,24 +200,25 @@ void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
   configServer.on("/status", [] { handleStatus(); });
-  configServer.on("/api/v1/GetAdapter", [] { handleGetAdapter(); });
   configServer.on("/api/v1/GetStatus", [] { handleGetStatus(); });
 #ifdef EBUS_INTERNAL
   configServer.on("/commands/list", [] { handleCommandsList(); });
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
   configServer.on("/commands/upload", [] { handleCommandsUpload(); });
   configServer.on("/commands/insert", [] { handleCommandsInsert(); });
-  configServer.on("/commands/load", [] { handleCommandsLoad(); });
+  configServer.on("/commands/load", [] {
+    handleCommandsLoad();
+    mqtt.publishHASensors(false);
+  });
   configServer.on("/commands/save", [] { handleCommandsSave(); });
   configServer.on("/commands/wipe", [] { handleCommandsWipe(); });
   configServer.on("/values", [] { handleValues(); });
-  configServer.on("/participants/scanseen",
-                  [] { handleParicipantsScanSeen(); });
-  configServer.on("/participants/scanfull",
-                  [] { handleParicipantsScanFull(); });
-  configServer.on("/participants/list", [] { handleParicipantsList(); });
+  configServer.on("/scan", [] { handleScan(); });
+  configServer.on("/scanfull", [] { handleScanFull(); });
+  configServer.on("/participants", [] { handleParticipants(); });
   configServer.on("/api/v1/GetCounters", [] { handleGetCounters(); });
   configServer.on("/api/v1/GetTimings", [] { handleGetTimings(); });
+  configServer.on("/reset", [] { handleResetStatistic(); });
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });

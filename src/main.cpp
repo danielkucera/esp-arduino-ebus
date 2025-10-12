@@ -164,10 +164,6 @@ WiFiServer statusServer(5555);
 
 uint32_t last_comms = 0;
 
-bool needMqttConnect = false;
-uint32_t lastMqttConnectionAttempt = 0;
-uint32_t lastMqttUpdate = 0;
-
 // status
 uint32_t reset_code = 0;
 Track<uint32_t> uptime("state/uptime", 10);
@@ -178,6 +174,12 @@ Track<uint32_t> free_heap("state/free_heap", 10);
 // wifi
 uint32_t last_connect = 0;
 int reconnect_count = 0;
+
+// mqtt
+bool needMqttConnect = false;
+int mqtt_reconnect_count = 0;
+uint32_t lastMqttConnectionAttempt = 0;
+uint32_t lastMqttUpdate = 0;
 
 bool connectMqtt() {
   if (mqtt.connected()) return true;
@@ -479,64 +481,16 @@ char* status_string() {
   return status;
 }
 
-const std::string getAdapterJson() {
-  std::string payload;
-  JsonDocument doc;
-
-  doc["Unique_ID"] = unique_id;
-
-  // Firmware
-  JsonObject Firmware = doc["Firmware"].to<JsonObject>();
-  Firmware["Version"] = AUTO_VERSION;
-  Firmware["SDK"] = ESP.getSdkVersion();
-  Firmware["Async"] = USE_ASYNCHRONOUS ? true : false;
-  Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
-
-  // Settings
-  JsonObject Settings = doc["Settings"].to<JsonObject>();
-  Settings["PWM"] = get_pwm();
-#ifdef EBUS_INTERNAL
-  Settings["Ebus_Address"] = ebus_address;
-  Settings["Command_Distance"] = atoi(command_distance);
-  Settings["Active_Commands"] = store.getActiveCommands();
-  Settings["Passive_Commands"] = store.getPassiveCommands();
-#endif
-
-  // Mqtt
-  JsonObject Mqtt = doc["Mqtt"].to<JsonObject>();
-  Mqtt["Server"] = mqtt_server;
-  Mqtt["User"] = mqtt_user;
-  Mqtt["Connected"] = mqtt.connected();
-#ifdef EBUS_INTERNAL
-  Mqtt["Publish_Counters"] = mqttPublishCountersParam.isChecked();
-  Mqtt["Publish_Timings"] = mqttPublishTimingsParam.isChecked();
-#endif
-
-  // HomeAssistant
-  JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
-  HomeAssistant["Support"] = haSupportParam.isChecked();
-
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
-
-  return payload;
-}
-
 const std::string getStatusJson() {
   std::string payload;
   JsonDocument doc;
 
-  doc["Reset_Code"] = reset_code;
-  doc["Uptime"] = uptime.value();
-  doc["Loop_Duration"] = loopDuration.value();
-  doc["Loop_Duration_Max"] = maxLoopDuration;
-  doc["Free_Heap"] = free_heap.value();
-
-  // WIFI
-  JsonObject WIFI = doc["WIFI"].to<JsonObject>();
-  WIFI["Last_Connect"] = last_connect;
-  WIFI["Reconnect_Count"] = reconnect_count;
-  WIFI["RSSI"] = WiFi.RSSI();
+  JsonObject Status = doc["Status"].to<JsonObject>();
+  Status["Reset_Code"] = reset_code;
+  Status["Uptime"] = uptime.value();
+  Status["Loop_Duration"] = loopDuration.value();
+  Status["Loop_Duration_Max"] = maxLoopDuration;
+  Status["Free_Heap"] = free_heap.value();
 
   // Arbitration
   JsonObject Arbitration = doc["Arbitration"].to<JsonObject>();
@@ -549,6 +503,66 @@ const std::string getStatusJson() {
   Arbitration["Lost2"] = static_cast<int>(Bus._nbrLost2);
   Arbitration["Late"] = static_cast<int>(Bus._nbrLate);
   Arbitration["Errors"] = static_cast<int>(Bus._nbrErrors);
+
+  // Firmware
+  JsonObject Firmware = doc["Firmware"].to<JsonObject>();
+  Firmware["Version"] = AUTO_VERSION;
+  Firmware["SDK"] = ESP.getSdkVersion();
+  Firmware["Async"] = USE_ASYNCHRONOUS ? true : false;
+  Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
+  Firmware["Unique_ID"] = unique_id;
+#if defined(ESP32)
+  Firmware["Clock_Speed"] = getCpuFrequencyMhz();
+  Firmware["Apb_Speed"] = getApbFrequency();
+#endif
+
+  // WIFI
+  JsonObject WIFI = doc["WIFI"].to<JsonObject>();
+  WIFI["Last_Connect"] = last_connect;
+  WIFI["Reconnect_Count"] = reconnect_count;
+  WIFI["RSSI"] = WiFi.RSSI();
+
+  if (staticIPParam.isChecked()) {
+    WIFI["Static_IP"] = true;
+    WIFI["IP_Address"] = ipAddress.toString();
+    WIFI["Gateway"] = gateway.toString();
+    WIFI["Netmask"] = netmask.toString();
+  } else {
+    WIFI["Static_IP"] = false;
+    WIFI["IP_Address"] = WiFi.localIP().toString();
+    WIFI["Gateway"] = WiFi.gatewayIP().toString();
+    WIFI["Netmask"] = WiFi.subnetMask().toString();
+  }
+  WIFI["SSID"] = WiFi.SSID();
+  WIFI["BSSID"] = WiFi.BSSIDstr();
+  WIFI["Channel"] = WiFi.channel();
+  WIFI["Hostname"] = WiFi.getHostname();
+  WIFI["MAC_Address"] = WiFi.macAddress();
+
+  // eBUS
+  JsonObject eBUS = doc["eBUS"].to<JsonObject>();
+  eBUS["PWM"] = get_pwm();
+#if defined(EBUS_INTERNAL)
+  eBUS["Ebus_Address"] = ebus_address;
+  eBUS["Command_Distance"] = atoi(command_distance);
+  eBUS["Active_Commands"] = store.getActiveCommands();
+  eBUS["Passive_Commands"] = store.getPassiveCommands();
+#endif
+
+  // MQTT
+  JsonObject MQTT = doc["MQTT"].to<JsonObject>();
+  MQTT["Server"] = mqtt_server;
+  MQTT["User"] = mqtt_user;
+  MQTT["Connected"] = mqtt.connected();
+  MQTT["Reconnect_Count"] = mqtt_reconnect_count;
+#if defined(EBUS_INTERNAL)
+  MQTT["Publish_Counter"] = mqttPublishCountersParam.isChecked();
+  MQTT["Publish_Timing"] = mqttPublishTimingsParam.isChecked();
+#endif
+
+  // HomeAssistant
+  JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
+  HomeAssistant["Support"] = haSupportParam.isChecked();
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
@@ -721,7 +735,10 @@ void loop() {
 #endif
 
   if (needMqttConnect) {
-    if (connectMqtt()) needMqttConnect = false;
+    if (connectMqtt()) {
+      needMqttConnect = false;
+      ++mqtt_reconnect_count;
+    }
 
   } else if ((iotWebConf.getState() == iotwebconf::OnLine) &&
              (!mqtt.connected())) {

@@ -164,7 +164,7 @@ void Schedule::handleScanFull() {
   nextScanCommand();
 }
 
-void Schedule::handleScanSeen() {
+void Schedule::handleScan() {
   scanCommands.clear();
   std::set<uint8_t> slaves;
 

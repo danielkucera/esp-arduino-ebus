@@ -154,6 +154,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       mqtt.publishCommands();
     } else if (id.compare("load") == 0) {
       loadCommands();
+      mqtt.publishHASensors(false);
     } else if (id.compare("save") == 0) {
       saveCommands();
     } else if (id.compare("wipe") == 0) {
@@ -296,7 +297,7 @@ void Mqtt::initScan(const bool full, const JsonArray &addresses) {
   if (full)
     schedule.handleScanFull();
   else if (addresses.isNull() || addresses.size() == 0)
-    schedule.handleScanSeen();
+    schedule.handleScan();
   else
     schedule.handleScanAddresses(addresses);
 
