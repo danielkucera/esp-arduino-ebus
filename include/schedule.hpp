@@ -41,7 +41,7 @@ class Schedule {
   void handleSend(const JsonArray &commands);
 
   void toggleForward(const bool enable);
-  void handleForwadFilter(const JsonArray &filters);
+  void handleForwardFilter(const JsonArray &filters);
 
   void nextCommand();
   void processData(const uint8_t byte);

@@ -209,7 +209,7 @@ void Schedule::handleSend(const JsonArray &commands) {
 
 void Schedule::toggleForward(const bool enable) { forward = enable; }
 
-void Schedule::handleForwadFilter(const JsonArray &filters) {
+void Schedule::handleForwardFilter(const JsonArray &filters) {
   forwardfilters.clear();
   for (JsonVariant filter : filters)
     forwardfilters.push_back(ebus::to_vector(filter));
