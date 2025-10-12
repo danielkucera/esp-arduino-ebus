@@ -18,13 +18,24 @@
 // along with the command as raw data. Defined messages (filter function) can be
 // forwarded. Scanning of eBUS participants is also available.
 
+constexpr uint8_t VENDOR_VAILLANT = 0xb5;
+
 struct Participant {
   uint8_t slave;
-  std::vector<uint8_t> scan070400;
-  std::vector<uint8_t> scanb5090124;
-  std::vector<uint8_t> scanb5090125;
-  std::vector<uint8_t> scanb5090126;
-  std::vector<uint8_t> scanb5090127;
+  std::vector<uint8_t> vec_070400;
+  std::vector<uint8_t> vec_b5090124;
+  std::vector<uint8_t> vec_b5090125;
+  std::vector<uint8_t> vec_b5090126;
+  std::vector<uint8_t> vec_b5090127;
+
+  bool isVaillant() const {
+    return (vec_070400.size() > 1 && vec_070400[1] == VENDOR_VAILLANT);
+  }
+
+  bool isVaillantValid() const {
+    return (vec_b5090124.size() > 0 && vec_b5090125.size() > 0 &&
+            vec_b5090126.size() > 0 && vec_b5090127.size() > 0);
+  }
 };
 
 class Schedule {
@@ -37,6 +48,7 @@ class Schedule {
   void handleScanFull();
   void handleScan();
   void handleScanAddresses(const JsonArray &addresses);
+  void handleScanVendor();
 
   void handleSend(const JsonArray &commands);
 
@@ -44,6 +56,8 @@ class Schedule {
   void handleForwardFilter(const JsonArray &filters);
 
   void nextCommand();
+  void nextScanCommand();
+
   void processData(const uint8_t byte);
 
   void setPublishCounters(const bool enable);
@@ -66,16 +80,21 @@ class Schedule {
 
   Command *scheduleCommand = nullptr;
 
-  uint32_t distanceCommands = 0;
-  uint32_t lastCommand = 0;
-
-  std::map<uint8_t, Participant> allParticipants;
-
   enum class Mode { scan, send, normal };
   Mode mode = Mode::normal;
 
+  uint32_t distanceCommands = 0;     // in milliseconds
+  uint32_t lastCommand = 10 * 1000;  // 10 seconds after start
+
+  uint32_t distanceScans = 11 * 1000;  // 11 seconds after start
+  uint32_t lastScan = 0;               // in milliseconds
+  uint8_t maxScans = 5;                // maximum number of scans
+  uint8_t currentScan = 0;             // current scan count
+
   bool fullScan = false;
   uint8_t scanIndex = 0;
+
+  std::map<uint8_t, Participant> allParticipants;
 
   std::deque<std::vector<uint8_t>> scanCommands;
   std::deque<std::vector<uint8_t>> sendCommands;
@@ -104,8 +123,6 @@ class Schedule {
 
   void processScan(const std::vector<uint8_t> &master,
                    const std::vector<uint8_t> &slave);
-
-  void nextScanCommand();
 };
 
 extern Schedule schedule;
