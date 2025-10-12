@@ -273,6 +273,7 @@ Available MQTT commands.
 |participants     |Publishing scanned ebus participants                          |x
 |send             |Sending ebus commands once                                    |x
 |forward          |Activate/deactivate data forwarding (including filtering)     |x
+|reset            |Resetting counter and timing values                           |x    
 
 
 ### Examples
@@ -286,12 +287,11 @@ The provided examples were created using `Mosquitto` in a `Linux shell`. The `se
 ```
 payload:
 {
-  "id": "restart",
-  "value": true
+  "id": "restart"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart","value":true}' 
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart"}' 
 ```
 
 **Inserting (Installing) of new commands**
@@ -348,48 +348,44 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01"
 ```
 payload:
 {
-  "id": "publish",
-  "value": true
+  "id": "publish"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"publish","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"publish"}'
 ```
 
 **Loading (Installing) saved commands**
 ```
 payload:
 {
-  "id": "load",
-  "value": true
+  "id": "load"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"load","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"load"}'
 ```
 
 **Saving the currently installed commands**
 ```
 payload:
 {
-  "id": "save",
-  "value": true
+  "id": "save"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"save","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"save"}'
 ```
 
 **Wiping of the saved commands**
 ```
 payload:
 {
-  "id": "wipe",
-  "value": true
+  "id": "wipe"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe"}'
 ```
 
 **Scanning of ebus participants**
@@ -397,8 +393,8 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"wipe","value":true}'
 payload:
 {
   "id": "scan",
-  "full": false
-  "addresses": [
+  "full": false,                         // optional
+  "addresses": [                         // optional
     "ZZ",
     ...
   ]
@@ -412,12 +408,11 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"scan","full":false,"
 ```
 payload:
 {
-  "id": "participants",
-  "value": true
+  "id": "participants"
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"participants","value":true}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"participants"}'
 ```
 
 **Sending ebus commands once**
@@ -440,19 +435,29 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"send","commands":["0
 payload:
 {
   "id": "forward",
-  "value": true,
-  "filters": [
+  "enable": true,
+  "filters": [                           // optional
     "DB(x)",
     ...
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":true,"filters":["0700","fe"]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","enable":true,"filters":["0700","fe"]}'
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","value":false}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"forward","enable":false}'
 ```
+
+**Resetting counter and timing values**
+```
+payload:
+{
+  "id": "reset"
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"reset"}' 
 
 ### Home Assistant Support
 Home Assistant support can be globally activated on the configuration web page.

@@ -15,17 +15,19 @@ Mqtt::Mqtt() {
   client.onPublish(onPublish);
 }
 
+void Mqtt::setUniqueId(const char *id) {
+  uniqueId = id;
+  rootTopic = "ebus/" + uniqueId + "/";
+  topicWill = mqtt.rootTopic + "state/available";
+  client.setWill(topicWill.c_str(), 0, true, "offline");
+}
+
 void Mqtt::setServer(const char *host, uint16_t port) {
   client.setServer(host, port);
 }
 
 void Mqtt::setCredentials(const char *username, const char *password) {
   client.setCredentials(username, password);
-}
-
-void Mqtt::setUniqueId(const char *id) {
-  uniqueId = id;
-  rootTopic = "ebus/" + uniqueId + "/";
 }
 
 void Mqtt::setHASupport(const bool enable) { haSupport = enable; }
@@ -110,11 +112,6 @@ void Mqtt::publishValue(Command *command, const JsonDocument &doc) {
   mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }
 
-void Mqtt::setWill(const char *topic, uint8_t qos, bool retain,
-                   const char *payload, size_t length) {
-  client.setWill(topic, qos, retain, payload, length);
-}
-
 uint16_t Mqtt::subscribe(const char *topic, uint8_t qos) {
   return client.subscribe(topic, qos);
 }
@@ -123,9 +120,7 @@ void Mqtt::onConnect(bool sessionPresent) {
   std::string topicRequest = mqtt.rootTopic + "request";
   mqtt.subscribe(topicRequest.c_str(), 0);
 
-  std::string topicWill = mqtt.rootTopic + "state/available";
-  mqtt.publish(topicWill.c_str(), 0, true, "online", false);
-  mqtt.setWill(topicWill.c_str(), 0, true, "offline");
+  mqtt.publish(mqtt.topicWill.c_str(), 0, true, "online", false);
 
   mqtt.publishHA();
 }
@@ -146,8 +141,7 @@ void Mqtt::onMessage(const char *topic, const char *payload,
   } else {
     std::string id = doc["id"].as<std::string>();
     if (id.compare("restart") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) restart();
+      restart();
     }
 #ifdef EBUS_INTERNAL
     else if (id.compare("insert") == 0) {  // NOLINT
@@ -157,24 +151,19 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       JsonArray keys = doc["keys"].as<JsonArray>();
       if (keys != nullptr) mqtt.removeCommands(keys);
     } else if (id.compare("publish") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) mqtt.publishCommands();
+      mqtt.publishCommands();
     } else if (id.compare("load") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) loadCommands();
+      loadCommands();
     } else if (id.compare("save") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) saveCommands();
+      saveCommands();
     } else if (id.compare("wipe") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) wipeCommands();
+      wipeCommands();
     } else if (id.compare("scan") == 0) {
       boolean full = doc["full"].as<boolean>();
       JsonArray addresses = doc["addresses"].as<JsonArray>();
       mqtt.initScan(full, addresses);
     } else if (id.compare("participants") == 0) {
-      boolean value = doc["value"].as<boolean>();
-      if (value) mqtt.publishParticipants();
+      mqtt.publishParticipants();
     } else if (id.compare("send") == 0) {
       JsonArray commands = doc["commands"].as<JsonArray>();
       if (commands.isNull() || commands.size() == 0)
@@ -183,9 +172,12 @@ void Mqtt::onMessage(const char *topic, const char *payload,
         schedule.handleSend(commands);
     } else if (id.compare("forward") == 0) {
       JsonArray filters = doc["filters"].as<JsonArray>();
-      if (!filters.isNull()) schedule.handleForwadFilter(filters);
-      boolean value = doc["value"].as<boolean>();
-      schedule.toggleForward(value);
+      if (!filters.isNull()) schedule.handleForwardFilter(filters);
+      boolean enable = doc["enable"].as<boolean>();
+      schedule.toggleForward(enable);
+    } else if (id.compare("reset") == 0) {
+      schedule.resetCounters();
+      schedule.resetTimings();
     }
 #endif
     else {  // NOLINT
