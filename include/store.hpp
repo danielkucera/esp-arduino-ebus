@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined(EBUS_INTERNAL)
 #include <ArduinoJson.h>
 #include <Ebus.h>
 
@@ -94,3 +95,4 @@ class Store {
 };
 
 extern Store store;
+#endif

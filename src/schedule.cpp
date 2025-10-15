@@ -1,3 +1,4 @@
+#if defined(EBUS_INTERNAL)
 #include "schedule.hpp"
 
 #include <set>
@@ -845,3 +846,4 @@ void Schedule::processScan(const std::vector<uint8_t> &master,
   if (ebus::contains(master, VEC_b5090127))
     allParticipants[master[1]].vec_b5090127 = slave;
 }
+#endif
