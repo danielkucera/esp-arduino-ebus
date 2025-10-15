@@ -61,15 +61,15 @@ class Schedule {
 
   void processData(const uint8_t byte);
 
-  void setPublishCounters(const bool enable);
-  void resetCounters();
-  void fetchCounters();
-  const std::string getCountersJson();
+  void setPublishCounter(const bool enable);
+  void resetCounter();
+  void fetchCounter();
+  const std::string getCounterJson();
 
-  void setPublishTimings(const bool enable);
-  void resetTimings();
-  void fetchTimings();
-  const std::string getTimingsJson();
+  void setPublishTiming(const bool enable);
+  void resetTiming();
+  void fetchTiming();
+  const std::string getTimingJson();
 
   static JsonDocument getParticipantJson(const Participant *participant);
   const std::string getParticipantsJson() const;
@@ -103,8 +103,8 @@ class Schedule {
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;
 
-  bool publishCounters = false;
-  bool publishTimings = false;
+  bool publishCounter = false;
+  bool publishTiming = false;
 
   static void onWriteCallback(const uint8_t byte);
   static int isDataAvailableCallback();
