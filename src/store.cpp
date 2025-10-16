@@ -427,6 +427,33 @@ const double Store::getValueDouble(const Command *command) {
 }
 
 const std::string Store::getValueString(const Command *command) {
-  return ebus::byte_2_string(command->data);
+  std::string value;
+
+  switch (command->datatype) {
+    case ebus::DataType::CHAR1:
+    case ebus::DataType::CHAR2:
+    case ebus::DataType::CHAR3:
+    case ebus::DataType::CHAR4:
+    case ebus::DataType::CHAR5:
+    case ebus::DataType::CHAR6:
+    case ebus::DataType::CHAR7:
+    case ebus::DataType::CHAR8:
+      value = ebus::byte_2_char(command->data);
+      break;
+    case ebus::DataType::HEX1:
+    case ebus::DataType::HEX2:
+    case ebus::DataType::HEX3:
+    case ebus::DataType::HEX4:
+    case ebus::DataType::HEX5:
+    case ebus::DataType::HEX6:
+    case ebus::DataType::HEX7:
+    case ebus::DataType::HEX8:
+      value = ebus::byte_2_hex(command->data);
+      break;
+    default:
+      break;
+  }
+
+  return value;
 }
 #endif
