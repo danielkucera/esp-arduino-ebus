@@ -135,19 +135,19 @@ void handleParticipants() {
                     schedule.getParticipantsJson().c_str());
 }
 
-void handleGetCounters() {
+void handleGetCounter() {
   configServer.send(200, "application/json;charset=utf-8",
-                    schedule.getCountersJson().c_str());
+                    schedule.getCounterJson().c_str());
 }
 
-void handleGetTimings() {
+void handleGetTiming() {
   configServer.send(200, "application/json;charset=utf-8",
-                    schedule.getTimingsJson().c_str());
+                    schedule.getTimingJson().c_str());
 }
 
 void handleResetStatistic() {
-  schedule.resetCounters();
-  schedule.resetTimings();
+  schedule.resetCounter();
+  schedule.resetTiming();
   configServer.send(200, "text/html", "Statistic reset");
 }
 #endif
@@ -224,8 +224,8 @@ void SetupHttpHandlers() {
   configServer.on("/scanfull", [] { handleScanFull(); });
   configServer.on("/scanvendor", [] { handleScanVendor(); });
   configServer.on("/participants", [] { handleParticipants(); });
-  configServer.on("/api/v1/GetCounters", [] { handleGetCounters(); });
-  configServer.on("/api/v1/GetTimings", [] { handleGetTimings(); });
+  configServer.on("/api/v1/GetCounter", [] { handleGetCounter(); });
+  configServer.on("/api/v1/GetTiming", [] { handleGetTiming(); });
   configServer.on("/reset", [] { handleResetStatistic(); });
 #endif
   configServer.on("/restart", [] { restart(); });

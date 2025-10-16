@@ -19,6 +19,9 @@ const std::vector<uint8_t> VEC_b5090125 = {0xb5, 0x09, 0x01, 0x25};
 const std::vector<uint8_t> VEC_b5090126 = {0xb5, 0x09, 0x01, 0x26};
 const std::vector<uint8_t> VEC_b5090127 = {0xb5, 0x09, 0x01, 0x27};
 
+// Inquiry of Existence (Service 07h FEh)
+const std::vector<uint8_t> VEC_07fe00 = {0x07, 0xfe, 0x00};
+
 // ebus/<unique_id>/state/addresses
 std::map<uint8_t, uint32_t> seenMasters;
 std::map<uint8_t, uint32_t> seenSlaves;
@@ -310,22 +313,17 @@ void Schedule::nextScanCommand() {
 
 void Schedule::processData(const uint8_t byte) { ebusHandler.run(byte); }
 
-void Schedule::setPublishCounters(const bool enable) {
-  publishCounters = enable;
-}
+void Schedule::setPublishCounter(const bool enable) { publishCounter = enable; }
 
-void Schedule::resetCounters() {
-  // Addresses Master
+void Schedule::resetCounter() {
   seenMasters.clear();
-
-  // Addresses Slave
   seenSlaves.clear();
 
   ebusHandler.resetCounters();
 }
 
-void Schedule::fetchCounters() {
-  if (!publishCounters) return;
+void Schedule::fetchCounter() {
+  if (!publishCounter) return;
 
   // Addresses Master
   for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
@@ -387,7 +385,7 @@ void Schedule::fetchCounters() {
   ASSIGN_COUNTER(errorsActiveSlaveACK)
 }
 
-const std::string Schedule::getCountersJson() {
+const std::string Schedule::getCounterJson() {
   std::string payload;
   JsonDocument doc;
 
@@ -468,12 +466,12 @@ const std::string Schedule::getCountersJson() {
   return payload;
 }
 
-void Schedule::setPublishTimings(const bool enable) { publishTimings = enable; }
+void Schedule::setPublishTiming(const bool enable) { publishTiming = enable; }
 
-void Schedule::resetTimings() { ebusHandler.resetTimings(); }
+void Schedule::resetTiming() { ebusHandler.resetTimings(); }
 
-void Schedule::fetchTimings() {
-  if (!publishTimings) return;
+void Schedule::fetchTiming() {
+  if (!publishTiming) return;
 
   // Timings
   ebus::Timings timings = ebusHandler.getTimings();
@@ -526,7 +524,7 @@ void Schedule::fetchTimings() {
   ASSIGN_STATE_TIMING(releaseBus, releaseBus)
 }
 
-const std::string Schedule::getTimingsJson() {
+const std::string Schedule::getTimingJson() {
   std::string payload;
   JsonDocument doc;
 
@@ -792,7 +790,7 @@ void Schedule::onTelegramCallback(const ebus::MessageType &messageType,
 }
 
 void Schedule::onErrorCallback(const std::string &str) {
-  if (schedule.publishCounters) {
+  if (schedule.publishCounter) {
     std::string topic = "state/resets/last";
     std::string payload = str;
     mqtt.publish(topic.c_str(), 0, false, payload.c_str());
@@ -828,6 +826,11 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
     mqtt.publishValue(command, store.getValueJson(command));
 
   processScan(master, slave);
+
+  // send Sign of Life (Service 07h FFh) in response
+  // to an Inquiry of Existence (Service 07h FEh)
+  if (ebus::contains(master, VEC_07fe00))
+    sendCommands.push_front(ebus::to_vector("fe07ff00"));
 }
 
 void Schedule::processScan(const std::vector<uint8_t> &master,

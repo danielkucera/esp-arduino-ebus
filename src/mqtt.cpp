@@ -182,8 +182,8 @@ void Mqtt::onMessage(const char *topic, const char *payload,
       boolean enable = doc["enable"].as<boolean>();
       schedule.toggleForward(enable);
     } else if (id.compare("reset") == 0) {
-      schedule.resetCounters();
-      schedule.resetTimings();
+      schedule.resetCounter();
+      schedule.resetTiming();
     }
 #endif
     else {  // NOLINT
