@@ -41,9 +41,11 @@ struct Participant {
 
 class Schedule {
  public:
-  Schedule();
+  Schedule() = default;
 
-  void setAddress(const uint8_t source);
+  void start(ebus::Request *request, ebus::Handler *handler);
+  void stop();
+
   void setDistance(const uint8_t distance);
 
   void handleScanFull();
@@ -55,11 +57,6 @@ class Schedule {
 
   void toggleForward(const bool enable);
   void handleForwardFilter(const JsonArray &filters);
-
-  void nextCommand();
-  void nextScanCommand();
-
-  void processData(const uint8_t byte);
 
   void setPublishCounter(const bool enable);
   void resetCounter();
@@ -77,12 +74,17 @@ class Schedule {
   const std::vector<Participant *> getParticipants();
 
  private:
-  ebus::Handler ebusHandler;
+  ebus::Request *ebusRequest = nullptr;
+  ebus::Handler *ebusHandler = nullptr;
 
-  Command *scheduleCommand = nullptr;
+  volatile bool stopRunner = false;
+
+  bool sendInquiryOfExistence = true;
 
   enum class Mode { scan, send, normal };
   Mode mode = Mode::normal;
+
+  Command *scheduleCommand = nullptr;
 
   uint32_t distanceCommands = 0;     // in milliseconds
   uint32_t lastCommand = 10 * 1000;  // 10 seconds after start
@@ -106,17 +108,36 @@ class Schedule {
   bool publishCounter = false;
   bool publishTiming = false;
 
-  static void onWriteCallback(const uint8_t byte);
-  static int isDataAvailableCallback();
+  enum class CallbackType { telegram, error };
 
-  static void onTelegramCallback(const ebus::MessageType &messageType,
-                                 const ebus::TelegramType &telegramType,
-                                 const std::vector<uint8_t> &master,
-                                 std::vector<uint8_t> *const slave);
+  struct CallbackEvent {
+    CallbackType type;
+    Mode mode;
+    struct {
+      ebus::MessageType messageType;
+      ebus::TelegramType telegramType;
+      std::vector<uint8_t> master;
+      std::vector<uint8_t> slave;
+      std::string error;
+    } data;
+  };
 
-  static void onErrorCallback(const std::string &str);
+  ebus::Queue<CallbackEvent *> eventQueue{8};
 
-  void processActive(const std::vector<uint8_t> &master,
+  TaskHandle_t scheduleTaskHandle;
+
+  static void taskFunc(void *arg);
+
+  void handleEvents();
+
+  void nextCommand();
+
+  void nextScanCommand();
+
+  static void reactiveMasterSlaveCallback(const std::vector<uint8_t> &master,
+                                          std::vector<uint8_t> *const slave);
+
+  void processActive(const Mode &mode, const std::vector<uint8_t> &master,
                      const std::vector<uint8_t> &slave);
 
   void processPassive(const std::vector<uint8_t> &master,
