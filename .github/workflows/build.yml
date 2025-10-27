@@ -33,6 +33,8 @@ jobs:
         pip install --upgrade platformio
     - name: Prepare release dir
       run: mkdir release
+    - name: Build v5.x-internal
+      run: pio run -e esp32-c3-internal ; cp .pio/build/esp32-c3-internal/firmware.bin release/firmware-HW_v5.x-internal-${GITHUB_SHA::6}.bin
     - name: Build v5.x
       run: pio run -e esp32-c3 ; cp .pio/build/esp32-c3/firmware.bin release/firmware-HW_v5.x-${GITHUB_SHA::6}.bin
     - name: Assemble v5.x fullflash
