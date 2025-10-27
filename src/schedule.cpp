@@ -3,11 +3,8 @@
 
 #include <set>
 
-#include "bus.hpp"
 #include "mqtt.hpp"
 #include "track.hpp"
-
-constexpr uint8_t DEFAULT_EBUS_HANDLER_ADDRESS = 0xff;
 
 // Identification (Service 07h 04h)
 const std::vector<uint8_t> VEC_070400 = {0x07, 0x04, 0x00};
@@ -28,136 +25,162 @@ std::map<uint8_t, uint32_t> seenSlaves;
 
 #define TRACK_U32(NAME, PATH) Track<uint32_t> NAME("state/" PATH, 10);
 
-#define ASSIGN_COUNTER(NAME) NAME = counters.NAME;
+#define ASSIGN_REQUEST_COUNTER(NAME) NAME = requestCounter.NAME;
+#define ASSIGN_HANDLER_COUNTER(NAME) NAME = handlerCounter.NAME;
 
 // Messages
 TRACK_U32(messagesTotal, "messages")
 TRACK_U32(messagesPassiveMasterSlave, "messages/passiveMasterSlave")
 TRACK_U32(messagesPassiveMasterMaster, "messages/passiveMasterMaster")
+TRACK_U32(messagesPassiveBroadcast, "messages/passiveBroadcast")
 TRACK_U32(messagesReactiveMasterSlave, "messages/reactiveMasterSlave")
 TRACK_U32(messagesReactiveMasterMaster, "messages/reactiveMasterMaster")
-TRACK_U32(messagesReactiveBroadcast, "messages/reactiveBroadcast")
 TRACK_U32(messagesActiveMasterSlave, "messages/activeMasterSlave")
 TRACK_U32(messagesActiveMasterMaster, "messages/activeMasterMaster")
 TRACK_U32(messagesActiveBroadcast, "messages/activeBroadcast")
 
 // Requests
-TRACK_U32(requestsTotal, "requests")
-TRACK_U32(requestsWon, "requests/won")
-TRACK_U32(requestsLost, "requests/lost")
-TRACK_U32(requestsRetry, "requests/retry")
-TRACK_U32(requestsError, "requests/error")
+TRACK_U32(requestsStartBit, "requests/startBit")
+TRACK_U32(requestsFirstSyn, "requests/firstSyn")
+TRACK_U32(requestsFirstWon, "requests/firstWon")
+TRACK_U32(requestsFirstRetry, "requests/firstRetry")
+TRACK_U32(requestsFirstLost, "requests/firstLost")
+TRACK_U32(requestsFirstError, "requests/firstError")
+TRACK_U32(requestsRetrySyn, "requests/retrySyn")
+TRACK_U32(requestsRetryError, "requests/retryError")
+TRACK_U32(requestsSecondWon, "requests/secondWon")
+TRACK_U32(requestsSecondLost, "requests/secondLost")
+TRACK_U32(requestsSecondError, "requests/secondError")
 
-// Resets
-TRACK_U32(resetsTotal, "resets")
-TRACK_U32(resetsPassive00, "resets/passive00")
-TRACK_U32(resetsPassive0704, "resets/passive0704")
-TRACK_U32(resetsPassive, "resets/passive")
-TRACK_U32(resetsActive, "resets/active")
+// Reset
+TRACK_U32(resetTotal, "reset")
+TRACK_U32(resetPassive00, "reset/passive00")
+TRACK_U32(resetPassive0704, "reset/passive0704")
+TRACK_U32(resetPassive, "reset/passive")
+TRACK_U32(resetActive, "reset/active")
 
-// Errors
-TRACK_U32(errorsTotal, "errors")
-TRACK_U32(errorsPassive, "errors/passive")
-TRACK_U32(errorsPassiveMaster, "errors/passive/master")
-TRACK_U32(errorsPassiveMasterACK, "errors/passive/masterACK")
-TRACK_U32(errorsPassiveSlave, "errors/passive/slave")
-TRACK_U32(errorsPassiveSlaveACK, "errors/passive/slaveACK")
-TRACK_U32(errorsReactive, "errors/reactive")
-TRACK_U32(errorsReactiveMaster, "errors/reactive/master")
-TRACK_U32(errorsReactiveMasterACK, "errors/reactive/masterACK")
-TRACK_U32(errorsReactiveSlave, "errors/reactive/slave")
-TRACK_U32(errorsReactiveSlaveACK, "errors/reactive/slaveACK")
-TRACK_U32(errorsActive, "errors/active")
-TRACK_U32(errorsActiveMaster, "errors/active/master")
-TRACK_U32(errorsActiveMasterACK, "errors/active/masterACK")
-TRACK_U32(errorsActiveSlave, "errors/active/slave")
-TRACK_U32(errorsActiveSlaveACK, "errors/active/slaveACK")
+// Error
+TRACK_U32(errorTotal, "error")
+TRACK_U32(errorPassive, "error/passive")
+TRACK_U32(errorPassiveMaster, "error/passive/master")
+TRACK_U32(errorPassiveMasterACK, "error/passive/masterACK")
+TRACK_U32(errorPassiveSlave, "error/passive/slave")
+TRACK_U32(errorPassiveSlaveACK, "error/passive/slaveACK")
+TRACK_U32(errorReactive, "error/reactive")
+TRACK_U32(errorReactiveMaster, "error/reactive/master")
+TRACK_U32(errorReactiveMasterACK, "error/reactive/masterACK")
+TRACK_U32(errorReactiveSlave, "error/reactive/slave")
+TRACK_U32(errorReactiveSlaveACK, "error/reactive/slaveACK")
+TRACK_U32(errorActive, "error/active")
+TRACK_U32(errorActiveMaster, "error/active/master")
+TRACK_U32(errorActiveMasterACK, "error/active/masterACK")
+TRACK_U32(errorActiveSlave, "error/active/slave")
+TRACK_U32(errorActiveSlaveACK, "error/active/slaveACK")
 
-#define TRACK_TIMING(NAME, PATH)                                    \
-  Track<int64_t> NAME##Last("state/timings/" PATH "/last", 10);     \
-  Track<int64_t> NAME##Mean("state/timings/" PATH "/mean", 10);     \
-  Track<int64_t> NAME##StdDev("state/timings/" PATH "/stddev", 10); \
-  Track<uint64_t> NAME##Count("state/timings/" PATH "/count", 10);
+#define TRACK_TIMING(NAME, PATH)                                   \
+  Track<int64_t> NAME##Last("state/timing/" PATH "/last", 10);     \
+  Track<int64_t> NAME##Mean("state/timing/" PATH "/mean", 10);     \
+  Track<int64_t> NAME##StdDev("state/timing/" PATH "/stddev", 10); \
+  Track<uint64_t> NAME##Count("state/timing/" PATH "/count", 10);
 
-#define ASSIGN_TIMING(NAME)            \
-  NAME##Last = timings.NAME##Last;     \
-  NAME##Mean = timings.NAME##Mean;     \
-  NAME##StdDev = timings.NAME##StdDev; \
-  NAME##Count = timings.NAME##Count;
+#define ASSIGN_REQUEST_TIMING(NAME)          \
+  NAME##Last = requestTiming.NAME##Last;     \
+  NAME##Mean = requestTiming.NAME##Mean;     \
+  NAME##StdDev = requestTiming.NAME##StdDev; \
+  NAME##Count = requestTiming.NAME##Count;
 
-#define ASSIGN_STATE_TIMING(NAME, STATE_ENUM)                     \
-  NAME##Last = stats.states[ebus::FsmState::STATE_ENUM].last;     \
-  NAME##Mean = stats.states[ebus::FsmState::STATE_ENUM].mean;     \
-  NAME##StdDev = stats.states[ebus::FsmState::STATE_ENUM].stddev; \
-  NAME##Count = stats.states[ebus::FsmState::STATE_ENUM].count;
+#define ASSIGN_HANDLER_TIMING(NAME)          \
+  NAME##Last = handlerTiming.NAME##Last;     \
+  NAME##Mean = handlerTiming.NAME##Mean;     \
+  NAME##StdDev = handlerTiming.NAME##StdDev; \
+  NAME##Count = handlerTiming.NAME##Count;
 
-// General timings
+#define ASSIGN_HANDLER_STATE_TIMING(NAME, STATE_ENUM)                          \
+  NAME##Last = handlerStateTiming.timing[ebus::HandlerState::STATE_ENUM].last; \
+  NAME##Mean = handlerStateTiming.timing[ebus::HandlerState::STATE_ENUM].mean; \
+  NAME##StdDev =                                                               \
+      handlerStateTiming.timing[ebus::HandlerState::STATE_ENUM].stddev;        \
+  NAME##Count = handlerStateTiming.timing[ebus::HandlerState::STATE_ENUM].count;
+
+// General timing
 TRACK_TIMING(sync, "sync")
+TRACK_TIMING(write, "write")
+TRACK_TIMING(busIsrDelay, "busIsr/delay")
+TRACK_TIMING(busIsrWindow, "busIsr/window")
 TRACK_TIMING(passiveFirst, "passive/first")
 TRACK_TIMING(passiveData, "passive/data")
 TRACK_TIMING(activeFirst, "active/first")
 TRACK_TIMING(activeData, "active/data")
-TRACK_TIMING(resetPassive, "reset/passive");
-TRACK_TIMING(resetActive, "reset/active");
-TRACK_TIMING(callbackWrite, "callback/write");
-TRACK_TIMING(callbackError, "callback/error");
+TRACK_TIMING(callbackReactive, "callback/reactive")
+TRACK_TIMING(callbackTelegram, "callback/telegram")
+TRACK_TIMING(callbackError, "callback/error")
 
-TRACK_TIMING(callbackTelegramPassiveMasterSlave,
-             "callback/telegram/passiveMasterSlave");
-TRACK_TIMING(callbackTelegramPassiveMasterMaster,
-             "callback/telegram/passiveMasterMaster");
-TRACK_TIMING(callbackTelegramReactiveMasterSlave,
-             "callback/telegram/reactiveMasterSlave");
-TRACK_TIMING(callbackTelegramReactiveMasterMaster,
-             "callback/telegram/reactiveMasterMaster");
-TRACK_TIMING(callbackTelegramReactiveBroadcast,
-             "callback/telegram/reactiveBroadcast");
-TRACK_TIMING(callbackTelegramActiveMasterSlave,
-             "callback/telegram/activeMasterSlave");
-TRACK_TIMING(callbackTelegramActiveMasterMaster,
-             "callback/telegram/activeMasterMaster");
-TRACK_TIMING(callbackTelegramActiveBroadcast,
-             "callback/telegram/activeBroadcast");
-
-// FSM state timings
-TRACK_TIMING(passiveReceiveMaster, "fsmstate/passiveReceiveMaster")
+// Handler state timing
+TRACK_TIMING(passiveReceiveMaster, "handlerState/passiveReceiveMaster")
 TRACK_TIMING(passiveReceiveMasterAcknowledge,
-             "fsmstate/passiveReceiveMasterAcknowledge")
-TRACK_TIMING(passiveReceiveSlave, "fsmstate/passiveReceiveSlave")
+             "handlerState/passiveReceiveMasterAcknowledge")
+TRACK_TIMING(passiveReceiveSlave, "handlerState/passiveReceiveSlave")
 TRACK_TIMING(passiveReceiveSlaveAcknowledge,
-             "fsmstate/passiveReceiveSlaveAcknowledge")
+             "handlerState/passiveReceiveSlaveAcknowledge")
 TRACK_TIMING(reactiveSendMasterPositiveAcknowledge,
-             "fsmstate/reactiveSendMasterPositiveAcknowledge")
+             "handlerState/reactiveSendMasterPositiveAcknowledge")
 TRACK_TIMING(reactiveSendMasterNegativeAcknowledge,
-             "fsmstate/reactiveSendMasterNegativeAcknowledge")
-TRACK_TIMING(reactiveSendSlave, "fsmstate/reactiveSendSlave")
+             "handlerState/reactiveSendMasterNegativeAcknowledge")
+TRACK_TIMING(reactiveSendSlave, "handlerState/reactiveSendSlave")
 TRACK_TIMING(reactiveReceiveSlaveAcknowledge,
-             "fsmstate/reactiveReceiveSlaveAcknowledge")
-TRACK_TIMING(requestBusFirstTry, "fsmstate/requestBusFirstTry")
-TRACK_TIMING(requestBusPriorityRetry, "fsmstate/requestBusPriorityRetry")
-TRACK_TIMING(requestBusSecondTry, "fsmstate/requestBusSecondTry")
-TRACK_TIMING(activeSendMaster, "fsmstate/activeSendMaster")
+             "handlerState/reactiveReceiveSlaveAcknowledge")
+TRACK_TIMING(requestBus, "handlerState/requestBus")
+TRACK_TIMING(activeSendMaster, "handlerState/activeSendMaster")
 TRACK_TIMING(activeReceiveMasterAcknowledge,
-             "fsmstate/activeReceiveMasterAcknowledge")
-TRACK_TIMING(activeReceiveSlave, "fsmstate/activeReceiveSlave")
+             "handlerState/activeReceiveMasterAcknowledge")
+TRACK_TIMING(activeReceiveSlave, "handlerState/activeReceiveSlave")
 TRACK_TIMING(activeSendSlavePositiveAcknowledge,
-             "fsmstate/activeSendSlavePositiveAcknowledge")
+             "handlerState/activeSendSlavePositiveAcknowledge")
 TRACK_TIMING(activeSendSlaveNegativeAcknowledge,
-             "fsmstate/activeSendSlaveNegativeAcknowledge")
-TRACK_TIMING(releaseBus, "fsmstate/releaseBus");
+             "handlerState/activeSendSlaveNegativeAcknowledge")
+TRACK_TIMING(releaseBus, "handlerState/releaseBus");
 
 Schedule schedule;
 
-Schedule::Schedule() : ebusHandler(DEFAULT_EBUS_HANDLER_ADDRESS) {
-  ebusHandler.onWrite(onWriteCallback);
-  ebusHandler.isDataAvailable(isDataAvailableCallback);
-  ebusHandler.onTelegram(onTelegramCallback);
-  ebusHandler.onError(onErrorCallback);
+void Schedule::start(ebus::Request *request, ebus::Handler *handler) {
+  ebusRequest = request;
+  ebusHandler = handler;
+  if (ebusRequest && ebusHandler) {
+    ebusHandler->setReactiveMasterSlaveCallback(reactiveMasterSlaveCallback);
+
+    ebusHandler->setTelegramCallback(
+        [this](const ebus::MessageType &messageType,
+               const ebus::TelegramType &telegramType,
+               const std::vector<uint8_t> &master,
+               const std::vector<uint8_t> &slave) {
+          CallbackEvent *event = new CallbackEvent();
+          event->type = CallbackType::telegram;
+          event->mode = mode;
+          event->data.messageType = messageType;
+          event->data.telegramType = telegramType;
+          event->data.master = master;
+          event->data.slave = slave;
+          eventQueue.try_push(event);
+        });
+
+    ebusHandler->setErrorCallback([this](const std::string &error,
+                                         const std::vector<uint8_t> &master,
+                                         const std::vector<uint8_t> &slave) {
+      CallbackEvent *event = new CallbackEvent();
+      event->type = CallbackType::error;
+      event->data.error = error;
+      event->data.master = master;
+      event->data.slave = slave;
+      eventQueue.try_push(event);
+    });
+
+    // Start the scheduleRunner task
+    xTaskCreate(&Schedule::taskFunc, "scheduleRunner", 4096, this, 2,
+                &scheduleTaskHandle);
+  }
 }
 
-void Schedule::setAddress(const uint8_t source) {
-  ebusHandler.setAddress(source);
-}
+void Schedule::stop() { stopRunner = true; }
 
 void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
@@ -174,11 +197,11 @@ void Schedule::handleScan() {
   std::set<uint8_t> slaves;
 
   for (const std::pair<uint8_t, uint32_t> master : seenMasters)
-    if (master.first != ebusHandler.getAddress())
+    if (master.first != ebusHandler->getSourceAddress())
       slaves.insert(ebus::slaveOf(master.first));
 
   for (const std::pair<uint8_t, uint32_t> slave : seenSlaves)
-    if (slave.first != ebusHandler.getSlaveAddress())
+    if (slave.first != ebusHandler->getTargetAddress())
       slaves.insert(slave.first);
 
   for (const uint8_t slave : slaves) {
@@ -195,7 +218,8 @@ void Schedule::handleScanAddresses(const JsonArray &addresses) {
 
   for (JsonVariant address : addresses) {
     uint8_t firstByte = ebus::to_vector(address.as<std::string>())[0];
-    if (ebus::isSlave(firstByte) && firstByte != ebusHandler.getSlaveAddress())
+    if (ebus::isSlave(firstByte) &&
+        firstByte != ebusHandler->getTargetAddress())
       slaves.insert(firstByte);
   }
 
@@ -251,75 +275,14 @@ void Schedule::handleForwardFilter(const JsonArray &filters) {
     forwardfilters.push_back(ebus::to_vector(filter));
 }
 
-void Schedule::nextCommand() {
-  uint32_t currentMillis = millis();
-
-  // scan participants
-  if (currentScan < maxScans && currentMillis > lastScan + distanceScans) {
-    currentScan++;
-    lastScan = currentMillis;
-    distanceScans = 3 * 60 * 1000;  // repeat scan in 3 minutes
-    handleScan();
-    handleScanVendor();
-  }
-
-  // determine next command to send
-  if (sendCommands.size() > 0 || scanCommands.size() > 0 || store.active()) {
-    uint32_t currentMillis = millis();
-    if (currentMillis > lastCommand + distanceCommands) {
-      lastCommand = currentMillis;
-
-      std::vector<uint8_t> command;
-      if (sendCommands.size() > 0) {
-        mode = Mode::send;
-        command = sendCommands.front();
-        sendCommands.pop_front();
-      } else if (scanCommands.size() > 0) {
-        mode = Mode::scan;
-        command = scanCommands.front();
-        scanCommands.pop_front();
-        if (fullScan && scanCommands.size() == 0) nextScanCommand();
-      } else {
-        mode = Mode::normal;
-        scheduleCommand = store.nextActiveCommand();
-        if (scheduleCommand != nullptr) command = scheduleCommand->command;
-      }
-
-      if (command.size() > 0) {
-        ebusHandler.enque(command);
-      }
-    }
-  }
-}
-
-void Schedule::nextScanCommand() {
-  while (scanIndex <= 0xff) {
-    scanIndex++;
-    if (scanIndex == 0xff) {
-      fullScan = false;
-      scanIndex = 0;
-      break;
-    }
-    if (ebus::isSlave(scanIndex) &&
-        scanIndex != ebusHandler.getSlaveAddress()) {
-      std::vector<uint8_t> command;
-      command = {scanIndex};
-      command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
-      scanCommands.push_back(command);
-      break;
-    }
-  }
-}
-
-void Schedule::processData(const uint8_t byte) { ebusHandler.run(byte); }
-
 void Schedule::setPublishCounter(const bool enable) { publishCounter = enable; }
 
 void Schedule::resetCounter() {
   seenMasters.clear();
   seenSlaves.clear();
 
-  ebusHandler.resetCounters();
+  if (ebusRequest) ebusRequest->resetCounter();
+  if (ebusHandler) ebusHandler->resetCounter();
 }
 
 void Schedule::fetchCounter() {
@@ -338,51 +301,58 @@ void Schedule::fetchCounter() {
     mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
   }
 
-  // Counters
-  ebus::Counters counters = ebusHandler.getCounters();
+  // Counter
+  ebus::Request::Counter requestCounter = ebusRequest->getCounter();
+  ebus::Handler::Counter handlerCounter = ebusHandler->getCounter();
 
   // Messages
-  ASSIGN_COUNTER(messagesTotal)
-  ASSIGN_COUNTER(messagesPassiveMasterSlave)
-  ASSIGN_COUNTER(messagesPassiveMasterMaster)
-  ASSIGN_COUNTER(messagesReactiveMasterSlave)
-  ASSIGN_COUNTER(messagesReactiveMasterMaster)
-  ASSIGN_COUNTER(messagesReactiveBroadcast)
-  ASSIGN_COUNTER(messagesActiveMasterSlave)
-  ASSIGN_COUNTER(messagesActiveMasterMaster)
-  ASSIGN_COUNTER(messagesActiveBroadcast)
+  ASSIGN_HANDLER_COUNTER(messagesTotal)
+  ASSIGN_HANDLER_COUNTER(messagesPassiveMasterSlave)
+  ASSIGN_HANDLER_COUNTER(messagesPassiveMasterMaster)
+  ASSIGN_HANDLER_COUNTER(messagesPassiveBroadcast)
+  ASSIGN_HANDLER_COUNTER(messagesReactiveMasterSlave)
+  ASSIGN_HANDLER_COUNTER(messagesReactiveMasterMaster)
+  ASSIGN_HANDLER_COUNTER(messagesActiveMasterSlave)
+  ASSIGN_HANDLER_COUNTER(messagesActiveMasterMaster)
+  ASSIGN_HANDLER_COUNTER(messagesActiveBroadcast)
 
   // Requests
-  ASSIGN_COUNTER(requestsTotal)
-  ASSIGN_COUNTER(requestsWon)
-  ASSIGN_COUNTER(requestsLost)
-  ASSIGN_COUNTER(requestsRetry)
-  ASSIGN_COUNTER(requestsError)
+  ASSIGN_REQUEST_COUNTER(requestsStartBit)
+  ASSIGN_REQUEST_COUNTER(requestsFirstSyn)
+  ASSIGN_REQUEST_COUNTER(requestsFirstWon)
+  ASSIGN_REQUEST_COUNTER(requestsFirstRetry)
+  ASSIGN_REQUEST_COUNTER(requestsFirstLost)
+  ASSIGN_REQUEST_COUNTER(requestsFirstError)
+  ASSIGN_REQUEST_COUNTER(requestsRetrySyn)
+  ASSIGN_REQUEST_COUNTER(requestsRetryError)
+  ASSIGN_REQUEST_COUNTER(requestsSecondWon)
+  ASSIGN_REQUEST_COUNTER(requestsSecondLost)
+  ASSIGN_REQUEST_COUNTER(requestsSecondError)
 
-  // Resets
-  ASSIGN_COUNTER(resetsTotal)
-  ASSIGN_COUNTER(resetsPassive00)
-  ASSIGN_COUNTER(resetsPassive0704)
-  ASSIGN_COUNTER(resetsPassive)
-  ASSIGN_COUNTER(resetsActive)
+  // Reset
+  ASSIGN_HANDLER_COUNTER(resetTotal)
+  ASSIGN_HANDLER_COUNTER(resetPassive00)
+  ASSIGN_HANDLER_COUNTER(resetPassive0704)
+  ASSIGN_HANDLER_COUNTER(resetPassive)
+  ASSIGN_HANDLER_COUNTER(resetActive)
 
-  // Errors
-  ASSIGN_COUNTER(errorsTotal)
-  ASSIGN_COUNTER(errorsPassive)
-  ASSIGN_COUNTER(errorsPassiveMaster)
-  ASSIGN_COUNTER(errorsPassiveMasterACK)
-  ASSIGN_COUNTER(errorsPassiveSlave)
-  ASSIGN_COUNTER(errorsPassiveSlaveACK)
-  ASSIGN_COUNTER(errorsReactive)
-  ASSIGN_COUNTER(errorsReactiveMaster)
-  ASSIGN_COUNTER(errorsReactiveMasterACK)
-  ASSIGN_COUNTER(errorsReactiveSlave)
-  ASSIGN_COUNTER(errorsReactiveSlaveACK)
-  ASSIGN_COUNTER(errorsActive)
-  ASSIGN_COUNTER(errorsActiveMaster)
-  ASSIGN_COUNTER(errorsActiveMasterACK)
-  ASSIGN_COUNTER(errorsActiveSlave)
-  ASSIGN_COUNTER(errorsActiveSlaveACK)
+  // Error
+  ASSIGN_HANDLER_COUNTER(errorTotal)
+  ASSIGN_HANDLER_COUNTER(errorPassive)
+  ASSIGN_HANDLER_COUNTER(errorPassiveMaster)
+  ASSIGN_HANDLER_COUNTER(errorPassiveMasterACK)
+  ASSIGN_HANDLER_COUNTER(errorPassiveSlave)
+  ASSIGN_HANDLER_COUNTER(errorPassiveSlaveACK)
+  ASSIGN_HANDLER_COUNTER(errorReactive)
+  ASSIGN_HANDLER_COUNTER(errorReactiveMaster)
+  ASSIGN_HANDLER_COUNTER(errorReactiveMasterACK)
+  ASSIGN_HANDLER_COUNTER(errorReactiveSlave)
+  ASSIGN_HANDLER_COUNTER(errorReactiveSlaveACK)
+  ASSIGN_HANDLER_COUNTER(errorActive)
+  ASSIGN_HANDLER_COUNTER(errorActiveMaster)
+  ASSIGN_HANDLER_COUNTER(errorActiveMasterACK)
+  ASSIGN_HANDLER_COUNTER(errorActiveSlave)
+  ASSIGN_HANDLER_COUNTER(errorActiveSlaveACK)
 }
 
 const std::string Schedule::getCounterJson() {
@@ -401,64 +371,74 @@ const std::string Schedule::getCounterJson() {
   for (const std::pair<uint8_t, uint32_t> slave : seenSlaves)
     Addresses_Slave[ebus::to_string(slave.first)] = slave.second;
 
-  // Counters
-  ebus::Counters counters = ebusHandler.getCounters();
+  // Counter
+  ebus::Handler::Counter handlerCounter = ebusHandler->getCounter();
+  ebus::Request::Counter requestCounter = ebusRequest->getCounter();
 
   // Messages
   JsonObject Messages = doc["Messages"].to<JsonObject>();
-  Messages["Total"] = counters.messagesTotal;
-  Messages["Passive_Master_Slave"] = counters.messagesPassiveMasterSlave;
-  Messages["Passive_Master_Master"] = counters.messagesPassiveMasterMaster;
-  Messages["Reactive_Master_Slave"] = counters.messagesReactiveMasterSlave;
-  Messages["Reactive_Master_Master"] = counters.messagesReactiveMasterMaster;
-  Messages["Reactive_Broadcast"] = counters.messagesReactiveBroadcast;
-  Messages["Active_Master_Slave"] = counters.messagesActiveMasterSlave;
-  Messages["Active_Master_Master"] = counters.messagesActiveMasterMaster;
-  Messages["Active_Broadcast"] = counters.messagesActiveBroadcast;
+  Messages["Total"] = handlerCounter.messagesTotal;
+  Messages["Passive_Master_Slave"] = handlerCounter.messagesPassiveMasterSlave;
+  Messages["Passive_Master_Master"] =
+      handlerCounter.messagesPassiveMasterMaster;
+  Messages["Passive_Broadcast"] = handlerCounter.messagesPassiveBroadcast;
+  Messages["Reactive_Master_Slave"] =
+      handlerCounter.messagesReactiveMasterSlave;
+  Messages["Reactive_Master_Master"] =
+      handlerCounter.messagesReactiveMasterMaster;
+  Messages["Active_Master_Slave"] = handlerCounter.messagesActiveMasterSlave;
+  Messages["Active_Master_Master"] = handlerCounter.messagesActiveMasterMaster;
+  Messages["Active_Broadcast"] = handlerCounter.messagesActiveBroadcast;
 
   // Requests
   JsonObject Requests = doc["Requests"].to<JsonObject>();
-  Requests["Total"] = counters.requestsTotal;
-  Requests["Won"] = counters.requestsWon;
-  Requests["Lost"] = counters.requestsLost;
-  Requests["Retry"] = counters.requestsRetry;
-  Requests["Error"] = counters.requestsError;
+  Requests["StartBit"] = requestCounter.requestsStartBit;
+  Requests["FirstSyn"] = requestCounter.requestsFirstSyn;
+  Requests["FirstWon"] = requestCounter.requestsFirstWon;
+  Requests["FirstRetry"] = requestCounter.requestsFirstRetry;
+  Requests["FirstLost"] = requestCounter.requestsFirstLost;
+  Requests["FirstError"] = requestCounter.requestsFirstError;
+  Requests["RetrySyn"] = requestCounter.requestsRetrySyn;
+  Requests["RetryError"] = requestCounter.requestsRetryError;
+  Requests["SecondWon"] = requestCounter.requestsSecondWon;
+  Requests["SecondLost"] = requestCounter.requestsSecondLost;
+  Requests["SecondError"] = requestCounter.requestsSecondError;
 
-  // Resets
-  JsonObject Resets = doc["Resets"].to<JsonObject>();
-  Resets["Total"] = counters.resetsTotal;
-  Resets["Passive_00"] = counters.resetsPassive00;
-  Resets["Passive_0704"] = counters.resetsPassive0704;
-  Resets["Passive"] = counters.resetsPassive;
-  Resets["Active"] = counters.resetsActive;
+  // Reset
+  JsonObject Reset = doc["Reset"].to<JsonObject>();
+  Reset["Total"] = handlerCounter.resetTotal;
+  Reset["Passive_00"] = handlerCounter.resetPassive00;
+  Reset["Passive_0704"] = handlerCounter.resetPassive0704;
+  Reset["Passive"] = handlerCounter.resetPassive;
+  Reset["Active"] = handlerCounter.resetActive;
 
-  // Errors
-  JsonObject Errors = doc["Errors"].to<JsonObject>();
-  Errors["Total"] = counters.errorsTotal;
+  // Error
+  JsonObject Error = doc["Error"].to<JsonObject>();
+  Error["Total"] = handlerCounter.errorTotal;
 
-  // Errors Passive
-  JsonObject Errors_Passive = doc["Errors"]["Passive"].to<JsonObject>();
-  Errors_Passive["Total"] = counters.errorsPassive;
-  Errors_Passive["Master"] = counters.errorsPassiveMaster;
-  Errors_Passive["Master_ACK"] = counters.errorsPassiveMasterACK;
-  Errors_Passive["Slave"] = counters.errorsPassiveSlave;
-  Errors_Passive["Slave_ACK"] = counters.errorsPassiveSlaveACK;
+  // Error Passive
+  JsonObject Error_Passive = doc["Error"]["Passive"].to<JsonObject>();
+  Error_Passive["Total"] = handlerCounter.errorPassive;
+  Error_Passive["Master"] = handlerCounter.errorPassiveMaster;
+  Error_Passive["Master_ACK"] = handlerCounter.errorPassiveMasterACK;
+  Error_Passive["Slave"] = handlerCounter.errorPassiveSlave;
+  Error_Passive["Slave_ACK"] = handlerCounter.errorPassiveSlaveACK;
 
-  // Erros Reactive
-  JsonObject Errors_Reactive = doc["Errors"]["Reactive"].to<JsonObject>();
-  Errors_Reactive["Total"] = counters.errorsReactive;
-  Errors_Reactive["Master"] = counters.errorsReactiveMaster;
-  Errors_Reactive["Master_ACK"] = counters.errorsReactiveMasterACK;
-  Errors_Reactive["Slave"] = counters.errorsReactiveSlave;
-  Errors_Reactive["Slave_ACK"] = counters.errorsReactiveSlaveACK;
+  // Error Reactive
+  JsonObject Error_Reactive = doc["Error"]["Reactive"].to<JsonObject>();
+  Error_Reactive["Total"] = handlerCounter.errorReactive;
+  Error_Reactive["Master"] = handlerCounter.errorReactiveMaster;
+  Error_Reactive["Master_ACK"] = handlerCounter.errorReactiveMasterACK;
+  Error_Reactive["Slave"] = handlerCounter.errorReactiveSlave;
+  Error_Reactive["Slave_ACK"] = handlerCounter.errorReactiveSlaveACK;
 
-  // Erros Active
-  JsonObject Errors_Active = doc["Errors"]["Active"].to<JsonObject>();
-  Errors_Active["Total"] = counters.errorsActive;
-  Errors_Active["Master"] = counters.errorsActiveMaster;
-  Errors_Active["Master_ACK"] = counters.errorsActiveMasterACK;
-  Errors_Active["Slave"] = counters.errorsActiveSlave;
-  Errors_Active["Slave_ACK"] = counters.errorsActiveSlaveACK;
+  // Error Active
+  JsonObject Error_Active = doc["Error"]["Active"].to<JsonObject>();
+  Error_Active["Total"] = handlerCounter.errorActive;
+  Error_Active["Master"] = handlerCounter.errorActiveMaster;
+  Error_Active["Master_ACK"] = handlerCounter.errorActiveMasterACK;
+  Error_Active["Slave"] = handlerCounter.errorActiveSlave;
+  Error_Active["Slave_ACK"] = handlerCounter.errorActiveSlaveACK;
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
@@ -468,67 +448,64 @@ const std::string Schedule::getCounterJson() {
 
 void Schedule::setPublishTiming(const bool enable) { publishTiming = enable; }
 
-void Schedule::resetTiming() { ebusHandler.resetTimings(); }
+void Schedule::resetTiming() {
+  if (ebusRequest) ebusRequest->resetTiming();
+  if (ebusHandler) ebusHandler->resetTiming();
+}
 
 void Schedule::fetchTiming() {
   if (!publishTiming) return;
 
-  // Timings
-  ebus::Timings timings = ebusHandler.getTimings();
+  // Timing
+  ebus::Request::Timing requestTiming = ebusRequest->getTiming();
+  ebus::Handler::Timing handlerTiming = ebusHandler->getTiming();
 
-  ASSIGN_TIMING(sync)
-  ASSIGN_TIMING(passiveFirst)
-  ASSIGN_TIMING(passiveData)
-  ASSIGN_TIMING(activeFirst)
-  ASSIGN_TIMING(activeData)
-  ASSIGN_TIMING(resetPassive)
-  ASSIGN_TIMING(resetActive)
-  ASSIGN_TIMING(callbackWrite)
-  ASSIGN_TIMING(callbackError)
-  ASSIGN_TIMING(callbackTelegramPassiveMasterSlave)
-  ASSIGN_TIMING(callbackTelegramPassiveMasterMaster)
-  ASSIGN_TIMING(callbackTelegramReactiveMasterSlave)
-  ASSIGN_TIMING(callbackTelegramReactiveMasterMaster)
-  ASSIGN_TIMING(callbackTelegramReactiveBroadcast)
-  ASSIGN_TIMING(callbackTelegramActiveMasterSlave)
-  ASSIGN_TIMING(callbackTelegramActiveMasterMaster)
-  ASSIGN_TIMING(callbackTelegramActiveBroadcast)
+  ASSIGN_HANDLER_TIMING(sync)
+  ASSIGN_HANDLER_TIMING(write)
+  ASSIGN_REQUEST_TIMING(busIsrDelay)
+  ASSIGN_REQUEST_TIMING(busIsrWindow)
+  ASSIGN_HANDLER_TIMING(passiveFirst)
+  ASSIGN_HANDLER_TIMING(passiveData)
+  ASSIGN_HANDLER_TIMING(activeFirst)
+  ASSIGN_HANDLER_TIMING(activeData)
+  ASSIGN_HANDLER_TIMING(callbackReactive)
+  ASSIGN_HANDLER_TIMING(callbackTelegram)
+  ASSIGN_HANDLER_TIMING(callbackError)
 
-  ebus::StateTimingStatsResults stats =
-      ebusHandler.getStateTimingStatsResults();
+  ebus::Handler::StateTiming handlerStateTiming = ebusHandler->getStateTiming();
 
-  ASSIGN_STATE_TIMING(passiveReceiveMaster, passiveReceiveMaster)
-  ASSIGN_STATE_TIMING(passiveReceiveMasterAcknowledge,
-                      passiveReceiveMasterAcknowledge)
-  ASSIGN_STATE_TIMING(passiveReceiveSlave, passiveReceiveSlave)
-  ASSIGN_STATE_TIMING(passiveReceiveSlaveAcknowledge,
-                      passiveReceiveSlaveAcknowledge)
-  ASSIGN_STATE_TIMING(reactiveSendMasterPositiveAcknowledge,
-                      reactiveSendMasterPositiveAcknowledge)
-  ASSIGN_STATE_TIMING(reactiveSendMasterNegativeAcknowledge,
-                      reactiveSendMasterNegativeAcknowledge)
-  ASSIGN_STATE_TIMING(reactiveSendSlave, reactiveSendSlave)
-  ASSIGN_STATE_TIMING(reactiveReceiveSlaveAcknowledge,
-                      reactiveReceiveSlaveAcknowledge)
-  ASSIGN_STATE_TIMING(requestBusFirstTry, requestBusFirstTry)
-  ASSIGN_STATE_TIMING(requestBusPriorityRetry, requestBusPriorityRetry)
-  ASSIGN_STATE_TIMING(requestBusSecondTry, requestBusSecondTry)
-  ASSIGN_STATE_TIMING(activeSendMaster, activeSendMaster)
-  ASSIGN_STATE_TIMING(activeReceiveMasterAcknowledge,
-                      activeReceiveMasterAcknowledge)
-  ASSIGN_STATE_TIMING(activeReceiveSlave, activeReceiveSlave)
-  ASSIGN_STATE_TIMING(activeSendSlavePositiveAcknowledge,
-                      activeSendSlavePositiveAcknowledge)
-  ASSIGN_STATE_TIMING(activeSendSlaveNegativeAcknowledge,
-                      activeSendSlaveNegativeAcknowledge)
-  ASSIGN_STATE_TIMING(releaseBus, releaseBus)
+  ASSIGN_HANDLER_STATE_TIMING(passiveReceiveMaster, passiveReceiveMaster)
+  ASSIGN_HANDLER_STATE_TIMING(passiveReceiveMasterAcknowledge,
+                              passiveReceiveMasterAcknowledge)
+  ASSIGN_HANDLER_STATE_TIMING(passiveReceiveSlave, passiveReceiveSlave)
+  ASSIGN_HANDLER_STATE_TIMING(passiveReceiveSlaveAcknowledge,
+                              passiveReceiveSlaveAcknowledge)
+  ASSIGN_HANDLER_STATE_TIMING(reactiveSendMasterPositiveAcknowledge,
+                              reactiveSendMasterPositiveAcknowledge)
+  ASSIGN_HANDLER_STATE_TIMING(reactiveSendMasterNegativeAcknowledge,
+                              reactiveSendMasterNegativeAcknowledge)
+  ASSIGN_HANDLER_STATE_TIMING(reactiveSendSlave, reactiveSendSlave)
+  ASSIGN_HANDLER_STATE_TIMING(reactiveReceiveSlaveAcknowledge,
+                              reactiveReceiveSlaveAcknowledge)
+  ASSIGN_HANDLER_STATE_TIMING(requestBus, requestBus)
+  ASSIGN_HANDLER_STATE_TIMING(activeSendMaster, activeSendMaster)
+  ASSIGN_HANDLER_STATE_TIMING(activeReceiveMasterAcknowledge,
+                              activeReceiveMasterAcknowledge)
+  ASSIGN_HANDLER_STATE_TIMING(activeReceiveSlave, activeReceiveSlave)
+  ASSIGN_HANDLER_STATE_TIMING(activeSendSlavePositiveAcknowledge,
+                              activeSendSlavePositiveAcknowledge)
+  ASSIGN_HANDLER_STATE_TIMING(activeSendSlaveNegativeAcknowledge,
+                              activeSendSlaveNegativeAcknowledge)
+  ASSIGN_HANDLER_STATE_TIMING(releaseBus, releaseBus)
 }
 
 const std::string Schedule::getTimingJson() {
   std::string payload;
   JsonDocument doc;
 
-  ebus::Timings timings = ebusHandler.getTimings();
+  // Timing
+  ebus::Request::Timing requestTiming = ebusRequest->getTiming();
+  ebus::Handler::Timing handlerTiming = ebusHandler->getTiming();
 
   // Helper lambda to add timing stats to a JsonObject
   auto addTiming = [](JsonObject obj, int64_t last, int64_t mean,
@@ -539,137 +516,116 @@ const std::string Schedule::getTimingJson() {
     obj["Count"] = count;
   };
 
-  addTiming(doc["Sync"].to<JsonObject>(), timings.syncLast, timings.syncMean,
-            timings.syncStdDev, timings.syncCount);
+  addTiming(doc["Sync"].to<JsonObject>(), handlerTiming.syncLast,
+            handlerTiming.syncMean, handlerTiming.syncStdDev,
+            handlerTiming.syncCount);
 
-  addTiming(doc["Passive"]["First"].to<JsonObject>(), timings.passiveFirstLast,
-            timings.passiveFirstMean, timings.passiveFirstStdDev,
-            timings.passiveFirstCount);
-  addTiming(doc["Passive"]["Data"].to<JsonObject>(), timings.passiveDataLast,
-            timings.passiveDataMean, timings.passiveDataStdDev,
-            timings.passiveDataCount);
+  addTiming(doc["Write"].to<JsonObject>(), handlerTiming.writeLast,
+            handlerTiming.writeMean, handlerTiming.writeStdDev,
+            handlerTiming.writeCount);
 
-  addTiming(doc["Active"]["First"].to<JsonObject>(), timings.activeFirstLast,
-            timings.activeFirstMean, timings.activeFirstStdDev,
-            timings.activeFirstCount);
-  addTiming(doc["Active"]["Data"].to<JsonObject>(), timings.activeDataLast,
-            timings.activeDataMean, timings.activeDataStdDev,
-            timings.activeDataCount);
+  addTiming(doc["BusIsr"]["Delay"].to<JsonObject>(),
+            requestTiming.busIsrDelayLast, requestTiming.busIsrDelayMean,
+            requestTiming.busIsrDelayStdDev, requestTiming.busIsrDelayCount);
 
-  addTiming(doc["Reset"]["Passive"].to<JsonObject>(), timings.resetPassiveLast,
-            timings.resetPassiveMean, timings.resetPassiveStdDev,
-            timings.resetPassiveCount);
-  addTiming(doc["Reset"]["Active"].to<JsonObject>(), timings.resetActiveLast,
-            timings.resetActiveMean, timings.resetActiveStdDev,
-            timings.resetActiveCount);
+  addTiming(doc["BusIsr"]["Window"].to<JsonObject>(),
+            requestTiming.busIsrWindowLast, requestTiming.busIsrWindowMean,
+            requestTiming.busIsrWindowStdDev, requestTiming.busIsrWindowCount);
 
-  addTiming(doc["Callback"]["Write"].to<JsonObject>(),
-            timings.callbackWriteLast, timings.callbackWriteMean,
-            timings.callbackWriteStdDev, timings.callbackWriteCount);
+  addTiming(doc["Passive"]["First"].to<JsonObject>(),
+            handlerTiming.passiveFirstLast, handlerTiming.passiveFirstMean,
+            handlerTiming.passiveFirstStdDev, handlerTiming.passiveFirstCount);
+
+  addTiming(doc["Passive"]["Data"].to<JsonObject>(),
+            handlerTiming.passiveDataLast, handlerTiming.passiveDataMean,
+            handlerTiming.passiveDataStdDev, handlerTiming.passiveDataCount);
+
+  addTiming(doc["Active"]["First"].to<JsonObject>(),
+            handlerTiming.activeFirstLast, handlerTiming.activeFirstMean,
+            handlerTiming.activeFirstStdDev, handlerTiming.activeFirstCount);
+
+  addTiming(doc["Active"]["Data"].to<JsonObject>(),
+            handlerTiming.activeDataLast, handlerTiming.activeDataMean,
+            handlerTiming.activeDataStdDev, handlerTiming.activeDataCount);
+
+  addTiming(doc["Callback"]["Reactive"].to<JsonObject>(),
+            handlerTiming.callbackReactiveLast,
+            handlerTiming.callbackReactiveMean,
+            handlerTiming.callbackReactiveStdDev,
+            handlerTiming.callbackReactiveCount);
+
+  addTiming(doc["Callback"]["Telegram"].to<JsonObject>(),
+            handlerTiming.callbackTelegramLast,
+            handlerTiming.callbackTelegramMean,
+            handlerTiming.callbackTelegramStdDev,
+            handlerTiming.callbackTelegramCount);
 
   addTiming(doc["Callback"]["Error"].to<JsonObject>(),
-            timings.callbackErrorLast, timings.callbackErrorMean,
-            timings.callbackErrorStdDev, timings.callbackErrorCount);
+            handlerTiming.callbackErrorLast, handlerTiming.callbackErrorMean,
+            handlerTiming.callbackErrorStdDev,
+            handlerTiming.callbackErrorCount);
 
-  addTiming(doc["Callback"]["Telegram"]["passiveMasterSlave"].to<JsonObject>(),
-            timings.callbackTelegramPassiveMasterSlaveLast,
-            timings.callbackTelegramPassiveMasterSlaveMean,
-            timings.callbackTelegramPassiveMasterSlaveStdDev,
-            timings.callbackTelegramPassiveMasterSlaveCount);
-  addTiming(doc["Callback"]["Telegram"]["passiveMasterMaster"].to<JsonObject>(),
-            timings.callbackTelegramPassiveMasterMasterLast,
-            timings.callbackTelegramPassiveMasterMasterMean,
-            timings.callbackTelegramPassiveMasterMasterStdDev,
-            timings.callbackTelegramPassiveMasterMasterCount);
+  ebus::Handler::StateTiming stateTiming = ebusHandler->getStateTiming();
 
-  addTiming(doc["Callback"]["Telegram"]["reactiveMasterSlave"].to<JsonObject>(),
-            timings.callbackTelegramReactiveMasterSlaveLast,
-            timings.callbackTelegramReactiveMasterSlaveMean,
-            timings.callbackTelegramReactiveMasterSlaveStdDev,
-            timings.callbackTelegramReactiveMasterSlaveCount);
-  addTiming(
-      doc["Callback"]["Telegram"]["reactiveMasterMaster"].to<JsonObject>(),
-      timings.callbackTelegramReactiveMasterMasterLast,
-      timings.callbackTelegramReactiveMasterMasterMean,
-      timings.callbackTelegramReactiveMasterMasterStdDev,
-      timings.callbackTelegramReactiveMasterMasterCount);
-  addTiming(doc["Callback"]["Telegram"]["reactiveBroadcast"].to<JsonObject>(),
-            timings.callbackTelegramReactiveBroadcastLast,
-            timings.callbackTelegramReactiveBroadcastMean,
-            timings.callbackTelegramReactiveBroadcastStdDev,
-            timings.callbackTelegramReactiveBroadcastCount);
+  // Output handler state timing
+  auto addStateTiming = [](JsonObject obj,
+                           const ebus::Handler::StateTiming::Timing &timing) {
+    obj["Last"] = static_cast<int64_t>(timing.last);
+    obj["Mean"] = static_cast<int64_t>(timing.mean);
+    obj["StdDev"] = static_cast<int64_t>(timing.stddev);
+    obj["Count"] = timing.count;
+  };
 
-  addTiming(doc["Callback"]["Telegram"]["activeMasterSlave"].to<JsonObject>(),
-            timings.callbackTelegramActiveMasterSlaveLast,
-            timings.callbackTelegramActiveMasterSlaveMean,
-            timings.callbackTelegramActiveMasterSlaveStdDev,
-            timings.callbackTelegramActiveMasterSlaveCount);
-  addTiming(doc["Callback"]["Telegram"]["activeMasterMaster"].to<JsonObject>(),
-            timings.callbackTelegramActiveMasterMasterLast,
-            timings.callbackTelegramActiveMasterMasterMean,
-            timings.callbackTelegramActiveMasterMasterStdDev,
-            timings.callbackTelegramActiveMasterMasterCount);
-  addTiming(doc["Callback"]["Telegram"]["activeBroadcast"].to<JsonObject>(),
-            timings.callbackTelegramActiveBroadcastLast,
-            timings.callbackTelegramActiveBroadcastMean,
-            timings.callbackTelegramActiveBroadcastStdDev,
-            timings.callbackTelegramActiveBroadcastCount);
-
-  ebus::StateTimingStatsResults stats =
-      ebusHandler.getStateTimingStatsResults();
-
-  // Output FSM state timings
-  auto addStateTiming =
-      [](JsonObject obj,
-         const ebus::StateTimingStatsResults::StateStats &state) {
-        obj["Last"] = static_cast<int64_t>(state.last);
-        obj["Mean"] = static_cast<int64_t>(state.mean);
-        obj["StdDev"] = static_cast<int64_t>(state.stddev);
-        obj["Count"] = state.count;
-      };
-
-  addStateTiming(doc["FsmState"]["passiveReceiveMaster"].to<JsonObject>(),
-                 stats.states.at(ebus::FsmState::passiveReceiveMaster));
   addStateTiming(
-      doc["FsmState"]["passiveReceiveMasterAcknowledge"].to<JsonObject>(),
-      stats.states.at(ebus::FsmState::passiveReceiveMasterAcknowledge));
-  addStateTiming(doc["FsmState"]["passiveReceiveSlave"].to<JsonObject>(),
-                 stats.states.at(ebus::FsmState::passiveReceiveSlave));
+      doc["HandlerState"]["passiveReceiveMaster"].to<JsonObject>(),
+      stateTiming.timing.at(ebus::HandlerState::passiveReceiveMaster));
   addStateTiming(
-      doc["FsmState"]["passiveReceiveSlaveAcknowledge"].to<JsonObject>(),
-      stats.states.at(ebus::FsmState::passiveReceiveSlaveAcknowledge));
+      doc["HandlerState"]["passiveReceiveMasterAcknowledge"].to<JsonObject>(),
+      stateTiming.timing.at(
+          ebus::HandlerState::passiveReceiveMasterAcknowledge));
   addStateTiming(
-      doc["FsmState"]["reactiveSendMasterPositiveAcknowledge"].to<JsonObject>(),
-      stats.states.at(ebus::FsmState::reactiveSendMasterPositiveAcknowledge));
+      doc["HandlerState"]["passiveReceiveSlave"].to<JsonObject>(),
+      stateTiming.timing.at(ebus::HandlerState::passiveReceiveSlave));
   addStateTiming(
-      doc["FsmState"]["reactiveSendMasterNegativeAcknowledge"].to<JsonObject>(),
-      stats.states.at(ebus::FsmState::reactiveSendMasterNegativeAcknowledge));
-  addStateTiming(doc["FsmState"]["reactiveSendSlave"].to<JsonObject>(),
-                 stats.states.at(ebus::FsmState::reactiveSendSlave));
+      doc["HandlerState"]["passiveReceiveSlaveAcknowledge"].to<JsonObject>(),
+      stateTiming.timing.at(
+          ebus::HandlerState::passiveReceiveSlaveAcknowledge));
   addStateTiming(
-      doc["FsmState"]["reactiveReceiveSlaveAcknowledge"].to<JsonObject>(),
-      stats.states.at(ebus::FsmState::reactiveReceiveSlaveAcknowledge));
-  addStateTiming(doc["FsmState"]["requestBusFirstTry"].to<JsonObject>(),
-                 stats.states.at(ebus::FsmState::requestBusFirstTry));
-  addStateTiming(doc["FsmState"]["requestBusPriorityRetry"].to<JsonObject>(),
-                 stats.states.at(ebus::FsmState::requestBusPriorityRetry));
-  addStateTiming(doc["FsmState"]["requestBusSecondTry"].to<JsonObject>(),
-                 stats.states.at(ebus::FsmState::requestBusSecondTry));
-  addStateTiming(doc["FsmState"]["activeSendMaster"].to<JsonObject>(),
-                 stats.states.at(ebus::FsmState::activeSendMaster));
+      doc["HandlerState"]["reactiveSendMasterPositiveAcknowledge"]
+          .to<JsonObject>(),
+      stateTiming.timing.at(
+          ebus::HandlerState::reactiveSendMasterPositiveAcknowledge));
   addStateTiming(
-      doc["FsmState"]["activeReceiveMasterAcknowledge"].to<JsonObject>(),
-      stats.states.at(ebus::FsmState::activeReceiveMasterAcknowledge));
-  addStateTiming(doc["FsmState"]["activeReceiveSlave"].to<JsonObject>(),
-                 stats.states.at(ebus::FsmState::activeReceiveSlave));
+      doc["HandlerState"]["reactiveSendMasterNegativeAcknowledge"]
+          .to<JsonObject>(),
+      stateTiming.timing.at(
+          ebus::HandlerState::reactiveSendMasterNegativeAcknowledge));
+  addStateTiming(doc["HandlerState"]["reactiveSendSlave"].to<JsonObject>(),
+                 stateTiming.timing.at(ebus::HandlerState::reactiveSendSlave));
   addStateTiming(
-      doc["FsmState"]["activeSendSlavePositiveAcknowledge"].to<JsonObject>(),
-      stats.states.at(ebus::FsmState::activeSendSlavePositiveAcknowledge));
+      doc["HandlerState"]["reactiveReceiveSlaveAcknowledge"].to<JsonObject>(),
+      stateTiming.timing.at(
+          ebus::HandlerState::reactiveReceiveSlaveAcknowledge));
+  addStateTiming(doc["HandlerState"]["requestBus"].to<JsonObject>(),
+                 stateTiming.timing.at(ebus::HandlerState::requestBus));
+  addStateTiming(doc["HandlerState"]["activeSendMaster"].to<JsonObject>(),
+                 stateTiming.timing.at(ebus::HandlerState::activeSendMaster));
   addStateTiming(
-      doc["FsmState"]["activeSendSlaveNegativeAcknowledge"].to<JsonObject>(),
-      stats.states.at(ebus::FsmState::activeSendSlaveNegativeAcknowledge));
-  addStateTiming(doc["FsmState"]["releaseBus"].to<JsonObject>(),
-                 stats.states.at(ebus::FsmState::releaseBus));
+      doc["HandlerState"]["activeReceiveMasterAcknowledge"].to<JsonObject>(),
+      stateTiming.timing.at(
+          ebus::HandlerState::activeReceiveMasterAcknowledge));
+  addStateTiming(doc["HandlerState"]["activeReceiveSlave"].to<JsonObject>(),
+                 stateTiming.timing.at(ebus::HandlerState::activeReceiveSlave));
+  addStateTiming(doc["HandlerState"]["activeSendSlavePositiveAcknowledge"]
+                     .to<JsonObject>(),
+                 stateTiming.timing.at(
+                     ebus::HandlerState::activeSendSlavePositiveAcknowledge));
+  addStateTiming(doc["HandlerState"]["activeSendSlaveNegativeAcknowledge"]
+                     .to<JsonObject>(),
+                 stateTiming.timing.at(
+                     ebus::HandlerState::activeSendSlaveNegativeAcknowledge));
+  addStateTiming(doc["HandlerState"]["releaseBus"].to<JsonObject>(),
+                 stateTiming.timing.at(ebus::HandlerState::releaseBus));
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
@@ -683,17 +639,16 @@ JsonDocument Schedule::getParticipantJson(const Participant *participant) {
   doc["address"] = ebus::to_string(participant->slave);
   doc["manufacturer"] =
       ebus::to_string(ebus::range(participant->vec_070400, 1, 1));
-  doc["unitid"] =
-      ebus::byte_2_string(ebus::range(participant->vec_070400, 2, 5));
+  doc["unitid"] = ebus::byte_2_char(ebus::range(participant->vec_070400, 2, 5));
   doc["software"] = ebus::to_string(ebus::range(participant->vec_070400, 7, 2));
   doc["hardware"] = ebus::to_string(ebus::range(participant->vec_070400, 9, 2));
 
   if (participant->isVaillant() && participant->isVaillantValid()) {
     std::string serial =
-        ebus::byte_2_string(ebus::range(participant->vec_b5090124, 2, 8));
-    serial += ebus::byte_2_string(ebus::range(participant->vec_b5090125, 1, 9));
-    serial += ebus::byte_2_string(ebus::range(participant->vec_b5090126, 1, 9));
-    serial += ebus::byte_2_string(ebus::range(participant->vec_b5090127, 1, 2));
+        ebus::byte_2_char(ebus::range(participant->vec_b5090124, 2, 8));
+    serial += ebus::byte_2_char(ebus::range(participant->vec_b5090125, 1, 9));
+    serial += ebus::byte_2_char(ebus::range(participant->vec_b5090126, 1, 9));
+    serial += ebus::byte_2_char(ebus::range(participant->vec_b5090127, 1, 2));
 
     doc["prefix"] = serial.substr(0, 2);
     doc["year"] = serial.substr(2, 2);
@@ -732,72 +687,143 @@ const std::vector<Participant *> Schedule::getParticipants() {
   return participants;
 }
 
-void Schedule::onWriteCallback(const uint8_t byte) { Bus.write(byte); }
+void Schedule::taskFunc(void *arg) {
+  Schedule *self = static_cast<Schedule *>(arg);
+  for (;;) {
+    if (self->stopRunner) vTaskDelete(NULL);
+    self->handleEvents();
+    self->nextCommand();
+    vTaskDelay(pdMS_TO_TICKS(10));  // adjust delay as needed
+  }
+}
 
-int Schedule::isDataAvailableCallback() { return Bus.available(); }
+void Schedule::handleEvents() {
+  CallbackEvent *event = nullptr;
+  while (eventQueue.try_pop(event)) {
+    if (event) {
+      switch (event->type) {
+        case CallbackType::error:
+          if (schedule.publishCounter) {
+            std::string topic = "state/reset/last";
+            std::string payload = event->data.error + " : master '" +
+                                  ebus::to_string(event->data.master) +
+                                  "' slave '" +
+                                  ebus::to_string(event->data.slave) + "'";
 
-void Schedule::onTelegramCallback(const ebus::MessageType &messageType,
-                                  const ebus::TelegramType &telegramType,
-                                  const std::vector<uint8_t> &master,
-                                  std::vector<uint8_t> *const slave) {
-  // count master and slave addresses
-  seenMasters[master[0]] += 1;
-  if (ebus::isSlave(master[1])) seenSlaves[master[1]] += 1;
-
-  switch (messageType) {
-    case ebus::MessageType::active:
-      schedule.processActive(std::vector<uint8_t>(master),
-                             std::vector<uint8_t>(*slave));
-      break;
-    case ebus::MessageType::passive:
-      schedule.processPassive(std::vector<uint8_t>(master),
-                              std::vector<uint8_t>(*slave));
-      break;
-    case ebus::MessageType::reactive:
-      switch (telegramType) {
-        case ebus::TelegramType::broadcast:
-          schedule.processPassive(std::vector<uint8_t>(master),
-                                  std::vector<uint8_t>());
+            mqtt.publish(topic.c_str(), 0, false, payload.c_str());
+          }
           break;
-        case ebus::TelegramType::master_master:
-          schedule.processPassive(std::vector<uint8_t>(master),
-                                  std::vector<uint8_t>());
-          break;
-        case ebus::TelegramType::master_slave:
-          // TODO(yuhu-): Implement handling of Identification (Service 07h 04h)
-          // Expected data format:
-          // hh...Manufacturer (BYTE)
-          // gg...Unit_ID_0-5 (ASCII)
-          // ss...Software version (BCD)
-          // rr...Revision (BCD)
-          // vv...Hardware version (BCD)
-          // hh...Revision (BCD)
-          // Example:
-          // const std::vector<uint8_t> SEARCH_0704 = {0x07, 0x04};
-          // if (ebus::Sequence::contains(master, SEARCH_0704))
-          //   *slave = ebus::Sequence::to_vector("0ahhggggggggggssrrhhrr");
+        case CallbackType::telegram:
+          if (!event->data.master.empty()) {
+            seenMasters[event->data.master[0]] += 1;
+            if (event->data.master.size() > 1 &&
+                ebus::isSlave(event->data.master[1]))
+              seenSlaves[event->data.master[1]] += 1;
+          }
 
-          schedule.processPassive(std::vector<uint8_t>(master),
-                                  std::vector<uint8_t>(*slave));
-          break;
-        default:
+          switch (event->data.messageType) {
+            case ebus::MessageType::active:
+              schedule.processActive(event->mode,
+                                     std::vector<uint8_t>(event->data.master),
+                                     std::vector<uint8_t>(event->data.slave));
+              break;
+            case ebus::MessageType::passive:
+            case ebus::MessageType::reactive:
+              schedule.processPassive(std::vector<uint8_t>(event->data.master),
+                                      std::vector<uint8_t>(event->data.slave));
+              break;
+          }
           break;
       }
-      break;
-    default:
-      break;
+      delete event;
+    }
   }
 }
 
-void Schedule::onErrorCallback(const std::string &str) {
-  if (schedule.publishCounter) {
-    std::string topic = "state/resets/last";
-    std::string payload = str;
-    mqtt.publish(topic.c_str(), 0, false, payload.c_str());
+void Schedule::nextCommand() {
+  uint32_t currentMillis = millis();
+
+  // enqueue Inquiry of Existence (07h FEh) at startup
+  // to discover all participants on the bus (first message after startup)
+  if (sendInquiryOfExistence) {
+    sendInquiryOfExistence = false;
+    sendCommands.push_front(ebus::to_vector("fe07fe00"));
+  }
+
+  // scan participants
+  if (currentScan < maxScans && currentMillis > lastScan + distanceScans) {
+    currentScan++;
+    lastScan = currentMillis;
+    distanceScans = 3 * 60 * 1000;  // repeat scan in 3 minutes
+    handleScan();
+    handleScanVendor();
+  }
+
+  // determine next command to send
+  if (sendCommands.size() > 0 || scanCommands.size() > 0 || store.active()) {
+    uint32_t currentMillis = millis();
+    if (currentMillis > lastCommand + distanceCommands) {
+      lastCommand = currentMillis;
+
+      std::vector<uint8_t> command;
+      if (sendCommands.size() > 0) {
+        mode = Mode::send;
+        command = sendCommands.front();
+        sendCommands.pop_front();
+      } else if (scanCommands.size() > 0) {
+        mode = Mode::scan;
+        command = scanCommands.front();
+        scanCommands.pop_front();
+        if (fullScan && scanCommands.size() == 0) nextScanCommand();
+      } else {
+        mode = Mode::normal;
+        scheduleCommand = store.nextActiveCommand();
+        if (scheduleCommand != nullptr) command = scheduleCommand->command;
+      }
+
+      if (command.size() > 0) {
+        ebusHandler->enqueueActiveMessage(command);
+      }
+    }
   }
 }
 
-void Schedule::processActive(const std::vector<uint8_t> &master,
+void Schedule::nextScanCommand() {
+  while (scanIndex <= 0xff) {
+    scanIndex++;
+    if (scanIndex == 0xff) {
+      fullScan = false;
+      scanIndex = 0;
+      break;
+    }
+    if (ebus::isSlave(scanIndex) &&
+        scanIndex != ebusHandler->getTargetAddress()) {
+      std::vector<uint8_t> command;
+      command = {scanIndex};
+      command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
+      scanCommands.push_back(command);
+      break;
+    }
+  }
+}
+
+void Schedule::reactiveMasterSlaveCallback(const std::vector<uint8_t> &master,
+                                           std::vector<uint8_t> *const slave) {
+  // TODO(yuhu-): Implement handling of Identification (Service 07h 04h)
+  // Expected data format:
+  // hh...Manufacturer (BYTE)
+  // gg...Unit_ID_0-5 (ASCII)
+  // ss...Software version (BCD)
+  // rr...Revision (BCD)
+  // vv...Hardware version (BCD)
+  // hh...Revision (BCD)
+  // Example:
+  // if (ebus::contains(master, VEC_070400, 2))
+  //   *slave = ebus::to_vector("0ahhggggggggggssrrhhrr");
+}
+
+void Schedule::processActive(const Mode &mode,
+                             const std::vector<uint8_t> &master,
                              const std::vector<uint8_t> &slave) {
   if (mode == Mode::scan) {
     processScan(master, slave);
@@ -829,24 +855,24 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
 
   // send Sign of Life (Service 07h FFh) in response
   // to an Inquiry of Existence (Service 07h FEh)
-  if (ebus::contains(master, VEC_07fe00))
+  if (ebus::contains(master, VEC_07fe00, 2))
     sendCommands.push_front(ebus::to_vector("fe07ff00"));
 }
 
 void Schedule::processScan(const std::vector<uint8_t> &master,
                            const std::vector<uint8_t> &slave) {
-  if (ebus::contains(master, VEC_070400)) {
+  if (ebus::contains(master, VEC_070400, 2)) {
     allParticipants[master[1]].slave = master[1];
     allParticipants[master[1]].vec_070400 = slave;
   }
 
-  if (ebus::contains(master, VEC_b5090124))
+  if (ebus::contains(master, VEC_b5090124, 2))
     allParticipants[master[1]].vec_b5090124 = slave;
-  if (ebus::contains(master, VEC_b5090125))
+  if (ebus::contains(master, VEC_b5090125, 2))
     allParticipants[master[1]].vec_b5090125 = slave;
-  if (ebus::contains(master, VEC_b5090126))
+  if (ebus::contains(master, VEC_b5090126, 2))
     allParticipants[master[1]].vec_b5090126 = slave;
-  if (ebus::contains(master, VEC_b5090127))
+  if (ebus::contains(master, VEC_b5090127, 2))
     allParticipants[master[1]].vec_b5090127 = slave;
 }
 #endif

@@ -221,36 +221,13 @@ By setting the MQTT server IP address / hostname, MQTT support is activated. At 
 - and a trailing slash.
 - Example root topic: **`ebus/8406ac/`**.
 
-Basic device data, settings and various counters are published regularly.
-
-The following topics are available on every device.
+The following sub topics are available on any device and are published regularly.
 |***topic***                    |***description***
 |:-                             |:-
-|settings                       |settings of the ebus adapter
-|firmware                       |details of the installed firmware
-|state                          |various status/counter information  
-|state/wifi                     |wifi related information
-|state/arbitration              |arbitration over common interface (e.g. ebusd)
-|&nbsp;                         |
-|**communication**              |
-|request                        |JSON encoded request 
-|response                       |JSON encoded response / error message
-
-
-### MQTT interface with firmware EBUS_INTERNAL=1
-A firmware with `EBUS_INTERNAL=1` adds a scheduler and a command buffer to the device.
-
-The following topics are available.
-|***topic***                    |***description***
-|:-                             |:-
-|commands                       |installed commands
-|values                         |received values of installed commands
-|state/internal/messages        |processed messages
-|state/internal/errors          |errors of finite state machine  
-|state/internal/resets          |resets of finite state machine 
-|state/internal/requests        |bus requests (arbitration)
-|state/internal/addresses       |collected ebus addresses
-
+|state/available                |indicates status for Home Assistant
+|state/uptime                   |uptime since last reboot in milliseconds 
+|state/free_heap                |free heap of the device in bytes
+|state/loop_duration            |duration of main loop in milliseconds
 
 ### Details of MQTT commands
 The MQTT command interface is divided into two topics for bidirectional communication.
@@ -259,24 +236,162 @@ The MQTT command interface is divided into two topics for bidirectional communic
 - Only **JSON-encoded** messages are processed.
 - To distinguish between commands, each message contains a **unique ID**.
 
+|***communication***            |***description***
+|:-                             |:-   
+|request                        |JSON encoded request 
+|response                       |JSON encoded response / error message
+
 Available MQTT commands.
-|***command***    |***description***                                             |***EBUS_INTERNAL=1***     
-|:-               |:-                                                            |:-
-|restart          |Restarting of the device                                      |
-|insert           |Inserting (Installing) of new commands                        |x
-|remove           |Removing installed commands                                   |x
-|publish          |Publishing installed commands                                 |x
-|load             |Loading (Installing) saved commands                           |x
-|save             |Saving the currently installed commands                       |x
-|wipe             |Wiping of the saved commands                                  |x
-|scan             |Scanning of ebus participants                                 |x
-|participants     |Publishing scanned ebus participants                          |x
-|send             |Sending ebus commands once                                    |x
-|forward          |Activate/deactivate data forwarding (including filtering)     |x
-|reset            |Resetting counter and timing values                           |x    
+|***command***                  |***description***                                              
+|:-                             |:-                                                            
+|restart                        |Restarting of the device                                      
 
 
-### Examples
+### Home Assistant Support
+Home Assistant support can be globally activated on the configuration web page.
+- Once Home Assistant support is activated there will be the followed MQTT topics created under **homeassistant**.
+- A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
+
+**MQTT Device - Diagnostic - Uptime of device (DD HH:MM:SS)**
+```
+topic: homeassistant/sensor/ebus8406ac/uptime/config
+payload:
+{
+  "name": "Uptime",
+  "entity_category": "diagnostic",
+  "unique_id": "ebus8406ac_uptime",
+  "state_topic": "ebus/8406ac/state/uptime",
+  "value_template": "{{timedelta(seconds=((value|float)/1000)|int)}}",
+  "device": {
+    "identifiers": "ebus8406ac",
+    "name": "esp-ebus",
+    "manufacturer": "",
+    "model": "",
+    "model_id": "",
+    "serial_number": "8406ac",
+    "hw_version": "",
+    "sw_version": "",
+    "configuration_url": "http://esp-ebus.local"
+  }
+}
+```
+
+**MQTT Device - Configuration - Restart button**
+```
+topic: homeassistant/button/ebus8406ac/restart/config
+payload:
+{
+  "name": "Restart",
+  "device_class": "restart",
+  "entity_category": "config",
+  "unique_id": "ebus8406ac_restart",
+  "availability_topic": "ebus/8406ac/state/available",
+  "command_topic": "ebus/8406ac/request",
+  "payload_press": "{\"id\":\"restart\",\"value\":true}",
+  "qos": 0,
+  "retain": false,
+  "device": {
+    "identifiers": "ebus8406ac"
+  }
+}
+``` 
+
+# Firmware with EBUS_INTERNAL
+Firmware with `EBUS_INTERNAL` is an alternative firmware that enables the device to operate as an independent eBUS device without external control software such as ebusd. In order to be able to evaluate passively received or actively sent commands, these must be installed in the internal command store. The results of the evaluated messages are also stored in the internal store or are actively sent via MQTT or can be retrieved via HTTP.
+
+Key facts:
+- Read and write access via port 3333, 3334 and port 3335 (ebusd enhanced protocol) is supported.
+- Status queries via port 5555 3334 is supported.
+- Internal command store.
+- Installing commands via MQTT or HTTP upload.
+- Installed commands can be stored in NVS memory and are automatically loaded on restart.
+- Received or sent messages are evaluated and the results are published to MQTT.
+- Sending of non-installed commands is supported via MQTT.
+- Scanning of eBUS devices is supported.
+- Automatic scan of eBUS devices at startup.
+- Pattern-recognized messages can be forwarded via MQTT.
+
+## Structure of the internal command store
+For an example of how to install a command via MQTT, see `Inserting (Installing) of new commands`.
+
+```
+struct Command {
+  std::string key;               // unique key of command
+  std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
+  std::string unit;              // unit of the interested part
+  bool active;                   // active sending of command
+  uint32_t interval;             // minimum interval between two commands in seconds
+  uint32_t last;                 // last time of the successful command (INTERNAL)
+  std::vector<uint8_t> data;     // received raw data (INTERNAL)
+  bool master;                   // value of interest is in master or slave part
+  size_t position;               // starting position in the interested part
+  ebus::DataType datatype;       // ebus data type
+  size_t length;                 // length of interested part (INTERNAL)
+  bool numeric;                  // indicate numeric types (INTERNAL)
+  float divider;                 // divider for value conversion
+  uint8_t digits;                // deciaml digits of value
+  std::string topic;             // mqtt topic below "values/"
+  bool ha;                       // home assistant support for auto discovery
+  std::string ha_class;          // home assistant device_class
+};
+```
+
+Available ebus data types: 
+- numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (IEEE 754)
+- character: CHAR1 - CHAR8, HEX1 - HEX8
+
+### MQTT interface with `EBUS_INTERNAL`
+
+The following sub topics are available and are published regularly.
+|***topic***                    |***description***
+|:-                             |:-
+|values/...                     |received values of installed commands
+|state/addresses                |collected ebus addresses
+|state/errors                   |errors of finite state machine  
+|state/messages                 |processed messages
+|state/requests                 |bus requests (arbitration)
+|state/resets                   |resets of finite state machine (passive, reactive, active)
+|state/timings                  |time required by internal routines / states
+
+Available MQTT commands
+|***command***                  |***description***                                                  
+|:-                             |:-                                                                                         
+|insert                         |Inserting (Installing) of new commands                        
+|remove                         |Removing installed commands                                   
+|publish                        |Publishing installed commands                                 
+|load                           |Loading (Installing) saved commands                           
+|save                           |Saving the currently installed commands                       
+|wipe                           |Wiping of the saved commands                                  
+|scan                           |Scanning of ebus participants                                 
+|participants                   |Publishing scanned ebus participants                          
+|send                           |Sending ebus commands once                                    
+|forward                        |Activate/deactivate data forwarding (including filtering)     
+|reset                          |Resetting counter and timing values                           
+
+
+### Home Assistant Support with `EBUS_INTERNAL`
+**MQTT Device - Sensors**
+- When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. 
+- A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
+- According to the above data it should look like the following example.
+```
+topic: homeassistant/sensor/ebus8406ac/outdoor_temperature/config
+payload:
+{
+  "name": "outdoor temperature",
+  "device_class": "temperature",
+  "state_topic": "ebus/8406ac/values/outdoor_temperature",
+  "unit_of_measurement": "°C",
+  "unique_id": "ebus8406ac_01",
+  "value_template": "{{value_json.value}}",
+  "device": {
+    "identifiers": "ebus8406ac"
+  }
+}
+```
+
+
+### Examples of MQTT commands
 The provided examples were created using `Mosquitto` in a `Linux shell`. The `server IP address or hostname` and `unique device ID` must be adjusted to your environment.
 - server IP address or hostname = `server`
 - unique device ID = `8406ac`
@@ -320,10 +435,6 @@ payload:
     }
   ]
 }
-
-ebus datatypes: 
-- numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (values as 1/1000)
-- character: CHAR1, CHAR2, CHAR3, CHAR4, CHAR5, CHAR6, CHAR7, CHAR8
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
@@ -459,72 +570,4 @@ payload:
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"reset"}' 
-
-### Home Assistant Support
-Home Assistant support can be globally activated on the configuration web page.
-- Once Home Assistant support is activated there will be the followed MQTT topics created under **homeassistant**.
-- A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
-
-**MQTT Device - Diagnostic - Uptime of device (DD HH:MM:SS)**
-```
-topic: homeassistant/sensor/ebus8406ac/uptime/config
-payload:
-{
-  "name": "Uptime",
-  "entity_category": "diagnostic",
-  "unique_id": "ebus8406ac_uptime",
-  "state_topic": "ebus/8406ac/state/uptime",
-  "value_template": "{{timedelta(seconds=((value|float)/1000)|int)}}",
-  "device": {
-    "identifiers": "ebus8406ac",
-    "name": "esp-ebus",
-    "manufacturer": "",
-    "model": "",
-    "model_id": "",
-    "serial_number": "8406ac",
-    "hw_version": "",
-    "sw_version": "",
-    "configuration_url": "http://esp-ebus.local"
-  }
-}
-```
-
-**MQTT Device - Configuration - Restart button**
-```
-topic: homeassistant/button/ebus8406ac/restart/config
-payload:
-{
-  "name": "Restart",
-  "device_class": "restart",
-  "entity_category": "config",
-  "unique_id": "ebus8406ac_restart",
-  "availability_topic": "ebus/8406ac/state/available",
-  "command_topic": "ebus/8406ac/request",
-  "payload_press": "{\"id\":\"restart\",\"value\":true}",
-  "qos": 0,
-  "retain": false,
-  "device": {
-    "identifiers": "ebus8406ac"
-  }
-}
-``` 
-
-**MQTT Device - Sensors**
-- When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. 
-- A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
-- According to the above data it should look like the following example.
-```
-topic: homeassistant/sensor/ebus8406ac/outdoor_temperature/config
-payload:
-{
-  "name": "outdoor temperature",
-  "device_class": "temperature",
-  "state_topic": "ebus/8406ac/values/outdoor_temperature",
-  "unit_of_measurement": "°C",
-  "unique_id": "ebus8406ac_01",
-  "value_template": "{{value_json.value}}",
-  "device": {
-    "identifiers": "ebus8406ac"
-  }
-}
 ```

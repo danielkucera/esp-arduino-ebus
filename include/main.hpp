@@ -10,8 +10,10 @@
 #if defined(ESP32)
 #define UART_TX 20
 #define UART_RX 21
+#if !defined(EBUS_INTERNAL)
 #define USE_SOFTWARE_SERIAL 1
-#define USE_ASYNCHRONOUS 1     // requires USE_SOFTWARE_SERIAL
+#define USE_ASYNCHRONOUS 1  // requires USE_SOFTWARE_SERIAL
+#endif
 #define AVAILABLE_THRESHOLD 0  // https://esp32.com/viewtopic.php?t=19788
 #else
 #define UART_TX 1
@@ -28,3 +30,4 @@ int DEBUG_LOG_IMPL(const char *format, ...);
 char *status_string();
 void restart();
 const std::string getStatusJson();
+void updateLastComms();
