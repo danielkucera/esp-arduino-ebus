@@ -296,13 +296,13 @@ payload:
 }
 ``` 
 
-# Firmware with EBUS_INTERNAL
-Firmware with `EBUS_INTERNAL` is an alternative firmware that enables the device to operate as an independent eBUS device without external control software such as ebusd. In order to be able to evaluate passively received or actively sent commands, these must be installed in the internal command store. The results of the evaluated messages are also stored in the internal store or are actively sent via MQTT or can be retrieved via HTTP.
+# Firmware marked with INTERNAL
+Firmware marked with `INTERNAL` is an alternative firmware that enables the device to operate as an independent eBUS device without external control software such as ebusd. In order to be able to evaluate passively received or actively sent commands, these must be installed in the internal command store. The results of the evaluated messages are also stored in the internal store or are actively sent via MQTT or can be retrieved via HTTP.
 
 Key facts:
 - Read and write access via port 3333, 3334 and port 3335 (ebusd enhanced protocol) is supported.
-- Status queries via port 5555 3334 is supported.
-- Internal command store.
+- Status queries via port 5555 is supported.
+- Internal command store for active and passive commands.
 - Installing commands via MQTT or HTTP upload.
 - Installed commands can be stored in NVS memory and are automatically loaded on restart.
 - Received or sent messages are evaluated and the results are published to MQTT.
@@ -340,7 +340,7 @@ Available ebus data types:
 - numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (IEEE 754)
 - character: CHAR1 - CHAR8, HEX1 - HEX8
 
-### MQTT interface with `EBUS_INTERNAL`
+### MQTT interface with `INTERNAL` firmware
 
 The following sub topics are available and are published regularly.
 |***topic***                    |***description***
@@ -369,7 +369,7 @@ Available MQTT commands
 |reset                          |Resetting counter and timing values                           
 
 
-### Home Assistant Support with `EBUS_INTERNAL`
+### Home Assistant Support with `INTERNAL` firmware
 **MQTT Device - Sensors**
 - When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. 
 - A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
