@@ -15,18 +15,18 @@ Mqtt::Mqtt() {
   client.onPublish(onPublish);
 }
 
-void Mqtt::setUniqueId(const char *id) {
+void Mqtt::setUniqueId(const char* id) {
   uniqueId = id;
   rootTopic = "ebus/" + uniqueId + "/";
   topicWill = mqtt.rootTopic + "state/available";
   client.setWill(topicWill.c_str(), 0, true, "offline");
 }
 
-void Mqtt::setServer(const char *host, uint16_t port) {
+void Mqtt::setServer(const char* host, uint16_t port) {
   client.setServer(host, port);
 }
 
-void Mqtt::setCredentials(const char *username, const char *password) {
+void Mqtt::setCredentials(const char* username, const char* password) {
   client.setCredentials(username, password);
 }
 
@@ -46,14 +46,14 @@ void Mqtt::doLoop() {
 #endif
 }
 
-uint16_t Mqtt::publish(const char *topic, uint8_t qos, bool retain,
-                       const char *payload, bool prefix) {
+uint16_t Mqtt::publish(const char* topic, uint8_t qos, bool retain,
+                       const char* payload, bool prefix) {
   std::string mqttTopic = prefix ? rootTopic + topic : topic;
   return client.publish(mqttTopic.c_str(), qos, retain, payload);
 }
 
-void Mqtt::publishResponse(const std::string &id, const std::string &status,
-                           const size_t &bytes) {
+void Mqtt::publishResponse(const std::string& id, const std::string& status,
+                           const size_t& bytes) {
   std::string payload;
   JsonDocument doc;
   doc["id"] = id;
@@ -74,22 +74,22 @@ void Mqtt::publishHA() const {
 
 #if defined(EBUS_INTERNAL)
 void Mqtt::publishCommands() {
-  for (Command *command : store.getCommands()) pubCommands.push_back(command);
+  for (Command* command : store.getCommands()) pubCommands.push_back(command);
 }
 
 void Mqtt::publishHASensors(const bool remove) {
-  for (Command *command : store.getCommands())
+  for (Command* command : store.getCommands())
     pubHASensors.push_back(std::make_tuple(command, remove));
 }
 
 void Mqtt::publishParticipants() {
-  for (Participant *participant : schedule.getParticipants())
+  for (Participant* participant : schedule.getParticipants())
     pubParticipants.push_back(participant);
 }
 
-void Mqtt::publishData(const std::string &id,
-                       const std::vector<uint8_t> &master,
-                       const std::vector<uint8_t> &slave) {
+void Mqtt::publishData(const std::string& id,
+                       const std::vector<uint8_t>& master,
+                       const std::vector<uint8_t>& slave) {
   std::string payload;
   JsonDocument doc;
   doc["id"] = id;
@@ -100,7 +100,7 @@ void Mqtt::publishData(const std::string &id,
   mqtt.publish("response", 0, false, payload.c_str());
 }
 
-void Mqtt::publishValue(Command *command, const JsonDocument &doc) {
+void Mqtt::publishValue(Command* command, const JsonDocument& doc) {
   command->last = millis();
 
   std::string payload;
@@ -116,7 +116,7 @@ void Mqtt::publishValue(Command *command, const JsonDocument &doc) {
 }
 #endif
 
-uint16_t Mqtt::subscribe(const char *topic, uint8_t qos) {
+uint16_t Mqtt::subscribe(const char* topic, uint8_t qos) {
   return client.subscribe(topic, qos);
 }
 
@@ -129,7 +129,7 @@ void Mqtt::onConnect(bool sessionPresent) {
   mqtt.publishHA();
 }
 
-void Mqtt::onMessage(const char *topic, const char *payload,
+void Mqtt::onMessage(const char* topic, const char* payload,
                      AsyncMqttClientMessageProperties properties, size_t len,
                      size_t index, size_t total) {
   JsonDocument doc;
@@ -198,12 +198,12 @@ void Mqtt::onMessage(const char *topic, const char *payload,
 }
 
 #if defined(EBUS_INTERNAL)
-void Mqtt::insertCommands(const JsonArray &commands) {
+void Mqtt::insertCommands(const JsonArray& commands) {
   for (JsonVariant command : commands)
     insCommands.push_back(store.createCommand(command));
 }
 
-void Mqtt::removeCommands(const JsonArray &keys) {
+void Mqtt::removeCommands(const JsonArray& keys) {
   for (JsonVariant key : keys) remCommands.push_back(key);
 }
 
@@ -226,7 +226,7 @@ void Mqtt::checkRemoveCommands() {
       lastRemove = millis();
       std::string key = remCommands.front();
       remCommands.pop_front();
-      const Command *command = store.findCommand(key);
+      const Command* command = store.findCommand(key);
       if (command != nullptr) {
         if (haSupport) mqtt.publishHASensor(command, true);
         store.removeCommand(key);
@@ -300,7 +300,7 @@ void Mqtt::wipeCommands() {
 }
 
 void Mqtt::initScan(const bool full, const bool vendor,
-                    const JsonArray &addresses) {
+                    const JsonArray& addresses) {
   if (full)
     schedule.handleScanFull();
   else if (vendor)
@@ -313,7 +313,7 @@ void Mqtt::initScan(const bool full, const bool vendor,
   mqtt.publishResponse("scan", "initiated");
 }
 
-void Mqtt::publishCommand(const Command *command) {
+void Mqtt::publishCommand(const Command* command) {
   std::string topic = "commands/" + command->key;
   std::string payload;
   serializeJson(store.getCommandJson(command), payload);
@@ -321,8 +321,8 @@ void Mqtt::publishCommand(const Command *command) {
 }
 #endif
 
-void Mqtt::publishHADiagnostic(const char *name, const bool remove,
-                               const char *value_template, const bool full) {
+void Mqtt::publishHADiagnostic(const char* name, const bool remove,
+                               const char* value_template, const bool full) {
   std::string lowerName = name;
   std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
                  [](unsigned char c) { return std::tolower(c); });
@@ -362,7 +362,7 @@ void Mqtt::publishHADiagnostic(const char *name, const bool remove,
   }
 }
 
-void Mqtt::publishHAConfigButton(const char *name, const bool remove) {
+void Mqtt::publishHAConfigButton(const char* name, const bool remove) {
   std::string lowerName = name;
   std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
                  [](unsigned char c) { return std::tolower(c); });
@@ -396,7 +396,7 @@ void Mqtt::publishHAConfigButton(const char *name, const bool remove) {
 }
 
 #if defined(EBUS_INTERNAL)
-void Mqtt::publishHASensor(const Command *command, const bool remove) {
+void Mqtt::publishHASensor(const Command* command, const bool remove) {
   std::string stateTopic = command->topic;
   std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
                  [](unsigned char c) { return std::tolower(c); });
@@ -437,7 +437,7 @@ void Mqtt::publishHASensor(const Command *command, const bool remove) {
     publish(topic.c_str(), 0, true, payload.c_str(), false);
 }
 
-void Mqtt::publishParticipant(const Participant *participant) {
+void Mqtt::publishParticipant(const Participant* participant) {
   std::string topic = "participants/" + ebus::to_string(participant->slave);
   std::string payload;
   serializeJson(schedule.getParticipantJson(participant), payload);

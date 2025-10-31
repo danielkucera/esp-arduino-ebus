@@ -16,9 +16,9 @@
 
 // Hash for std::vector<uint8_t>
 struct VectorHash {
-  std::size_t operator()(const std::vector<uint8_t> &vec) const {
+  std::size_t operator()(const std::vector<uint8_t>& vec) const {
     std::size_t hash = vec.size();
-    for (const uint8_t &h : vec) {
+    for (const uint8_t& h : vec) {
       hash ^= std::hash<uint8_t>()(h) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     }
     return hash;
@@ -47,51 +47,50 @@ struct Command {
 
 class Store {
  public:
-  Command createCommand(const JsonDocument &doc);
+  Command createCommand(const JsonDocument& doc);
 
-  void insertCommand(const Command &command);
-  void removeCommand(const std::string &key);
-  const Command *findCommand(const std::string &key);
+  void insertCommand(const Command& command);
+  void removeCommand(const std::string& key);
+  const Command* findCommand(const std::string& key);
 
   int64_t loadCommands();
   int64_t saveCommands() const;
   static int64_t wipeCommands();
 
-  static JsonDocument getCommandJson(const Command *command);
+  static JsonDocument getCommandJson(const Command* command);
   const std::string getCommandsJson() const;
 
-  const std::vector<Command *> getCommands();
+  const std::vector<Command*> getCommands();
 
   const size_t getActiveCommands() const;
   const size_t getPassiveCommands() const;
 
   const bool active() const;
 
-  Command *nextActiveCommand();
-  std::vector<Command *> findPassiveCommands(
-      const std::vector<uint8_t> &master);
+  Command* nextActiveCommand();
+  std::vector<Command*> findPassiveCommands(const std::vector<uint8_t>& master);
 
-  std::vector<Command *> updateData(Command *command,
-                                    const std::vector<uint8_t> &master,
-                                    const std::vector<uint8_t> &slave);
+  std::vector<Command*> updateData(Command* command,
+                                   const std::vector<uint8_t>& master,
+                                   const std::vector<uint8_t>& slave);
 
-  static JsonDocument getValueJson(const Command *command);
+  static JsonDocument getValueJson(const Command* command);
   const std::string getValuesJson() const;
 
  private:
   // Use unordered_map for fast key lookup
   std::unordered_map<std::string, Command> allCommandsByKey;
   // For passive commands, use command.command as key
-  std::unordered_map<std::vector<uint8_t>, Command *, VectorHash>
+  std::unordered_map<std::vector<uint8_t>, Command*, VectorHash>
       passiveCommands;
   // For active commands, just keep a vector of pointers
-  std::vector<Command *> activeCommands;
+  std::vector<Command*> activeCommands;
 
   const std::string serializeCommands() const;
-  void deserializeCommands(const char *payload);
+  void deserializeCommands(const char* payload);
 
-  static const double getValueDouble(const Command *command);
-  static const std::string getValueString(const Command *command);
+  static const double getValueDouble(const Command* command);
+  static const std::string getValueString(const Command* command);
 };
 
 extern Store store;

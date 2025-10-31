@@ -17,10 +17,10 @@ class Mqtt {
  public:
   Mqtt();
 
-  void setUniqueId(const char *id);
+  void setUniqueId(const char* id);
 
-  void setServer(const char *host, uint16_t port);
-  void setCredentials(const char *username, const char *password = nullptr);
+  void setServer(const char* host, uint16_t port);
+  void setCredentials(const char* username, const char* password = nullptr);
 
   void setHASupport(const bool enable);
 
@@ -29,11 +29,11 @@ class Mqtt {
 
   void doLoop();
 
-  uint16_t publish(const char *topic, uint8_t qos, bool retain,
-                   const char *payload = nullptr, bool prefix = true);
+  uint16_t publish(const char* topic, uint8_t qos, bool retain,
+                   const char* payload = nullptr, bool prefix = true);
 
-  void publishResponse(const std::string &id, const std::string &status,
-                       const size_t &bytes = 0);
+  void publishResponse(const std::string& id, const std::string& status,
+                       const size_t& bytes = 0);
 
   void publishHA() const;
 
@@ -42,11 +42,11 @@ class Mqtt {
   void publishHASensors(const bool remove);
   void publishParticipants();
 
-  static void publishData(const std::string &id,
-                          const std::vector<uint8_t> &master,
-                          const std::vector<uint8_t> &slave);
+  static void publishData(const std::string& id,
+                          const std::vector<uint8_t>& master,
+                          const std::vector<uint8_t>& slave);
 
-  static void publishValue(Command *command, const JsonDocument &doc);
+  static void publishValue(Command* command, const JsonDocument& doc);
 #endif
 
  private:
@@ -66,20 +66,20 @@ class Mqtt {
   uint32_t distanceRemove = 300;
   uint32_t lastRemove = 0;
 
-  std::deque<const Command *> pubCommands;
+  std::deque<const Command*> pubCommands;
   uint32_t distancePublish = 200;
   uint32_t lastPublish = 0;
 
-  std::deque<std::tuple<const Command *, bool>> pubHASensors;
+  std::deque<std::tuple<const Command*, bool>> pubHASensors;
   uint32_t distanceHASensors = 200;
   uint32_t lastHASensors = 0;
 
-  std::deque<const Participant *> pubParticipants;
+  std::deque<const Participant*> pubParticipants;
   uint32_t distanceParticipants = 200;
   uint32_t lastParticipants = 0;
 #endif
 
-  uint16_t subscribe(const char *topic, uint8_t qos);
+  uint16_t subscribe(const char* topic, uint8_t qos);
 
   static void onConnect(bool sessionPresent);
   static void onDisconnect(AsyncMqttClientDisconnectReason reason) {}
@@ -87,15 +87,15 @@ class Mqtt {
   static void onSubscribe(uint16_t packetId, uint8_t qos) {}
   static void onUnsubscribe(uint16_t packetId) {}
 
-  static void onMessage(const char *topic, const char *payload,
+  static void onMessage(const char* topic, const char* payload,
                         AsyncMqttClientMessageProperties properties, size_t len,
                         size_t index, size_t total);
 
   static void onPublish(uint16_t packetId) {}
 
 #if defined(EBUS_INTERNAL)
-  void insertCommands(const JsonArray &commands);
-  void removeCommands(const JsonArray &keys);
+  void insertCommands(const JsonArray& commands);
+  void removeCommands(const JsonArray& keys);
 
   void checkInsertCommands();
   void checkRemoveCommands();
@@ -109,20 +109,20 @@ class Mqtt {
   static void wipeCommands();
 
   static void initScan(const bool full, const bool vendor,
-                       const JsonArray &addresses);
+                       const JsonArray& addresses);
 
-  void publishCommand(const Command *command);
+  void publishCommand(const Command* command);
 #endif
 
-  void publishHADiagnostic(const char *name, const bool remove,
-                           const char *value_template, const bool full = false);
+  void publishHADiagnostic(const char* name, const bool remove,
+                           const char* value_template, const bool full = false);
 
-  void publishHAConfigButton(const char *name, const bool remove);
+  void publishHAConfigButton(const char* name, const bool remove);
 
 #if defined(EBUS_INTERNAL)
-  void publishHASensor(const Command *command, const bool remove);
+  void publishHASensor(const Command* command, const bool remove);
 
-  void publishParticipant(const Participant *participant);
+  void publishParticipant(const Participant* participant);
 #endif
 };
 

@@ -23,11 +23,11 @@
 #define AVAILABLE_THRESHOLD 1
 #endif
 
-inline int DEBUG_LOG(const char *format, ...) { return 0; }
-int DEBUG_LOG_IMPL(const char *format, ...);
+inline int DEBUG_LOG(const char* format, ...) { return 0; }
+int DEBUG_LOG_IMPL(const char* format, ...);
 // #define DEBUG_LOG DEBUG_LOG_IMPL
 
-char *status_string();
+char* status_string();
 void restart();
 const std::string getStatusJson();
 void updateLastComms();
