@@ -5,7 +5,7 @@
 
 Store store;
 
-Command Store::createCommand(const JsonDocument &doc) {
+Command Store::createCommand(const JsonDocument& doc) {
   Command command;
   // TODO(yuhu-): check incoming data for completeness
   command.key = doc["key"].as<std::string>();
@@ -18,8 +18,7 @@ Command Store::createCommand(const JsonDocument &doc) {
   command.data = std::vector<uint8_t>();
   command.master = doc["master"].as<bool>();
   command.position = doc["position"].as<size_t>();
-  command.datatype =
-      ebus::string_2_datatype(doc["datatype"].as<const char *>());
+  command.datatype = ebus::string_2_datatype(doc["datatype"].as<const char*>());
   command.length = ebus::sizeof_datatype(command.datatype);
   command.numeric = ebus::typeof_datatype(command.datatype);
   command.divider =
@@ -37,7 +36,7 @@ Command Store::createCommand(const JsonDocument &doc) {
   return command;
 }
 
-void Store::insertCommand(const Command &command) {
+void Store::insertCommand(const Command& command) {
   // Insert or update in allCommandsByKey
   std::unordered_map<std::string, Command>::iterator it =
       allCommandsByKey.find(command.key);
@@ -47,7 +46,7 @@ void Store::insertCommand(const Command &command) {
     allCommandsByKey.insert(std::make_pair(command.key, command));
 
   // Remove from previous index if exists
-  for (std::unordered_map<std::vector<uint8_t>, Command *, VectorHash>::iterator
+  for (std::unordered_map<std::vector<uint8_t>, Command*, VectorHash>::iterator
            itp = passiveCommands.begin();
        itp != passiveCommands.end();) {
     if (itp->second->key == command.key)
@@ -59,23 +58,23 @@ void Store::insertCommand(const Command &command) {
   activeCommands.erase(
       std::remove_if(
           activeCommands.begin(), activeCommands.end(),
-          [&](const Command *cmd) { return cmd->key == command.key; }),
+          [&](const Command* cmd) { return cmd->key == command.key; }),
       activeCommands.end());
 
   // Add to passive or active index
-  Command *cmdPtr = &allCommandsByKey[command.key];
+  Command* cmdPtr = &allCommandsByKey[command.key];
   if (command.active)
     activeCommands.push_back(cmdPtr);
   else
     passiveCommands[command.command] = cmdPtr;
 }
 
-void Store::removeCommand(const std::string &key) {
+void Store::removeCommand(const std::string& key) {
   std::unordered_map<std::string, Command>::iterator it =
       allCommandsByKey.find(key);
   if (it != allCommandsByKey.end()) {
     // Remove from indexes
-    for (std::unordered_map<std::vector<uint8_t>, Command *,
+    for (std::unordered_map<std::vector<uint8_t>, Command*,
                             VectorHash>::iterator itp = passiveCommands.begin();
          itp != passiveCommands.end();) {
       if (itp->second->key == key)
@@ -85,13 +84,13 @@ void Store::removeCommand(const std::string &key) {
     }
     activeCommands.erase(
         std::remove_if(activeCommands.begin(), activeCommands.end(),
-                       [&](const Command *cmd) { return cmd->key == key; }),
+                       [&](const Command* cmd) { return cmd->key == key; }),
         activeCommands.end());
     allCommandsByKey.erase(it);
   }
 }
 
-const Command *Store::findCommand(const std::string &key) {
+const Command* Store::findCommand(const std::string& key) {
   std::unordered_map<std::string, Command>::iterator it =
       allCommandsByKey.find(key);
   if (it != allCommandsByKey.end())
@@ -151,7 +150,7 @@ int64_t Store::wipeCommands() {
   return bytes;
 }
 
-JsonDocument Store::getCommandJson(const Command *command) {
+JsonDocument Store::getCommandJson(const Command* command) {
   JsonDocument doc;
 
   doc["key"] = command->key;
@@ -177,7 +176,7 @@ const std::string Store::getCommandsJson() const {
   JsonDocument doc;
 
   if (!allCommandsByKey.empty()) {
-    for (const std::pair<const std::string, Command> &kv : allCommandsByKey)
+    for (const std::pair<const std::string, Command>& kv : allCommandsByKey)
       doc.add(getCommandJson(&kv.second));
   }
 
@@ -189,9 +188,9 @@ const std::string Store::getCommandsJson() const {
   return payload;
 }
 
-const std::vector<Command *> Store::getCommands() {
-  std::vector<Command *> commands;
-  for (std::pair<const std::string, Command> &kv : allCommandsByKey)
+const std::vector<Command*> Store::getCommands() {
+  std::vector<Command*> commands;
+  for (std::pair<const std::string, Command>& kv : allCommandsByKey)
     commands.push_back(&(kv.second));
   return commands;
 }
@@ -204,10 +203,10 @@ const size_t Store::getPassiveCommands() const {
 
 const bool Store::active() const { return !activeCommands.empty(); }
 
-Command *Store::nextActiveCommand() {
-  Command *next = nullptr;
+Command* Store::nextActiveCommand() {
+  Command* next = nullptr;
   bool init = false;
-  for (Command *cmd : activeCommands) {
+  for (Command* cmd : activeCommands) {
     if (cmd->last == 0) {
       next = cmd;
       init = true;
@@ -224,17 +223,17 @@ Command *Store::nextActiveCommand() {
   return next;
 }
 
-std::vector<Command *> Store::findPassiveCommands(
-    const std::vector<uint8_t> &master) {
-  std::vector<Command *> commands;
+std::vector<Command*> Store::findPassiveCommands(
+    const std::vector<uint8_t>& master) {
+  std::vector<Command*> commands;
   // Fast lookup by command pattern
-  std::unordered_map<std::vector<uint8_t>, Command *, VectorHash>::iterator it =
+  std::unordered_map<std::vector<uint8_t>, Command*, VectorHash>::iterator it =
       passiveCommands.find(master);
   if (it != passiveCommands.end()) {
     commands.push_back(it->second);
   } else {
     // fallback: scan for all that match (if needed)
-    for (const std::pair<const std::vector<uint8_t>, Command *> &kv :
+    for (const std::pair<const std::vector<uint8_t>, Command*>& kv :
          passiveCommands) {
       if (ebus::contains(master, kv.first)) commands.push_back(kv.second);
     }
@@ -242,9 +241,9 @@ std::vector<Command *> Store::findPassiveCommands(
   return commands;
 }
 
-std::vector<Command *> Store::updateData(Command *command,
-                                         const std::vector<uint8_t> &master,
-                                         const std::vector<uint8_t> &slave) {
+std::vector<Command*> Store::updateData(Command* command,
+                                        const std::vector<uint8_t>& master,
+                                        const std::vector<uint8_t>& slave) {
   if (command) {
     command->last = millis();
     if (command->master)
@@ -257,8 +256,8 @@ std::vector<Command *> Store::updateData(Command *command,
   }
 
   // Passive: potentially multiple matches
-  std::vector<Command *> commands = findPassiveCommands(master);
-  for (Command *cmd : commands) {
+  std::vector<Command*> commands = findPassiveCommands(master);
+  for (Command* cmd : commands) {
     cmd->last = millis();
     if (cmd->master)
       cmd->data = ebus::range(master, 4 + cmd->position, cmd->length);
@@ -268,7 +267,7 @@ std::vector<Command *> Store::updateData(Command *command,
   return commands;
 }
 
-JsonDocument Store::getValueJson(const Command *command) {
+JsonDocument Store::getValueJson(const Command* command) {
   JsonDocument doc;
 
   if (command->numeric)
@@ -290,8 +289,8 @@ const std::string Store::getValuesJson() const {
     size_t index = 0;
     uint32_t now = millis();
 
-    for (const std::pair<const std::string, Command> &kv : allCommandsByKey) {
-      const Command &command = kv.second;
+    for (const std::pair<const std::string, Command>& kv : allCommandsByKey) {
+      const Command& command = kv.second;
       JsonArray array = results[index][command.key].to<JsonArray>();
       if (command.numeric)
         array.add(store.getValueDouble(&command));
@@ -318,8 +317,8 @@ const std::string Store::serializeCommands() const {
   JsonDocument doc;
 
   if (!allCommandsByKey.empty()) {
-    for (const std::pair<const std::string, Command> &kv : allCommandsByKey) {
-      const Command &command = kv.second;
+    for (const std::pair<const std::string, Command>& kv : allCommandsByKey) {
+      const Command& command = kv.second;
       JsonArray array = doc.add<JsonArray>();
 
       array.add(command.key);
@@ -348,7 +347,7 @@ const std::string Store::serializeCommands() const {
   return payload;
 }
 
-void Store::deserializeCommands(const char *payload) {
+void Store::deserializeCommands(const char* payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);
 
@@ -376,7 +375,7 @@ void Store::deserializeCommands(const char *payload) {
   }
 }
 
-const double Store::getValueDouble(const Command *command) {
+const double Store::getValueDouble(const Command* command) {
   double value = 0;
 
   switch (command->datatype) {
@@ -426,7 +425,7 @@ const double Store::getValueDouble(const Command *command) {
   return value;
 }
 
-const std::string Store::getValueString(const Command *command) {
+const std::string Store::getValueString(const Command* command) {
   std::string value;
 
   switch (command->datatype) {

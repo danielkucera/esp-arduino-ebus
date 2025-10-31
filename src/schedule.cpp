@@ -142,18 +142,18 @@ TRACK_TIMING(releaseBus, "handlerState/releaseBus");
 
 Schedule schedule;
 
-void Schedule::start(ebus::Request *request, ebus::Handler *handler) {
+void Schedule::start(ebus::Request* request, ebus::Handler* handler) {
   ebusRequest = request;
   ebusHandler = handler;
   if (ebusRequest && ebusHandler) {
     ebusHandler->setReactiveMasterSlaveCallback(reactiveMasterSlaveCallback);
 
     ebusHandler->setTelegramCallback(
-        [this](const ebus::MessageType &messageType,
-               const ebus::TelegramType &telegramType,
-               const std::vector<uint8_t> &master,
-               const std::vector<uint8_t> &slave) {
-          CallbackEvent *event = new CallbackEvent();
+        [this](const ebus::MessageType& messageType,
+               const ebus::TelegramType& telegramType,
+               const std::vector<uint8_t>& master,
+               const std::vector<uint8_t>& slave) {
+          CallbackEvent* event = new CallbackEvent();
           event->type = CallbackType::telegram;
           event->mode = mode;
           event->data.messageType = messageType;
@@ -163,10 +163,10 @@ void Schedule::start(ebus::Request *request, ebus::Handler *handler) {
           eventQueue.try_push(event);
         });
 
-    ebusHandler->setErrorCallback([this](const std::string &error,
-                                         const std::vector<uint8_t> &master,
-                                         const std::vector<uint8_t> &slave) {
-      CallbackEvent *event = new CallbackEvent();
+    ebusHandler->setErrorCallback([this](const std::string& error,
+                                         const std::vector<uint8_t>& master,
+                                         const std::vector<uint8_t>& slave) {
+      CallbackEvent* event = new CallbackEvent();
       event->type = CallbackType::error;
       event->data.error = error;
       event->data.master = master;
@@ -212,7 +212,7 @@ void Schedule::handleScan() {
   }
 }
 
-void Schedule::handleScanAddresses(const JsonArray &addresses) {
+void Schedule::handleScanAddresses(const JsonArray& addresses) {
   scanCommands.clear();
   std::set<uint8_t> slaves;
 
@@ -232,7 +232,7 @@ void Schedule::handleScanAddresses(const JsonArray &addresses) {
 }
 
 void Schedule::handleScanVendor() {
-  for (const std::pair<uint8_t, Participant> &participant : allParticipants) {
+  for (const std::pair<uint8_t, Participant>& participant : allParticipants) {
     if (participant.second.isVaillant()) {
       if (participant.second.vec_b5090124.size() == 0) {
         std::vector<uint8_t> command;
@@ -262,14 +262,14 @@ void Schedule::handleScanVendor() {
   }
 }
 
-void Schedule::handleSend(const JsonArray &commands) {
+void Schedule::handleSend(const JsonArray& commands) {
   for (JsonVariant command : commands)
     sendCommands.push_back(ebus::to_vector(command));
 }
 
 void Schedule::toggleForward(const bool enable) { forward = enable; }
 
-void Schedule::handleForwardFilter(const JsonArray &filters) {
+void Schedule::handleForwardFilter(const JsonArray& filters) {
   forwardfilters.clear();
   for (JsonVariant filter : filters)
     forwardfilters.push_back(ebus::to_vector(filter));
@@ -289,14 +289,14 @@ void Schedule::fetchCounter() {
   if (!publishCounter) return;
 
   // Addresses Master
-  for (std::pair<const uint8_t, uint32_t> &master : seenMasters) {
+  for (std::pair<const uint8_t, uint32_t>& master : seenMasters) {
     std::string topic =
         "state/addresses/master/" + ebus::to_string(master.first);
     mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
   }
 
   // Addresses Slave
-  for (std::pair<const uint8_t, uint32_t> &slave : seenSlaves) {
+  for (std::pair<const uint8_t, uint32_t>& slave : seenSlaves) {
     std::string topic = "state/addresses/slave/" + ebus::to_string(slave.first);
     mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
   }
@@ -569,7 +569,7 @@ const std::string Schedule::getTimingJson() {
 
   // Output handler state timing
   auto addStateTiming = [](JsonObject obj,
-                           const ebus::Handler::StateTiming::Timing &timing) {
+                           const ebus::Handler::StateTiming::Timing& timing) {
     obj["Last"] = static_cast<int64_t>(timing.last);
     obj["Mean"] = static_cast<int64_t>(timing.mean);
     obj["StdDev"] = static_cast<int64_t>(timing.stddev);
@@ -633,7 +633,7 @@ const std::string Schedule::getTimingJson() {
   return payload;
 }
 
-JsonDocument Schedule::getParticipantJson(const Participant *participant) {
+JsonDocument Schedule::getParticipantJson(const Participant* participant) {
   JsonDocument doc;
 
   doc["address"] = ebus::to_string(participant->slave);
@@ -668,7 +668,7 @@ const std::string Schedule::getParticipantsJson() const {
   JsonDocument doc;
 
   if (allParticipants.size() > 0) {
-    for (const std::pair<uint8_t, Participant> &participant : allParticipants)
+    for (const std::pair<uint8_t, Participant>& participant : allParticipants)
       doc.add(getParticipantJson(&participant.second));
   }
 
@@ -680,15 +680,15 @@ const std::string Schedule::getParticipantsJson() const {
   return payload;
 }
 
-const std::vector<Participant *> Schedule::getParticipants() {
-  std::vector<Participant *> participants;
-  for (std::pair<const uint8_t, Participant> &participant : allParticipants)
+const std::vector<Participant*> Schedule::getParticipants() {
+  std::vector<Participant*> participants;
+  for (std::pair<const uint8_t, Participant>& participant : allParticipants)
     participants.push_back(&(participant.second));
   return participants;
 }
 
-void Schedule::taskFunc(void *arg) {
-  Schedule *self = static_cast<Schedule *>(arg);
+void Schedule::taskFunc(void* arg) {
+  Schedule* self = static_cast<Schedule*>(arg);
   for (;;) {
     if (self->stopRunner) vTaskDelete(NULL);
     self->handleEvents();
@@ -698,7 +698,7 @@ void Schedule::taskFunc(void *arg) {
 }
 
 void Schedule::handleEvents() {
-  CallbackEvent *event = nullptr;
+  CallbackEvent* event = nullptr;
   while (eventQueue.try_pop(event)) {
     if (event) {
       switch (event->type) {
@@ -807,8 +807,8 @@ void Schedule::nextScanCommand() {
   }
 }
 
-void Schedule::reactiveMasterSlaveCallback(const std::vector<uint8_t> &master,
-                                           std::vector<uint8_t> *const slave) {
+void Schedule::reactiveMasterSlaveCallback(const std::vector<uint8_t>& master,
+                                           std::vector<uint8_t>* const slave) {
   // TODO(yuhu-): Implement handling of Identification (Service 07h 04h)
   // Expected data format:
   // hh...Manufacturer (BYTE)
@@ -822,9 +822,9 @@ void Schedule::reactiveMasterSlaveCallback(const std::vector<uint8_t> &master,
   //   *slave = ebus::to_vector("0ahhggggggggggssrrhhrr");
 }
 
-void Schedule::processActive(const Mode &mode,
-                             const std::vector<uint8_t> &master,
-                             const std::vector<uint8_t> &slave) {
+void Schedule::processActive(const Mode& mode,
+                             const std::vector<uint8_t>& master,
+                             const std::vector<uint8_t>& slave) {
   if (mode == Mode::scan) {
     processScan(master, slave);
   } else if (mode == Mode::send) {
@@ -835,20 +835,20 @@ void Schedule::processActive(const Mode &mode,
   }
 }
 
-void Schedule::processPassive(const std::vector<uint8_t> &master,
-                              const std::vector<uint8_t> &slave) {
+void Schedule::processPassive(const std::vector<uint8_t>& master,
+                              const std::vector<uint8_t>& slave) {
   if (forward) {
     size_t count = std::count_if(forwardfilters.begin(), forwardfilters.end(),
-                                 [&master](const std::vector<uint8_t> &vec) {
+                                 [&master](const std::vector<uint8_t>& vec) {
                                    return ebus::contains(master, vec);
                                  });
     if (count > 0 || forwardfilters.size() == 0)
       mqtt.publishData("forward", master, slave);
   }
 
-  std::vector<Command *> pasCommands = store.updateData(nullptr, master, slave);
+  std::vector<Command*> pasCommands = store.updateData(nullptr, master, slave);
 
-  for (Command *command : pasCommands)
+  for (Command* command : pasCommands)
     mqtt.publishValue(command, store.getValueJson(command));
 
   processScan(master, slave);
@@ -859,8 +859,8 @@ void Schedule::processPassive(const std::vector<uint8_t> &master,
     sendCommands.push_front(ebus::to_vector("fe07ff00"));
 }
 
-void Schedule::processScan(const std::vector<uint8_t> &master,
-                           const std::vector<uint8_t> &slave) {
+void Schedule::processScan(const std::vector<uint8_t>& master,
+                           const std::vector<uint8_t>& slave) {
   if (ebus::contains(master, VEC_070400, 2)) {
     allParticipants[master[1]].slave = master[1];
     allParticipants[master[1]].vec_070400 = slave;

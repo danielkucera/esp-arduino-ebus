@@ -43,20 +43,20 @@ class Schedule {
  public:
   Schedule() = default;
 
-  void start(ebus::Request *request, ebus::Handler *handler);
+  void start(ebus::Request* request, ebus::Handler* handler);
   void stop();
 
   void setDistance(const uint8_t distance);
 
   void handleScanFull();
   void handleScan();
-  void handleScanAddresses(const JsonArray &addresses);
+  void handleScanAddresses(const JsonArray& addresses);
   void handleScanVendor();
 
-  void handleSend(const JsonArray &commands);
+  void handleSend(const JsonArray& commands);
 
   void toggleForward(const bool enable);
-  void handleForwardFilter(const JsonArray &filters);
+  void handleForwardFilter(const JsonArray& filters);
 
   void setPublishCounter(const bool enable);
   void resetCounter();
@@ -68,14 +68,14 @@ class Schedule {
   void fetchTiming();
   const std::string getTimingJson();
 
-  static JsonDocument getParticipantJson(const Participant *participant);
+  static JsonDocument getParticipantJson(const Participant* participant);
   const std::string getParticipantsJson() const;
 
-  const std::vector<Participant *> getParticipants();
+  const std::vector<Participant*> getParticipants();
 
  private:
-  ebus::Request *ebusRequest = nullptr;
-  ebus::Handler *ebusHandler = nullptr;
+  ebus::Request* ebusRequest = nullptr;
+  ebus::Handler* ebusHandler = nullptr;
 
   volatile bool stopRunner = false;
 
@@ -84,7 +84,7 @@ class Schedule {
   enum class Mode { scan, send, normal };
   Mode mode = Mode::normal;
 
-  Command *scheduleCommand = nullptr;
+  Command* scheduleCommand = nullptr;
 
   uint32_t distanceCommands = 0;     // in milliseconds
   uint32_t lastCommand = 10 * 1000;  // 10 seconds after start
@@ -122,11 +122,11 @@ class Schedule {
     } data;
   };
 
-  ebus::Queue<CallbackEvent *> eventQueue{8};
+  ebus::Queue<CallbackEvent*> eventQueue{8};
 
   TaskHandle_t scheduleTaskHandle;
 
-  static void taskFunc(void *arg);
+  static void taskFunc(void* arg);
 
   void handleEvents();
 
@@ -134,17 +134,17 @@ class Schedule {
 
   void nextScanCommand();
 
-  static void reactiveMasterSlaveCallback(const std::vector<uint8_t> &master,
-                                          std::vector<uint8_t> *const slave);
+  static void reactiveMasterSlaveCallback(const std::vector<uint8_t>& master,
+                                          std::vector<uint8_t>* const slave);
 
-  void processActive(const Mode &mode, const std::vector<uint8_t> &master,
-                     const std::vector<uint8_t> &slave);
+  void processActive(const Mode& mode, const std::vector<uint8_t>& master,
+                     const std::vector<uint8_t>& slave);
 
-  void processPassive(const std::vector<uint8_t> &master,
-                      const std::vector<uint8_t> &slave);
+  void processPassive(const std::vector<uint8_t>& master,
+                      const std::vector<uint8_t>& slave);
 
-  void processScan(const std::vector<uint8_t> &master,
-                   const std::vector<uint8_t> &slave);
+  void processScan(const std::vector<uint8_t>& master,
+                   const std::vector<uint8_t>& slave);
 };
 
 extern Schedule schedule;
