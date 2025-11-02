@@ -9,7 +9,8 @@ Command Store::createCommand(const JsonDocument& doc) {
   Command command;
   // TODO(yuhu-): check incoming data for completeness
   command.key = doc["key"].as<std::string>();
-  command.command = ebus::to_vector(doc["command"].as<std::string>());
+  command.read_cmd = ebus::to_vector(doc["read_cmd"].as<std::string>());
+  command.write_cmd = ebus::to_vector(doc["write_cmd"].as<std::string>());
   command.unit = doc["unit"].as<std::string>();
   command.active = doc["active"].as<bool>();
   command.interval =
@@ -66,7 +67,7 @@ void Store::insertCommand(const Command& command) {
   if (command.active)
     activeCommands.push_back(cmdPtr);
   else
-    passiveCommands[command.command] = cmdPtr;
+    passiveCommands[command.read_cmd] = cmdPtr;
 }
 
 void Store::removeCommand(const std::string& key) {
@@ -154,7 +155,8 @@ JsonDocument Store::getCommandJson(const Command* command) {
   JsonDocument doc;
 
   doc["key"] = command->key;
-  doc["command"] = ebus::to_string(command->command);
+  doc["read_cmd"] = ebus::to_string(command->read_cmd);
+  doc["write_cmd"] = ebus::to_string(command->write_cmd);
   doc["unit"] = command->unit;
   doc["active"] = command->active;
   doc["interval"] = command->interval;
@@ -322,7 +324,8 @@ const std::string Store::serializeCommands() const {
       JsonArray array = doc.add<JsonArray>();
 
       array.add(command.key);
-      array.add(ebus::to_string(command.command));
+      array.add(ebus::to_string(command.read_cmd));
+      array.add(ebus::to_string(command.write_cmd));
       array.add(command.unit);
       array.add(command.active);
       array.add(command.interval);
@@ -357,18 +360,19 @@ void Store::deserializeCommands(const char* payload) {
       JsonDocument tmpDoc;
 
       tmpDoc["key"] = variant[0];
-      tmpDoc["command"] = variant[1];
-      tmpDoc["unit"] = variant[2];
-      tmpDoc["active"] = variant[3];
-      tmpDoc["interval"] = variant[4];
-      tmpDoc["master"] = variant[5];
-      tmpDoc["position"] = variant[6];
-      tmpDoc["datatype"] = variant[7];
-      tmpDoc["divider"] = variant[8];
-      tmpDoc["digits"] = variant[9];
-      tmpDoc["topic"] = variant[10];
-      tmpDoc["ha"] = variant[11];
-      tmpDoc["ha_class"] = variant[12];
+      tmpDoc["read_cmd"] = variant[1];
+      tmpDoc["write_cmd"] = variant[2];
+      tmpDoc["unit"] = variant[3];
+      tmpDoc["active"] = variant[4];
+      tmpDoc["interval"] = variant[5];
+      tmpDoc["master"] = variant[6];
+      tmpDoc["position"] = variant[7];
+      tmpDoc["datatype"] = variant[8];
+      tmpDoc["divider"] = variant[9];
+      tmpDoc["digits"] = variant[10];
+      tmpDoc["topic"] = variant[11];
+      tmpDoc["ha"] = variant[12];
+      tmpDoc["ha_class"] = variant[13];
 
       insertCommand(createCommand(tmpDoc));
     }

@@ -778,7 +778,7 @@ void Schedule::nextCommand() {
       } else {
         mode = Mode::normal;
         scheduleCommand = store.nextActiveCommand();
-        if (scheduleCommand != nullptr) command = scheduleCommand->command;
+        if (scheduleCommand != nullptr) command = scheduleCommand->read_cmd;
       }
 
       if (command.size() > 0) {

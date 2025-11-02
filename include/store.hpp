@@ -26,10 +26,11 @@ struct VectorHash {
 };
 
 struct Command {
-  std::string key;               // unique key of command
-  std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
-  std::string unit;              // unit of the interested part
-  bool active;                   // active sending of command
+  std::string key;                 // unique key of command
+  std::vector<uint8_t> read_cmd;   // read command as vector of "ZZPBSBNNDBx"
+  std::vector<uint8_t> write_cmd;  // write command as vector of "ZZPBSBNNDBx"
+  std::string unit;                // unit of the interested part
+  bool active;                     // active sending of command
   uint32_t interval;  // minimum interval between two commands in seconds
   uint32_t last;      // last time of the successful command (INTERNAL)
   std::vector<uint8_t> data;  // received raw data (INTERNAL)

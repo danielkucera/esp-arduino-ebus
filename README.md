@@ -316,23 +316,24 @@ For an example of how to install a command via MQTT, see `Inserting (Installing)
 
 ```
 struct Command {
-  std::string key;               // unique key of command
-  std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
-  std::string unit;              // unit of the interested part
-  bool active;                   // active sending of command
-  uint32_t interval;             // minimum interval between two commands in seconds
-  uint32_t last;                 // last time of the successful command (INTERNAL)
-  std::vector<uint8_t> data;     // received raw data (INTERNAL)
-  bool master;                   // value of interest is in master or slave part
-  size_t position;               // starting position in the interested part
-  ebus::DataType datatype;       // ebus data type
-  size_t length;                 // length of interested part (INTERNAL)
-  bool numeric;                  // indicate numeric types (INTERNAL)
-  float divider;                 // divider for value conversion
-  uint8_t digits;                // deciaml digits of value
-  std::string topic;             // mqtt topic below "values/"
-  bool ha;                       // home assistant support for auto discovery
-  std::string ha_class;          // home assistant device_class
+  std::string key;                 // unique key of command
+  std::vector<uint8_t> reat_cmd;   // read command as vector of "ZZPBSBNNDBx"
+  std::vector<uint8_t> write_cmd;  // write command as vector of "ZZPBSBNNDBx"
+  std::string unit;                // unit of the interested part
+  bool active;                     // active sending of command
+  uint32_t interval;               // minimum interval between two commands in seconds
+  uint32_t last;                   // last time of the successful command (INTERNAL)
+  std::vector<uint8_t> data;       // received raw data (INTERNAL)
+  bool master;                     // value of interest is in master or slave part
+  size_t position;                 // starting position in the interested part
+  ebus::DataType datatype;         // ebus data type
+  size_t length;                   // length of interested part (INTERNAL)
+  bool numeric;                    // indicate numeric types (INTERNAL)
+  float divider;                   // divider for value conversion
+  uint8_t digits;                  // deciaml digits of value
+  std::string topic;               // mqtt topic below "values/"
+  bool ha;                         // home assistant support for auto discovery
+  std::string ha_class;            // home assistant device_class
 };
 ```
 
@@ -417,7 +418,8 @@ payload:
   "commands": [
     {
       "key": "01",                       // unique key of command
-      "command": "fe070009",             // ebus command as vector of "ZZPBSBNNDBx"
+      "read_cmd": "fe070009",            // read command as vector of "ZZPBSBNNDBx"
+      "write_cmd": "",                   // write command as vector of "ZZPBSBNNDBx"
       "unit": "°C",                      // unit of the interested part
       "active": false,                   // active sending of command
       "interval": 0,                     // minimum interval between two commands in seconds
@@ -437,7 +439,7 @@ payload:
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","read_cmd":"fe070009","write_cmd":"","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
 ```
 
 **Removing installed commands**
