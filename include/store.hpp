@@ -46,6 +46,14 @@ struct Command {
   std::string ha_class;       // home assistant device_class
 };
 
+const double getDoubleFromVector(const Command* command);
+const std::vector<uint8_t> getVectorFromDouble(const Command* command,
+                                               double value);
+
+const std::string getStringFromVector(const Command* command);
+const std::vector<uint8_t> getVectorFromString(const Command* command,
+                                               const std::string& value);
+
 class Store {
  public:
   Command createCommand(const JsonDocument& doc);
@@ -76,6 +84,7 @@ class Store {
                                    const std::vector<uint8_t>& slave);
 
   static JsonDocument getValueJson(const Command* command);
+  static const std::string getValueFullJson(const Command* command);
   const std::string getValuesJson() const;
 
  private:
@@ -89,9 +98,6 @@ class Store {
 
   const std::string serializeCommands() const;
   void deserializeCommands(const char* payload);
-
-  static const double getValueDouble(const Command* command);
-  static const std::string getValueString(const Command* command);
 };
 
 extern Store store;

@@ -3,6 +3,171 @@
 
 #include <Preferences.h>
 
+const double getDoubleFromVector(const Command* command) {
+  double value = 0;
+
+  switch (command->datatype) {
+    case ebus::DataType::BCD:
+      value = ebus::byte_2_bcd(command->data);
+      break;
+    case ebus::DataType::UINT8:
+      value = ebus::byte_2_uint8(command->data);
+      break;
+    case ebus::DataType::INT8:
+      value = ebus::byte_2_int8(command->data);
+      break;
+    case ebus::DataType::UINT16:
+      value = ebus::byte_2_uint16(command->data);
+      break;
+    case ebus::DataType::INT16:
+      value = ebus::byte_2_int16(command->data);
+      break;
+    case ebus::DataType::UINT32:
+      value = ebus::byte_2_uint32(command->data);
+      break;
+    case ebus::DataType::INT32:
+      value = ebus::byte_2_int32(command->data);
+      break;
+    case ebus::DataType::DATA1B:
+      value = ebus::byte_2_data1b(command->data);
+      break;
+    case ebus::DataType::DATA1C:
+      value = ebus::byte_2_data1c(command->data);
+      break;
+    case ebus::DataType::DATA2B:
+      value = ebus::byte_2_data2b(command->data);
+      break;
+    case ebus::DataType::DATA2C:
+      value = ebus::byte_2_data2c(command->data);
+      break;
+    case ebus::DataType::FLOAT:
+      value = ebus::byte_2_float(command->data);
+      break;
+    default:
+      break;
+  }
+
+  value = value / command->divider;
+  value = ebus::round_digits(value, command->digits);
+
+  return value;
+}
+
+const std::vector<uint8_t> getVectorFromDouble(const Command* command,
+                                               double value) {
+  std::vector<uint8_t> result;
+  if (!command) return result;
+
+  value = value * command->divider;
+  value = ebus::round_digits(value, command->digits);
+
+  switch (command->datatype) {
+    case ebus::DataType::BCD:
+      result = ebus::bcd_2_byte(value);
+      break;
+    case ebus::DataType::UINT8:
+      result = ebus::uint8_2_byte(value);
+      break;
+    case ebus::DataType::INT8:
+      result = ebus::int8_2_byte(value);
+      break;
+    case ebus::DataType::UINT16:
+      result = ebus::uint16_2_byte(value);
+      break;
+    case ebus::DataType::INT16:
+      result = ebus::int16_2_byte(value);
+      break;
+    case ebus::DataType::UINT32:
+      result = ebus::uint32_2_byte(value);
+      break;
+    case ebus::DataType::INT32:
+      result = ebus::int32_2_byte(value);
+      break;
+    case ebus::DataType::DATA1B:
+      result = ebus::data1b_2_byte(value);
+      break;
+    case ebus::DataType::DATA1C:
+      result = ebus::data1c_2_byte(value);
+      break;
+    case ebus::DataType::DATA2B:
+      result = ebus::data2b_2_byte(value);
+      break;
+    case ebus::DataType::DATA2C:
+      result = ebus::data2c_2_byte(value);
+      break;
+    case ebus::DataType::FLOAT:
+      result = ebus::float_2_byte(value);
+      break;
+    default:
+      break;
+  }
+
+  return result;
+}
+
+const std::string getStringFromVector(const Command* command) {
+  std::string value;
+
+  switch (command->datatype) {
+    case ebus::DataType::CHAR1:
+    case ebus::DataType::CHAR2:
+    case ebus::DataType::CHAR3:
+    case ebus::DataType::CHAR4:
+    case ebus::DataType::CHAR5:
+    case ebus::DataType::CHAR6:
+    case ebus::DataType::CHAR7:
+    case ebus::DataType::CHAR8:
+      value = ebus::byte_2_char(command->data);
+      break;
+    case ebus::DataType::HEX1:
+    case ebus::DataType::HEX2:
+    case ebus::DataType::HEX3:
+    case ebus::DataType::HEX4:
+    case ebus::DataType::HEX5:
+    case ebus::DataType::HEX6:
+    case ebus::DataType::HEX7:
+    case ebus::DataType::HEX8:
+      value = ebus::byte_2_hex(command->data);
+      break;
+    default:
+      break;
+  }
+
+  return value;
+}
+
+const std::vector<uint8_t> getVectorFromString(const Command* command,
+                                               const std::string& value) {
+  std::vector<uint8_t> result;
+  if (!command) return result;
+
+  switch (command->datatype) {
+    case ebus::DataType::CHAR1:
+    case ebus::DataType::CHAR2:
+    case ebus::DataType::CHAR3:
+    case ebus::DataType::CHAR4:
+    case ebus::DataType::CHAR5:
+    case ebus::DataType::CHAR6:
+    case ebus::DataType::CHAR7:
+    case ebus::DataType::CHAR8:
+      result = ebus::char_2_byte(value.substr(0, command->length));
+      break;
+    case ebus::DataType::HEX1:
+    case ebus::DataType::HEX2:
+    case ebus::DataType::HEX3:
+    case ebus::DataType::HEX4:
+    case ebus::DataType::HEX5:
+    case ebus::DataType::HEX6:
+    case ebus::DataType::HEX7:
+    case ebus::DataType::HEX8:
+      result = ebus::hex_2_byte(value.substr(0, command->length));
+      break;
+    default:
+      break;
+  }
+  return result;
+}
+
 Store store;
 
 Command Store::createCommand(const JsonDocument& doc) {
@@ -273,12 +438,30 @@ JsonDocument Store::getValueJson(const Command* command) {
   JsonDocument doc;
 
   if (command->numeric)
-    doc["value"] = store.getValueDouble(command);
+    doc["value"] = getDoubleFromVector(command);
   else
-    doc["value"] = store.getValueString(command);
+    doc["value"] = getStringFromVector(command);
 
   doc.shrinkToFit();
   return doc;
+}
+
+const std::string Store::getValueFullJson(const Command* command) {
+  std::string payload;
+  JsonDocument doc;
+
+  doc["key"] = command->key;
+  if (command->numeric)
+    doc["value"] = getDoubleFromVector(command);
+  else
+    doc["value"] = getStringFromVector(command);
+  doc["unit"] = command->unit;
+  doc["topic"] = command->topic;
+  doc["age"] = static_cast<uint32_t>((millis() - command->last) / 1000);
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload;
 }
 
 const std::string Store::getValuesJson() const {
@@ -295,9 +478,9 @@ const std::string Store::getValuesJson() const {
       const Command& command = kv.second;
       JsonArray array = results[index][command.key].to<JsonArray>();
       if (command.numeric)
-        array.add(store.getValueDouble(&command));
+        array.add(getDoubleFromVector(&command));
       else
-        array.add(store.getValueString(&command));
+        array.add(getStringFromVector(&command));
 
       array.add(command.unit);
       array.add(command.topic);
@@ -379,84 +562,4 @@ void Store::deserializeCommands(const char* payload) {
   }
 }
 
-const double Store::getValueDouble(const Command* command) {
-  double value = 0;
-
-  switch (command->datatype) {
-    case ebus::DataType::BCD:
-      value = ebus::byte_2_bcd(command->data);
-      break;
-    case ebus::DataType::UINT8:
-      value = ebus::byte_2_uint8(command->data);
-      break;
-    case ebus::DataType::INT8:
-      value = ebus::byte_2_int8(command->data);
-      break;
-    case ebus::DataType::UINT16:
-      value = ebus::byte_2_uint16(command->data);
-      break;
-    case ebus::DataType::INT16:
-      value = ebus::byte_2_int16(command->data);
-      break;
-    case ebus::DataType::UINT32:
-      value = ebus::byte_2_uint32(command->data);
-      break;
-    case ebus::DataType::INT32:
-      value = ebus::byte_2_int32(command->data);
-      break;
-    case ebus::DataType::DATA1B:
-      value = ebus::byte_2_data1b(command->data);
-      break;
-    case ebus::DataType::DATA1C:
-      value = ebus::byte_2_data1c(command->data);
-      break;
-    case ebus::DataType::DATA2B:
-      value = ebus::byte_2_data2b(command->data);
-      break;
-    case ebus::DataType::DATA2C:
-      value = ebus::byte_2_data2c(command->data);
-      break;
-    case ebus::DataType::FLOAT:
-      value = ebus::byte_2_float(command->data);
-      break;
-    default:
-      break;
-  }
-
-  value = value / command->divider;
-  value = ebus::round_digits(value, command->digits);
-
-  return value;
-}
-
-const std::string Store::getValueString(const Command* command) {
-  std::string value;
-
-  switch (command->datatype) {
-    case ebus::DataType::CHAR1:
-    case ebus::DataType::CHAR2:
-    case ebus::DataType::CHAR3:
-    case ebus::DataType::CHAR4:
-    case ebus::DataType::CHAR5:
-    case ebus::DataType::CHAR6:
-    case ebus::DataType::CHAR7:
-    case ebus::DataType::CHAR8:
-      value = ebus::byte_2_char(command->data);
-      break;
-    case ebus::DataType::HEX1:
-    case ebus::DataType::HEX2:
-    case ebus::DataType::HEX3:
-    case ebus::DataType::HEX4:
-    case ebus::DataType::HEX5:
-    case ebus::DataType::HEX6:
-    case ebus::DataType::HEX7:
-    case ebus::DataType::HEX8:
-      value = ebus::byte_2_hex(command->data);
-      break;
-    default:
-      break;
-  }
-
-  return value;
-}
 #endif
