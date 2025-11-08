@@ -192,7 +192,7 @@ void Schedule::start(ebus::Request* request, ebus::Handler* handler) {
 
     // enqueue Inquiry of Existence at startup to discover all participants
     if (sendInquiryOfExistence)
-      enqueueCommand({Mode::send, PRIO_INTERNAL, VEC_fe07fe00, nullptr});
+      enqueueCommand({Mode::internal, PRIO_INTERNAL, VEC_fe07fe00, nullptr});
   }
 }
 
@@ -233,10 +233,10 @@ void Schedule::handleScan() {
   }
 }
 
-void Schedule::handleScanAddresses(const JsonArray& addresses) {
+void Schedule::handleScanAddresses(const JsonArrayConst& addresses) {
   std::set<uint8_t> slaves;
 
-  for (JsonVariant address : addresses) {
+  for (JsonVariantConst address : addresses) {
     uint8_t firstByte = ebus::to_vector(address.as<std::string>())[0];
     if (ebus::isSlave(firstByte) &&
         firstByte != ebusHandler->getTargetAddress())
@@ -286,15 +286,20 @@ void Schedule::handleSend(const std::vector<uint8_t>& command) {
   enqueueCommand({Mode::send, PRIO_SEND, command, nullptr});
 }
 
-void Schedule::handleSend(const JsonArray& commands) {
-  for (JsonVariant command : commands) handleSend(ebus::to_vector(command));
+void Schedule::handleSend(const JsonArrayConst& commands) {
+  for (JsonVariantConst command : commands)
+    handleSend(ebus::to_vector(command));
+}
+
+void Schedule::handleWrite(const std::vector<uint8_t>& command) {
+  enqueueCommand({Mode::write, PRIO_SEND, command, nullptr});
 }
 
 void Schedule::toggleForward(const bool enable) { forward = enable; }
 
-void Schedule::handleForwardFilter(const JsonArray& filters) {
+void Schedule::handleForwardFilter(const JsonArrayConst& filters) {
   forwardfilters.clear();
-  for (JsonVariant filter : filters)
+  for (JsonVariantConst filter : filters)
     forwardfilters.push_back(ebus::to_vector(filter));
 }
 
@@ -895,7 +900,7 @@ void Schedule::processActive(const Mode& mode,
     case Mode::send:
       mqtt.publishData("send", master, slave);
       break;
-    case Mode::read:
+    case Mode::read:  // not used yet
       mqtt.publishData("read", master, slave);
       break;
     case Mode::write:
@@ -919,14 +924,14 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
 
   std::vector<Command*> pasCommands = store.updateData(nullptr, master, slave);
 
-  for (Command* command : pasCommands)
+  for (const Command* command : pasCommands)
     mqtt.publishValue(command, store.getValueJson(command));
 
   processScan(master, slave);
 
   // send Sign of Life in response to an Inquiry of Existence
   if (ebus::contains(master, VEC_07fe00, 2))
-    enqueueCommand({Mode::send, PRIO_INTERNAL, VEC_fe07ff00, nullptr});
+    enqueueCommand({Mode::internal, PRIO_INTERNAL, VEC_fe07ff00, nullptr});
 }
 
 void Schedule::processScan(const std::vector<uint8_t>& master,

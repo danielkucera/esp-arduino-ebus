@@ -52,14 +52,16 @@ class Schedule {
 
   void handleScanFull();
   void handleScan();
-  void handleScanAddresses(const JsonArray& addresses);
+  void handleScanAddresses(const JsonArrayConst& addresses);
   void handleScanVendor();
 
   void handleSend(const std::vector<uint8_t>& command);
-  void handleSend(const JsonArray& commands);
+  void handleSend(const JsonArrayConst& commands);
+
+  void handleWrite(const std::vector<uint8_t>& command);
 
   void toggleForward(const bool enable);
-  void handleForwardFilter(const JsonArray& filters);
+  void handleForwardFilter(const JsonArrayConst& filters);
 
   void setPublishCounter(const bool enable);
   void resetCounter();
