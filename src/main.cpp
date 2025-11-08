@@ -705,7 +705,9 @@ void setup() {
 
   iotWebConf.addParameterGroup(&connGroup);
   iotWebConf.addParameterGroup(&ebusGroup);
+#if defined(EBUS_INTERNAL)
   iotWebConf.addParameterGroup(&scheduleGroup);
+#endif
   iotWebConf.addParameterGroup(&mqttGroup);
   iotWebConf.addParameterGroup(&haGroup);
   iotWebConf.setFormValidator(&formValidator);

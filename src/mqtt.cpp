@@ -140,7 +140,7 @@ void Mqtt::onMessage(const char* topic, const char* payload,
   }
 
   std::string id = doc["id"].as<std::string>();
-  std::unordered_map<std::__cxx11::string, CommandHandler>::const_iterator it =
+  std::unordered_map<std::string, CommandHandler>::const_iterator it =
       mqtt.commandHandlers.find(id);
   if (it != mqtt.commandHandlers.end()) {
     it->second(doc);  // Call the handler
