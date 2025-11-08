@@ -1,14 +1,18 @@
 #pragma once
 
+#include <ArduinoJson.h>
 #include <AsyncMqttClient.h>
 
 #include <deque>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "schedule.hpp"
 #include "store.hpp"
+
+using CommandHandler = std::function<void(const JsonDocument&)>;
 
 // The MQTT class acts as a wrapper for the entire MQTT subsystem. It provides
 // some basic methods for supporting Home Assistant.
@@ -38,7 +42,6 @@ class Mqtt {
   void publishHA() const;
 
 #if defined(EBUS_INTERNAL)
-  void publishCommands();
   void publishHASensors(const bool remove);
   void publishParticipants();
 
@@ -46,7 +49,7 @@ class Mqtt {
                           const std::vector<uint8_t>& master,
                           const std::vector<uint8_t>& slave);
 
-  static void publishValue(Command* command, const JsonDocument& doc);
+  static void publishValue(const Command* command, const JsonDocument& doc);
 #endif
 
  private:
@@ -79,6 +82,33 @@ class Mqtt {
   uint32_t lastParticipants = 0;
 #endif
 
+  // Command handlers map
+  std::unordered_map<std::string, CommandHandler> commandHandlers = {
+      {"restart", [this](const JsonDocument& doc) { handleRestart(doc); }},
+#if defined(EBUS_INTERNAL)
+      {"insert", [this](const JsonDocument& doc) { handleInsert(doc); }},
+      {"remove", [this](const JsonDocument& doc) { handleRemove(doc); }},
+      {"publish", [this](const JsonDocument& doc) { handlePublish(doc); }},
+
+      {"load", [this](const JsonDocument& doc) { handleLoad(doc); }},
+      {"save", [this](const JsonDocument& doc) { handleSave(doc); }},
+      {"wipe", [this](const JsonDocument& doc) { handleWipe(doc); }},
+
+      {"scan", [this](const JsonDocument& doc) { handleScan(doc); }},
+      {"participants",
+       [this](const JsonDocument& doc) { handleParticipants(doc); }},
+
+      {"send", [this](const JsonDocument& doc) { handleSend(doc); }},
+      {"forward", [this](const JsonDocument& doc) { handleForward(doc); }},
+
+      {"reset", [this](const JsonDocument& doc) { handleReset(doc); }},
+
+      {"read", [this](const JsonDocument& doc) { handleRead(doc); }},
+      {"write", [this](const JsonDocument& doc) { handleWrite(doc); }},
+
+#endif
+  };
+
   uint16_t subscribe(const char* topic, uint8_t qos);
 
   static void onConnect(bool sessionPresent);
@@ -93,9 +123,26 @@ class Mqtt {
 
   static void onPublish(uint16_t packetId) {}
 
+  static void handleRestart(const JsonDocument& doc);
 #if defined(EBUS_INTERNAL)
-  void insertCommands(const JsonArray& commands);
-  void removeCommands(const JsonArray& keys);
+  void handleInsert(const JsonDocument& doc);
+  void handleRemove(const JsonDocument& doc);
+  void handlePublish(const JsonDocument& doc);
+
+  static void handleLoad(const JsonDocument& doc);
+  static void handleSave(const JsonDocument& doc);
+  static void handleWipe(const JsonDocument& doc);
+
+  void handleScan(const JsonDocument& doc);
+  static void handleParticipants(const JsonDocument& doc);
+
+  void handleSend(const JsonDocument& doc);
+  void handleForward(const JsonDocument& doc);
+
+  static void handleReset(const JsonDocument& doc);
+
+  void handleRead(const JsonDocument& doc);
+  void handleWrite(const JsonDocument& doc);
 
   void checkInsertCommands();
   void checkRemoveCommands();
@@ -103,13 +150,6 @@ class Mqtt {
   void checkPublishCommands();
   void checkPublishHASensors();
   void checkPublishParticipants();
-
-  static void loadCommands();
-  static void saveCommands();
-  static void wipeCommands();
-
-  static void initScan(const bool full, const bool vendor,
-                       const JsonArray& addresses);
 
   void publishCommand(const Command* command);
 #endif

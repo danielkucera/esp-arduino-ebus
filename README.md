@@ -367,7 +367,9 @@ Available MQTT commands
 |participants                   |Publishing scanned ebus participants                          
 |send                           |Sending ebus commands once                                    
 |forward                        |Activate/deactivate data forwarding (including filtering)     
-|reset                          |Resetting counter and timing values                           
+|reset                          |Resetting counter and timing values
+|read                           |Reading the value of a stored command
+|write                          |Writing a value using a stored command     
 
 
 ### Home Assistant Support with `INTERNAL` firmware
@@ -572,4 +574,29 @@ payload:
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"reset"}' 
+```
+
+**Reading the value of a stored command**
+```
+payload:
+{
+  "id": "read",
+  "key": "01"
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"read","key":"01"}' 
+```
+
+**Writing a value using a stored command**
+```
+payload:
+{
+  "id": "write",
+  "key": "01",
+  "value": 1.25                          // character types within quotation marks 
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"write","key":"01","value":1.25}' 
 ```

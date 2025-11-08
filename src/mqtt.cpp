@@ -1,6 +1,6 @@
 #include "mqtt.hpp"
 
-#include <ArduinoJson.h>
+#include <functional>
 
 #include "main.hpp"
 
@@ -73,10 +73,6 @@ void Mqtt::publishHA() const {
 }
 
 #if defined(EBUS_INTERNAL)
-void Mqtt::publishCommands() {
-  for (Command* command : store.getCommands()) pubCommands.push_back(command);
-}
-
 void Mqtt::publishHASensors(const bool remove) {
   for (Command* command : store.getCommands())
     pubHASensors.push_back(std::make_tuple(command, remove));
@@ -100,9 +96,7 @@ void Mqtt::publishData(const std::string& id,
   mqtt.publish("response", 0, false, payload.c_str());
 }
 
-void Mqtt::publishValue(Command* command, const JsonDocument& doc) {
-  command->last = millis();
-
+void Mqtt::publishValue(const Command* command, const JsonDocument& doc) {
   std::string payload;
   serializeJson(doc, payload);
 
@@ -142,69 +136,154 @@ void Mqtt::onMessage(const char* topic, const char* payload,
     doc.shrinkToFit();
     serializeJson(errorDoc, errorPayload);
     mqtt.publish("response", 0, false, errorPayload.c_str());
+    return;
+  }
+
+  std::string id = doc["id"].as<std::string>();
+  std::unordered_map<std::__cxx11::string, CommandHandler>::const_iterator it =
+      mqtt.commandHandlers.find(id);
+  if (it != mqtt.commandHandlers.end()) {
+    it->second(doc);  // Call the handler
   } else {
-    std::string id = doc["id"].as<std::string>();
-    if (id.compare("restart") == 0) {
-      restart();
-    }
-#if defined(EBUS_INTERNAL)
-    else if (id.compare("insert") == 0) {  // NOLINT
-      JsonArray commands = doc["commands"].as<JsonArray>();
-      if (commands != nullptr) mqtt.insertCommands(commands);
-    } else if (id.compare("remove") == 0) {
-      JsonArray keys = doc["keys"].as<JsonArray>();
-      if (keys != nullptr) mqtt.removeCommands(keys);
-    } else if (id.compare("publish") == 0) {
-      mqtt.publishCommands();
-    } else if (id.compare("load") == 0) {
-      loadCommands();
-      mqtt.publishHASensors(false);
-    } else if (id.compare("save") == 0) {
-      saveCommands();
-    } else if (id.compare("wipe") == 0) {
-      wipeCommands();
-    } else if (id.compare("scan") == 0) {
-      boolean full = doc["full"].as<boolean>();
-      boolean vendor = doc["vendor"].as<boolean>();
-      JsonArray addresses = doc["addresses"].as<JsonArray>();
-      mqtt.initScan(full, vendor, addresses);
-    } else if (id.compare("participants") == 0) {
-      mqtt.publishParticipants();
-    } else if (id.compare("send") == 0) {
-      JsonArray commands = doc["commands"].as<JsonArray>();
-      if (commands.isNull() || commands.size() == 0)
-        mqtt.publishResponse("send", "commands array invalid");
-      else
-        schedule.handleSend(commands);
-    } else if (id.compare("forward") == 0) {
-      JsonArray filters = doc["filters"].as<JsonArray>();
-      if (!filters.isNull()) schedule.handleForwardFilter(filters);
-      boolean enable = doc["enable"].as<boolean>();
-      schedule.toggleForward(enable);
-    } else if (id.compare("reset") == 0) {
-      schedule.resetCounter();
-      schedule.resetTiming();
-    }
-#endif
-    else {  // NOLINT
-      std::string errorPayload;
-      JsonDocument errorDoc;
-      errorDoc["error"] = "command '" + id + "' not found";
-      doc.shrinkToFit();
-      serializeJson(errorDoc, errorPayload);
-      mqtt.publish("response", 0, false, errorPayload.c_str());
-    }
+    // Unknown command error handling
+    std::string errorPayload;
+    JsonDocument errorDoc;
+    errorDoc["error"] = "command '" + id + "' not found";
+    doc.shrinkToFit();
+    serializeJson(errorDoc, errorPayload);
+    mqtt.publish("response", 0, false, errorPayload.c_str());
   }
 }
 
+void Mqtt::handleRestart(const JsonDocument& doc) { restart(); }
+
 #if defined(EBUS_INTERNAL)
-void Mqtt::insertCommands(const JsonArray& commands) {
-  for (JsonVariant command : commands)
-    insCommands.push_back(store.createCommand(command));
+void Mqtt::handleInsert(const JsonDocument& doc) {
+  JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
+  if (!commands.isNull()) {
+    for (JsonVariantConst command : commands)
+      insCommands.push_back(store.createCommand(command));
+  }
 }
 
-void Mqtt::removeCommands(const JsonArray& keys) {
-  for (JsonVariant key : keys) remCommands.push_back(key);
+void Mqtt::handleRemove(const JsonDocument& doc) {
+  JsonArrayConst keys = doc["keys"].as<JsonArrayConst>();
+  if (!keys.isNull()) {
+    for (JsonVariantConst key : keys)
+      remCommands.push_back(key.as<std::string>());
+  }
+}
+
+void Mqtt::handlePublish(const JsonDocument& doc) {
+  for (Command* command : store.getCommands()) pubCommands.push_back(command);
+}
+
+void Mqtt::handleLoad(const JsonDocument& doc) {
+  int64_t bytes = store.loadCommands();
+  if (bytes > 0)
+    mqtt.publishResponse("load", "successful", bytes);
+  else if (bytes < 0)
+    mqtt.publishResponse("load", "failed");
+  else
+    mqtt.publishResponse("load", "no data");
+}
+
+void Mqtt::handleSave(const JsonDocument& doc) {
+  int64_t bytes = store.saveCommands();
+  if (bytes > 0)
+    mqtt.publishResponse("save", "successful", bytes);
+  else if (bytes < 0)
+    mqtt.publishResponse("save", "failed");
+  else
+    mqtt.publishResponse("save", "no data");
+}
+
+void Mqtt::handleWipe(const JsonDocument& doc) {
+  int64_t bytes = store.wipeCommands();
+  if (bytes > 0)
+    mqtt.publishResponse("wipe", "successful", bytes);
+  else if (bytes < 0)
+    mqtt.publishResponse("wipe", "failed");
+  else
+    mqtt.publishResponse("wipe", "no data");
+}
+
+void Mqtt::handleScan(const JsonDocument& doc) {
+  boolean full = doc["full"].as<boolean>();
+  boolean vendor = doc["vendor"].as<boolean>();
+  JsonArrayConst addresses = doc["addresses"].as<JsonArrayConst>();
+
+  if (full)
+    schedule.handleScanFull();
+  else if (vendor)
+    schedule.handleScanVendor();
+  else if (addresses.isNull() || addresses.size() == 0)
+    schedule.handleScan();
+  else
+    schedule.handleScanAddresses(addresses);
+
+  mqtt.publishResponse("scan", "initiated");
+}
+
+void Mqtt::handleParticipants(const JsonDocument& doc) {
+  mqtt.publishParticipants();
+}
+
+void Mqtt::handleSend(const JsonDocument& doc) {
+  JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
+  if (commands.isNull() || commands.size() == 0)
+    mqtt.publishResponse("send", "commands array invalid");
+  else
+    schedule.handleSend(commands);
+}
+
+void Mqtt::handleForward(const JsonDocument& doc) {
+  JsonArrayConst filters = doc["filters"].as<JsonArrayConst>();
+  if (!filters.isNull()) schedule.handleForwardFilter(filters);
+  boolean enable = doc["enable"].as<boolean>();
+  schedule.toggleForward(enable);
+}
+
+void Mqtt::handleReset(const JsonDocument& doc) {
+  schedule.resetCounter();
+  schedule.resetTiming();
+}
+
+void Mqtt::handleRead(const JsonDocument& doc) {
+  std::string key = doc["key"].as<std::string>();
+  const Command* command = store.findCommand(key);
+  if (command != nullptr) {
+    String s = "{\"id\":\"read\",";
+    s += store.getValueFullJson(command).substr(1).c_str();  // skip opening {
+    publish("response", 0, false, s.c_str());
+  } else {
+    mqtt.publishResponse("read", "key '" + key + "' not found");
+  }
+}
+
+void Mqtt::handleWrite(const JsonDocument& doc) {
+  std::string key = doc["key"].as<std::string>();
+  const Command* command = store.findCommand(key);
+  if (command != nullptr) {
+    std::vector<uint8_t> valueBytes;
+    if (command->numeric) {
+      double value = doc["value"].as<double>();
+      value = value * command->divider;
+      valueBytes = getVectorFromDouble(command, value);
+    } else {
+      std::string value = doc["value"].as<std::string>();
+      valueBytes = getVectorFromString(command, value);
+    }
+    if (valueBytes.size() > 0) {
+      std::vector<uint8_t> writeCmd = command->write_cmd;
+      writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
+      schedule.handleSend(writeCmd);
+    } else {
+      mqtt.publishResponse("write", "invalid value for key '" + key + "'");
+    }
+  } else {
+    mqtt.publishResponse("write", "key '" + key + "' not found");
+  }
 }
 
 void Mqtt::checkInsertCommands() {
@@ -267,50 +346,6 @@ void Mqtt::checkPublishParticipants() {
       pubParticipants.pop_front();
     }
   }
-}
-
-void Mqtt::loadCommands() {
-  int64_t bytes = store.loadCommands();
-  if (bytes > 0)
-    mqtt.publishResponse("load", "successful", bytes);
-  else if (bytes < 0)
-    mqtt.publishResponse("load", "failed");
-  else
-    mqtt.publishResponse("load", "no data");
-}
-
-void Mqtt::saveCommands() {
-  int64_t bytes = store.saveCommands();
-  if (bytes > 0)
-    mqtt.publishResponse("save", "successful", bytes);
-  else if (bytes < 0)
-    mqtt.publishResponse("save", "failed");
-  else
-    mqtt.publishResponse("save", "no data");
-}
-
-void Mqtt::wipeCommands() {
-  int64_t bytes = store.wipeCommands();
-  if (bytes > 0)
-    mqtt.publishResponse("wipe", "successful", bytes);
-  else if (bytes < 0)
-    mqtt.publishResponse("wipe", "failed");
-  else
-    mqtt.publishResponse("wipe", "no data");
-}
-
-void Mqtt::initScan(const bool full, const bool vendor,
-                    const JsonArray& addresses) {
-  if (full)
-    schedule.handleScanFull();
-  else if (vendor)
-    schedule.handleScanVendor();
-  else if (addresses.isNull() || addresses.size() == 0)
-    schedule.handleScan();
-  else
-    schedule.handleScanAddresses(addresses);
-
-  mqtt.publishResponse("scan", "initiated");
 }
 
 void Mqtt::publishCommand(const Command* command) {
