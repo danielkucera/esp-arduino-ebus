@@ -89,10 +89,12 @@ static char ebus_address_values[][NUMBER_LEN] = {
     "00", "10", "30", "70", "f0", "01", "11", "31", "71",
     "f1", "03", "13", "33", "73", "f3", "07", "17", "37",
     "77", "f7", "0f", "1f", "3f", "7f", "ff"};
-
-char command_distance[NUMBER_LEN];
 char busisr_window[NUMBER_LEN];
 char busisr_offset[NUMBER_LEN];
+
+char inquiryOfExistenceValue[STRING_LEN];
+char scanOnStartupValue[STRING_LEN];
+char command_distance[NUMBER_LEN];
 #endif
 
 char mqtt_server[STRING_LEN];
@@ -130,15 +132,26 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     reinterpret_cast<char*>(ebus_address_values),
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
-iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
-    "Command distance (seconds)", "command_distance", command_distance,
-    NUMBER_LEN, "2", "1..60", "min='1' max='60' step='1'");
 iotwebconf::NumberParameter busIsrWindowParam = iotwebconf::NumberParameter(
     "Bus ISR window (micro seconds)", "busisr_window", busisr_window,
     NUMBER_LEN, "4300", "4250..4500", "min='4250' max='4500' step='1'");
 iotwebconf::NumberParameter busIsrOffsetParam = iotwebconf::NumberParameter(
     "Bus ISR offset (micro seconds)", "busisr_offset", busisr_offset,
     NUMBER_LEN, "80", "0..200", "min='0' max='200' step='1'");
+
+iotwebconf::ParameterGroup scheduleGroup =
+    iotwebconf::ParameterGroup("schedule", "Schedule configuration");
+iotwebconf::CheckboxParameter inquiryOfExistenceParam =
+    iotwebconf::CheckboxParameter("Send an inquiry of existence command",
+                                  "inquiryOfExistenceParam",
+                                  inquiryOfExistenceValue, STRING_LEN);
+iotwebconf::CheckboxParameter scanOnStartupParam =
+    iotwebconf::CheckboxParameter("Scan for eBUS participants on startup",
+                                  "scanOnStartupParam", scanOnStartupValue,
+                                  STRING_LEN);
+iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
+    "Command distance (seconds)", "command_distance", command_distance,
+    NUMBER_LEN, "2", "1..60", "min='1' max='60' step='1'");
 #endif
 
 iotwebconf::ParameterGroup mqttGroup =
@@ -401,9 +414,12 @@ void saveParamsCallback() {
 #if defined(EBUS_INTERNAL)
   ebus::handler->setSourceAddress(
       uint8_t(std::strtoul(ebus_address, nullptr, 16)));
-  schedule.setDistance(atoi(command_distance));
   ebus::setBusIsrWindow(atoi(busisr_window));
   ebus::setBusIsrOffset(atoi(busisr_offset));
+
+  schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
+  schedule.setScanOnStartup(scanOnStartupParam.isChecked());
+  schedule.setDistance(atoi(command_distance));
 #endif
 
   mqtt.setServer(mqtt_server, 1883);
@@ -474,12 +490,18 @@ char* status_string() {
 #if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
                   ebus_address);
-  pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
-                  atoi(command_distance));
   pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %i us\r\n",
                   atoi(busisr_window));
   pos += snprintf(status + pos, bufferSize - pos, "busisr_offset: %i us\r\n",
                   atoi(busisr_offset));
+
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "inquiry_of_existence: %s\r\n",
+               inquiryOfExistenceParam.isChecked() ? "true" : "false");
+  pos += snprintf(status + pos, bufferSize - pos, "scan_on_startup: %s\r\n",
+                  scanOnStartupParam.isChecked() ? "true" : "false");
+  pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
+                  atoi(command_distance));
   pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
@@ -578,11 +600,16 @@ const std::string getStatusJson() {
   eBUS["PWM"] = get_pwm();
 #if defined(EBUS_INTERNAL)
   eBUS["Ebus_Address"] = ebus_address;
-  eBUS["Command_Distance"] = atoi(command_distance);
   eBUS["BusIsr_Window"] = atoi(busisr_window);
   eBUS["BusIsr_Offset"] = atoi(busisr_offset);
-  eBUS["Active_Commands"] = store.getActiveCommands();
-  eBUS["Passive_Commands"] = store.getPassiveCommands();
+
+  // Schedule
+  JsonObject Schedule = doc["Schedule"].to<JsonObject>();
+  Schedule["Inquiry_Of_Existence"] = inquiryOfExistenceParam.isChecked();
+  Schedule["Scan_On_Startup"] = scanOnStartupParam.isChecked();
+  Schedule["Command_Distance"] = atoi(command_distance);
+  Schedule["Active_Commands"] = store.getActiveCommands();
+  Schedule["Passive_Commands"] = store.getPassiveCommands();
 #endif
 
   // MQTT
@@ -658,9 +685,12 @@ void setup() {
 
 #if defined(EBUS_INTERNAL)
   ebusGroup.addItem(&ebusAddressParam);
-  ebusGroup.addItem(&commandDistanceParam);
   ebusGroup.addItem(&busIsrWindowParam);
   ebusGroup.addItem(&busIsrOffsetParam);
+
+  scheduleGroup.addItem(&inquiryOfExistenceParam);
+  scheduleGroup.addItem(&scanOnStartupParam);
+  scheduleGroup.addItem(&commandDistanceParam);
 #endif
 
   mqttGroup.addItem(&mqttServerParam);
@@ -675,6 +705,7 @@ void setup() {
 
   iotWebConf.addParameterGroup(&connGroup);
   iotWebConf.addParameterGroup(&ebusGroup);
+  iotWebConf.addParameterGroup(&scheduleGroup);
   iotWebConf.addParameterGroup(&mqttGroup);
   iotWebConf.addParameterGroup(&haGroup);
   iotWebConf.setFormValidator(&formValidator);
@@ -744,9 +775,12 @@ void setup() {
 #if defined(EBUS_INTERNAL)
   ebus::handler->setSourceAddress(
       uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+
+  schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
+  schedule.setScanOnStartup(scanOnStartupParam.isChecked());
+  schedule.setDistance(atoi(command_distance));
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
-  schedule.setDistance(atoi(command_distance));
   schedule.start(ebus::request, ebus::handler);
 
   ebus::setBusIsrWindow(atoi(busisr_window));

@@ -16,8 +16,20 @@ const std::vector<uint8_t> VEC_b5090125 = {0xb5, 0x09, 0x01, 0x25};
 const std::vector<uint8_t> VEC_b5090126 = {0xb5, 0x09, 0x01, 0x26};
 const std::vector<uint8_t> VEC_b5090127 = {0xb5, 0x09, 0x01, 0x27};
 
-// Inquiry of Existence (Service 07h FEh)
+// search Inquiry of Existence (Service 07h FEh)
 const std::vector<uint8_t> VEC_07fe00 = {0x07, 0xfe, 0x00};
+
+// broadcast Inquiry of Existence (Service 07h FEh)
+const std::vector<uint8_t> VEC_fe07fe00 = {0xfe, 0x07, 0xfe, 0x00};
+
+// broadcast Sign of Life (Service 07h FFh)
+const std::vector<uint8_t> VEC_fe07ff00 = {0xfe, 0x07, 0xff, 0x00};
+
+static constexpr uint8_t PRIO_INTERNAL = 5;  // highest
+static constexpr uint8_t PRIO_SEND = 4;      // manual send
+static constexpr uint8_t PRIO_SCHEDULE = 3;  // schedule commands
+static constexpr uint8_t PRIO_SCAN = 2;      // manual scan
+static constexpr uint8_t PRIO_FULLSCAN = 1;  // manual full scan
 
 // ebus/<unique_id>/state/addresses
 std::map<uint8_t, uint32_t> seenMasters;
@@ -177,23 +189,32 @@ void Schedule::start(ebus::Request* request, ebus::Handler* handler) {
     // Start the scheduleRunner task
     xTaskCreate(&Schedule::taskFunc, "scheduleRunner", 4096, this, 2,
                 &scheduleTaskHandle);
+
+    // enqueue Inquiry of Existence at startup to discover all participants
+    if (sendInquiryOfExistence)
+      enqueueCommand({Mode::send, PRIO_INTERNAL, VEC_fe07fe00, nullptr});
   }
 }
 
 void Schedule::stop() { stopRunner = true; }
+
+void Schedule::setSendInquiryOfExistence(const bool enable) {
+  sendInquiryOfExistence = enable;
+}
+
+void Schedule::setScanOnStartup(const bool enable) { scanOnStartup = enable; }
 
 void Schedule::setDistance(const uint8_t distance) {
   distanceCommands = distance * 1000;
 }
 
 void Schedule::handleScanFull() {
-  scanCommands.clear();
   fullScan = true;
-  nextScanCommand();
+  scanIndex = 0;
+  enqueueFullScanCommand();
 }
 
 void Schedule::handleScan() {
-  scanCommands.clear();
   std::set<uint8_t> slaves;
 
   for (const std::pair<uint8_t, uint32_t> master : seenMasters)
@@ -208,12 +229,11 @@ void Schedule::handleScan() {
     std::vector<uint8_t> command;
     command = {slave};
     command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
-    scanCommands.push_back(command);
+    enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
   }
 }
 
 void Schedule::handleScanAddresses(const JsonArray& addresses) {
-  scanCommands.clear();
   std::set<uint8_t> slaves;
 
   for (JsonVariant address : addresses) {
@@ -227,7 +247,7 @@ void Schedule::handleScanAddresses(const JsonArray& addresses) {
     std::vector<uint8_t> command;
     command = {slave};
     command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
-    scanCommands.push_back(command);
+    enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
   }
 }
 
@@ -238,33 +258,36 @@ void Schedule::handleScanVendor() {
         std::vector<uint8_t> command;
         command = {participant.first};
         command.insert(command.end(), VEC_b5090124.begin(), VEC_b5090124.end());
-        scanCommands.push_back(command);
+        enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
       }
       if (participant.second.vec_b5090125.size() == 0) {
         std::vector<uint8_t> command;
         command = {participant.first};
         command.insert(command.end(), VEC_b5090125.begin(), VEC_b5090125.end());
-        scanCommands.push_back(command);
+        enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
       }
       if (participant.second.vec_b5090126.size() == 0) {
         std::vector<uint8_t> command;
         command = {participant.first};
         command.insert(command.end(), VEC_b5090126.begin(), VEC_b5090126.end());
-        scanCommands.push_back(command);
+        enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
       }
       if (participant.second.vec_b5090127.size() == 0) {
         std::vector<uint8_t> command;
         command = {participant.first};
         command.insert(command.end(), VEC_b5090127.begin(), VEC_b5090127.end());
-        scanCommands.push_back(command);
+        enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
       }
     }
   }
 }
 
+void Schedule::handleSend(const std::vector<uint8_t>& command) {
+  enqueueCommand({Mode::send, PRIO_SEND, command, nullptr});
+}
+
 void Schedule::handleSend(const JsonArray& commands) {
-  for (JsonVariant command : commands)
-    sendCommands.push_back(ebus::to_vector(command));
+  for (JsonVariant command : commands) handleSend(ebus::to_vector(command));
 }
 
 void Schedule::toggleForward(const bool enable) { forward = enable; }
@@ -692,7 +715,7 @@ void Schedule::taskFunc(void* arg) {
   for (;;) {
     if (self->stopRunner) vTaskDelete(NULL);
     self->handleEvents();
-    self->nextCommand();
+    self->handleCommands();
     vTaskDelay(pdMS_TO_TICKS(10));  // adjust delay as needed
   }
 }
@@ -740,17 +763,66 @@ void Schedule::handleEvents() {
   }
 }
 
-void Schedule::nextCommand() {
+void Schedule::handleCommands() {
   uint32_t currentMillis = millis();
 
-  // enqueue Inquiry of Existence (07h FEh) at startup
-  // to discover all participants on the bus (first message after startup)
-  if (sendInquiryOfExistence) {
-    sendInquiryOfExistence = false;
-    sendCommands.push_front(ebus::to_vector("fe07fe00"));
+  // check if scheduleCommand is stuck
+  if (scheduleCommand != nullptr && scheduleCommandSetTime > 0) {
+    if (currentMillis - scheduleCommandSetTime > scheduleCommandTimeout) {
+      // command is stuck, clear it so next can be enqueued
+      scheduleCommand = nullptr;
+      scheduleCommandSetTime = 0;  // clear after success
+    }
   }
 
-  // scan participants
+  // enqueue startup scan commands if needed
+  if (scanOnStartup) enqueueStartupScanCommands();
+
+  // enqueue next schedule command if needed
+  if (store.active()) enqueueScheduleCommand();
+
+  // process queue
+  if (!queuedCommands.empty() &&
+      currentMillis > lastCommand + distanceCommands) {
+    lastCommand = currentMillis;
+    QueuedCommand cmd = queuedCommands.front();
+    queuedCommands.erase(queuedCommands.begin());
+
+    mode = cmd.mode;
+    scheduleCommand = cmd.scheduleCommand;
+
+    // time when command was scheduled
+    if (cmd.mode == Mode::schedule) scheduleCommandSetTime = millis();
+
+    // enqueue next full scan command if needed
+    if (fullScan && mode == Mode::fullscan) enqueueFullScanCommand();
+
+    // send command
+    if (cmd.command.size() > 0) ebusHandler->enqueueActiveMessage(cmd.command);
+  }
+}
+
+void Schedule::enqueueCommand(const QueuedCommand& cmd) {
+  if (cmd.mode == Mode::schedule) {
+    // only allow one schedule command in the queue
+    for (const struct QueuedCommand& queued : queuedCommands) {
+      if (queued.mode == Mode::schedule) return;
+    }
+  }
+  // insert sorted: higher priority first, then older timestamp first
+  std::vector<Schedule::QueuedCommand>::iterator it =
+      std::find_if(queuedCommands.begin(), queuedCommands.end(),
+                   [&](const QueuedCommand& other) {
+                     if (cmd.priority > other.priority) return true;
+                     if (cmd.priority == other.priority)
+                       return cmd.timestamp < other.timestamp;
+                     return false;
+                   });
+  queuedCommands.insert(it, cmd);
+}
+
+void Schedule::enqueueStartupScanCommands() {
+  uint32_t currentMillis = millis();
   if (currentScan < maxScans && currentMillis > lastScan + distanceScans) {
     currentScan++;
     lastScan = currentMillis;
@@ -758,37 +830,17 @@ void Schedule::nextCommand() {
     handleScan();
     handleScanVendor();
   }
+}
 
-  // determine next command to send
-  if (sendCommands.size() > 0 || scanCommands.size() > 0 || store.active()) {
-    uint32_t currentMillis = millis();
-    if (currentMillis > lastCommand + distanceCommands) {
-      lastCommand = currentMillis;
-
-      std::vector<uint8_t> command;
-      if (sendCommands.size() > 0) {
-        mode = Mode::send;
-        command = sendCommands.front();
-        sendCommands.pop_front();
-      } else if (scanCommands.size() > 0) {
-        mode = Mode::scan;
-        command = scanCommands.front();
-        scanCommands.pop_front();
-        if (fullScan && scanCommands.size() == 0) nextScanCommand();
-      } else {
-        mode = Mode::normal;
-        scheduleCommand = store.nextActiveCommand();
-        if (scheduleCommand != nullptr) command = scheduleCommand->read_cmd;
-      }
-
-      if (command.size() > 0) {
-        ebusHandler->enqueueActiveMessage(command);
-      }
-    }
+void Schedule::enqueueScheduleCommand() {
+  Command* cmd = store.nextActiveCommand();
+  if (cmd && cmd->read_cmd.size() > 0) {
+    if (scheduleCommand == cmd) return;  // already enqueued
+    enqueueCommand({Mode::schedule, PRIO_SCHEDULE, cmd->read_cmd, cmd});
   }
 }
 
-void Schedule::nextScanCommand() {
+void Schedule::enqueueFullScanCommand() {
   while (scanIndex <= 0xff) {
     scanIndex++;
     if (scanIndex == 0xff) {
@@ -801,7 +853,7 @@ void Schedule::nextScanCommand() {
       std::vector<uint8_t> command;
       command = {scanIndex};
       command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
-      scanCommands.push_back(command);
+      enqueueCommand({Mode::fullscan, PRIO_FULLSCAN, command, nullptr});
       break;
     }
   }
@@ -825,13 +877,32 @@ void Schedule::reactiveMasterSlaveCallback(const std::vector<uint8_t>& master,
 void Schedule::processActive(const Mode& mode,
                              const std::vector<uint8_t>& master,
                              const std::vector<uint8_t>& slave) {
-  if (mode == Mode::scan) {
-    processScan(master, slave);
-  } else if (mode == Mode::send) {
-    mqtt.publishData("send", master, slave);
-  } else {
-    store.updateData(scheduleCommand, master, slave);
-    mqtt.publishValue(scheduleCommand, store.getValueJson(scheduleCommand));
+  switch (mode) {
+    case Mode::schedule:
+      if (scheduleCommand != nullptr) {
+        store.updateData(scheduleCommand, master, slave);
+        mqtt.publishValue(scheduleCommand, store.getValueJson(scheduleCommand));
+        scheduleCommand = nullptr;
+        scheduleCommandSetTime = 0;  // clear after success
+      }
+      break;
+    case Mode::internal:
+      break;
+    case Mode::scan:
+    case Mode::fullscan:
+      processScan(master, slave);
+      break;
+    case Mode::send:
+      mqtt.publishData("send", master, slave);
+      break;
+    case Mode::read:
+      mqtt.publishData("read", master, slave);
+      break;
+    case Mode::write:
+      mqtt.publishData("write", master, slave);
+      break;
+    default:
+      break;
   }
 }
 
@@ -853,10 +924,9 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
 
   processScan(master, slave);
 
-  // send Sign of Life (Service 07h FFh) in response
-  // to an Inquiry of Existence (Service 07h FEh)
+  // send Sign of Life in response to an Inquiry of Existence
   if (ebus::contains(master, VEC_07fe00, 2))
-    sendCommands.push_front(ebus::to_vector("fe07ff00"));
+    enqueueCommand({Mode::send, PRIO_INTERNAL, VEC_fe07ff00, nullptr});
 }
 
 void Schedule::processScan(const std::vector<uint8_t>& master,
