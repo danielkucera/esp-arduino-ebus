@@ -310,6 +310,8 @@ Key facts:
 - Scanning of eBUS devices is supported.
 - Automatic scan of eBUS devices at startup.
 - Pattern-recognized messages can be forwarded via MQTT.
+- Reading the value of a stored command via MQTT.
+- Writing a value using a stored command via MQTT.
 
 ## Structure of the internal command store
 For an example of how to install a command via MQTT, see `Inserting (Installing) of new commands`.
