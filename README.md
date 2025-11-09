@@ -421,7 +421,7 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart"}'
 
 **Inserting (Installing) of new commands**
 ```
-payload:
+payload: - sensor
 {
   "id": "insert",
   "commands": [
@@ -438,7 +438,7 @@ payload:
       "digits": 2,                       // deciaml digits of value
       "topic": "outdoor_temperature",    // mqtt topic below "values/"
       "ha": true,                        // home assistant support for auto discovery
-      "ha_component": "sensor"           // home assistant component type
+      "ha_component": "sensor",          // home assistant component type
       "ha_device_class": "temperature"   // home assistant device class
     },
     {
@@ -449,6 +449,42 @@ payload:
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","read_cmd":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_component":"sensor","ha_device_class":"temperature"}]}'
+```
+
+```
+payload: - number
+{
+  "id": "insert",
+  "commands": [
+    {
+      "key": "55",                       // unique key of command
+      "read_cmd": "50b509030d3300",      // read command as vector of "ZZPBSBNNDBx"
+      "write_cmd": "50b509040e3300",     // write command as vector of "ZZPBSBNNDBx"
+      "unit": "°C",                      // unit of the interested part
+      "active": true,                    // active sending of command
+      "interval": 60,                    // minimum interval between two commands in seconds
+      "master": false,                   // value of interest is in master or slave part
+      "position": 1,                     // starting position in the interested part
+      "datatype": "DATA1C",              // ebus datatype
+      "divider": 1,                      // divider for value conversion
+      "min": 15,                         // minimum value
+      "max": 20,                         // maximum value
+      "digits": 2,                       // deciaml digits of value
+      "topic": "desired_temp_low",       // mqtt topic below "values/"
+      "ha": true,                        // home assistant support for auto discovery
+      "ha_component": "number",          // home assistant component type
+      "ha_device_class": "temperature",  // home assistant device class
+      "ha_number_step": 1,               // home assistant step value
+      "ha_number_mode": "box"            // home assistant mode
+    },
+    {
+    ...
+    }
+  ]
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"55","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","unit":"°C","active":true,"interval":60,"master":false,"position":1,"datatype":"DATA1C","divider":1,"min":15,"max":20,"digits":2,"topic":"desired_temp_low","ha":true,"ha_component":"number","ha_device_class":"temperature","ha_number_step":1,"ha_number_mode":"box"}]}'
 ```
 
 **Removing installed commands**
