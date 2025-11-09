@@ -191,13 +191,33 @@ Command Store::createCommand(const JsonDocument& doc) {
       doc["divider"].isNull()
           ? 1
           : (doc["divider"].as<float>() > 0 ? doc["divider"].as<float>() : 1);
+  command.min = doc["min"].isNull() ? 1 : doc["min"].as<float>();
+  command.max = doc["max"].isNull() ? 100 : doc["max"].as<float>();
   command.digits = doc["digits"].isNull() ? 2 : doc["digits"].as<uint8_t>();
   command.topic = doc["topic"].as<std::string>();
   command.ha = doc["ha"].isNull() ? false : doc["ha"].as<bool>();
-  command.ha_class =
-      command.ha
-          ? (doc["ha_class"].isNull() ? "" : doc["ha_class"].as<std::string>())
-          : "";
+
+  if (command.ha) {
+    command.ha_component =
+        (doc["ha_component"].isNull() ? "sensor"
+                                      : doc["ha_component"].as<std::string>());
+    command.ha_device_class = (doc["ha_device_class"].isNull()
+                                   ? ""
+                                   : doc["ha_device_class"].as<std::string>());
+    command.ha_number_step = (doc["ha_number_step"].isNull()
+                                  ? 1
+                                  : (doc["ha_number_step"].as<float>() > 0
+                                         ? doc["ha_number_step"].as<float>()
+                                         : 1));
+    command.ha_number_mode = (doc["ha_number_mode"].isNull()
+                                  ? "auto"
+                                  : doc["ha_number_mode"].as<std::string>());
+  } else {
+    command.ha_component = "";
+    command.ha_device_class = "";
+    command.ha_number_step = 1;
+    command.ha_number_mode = "";
+  }
 
   return command;
 }
@@ -329,10 +349,15 @@ JsonDocument Store::getCommandJson(const Command* command) {
   doc["position"] = command->position;
   doc["datatype"] = ebus::datatype_2_string(command->datatype);
   doc["divider"] = command->divider;
+  doc["min"] = command->min;
+  doc["max"] = command->max;
   doc["digits"] = command->digits;
   doc["topic"] = command->topic;
   doc["ha"] = command->ha;
-  doc["ha_class"] = command->ha_class;
+  doc["ha_component"] = command->ha_component;
+  doc["ha_device_class"] = command->ha_device_class;
+  doc["ha_number_step"] = command->ha_number_step;
+  doc["ha_number_mode"] = command->ha_number_mode;
 
   doc.shrinkToFit();
   return doc;
@@ -516,10 +541,15 @@ const std::string Store::serializeCommands() const {
       array.add(command.position);
       array.add(ebus::datatype_2_string(command.datatype));
       array.add(command.divider);
+      array.add(command.min);
+      array.add(command.max);
       array.add(command.digits);
       array.add(command.topic);
       array.add(command.ha);
-      array.add(command.ha_class);
+      array.add(command.ha_component);
+      array.add(command.ha_device_class);
+      array.add(command.ha_number_step);
+      array.add(command.ha_number_mode);
     }
   }
 
@@ -552,10 +582,15 @@ void Store::deserializeCommands(const char* payload) {
       tmpDoc["position"] = variant[7];
       tmpDoc["datatype"] = variant[8];
       tmpDoc["divider"] = variant[9];
-      tmpDoc["digits"] = variant[10];
-      tmpDoc["topic"] = variant[11];
-      tmpDoc["ha"] = variant[12];
-      tmpDoc["ha_class"] = variant[13];
+      tmpDoc["min"] = variant[10];
+      tmpDoc["max"] = variant[11];
+      tmpDoc["digits"] = variant[12];
+      tmpDoc["topic"] = variant[13];
+      tmpDoc["ha"] = variant[14];
+      tmpDoc["ha_component"] = variant[15];
+      tmpDoc["ha_device_class"] = variant[16];
+      tmpDoc["ha_number_step"] = variant[17];
+      tmpDoc["ha_number_mode"] = variant[18];
 
       insertCommand(createCommand(tmpDoc));
     }

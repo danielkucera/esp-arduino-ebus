@@ -319,11 +319,11 @@ For an example of how to install a command via MQTT, see `Inserting (Installing)
 ```
 struct Command {
   std::string key;                 // unique key of command
-  std::vector<uint8_t> reat_cmd;   // read command as vector of "ZZPBSBNNDBx"
-  std::vector<uint8_t> write_cmd;  // write command as vector of "ZZPBSBNNDBx"
+  std::vector<uint8_t> read_cmd;   // read command as vector of "ZZPBSBNNDBx"
+  std::vector<uint8_t> write_cmd;  // write command as vector of "ZZPBSBNNDBx" (OPTIONAL, default: empty)
   std::string unit;                // unit of the interested part
   bool active;                     // active sending of command
-  uint32_t interval;               // minimum interval between two commands in seconds
+  uint32_t interval;               // minimum interval between two commands in seconds (OPTIONAL, default: 60)
   uint32_t last;                   // last time of the successful command (INTERNAL)
   std::vector<uint8_t> data;       // received raw data (INTERNAL)
   bool master;                     // value of interest is in master or slave part
@@ -331,11 +331,16 @@ struct Command {
   ebus::DataType datatype;         // ebus data type
   size_t length;                   // length of interested part (INTERNAL)
   bool numeric;                    // indicate numeric types (INTERNAL)
-  float divider;                   // divider for value conversion
-  uint8_t digits;                  // deciaml digits of value
+  float divider;                   // divider for value conversion (OPTIONAL, default: 1)
+  float min;                       // minimum value (OPTIONAL, default: 1)
+  float max;                       // maximum value (OPTIONAL, default: 100)
+  uint8_t digits;                  // decimal digits of value (OPTIONAL, default: 2)
   std::string topic;               // mqtt topic below "values/"
-  bool ha;                         // home assistant support for auto discovery
-  std::string ha_class;            // home assistant device_class
+  bool ha;                         // home assistant support for auto discovery (OPTIONAL, default: false)
+  std::string ha_component;        // home assistant component type (sensor, number) (OPTIONAL, default: sensor) 
+  std::string ha_device_class;     // home assistant device class (OPTIONAL, default: empty)
+  float ha_number_step;            // home assistant step value  (OPTIONAL, default: 1)
+  std::string ha_number_mode;      // home assistant mode (slider, box) (OPTIONAL, default: auto)
 };
 ```
 
@@ -423,7 +428,6 @@ payload:
     {
       "key": "01",                       // unique key of command
       "read_cmd": "fe070009",            // read command as vector of "ZZPBSBNNDBx"
-      "write_cmd": "",                   // write command as vector of "ZZPBSBNNDBx"
       "unit": "°C",                      // unit of the interested part
       "active": false,                   // active sending of command
       "interval": 0,                     // minimum interval between two commands in seconds
@@ -434,7 +438,8 @@ payload:
       "digits": 2,                       // deciaml digits of value
       "topic": "outdoor_temperature",    // mqtt topic below "values/"
       "ha": true,                        // home assistant support for auto discovery
-      "ha_class": "temperature"          // home assistant device_class
+      "ha_component": "sensor"           // home assistant component type
+      "ha_device_class": "temperature"   // home assistant device class
     },
     {
     ...
@@ -443,7 +448,7 @@ payload:
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","read_cmd":"fe070009","write_cmd":"","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","read_cmd":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_component":"sensor","ha_device_class":"temperature"}]}'
 ```
 
 **Removing installed commands**

@@ -799,7 +799,7 @@ void setup() {
   });
 
   store.loadCommands();  // install saved commands
-  mqtt.publishHASensors(false);
+  mqtt.publishHAComponents(false);
 #else
 #if defined(ESP32)
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);

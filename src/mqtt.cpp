@@ -41,7 +41,7 @@ void Mqtt::doLoop() {
   checkInsertCommands();
   checkRemoveCommands();
   checkPublishCommands();
-  checkPublishHASensors();
+  checkPublishHAComponents();
   checkPublishParticipants();
 #endif
 }
@@ -73,14 +73,14 @@ void Mqtt::publishHA() const {
 }
 
 #if defined(EBUS_INTERNAL)
-void Mqtt::publishHASensors(const bool remove) {
+void Mqtt::publishHAComponents(const bool remove) {
   for (Command* command : store.getCommands())
-    pubHASensors.push_back(std::make_tuple(command, remove));
+    pubHAComponents.push(std::make_tuple(command, remove));
 }
 
 void Mqtt::publishParticipants() {
   for (Participant* participant : schedule.getParticipants())
-    pubParticipants.push_back(participant);
+    pubParticipants.push(participant);
 }
 
 void Mqtt::publishData(const std::string& id,
@@ -162,20 +162,19 @@ void Mqtt::handleInsert(const JsonDocument& doc) {
   JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
   if (!commands.isNull()) {
     for (JsonVariantConst command : commands)
-      insCommands.push_back(store.createCommand(command));
+      insCommands.push(store.createCommand(command));
   }
 }
 
 void Mqtt::handleRemove(const JsonDocument& doc) {
   JsonArrayConst keys = doc["keys"].as<JsonArrayConst>();
   if (!keys.isNull()) {
-    for (JsonVariantConst key : keys)
-      remCommands.push_back(key.as<std::string>());
+    for (JsonVariantConst key : keys) remCommands.push(key.as<std::string>());
   }
 }
 
 void Mqtt::handlePublish(const JsonDocument& doc) {
-  for (Command* command : store.getCommands()) pubCommands.push_back(command);
+  for (Command* command : store.getCommands()) pubCommands.push(command);
 }
 
 void Mqtt::handleLoad(const JsonDocument& doc) {
@@ -291,9 +290,9 @@ void Mqtt::checkInsertCommands() {
     if (millis() > lastInsert + distanceInsert) {
       lastInsert = millis();
       Command command = insCommands.front();
-      insCommands.pop_front();
+      insCommands.pop();
       store.insertCommand(command);
-      if (haSupport) mqtt.publishHASensor(&command, false);
+      if (haSupport) mqtt.publishHAComponents(&command, false);
       mqtt.publishResponse("insert", "key '" + command.key + "' inserted");
     }
   }
@@ -304,10 +303,10 @@ void Mqtt::checkRemoveCommands() {
     if (millis() > lastRemove + distanceRemove) {
       lastRemove = millis();
       std::string key = remCommands.front();
-      remCommands.pop_front();
+      remCommands.pop();
       const Command* command = store.findCommand(key);
       if (command != nullptr) {
-        if (haSupport) mqtt.publishHASensor(command, true);
+        if (haSupport) mqtt.publishHAComponents(command, true);
         store.removeCommand(key);
         mqtt.publishResponse("remove", "key '" + key + "' removed");
       } else {
@@ -322,18 +321,18 @@ void Mqtt::checkPublishCommands() {
     if (millis() > lastPublish + distancePublish) {
       lastPublish = millis();
       mqtt.publishCommand(pubCommands.front());
-      pubCommands.pop_front();
+      pubCommands.pop();
     }
   }
 }
 
-void Mqtt::checkPublishHASensors() {
-  if (pubHASensors.size() > 0) {
-    if (millis() > lastHASensors + distanceHASensors) {
-      lastHASensors = millis();
-      mqtt.publishHASensor(std::get<0>(pubHASensors.front()),
-                           std::get<1>(pubHASensors.front()));
-      pubHASensors.pop_front();
+void Mqtt::checkPublishHAComponents() {
+  if (pubHAComponents.size() > 0) {
+    if (millis() > lastHAComponents + distanceHAComponents) {
+      lastHAComponents = millis();
+      mqtt.publishHAComponents(std::get<0>(pubHAComponents.front()),
+                               std::get<1>(pubHAComponents.front()));
+      pubHAComponents.pop();
     }
   }
 }
@@ -343,7 +342,7 @@ void Mqtt::checkPublishParticipants() {
     if (millis() > lastParticipants + distanceParticipants) {
       lastParticipants = millis();
       mqtt.publishParticipant(pubParticipants.front());
-      pubParticipants.pop_front();
+      pubParticipants.pop();
     }
   }
 }
@@ -413,8 +412,8 @@ void Mqtt::publishHAConfigButton(const char* name, const bool remove) {
     doc["availability_topic"] = rootTopic + std::string("state/available");
     doc["command_topic"] = rootTopic + "request";
     doc["payload_press"] = "{\"id\":\"" + lowerName + "\",\"value\":true}";
-    doc["qos"] = 0;
-    doc["retain"] = false;
+    // doc["qos"] = 0;
+    // doc["retain"] = false;
 
     JsonObject device = doc["device"].to<JsonObject>();
     device["identifiers"] = "ebus" + uniqueId;
@@ -431,7 +430,7 @@ void Mqtt::publishHAConfigButton(const char* name, const bool remove) {
 }
 
 #if defined(EBUS_INTERNAL)
-void Mqtt::publishHASensor(const Command* command, const bool remove) {
+void Mqtt::publishHAComponents(const Command* command, const bool remove) {
   std::string stateTopic = command->topic;
   std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
                  [](unsigned char c) { return std::tolower(c); });
@@ -439,8 +438,8 @@ void Mqtt::publishHASensor(const Command* command, const bool remove) {
   std::string subTopic = stateTopic;
   std::replace(subTopic.begin(), subTopic.end(), '/', '_');
 
-  std::string topic =
-      "homeassistant/sensor/ebus" + uniqueId + '/' + subTopic + "/config";
+  std::string topic = "homeassistant/" + command->ha_component + "/ebus" +
+                      uniqueId + '/' + subTopic + "/config";
 
   std::string payload;
 
@@ -452,14 +451,26 @@ void Mqtt::publishHASensor(const Command* command, const bool remove) {
     std::replace(name.begin(), name.end(), '_', ' ');
 
     doc["name"] = name;
-    if (command->ha_class.compare("null") != 0 &&
-        command->ha_class.length() > 0)
-      doc["device_class"] = command->ha_class;
+    if (command->ha_device_class.compare("null") != 0 &&
+        command->ha_device_class.length() > 0)
+      doc["device_class"] = command->ha_device_class;
     doc["state_topic"] = rootTopic + std::string("values/") + stateTopic;
+    if (command->ha_component.compare("number") == 0)
+      doc["command_topic"] = rootTopic + "request";
     if (command->unit.compare("null") != 0 && command->unit.length() > 0)
       doc["unit_of_measurement"] = command->unit;
     doc["unique_id"] = "ebus" + uniqueId + '_' + command->key;
     doc["value_template"] = "{{value_json.value}}";
+    if (command->ha_component.compare("number") == 0) {
+      doc["command_template"] = "{\"id\":\"write\",\"key\":\"" + command->key +
+                                "\",\"value\":{{value}}}";
+      doc["min"] = command->min;
+      doc["max"] = command->max;
+      doc["step"] = command->ha_number_step;
+      doc["mode"] = command->ha_number_mode;
+      // doc["qos"] = 0;
+      // doc["retain"] = false;
+    }
 
     JsonObject device = doc["device"].to<JsonObject>();
     device["identifiers"] = "ebus" + uniqueId;

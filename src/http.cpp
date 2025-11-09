@@ -215,7 +215,7 @@ void SetupHttpHandlers() {
   configServer.on("/commands/insert", [] { handleCommandsInsert(); });
   configServer.on("/commands/load", [] {
     handleCommandsLoad();
-    mqtt.publishHASensors(false);
+    mqtt.publishHAComponents(false);
   });
   configServer.on("/commands/save", [] { handleCommandsSave(); });
   configServer.on("/commands/wipe", [] { handleCommandsWipe(); });

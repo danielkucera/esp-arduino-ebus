@@ -3,7 +3,7 @@
 #include <ArduinoJson.h>
 #include <AsyncMqttClient.h>
 
-#include <deque>
+#include <queue>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -42,7 +42,7 @@ class Mqtt {
   void publishHA() const;
 
 #if defined(EBUS_INTERNAL)
-  void publishHASensors(const bool remove);
+  void publishHAComponents(const bool remove);
   void publishParticipants();
 
   static void publishData(const std::string& id,
@@ -61,23 +61,23 @@ class Mqtt {
   bool haSupport = false;
 
 #if defined(EBUS_INTERNAL)
-  std::deque<Command> insCommands;
+  std::queue<Command> insCommands;
   uint32_t distanceInsert = 300;
   uint32_t lastInsert = 0;
 
-  std::deque<std::string> remCommands;
+  std::queue<std::string> remCommands;
   uint32_t distanceRemove = 300;
   uint32_t lastRemove = 0;
 
-  std::deque<const Command*> pubCommands;
+  std::queue<const Command*> pubCommands;
   uint32_t distancePublish = 200;
   uint32_t lastPublish = 0;
 
-  std::deque<std::tuple<const Command*, bool>> pubHASensors;
-  uint32_t distanceHASensors = 200;
-  uint32_t lastHASensors = 0;
+  std::queue<std::tuple<const Command*, bool>> pubHAComponents;
+  uint32_t distanceHAComponents = 200;
+  uint32_t lastHAComponents = 0;
 
-  std::deque<const Participant*> pubParticipants;
+  std::queue<const Participant*> pubParticipants;
   uint32_t distanceParticipants = 200;
   uint32_t lastParticipants = 0;
 #endif
@@ -148,7 +148,7 @@ class Mqtt {
   void checkRemoveCommands();
 
   void checkPublishCommands();
-  void checkPublishHASensors();
+  void checkPublishHAComponents();
   void checkPublishParticipants();
 
   void publishCommand(const Command* command);
@@ -160,7 +160,7 @@ class Mqtt {
   void publishHAConfigButton(const char* name, const bool remove);
 
 #if defined(EBUS_INTERNAL)
-  void publishHASensor(const Command* command, const bool remove);
+  void publishHAComponents(const Command* command, const bool remove);
 
   void publishParticipant(const Participant* participant);
 #endif
