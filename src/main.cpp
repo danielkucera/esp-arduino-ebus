@@ -16,6 +16,7 @@
 #include "client.hpp"
 #include "http.hpp"
 #include "mqtt.hpp"
+#include "mqttha.hpp"
 #include "track.hpp"
 
 #if defined(ESP32)
@@ -430,8 +431,11 @@ void saveParamsCallback() {
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
 #endif
 
-  mqtt.setHASupport(haSupportParam.isChecked());
-  mqtt.publishHA();
+  mqttha.setEnabled(haSupportParam.isChecked());
+  mqttha.publishDeviceInfo();
+#if defined(EBUS_INTERNAL)
+  mqttha.publishComponents();
+#endif
 }
 
 void connectWifi(const char* ssid, const char* password) {
@@ -757,7 +761,11 @@ void setup() {
   mqtt.setUniqueId(unique_id);
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
-  mqtt.setHASupport(haSupportParam.isChecked());
+
+  // mqttha.setMqtt(&mqtt);
+  mqttha.setUniqueId(mqtt.getUniqueId());
+  mqttha.setRootTopic(mqtt.getRootTopic());
+  mqttha.setEnabled(haSupportParam.isChecked());
 
 #if !defined(EBUS_INTERNAL)
   wifiServer.begin();
@@ -799,7 +807,7 @@ void setup() {
   });
 
   store.loadCommands();  // install saved commands
-  mqtt.publishHAComponents(false);
+  mqttha.publishComponents();
 #else
 #if defined(ESP32)
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);

@@ -1,7 +1,7 @@
 #include "http.hpp"
 
 #include "main.hpp"
-#include "mqtt.hpp"
+#include "mqttha.hpp"
 #include "schedule.hpp"
 #include "store.hpp"
 
@@ -215,7 +215,7 @@ void SetupHttpHandlers() {
   configServer.on("/commands/insert", [] { handleCommandsInsert(); });
   configServer.on("/commands/load", [] {
     handleCommandsLoad();
-    mqtt.publishHAComponents(false);
+    mqttha.publishComponents();
   });
   configServer.on("/commands/save", [] { handleCommandsSave(); });
   configServer.on("/commands/wipe", [] { handleCommandsWipe(); });

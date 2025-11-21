@@ -173,7 +173,15 @@ Store store;
 Command Store::createCommand(const JsonDocument& doc) {
   Command command;
   // TODO(yuhu-): check incoming data for completeness
+  // if (doc["key"].isNull() || doc["name"].isNull() || doc["read_cmd"].isNull()
+  // ||
+  //     doc["write_cmd"].isNull() || doc["unit"].isNull() ||
+  //     doc["active"].isNull() || doc["master"].isNull() ||
+  //     doc["position"].isNull() || doc["datatype"].isNull()) {
+  //   return command;  // return empty command on invalid data
+  // }
   command.key = doc["key"].as<std::string>();
+  command.name = doc["name"].as<std::string>();
   command.read_cmd = ebus::to_vector(doc["read_cmd"].as<std::string>());
   command.write_cmd = ebus::to_vector(doc["write_cmd"].as<std::string>());
   command.unit = doc["unit"].as<std::string>();
@@ -194,7 +202,6 @@ Command Store::createCommand(const JsonDocument& doc) {
   command.min = doc["min"].isNull() ? 1 : doc["min"].as<float>();
   command.max = doc["max"].isNull() ? 100 : doc["max"].as<float>();
   command.digits = doc["digits"].isNull() ? 2 : doc["digits"].as<uint8_t>();
-  command.topic = doc["topic"].as<std::string>();
   command.ha = doc["ha"].isNull() ? false : doc["ha"].as<bool>();
 
   if (command.ha) {
@@ -204,6 +211,11 @@ Command Store::createCommand(const JsonDocument& doc) {
     command.ha_device_class = (doc["ha_device_class"].isNull()
                                    ? ""
                                    : doc["ha_device_class"].as<std::string>());
+    command.ha_entity_category =
+        (doc["ha_entity_category"].isNull()
+             ? ""
+             : doc["ha_entity_category"].as<std::string>());
+
     command.ha_number_step = (doc["ha_number_step"].isNull()
                                   ? 1
                                   : (doc["ha_number_step"].as<float>() > 0
@@ -212,11 +224,22 @@ Command Store::createCommand(const JsonDocument& doc) {
     command.ha_number_mode = (doc["ha_number_mode"].isNull()
                                   ? "auto"
                                   : doc["ha_number_mode"].as<std::string>());
+    command.ha_select_options =
+        (doc["ha_select_options"].isNull()
+             ? ""
+             : doc["ha_select_options"].as<std::string>());
+    command.ha_select_options_default =
+        (doc["ha_select_options_default"].isNull()
+             ? ""
+             : doc["ha_select_options_default"].as<std::string>());
   } else {
     command.ha_component = "";
     command.ha_device_class = "";
+    command.ha_entity_category = "";
     command.ha_number_step = 1;
     command.ha_number_mode = "";
+    command.ha_select_options = "";
+    command.ha_select_options_default = "";
   }
 
   return command;
@@ -276,7 +299,7 @@ void Store::removeCommand(const std::string& key) {
   }
 }
 
-const Command* Store::findCommand(const std::string& key) {
+Command* Store::findCommand(const std::string& key) {
   std::unordered_map<std::string, Command>::iterator it =
       allCommandsByKey.find(key);
   if (it != allCommandsByKey.end())
@@ -340,6 +363,7 @@ JsonDocument Store::getCommandJson(const Command* command) {
   JsonDocument doc;
 
   doc["key"] = command->key;
+  doc["name"] = command->name;
   doc["read_cmd"] = ebus::to_string(command->read_cmd);
   doc["write_cmd"] = ebus::to_string(command->write_cmd);
   doc["unit"] = command->unit;
@@ -352,19 +376,20 @@ JsonDocument Store::getCommandJson(const Command* command) {
   doc["min"] = command->min;
   doc["max"] = command->max;
   doc["digits"] = command->digits;
-  doc["topic"] = command->topic;
   doc["ha"] = command->ha;
   doc["ha_component"] = command->ha_component;
   doc["ha_device_class"] = command->ha_device_class;
+  doc["ha_entity_category"] = command->ha_entity_category;
   doc["ha_number_step"] = command->ha_number_step;
   doc["ha_number_mode"] = command->ha_number_mode;
+  doc["ha_select_options"] = command->ha_select_options;
+  doc["ha_select_options_default"] = command->ha_select_options_default;
 
   doc.shrinkToFit();
   return doc;
 }
 
-const std::string Store::getCommandsJson() const {
-  std::string payload;
+const JsonDocument Store::getCommandsJsonDocument() const {
   JsonDocument doc;
 
   if (!allCommandsByKey.empty()) {
@@ -375,8 +400,13 @@ const std::string Store::getCommandsJson() const {
   if (doc.isNull()) doc.to<JsonArray>();
 
   doc.shrinkToFit();
-  serializeJson(doc, payload);
+  return doc;
+}
 
+const std::string Store::getCommandsJson() const {
+  std::string payload;
+  JsonDocument doc = getCommandsJsonDocument();
+  serializeJson(doc, payload);
   return payload;
 }
 
@@ -481,7 +511,7 @@ const std::string Store::getValueFullJson(const Command* command) {
   else
     doc["value"] = getStringFromVector(command);
   doc["unit"] = command->unit;
-  doc["topic"] = command->topic;
+  doc["name"] = command->name;
   doc["age"] = static_cast<uint32_t>((millis() - command->last) / 1000);
   doc.shrinkToFit();
   serializeJson(doc, payload);
@@ -508,7 +538,7 @@ const std::string Store::getValuesJson() const {
         array.add(getStringFromVector(&command));
 
       array.add(command.unit);
-      array.add(command.topic);
+      array.add(command.name);
       array.add(static_cast<uint32_t>((now - command.last) / 1000));
       index++;
     }
@@ -522,6 +552,7 @@ const std::string Store::getValuesJson() const {
   return payload;
 }
 
+// deprecated
 const std::string Store::serializeCommands() const {
   std::string payload;
   JsonDocument doc;
@@ -532,6 +563,7 @@ const std::string Store::serializeCommands() const {
       JsonArray array = doc.add<JsonArray>();
 
       array.add(command.key);
+      array.add(command.name);
       array.add(ebus::to_string(command.read_cmd));
       array.add(ebus::to_string(command.write_cmd));
       array.add(command.unit);
@@ -544,12 +576,14 @@ const std::string Store::serializeCommands() const {
       array.add(command.min);
       array.add(command.max);
       array.add(command.digits);
-      array.add(command.topic);
       array.add(command.ha);
       array.add(command.ha_component);
       array.add(command.ha_device_class);
+      array.add(command.ha_entity_category);
       array.add(command.ha_number_step);
       array.add(command.ha_number_mode);
+      array.add(command.ha_select_options);
+      array.add(command.ha_select_options_default);
     }
   }
 
@@ -563,6 +597,7 @@ const std::string Store::serializeCommands() const {
   return payload;
 }
 
+// deprecated
 void Store::deserializeCommands(const char* payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);
@@ -573,25 +608,49 @@ void Store::deserializeCommands(const char* payload) {
       JsonDocument tmpDoc;
 
       tmpDoc["key"] = variant[0];
-      tmpDoc["read_cmd"] = variant[1];
-      tmpDoc["write_cmd"] = variant[2];
-      tmpDoc["unit"] = variant[3];
-      tmpDoc["active"] = variant[4];
-      tmpDoc["interval"] = variant[5];
-      tmpDoc["master"] = variant[6];
-      tmpDoc["position"] = variant[7];
-      tmpDoc["datatype"] = variant[8];
-      tmpDoc["divider"] = variant[9];
-      tmpDoc["min"] = variant[10];
-      tmpDoc["max"] = variant[11];
-      tmpDoc["digits"] = variant[12];
-      tmpDoc["topic"] = variant[13];
+      tmpDoc["name"] = variant[1];
+      tmpDoc["read_cmd"] = variant[2];
+      tmpDoc["write_cmd"] = variant[3];
+      tmpDoc["unit"] = variant[4];
+      tmpDoc["active"] = variant[5];
+      tmpDoc["interval"] = variant[6];
+      tmpDoc["master"] = variant[7];
+      tmpDoc["position"] = variant[8];
+      tmpDoc["datatype"] = variant[9];
+      tmpDoc["divider"] = variant[10];
+      tmpDoc["min"] = variant[11];
+      tmpDoc["max"] = variant[12];
+      tmpDoc["digits"] = variant[13];
       tmpDoc["ha"] = variant[14];
       tmpDoc["ha_component"] = variant[15];
       tmpDoc["ha_device_class"] = variant[16];
-      tmpDoc["ha_number_step"] = variant[17];
-      tmpDoc["ha_number_mode"] = variant[18];
+      tmpDoc["ha_entity_category"] = variant[17];
+      tmpDoc["ha_number_step"] = variant[18];
+      tmpDoc["ha_number_mode"] = variant[19];
+      tmpDoc["ha_select_options"] = variant[20];
+      tmpDoc["ha_select_options_default"] = variant[21];
 
+      insertCommand(createCommand(tmpDoc));
+    }
+  }
+}
+
+const std::string Store::serializeCommandsBinary() const {
+  std::string payload;
+  JsonDocument doc = getCommandsJsonDocument();
+  serializeMsgPack(doc, payload);
+  return payload;
+}
+
+void Store::deserializeCommandsBinary(const char* payload) {
+  JsonDocument doc;
+  DeserializationError error = deserializeMsgPack(doc, payload);
+
+  if (!error) {
+    JsonArray array = doc.as<JsonArray>();
+    for (JsonObject obj : array) {
+      JsonDocument tmpDoc;
+      for (JsonPair kv : obj) tmpDoc[kv.key()] = kv.value();
       insertCommand(createCommand(tmpDoc));
     }
   }

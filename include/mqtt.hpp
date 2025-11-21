@@ -12,10 +12,50 @@
 #include "schedule.hpp"
 #include "store.hpp"
 
+enum class IncomingActionType { Insert, Remove };
+
+struct IncomingAction {
+  IncomingActionType type;
+  Command command;  // for Insert
+  std::string key;  // for Remove
+
+  explicit IncomingAction(const Command& cmd)
+      : type(IncomingActionType::Insert), command(cmd), key("") {}
+
+  explicit IncomingAction(const std::string& k)
+      : type(IncomingActionType::Remove), command(), key(k) {}
+};
+
+enum class OutgoingActionType { Command, Participant, Component };
+
+struct OutgoingAction {
+  OutgoingActionType type;
+  const Command* command;          // for Command and Component
+  const Participant* participant;  // for Participant
+  bool haRemove;                   // for Component
+
+  explicit OutgoingAction(const Command* cmd)
+      : type(OutgoingActionType::Command),
+        command(cmd),
+        participant(nullptr),
+        haRemove(false) {}
+
+  explicit OutgoingAction(const Participant* part)
+      : type(OutgoingActionType::Participant),
+        command(nullptr),
+        participant(part),
+        haRemove(false) {}
+
+  explicit OutgoingAction(const Command* cmd, bool remove)
+      : type(OutgoingActionType::Component),
+        command(cmd),
+        participant(nullptr),
+        haRemove(remove) {}
+};
+
 using CommandHandler = std::function<void(const JsonDocument&)>;
 
-// The MQTT class acts as a wrapper for the entire MQTT subsystem. It provides
-// some basic methods for supporting Home Assistant.
+// The MQTT class acts as a wrapper for the entire MQTT subsystem.
 
 class Mqtt {
  public:
@@ -23,33 +63,28 @@ class Mqtt {
 
   void setUniqueId(const char* id);
 
+  const std::string& getUniqueId() const;
+  const std::string& getRootTopic() const;
+
   void setServer(const char* host, uint16_t port);
   void setCredentials(const char* username, const char* password = nullptr);
 
-  void setHASupport(const bool enable);
-
   void connect();
-  bool connected() const;
-
-  void doLoop();
+  const bool connected() const;
 
   uint16_t publish(const char* topic, uint8_t qos, bool retain,
                    const char* payload = nullptr, bool prefix = true);
 
-  void publishResponse(const std::string& id, const std::string& status,
-                       const size_t& bytes = 0);
-
-  void publishHA() const;
+  static void enqueueOutgoing(const OutgoingAction& action);
 
 #if defined(EBUS_INTERNAL)
-  void publishHAComponents(const bool remove);
-  void publishParticipants();
-
   static void publishData(const std::string& id,
                           const std::vector<uint8_t>& master,
                           const std::vector<uint8_t>& slave);
 
   static void publishValue(const Command* command, const JsonDocument& doc);
+
+  void doLoop();
 #endif
 
  private:
@@ -58,28 +93,14 @@ class Mqtt {
   std::string rootTopic;
   std::string topicWill;
 
-  bool haSupport = false;
-
 #if defined(EBUS_INTERNAL)
-  std::queue<Command> insCommands;
-  uint32_t distanceInsert = 300;
-  uint32_t lastInsert = 0;
+  std::queue<IncomingAction> incomingQueue;
+  uint32_t lastIncoming = 0;
+  uint32_t incomingInterval = 200;  // ms
 
-  std::queue<std::string> remCommands;
-  uint32_t distanceRemove = 300;
-  uint32_t lastRemove = 0;
-
-  std::queue<const Command*> pubCommands;
-  uint32_t distancePublish = 200;
-  uint32_t lastPublish = 0;
-
-  std::queue<std::tuple<const Command*, bool>> pubHAComponents;
-  uint32_t distanceHAComponents = 200;
-  uint32_t lastHAComponents = 0;
-
-  std::queue<const Participant*> pubParticipants;
-  uint32_t distanceParticipants = 200;
-  uint32_t lastParticipants = 0;
+  std::queue<OutgoingAction> outgoingQueue;
+  uint32_t lastOutgoing = 0;
+  uint32_t outgoingInterval = 200;  // ms
 #endif
 
   // Command handlers map
@@ -105,7 +126,6 @@ class Mqtt {
 
       {"read", [this](const JsonDocument& doc) { handleRead(doc); }},
       {"write", [this](const JsonDocument& doc) { handleWrite(doc); }},
-
 #endif
   };
 
@@ -123,11 +143,12 @@ class Mqtt {
 
   static void onPublish(uint16_t packetId) {}
 
+  // Command handlers
   static void handleRestart(const JsonDocument& doc);
 #if defined(EBUS_INTERNAL)
   void handleInsert(const JsonDocument& doc);
   void handleRemove(const JsonDocument& doc);
-  void handlePublish(const JsonDocument& doc);
+  static void handlePublish(const JsonDocument& doc);
 
   static void handleLoad(const JsonDocument& doc);
   static void handleSave(const JsonDocument& doc);
@@ -144,25 +165,16 @@ class Mqtt {
   void handleRead(const JsonDocument& doc);
   void handleWrite(const JsonDocument& doc);
 
-  void checkInsertCommands();
-  void checkRemoveCommands();
+  void checkIncomingQueue();
+  void checkOutgoingQueue();
 
-  void checkPublishCommands();
-  void checkPublishHAComponents();
-  void checkPublishParticipants();
+  void publishResponse(const std::string& id, const std::string& status,
+                       const size_t& bytes = 0);
 
   void publishCommand(const Command* command);
-#endif
-
-  void publishHADiagnostic(const char* name, const bool remove,
-                           const char* value_template, const bool full = false);
-
-  void publishHAConfigButton(const char* name, const bool remove);
-
-#if defined(EBUS_INTERNAL)
-  void publishHAComponents(const Command* command, const bool remove);
 
   void publishParticipant(const Participant* participant);
+
 #endif
 };
 
