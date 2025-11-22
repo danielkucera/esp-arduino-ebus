@@ -123,7 +123,8 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
 MqttHA::Component MqttHA::createSensor(const Command* command) const {
   Component c = createComponent("sensor", command->key, command->name);
   c.fields["state_topic"] = createStateTopic("values", command->name);
-  c.fields["device_class"] = command->ha_device_class;
+  if (!command->ha_device_class.empty())
+    c.fields["device_class"] = command->ha_device_class;
   c.fields["unit_of_measurement"] = command->unit;
   c.fields["value_template"] = "{{value_json.value}}";
   return c;
@@ -132,7 +133,8 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
 MqttHA::Component MqttHA::createNumber(const Command* command) const {
   Component c = createComponent("number", command->key, command->name);
   c.fields["state_topic"] = createStateTopic("values", command->name);
-  c.fields["device_class"] = command->ha_device_class;
+  if (!command->ha_device_class.empty())
+    c.fields["device_class"] = command->ha_device_class;
   if (!command->ha_entity_category.empty())
     c.fields["entity_category"] = command->ha_entity_category;
   c.fields["unit_of_measurement"] = command->unit;
@@ -150,7 +152,8 @@ MqttHA::Component MqttHA::createNumber(const Command* command) const {
 MqttHA::Component MqttHA::createSelect(const Command* command) const {
   Component c = createComponent("select", command->key, command->name);
   c.fields["state_topic"] = createStateTopic("values", command->name);
-  c.fields["device_class"] = command->ha_device_class;
+  if (!command->ha_device_class.empty())
+    c.fields["device_class"] = command->ha_device_class;
   if (!command->ha_entity_category.empty())
     c.fields["entity_category"] = command->ha_entity_category;
   c.fields["command_topic"] = commandTopic;
