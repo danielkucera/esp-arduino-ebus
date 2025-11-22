@@ -108,13 +108,9 @@ class Store {
   // For active commands, just keep a vector of pointers
   std::vector<Command*> activeCommands;
 
-  // string serialization/deserialization
+  // Flexible serialization/deserialization
   const std::string serializeCommands() const;
   void deserializeCommands(const char* payload);
-
-  // binary serialization/deserialization
-  const std::string serializeCommandsBinary() const;
-  void deserializeCommandsBinary(const char* payload);
 };
 
 extern Store store;

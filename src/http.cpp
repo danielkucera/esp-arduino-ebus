@@ -68,6 +68,8 @@ void handleCommandsLoad() {
     configServer.send(200, "text/html", "Loading failed");
   else
     configServer.send(200, "text/html", "No data loaded");
+
+  if (mqttha.isEnabled()) mqttha.publishComponents();
 }
 
 void handleCommandsSave() {
@@ -213,10 +215,7 @@ void SetupHttpHandlers() {
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
   configServer.on("/commands/upload", [] { handleCommandsUpload(); });
   configServer.on("/commands/insert", [] { handleCommandsInsert(); });
-  configServer.on("/commands/load", [] {
-    handleCommandsLoad();
-    mqttha.publishComponents();
-  });
+  configServer.on("/commands/load", [] { handleCommandsLoad(); });
   configServer.on("/commands/save", [] { handleCommandsSave(); });
   configServer.on("/commands/wipe", [] { handleCommandsWipe(); });
   configServer.on("/values", [] { handleValues(); });

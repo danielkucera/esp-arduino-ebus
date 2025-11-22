@@ -334,9 +334,10 @@ int64_t Store::saveCommands() const {
   Preferences preferences;
   preferences.begin("commands", false);
 
-  int64_t bytes = strlen(serializeCommands().c_str());
+  std::string payload = serializeCommands();
+  int64_t bytes = payload.size();
   if (bytes > 2) {  // 2 = empty json array "[]"
-    bytes = preferences.putBytes("ebus", serializeCommands().c_str(), bytes);
+    bytes = preferences.putBytes("ebus", payload.data(), bytes);
     if (bytes == 0) bytes = -1;
   } else {
     bytes = 0;
@@ -552,105 +553,91 @@ const std::string Store::getValuesJson() const {
   return payload;
 }
 
-// deprecated
 const std::string Store::serializeCommands() const {
   std::string payload;
   JsonDocument doc;
 
-  if (!allCommandsByKey.empty()) {
-    for (const std::pair<const std::string, Command>& kv : allCommandsByKey) {
-      const Command& command = kv.second;
-      JsonArray array = doc.add<JsonArray>();
+  // Define field names (order matters)
+  std::vector<std::string> fields = {"key",
+                                     "name",
+                                     "read_cmd",
+                                     "write_cmd",
+                                     "unit",
+                                     "active",
+                                     "interval",
+                                     "master",
+                                     "position",
+                                     "datatype",
+                                     "divider",
+                                     "min",
+                                     "max",
+                                     "digits",
+                                     "ha",
+                                     "ha_component",
+                                     "ha_device_class",
+                                     "ha_entity_category",
+                                     "ha_number_step",
+                                     "ha_number_mode",
+                                     "ha_select_options",
+                                     "ha_select_options_default"};
 
-      array.add(command.key);
-      array.add(command.name);
-      array.add(ebus::to_string(command.read_cmd));
-      array.add(ebus::to_string(command.write_cmd));
-      array.add(command.unit);
-      array.add(command.active);
-      array.add(command.interval);
-      array.add(command.master);
-      array.add(command.position);
-      array.add(ebus::datatype_2_string(command.datatype));
-      array.add(command.divider);
-      array.add(command.min);
-      array.add(command.max);
-      array.add(command.digits);
-      array.add(command.ha);
-      array.add(command.ha_component);
-      array.add(command.ha_device_class);
-      array.add(command.ha_entity_category);
-      array.add(command.ha_number_step);
-      array.add(command.ha_number_mode);
-      array.add(command.ha_select_options);
-      array.add(command.ha_select_options_default);
-    }
-  }
+  // Add header as first entry
+  JsonArray header = doc.add<JsonArray>();
+  for (const auto& field : fields) header.add(field);
 
-  if (doc.isNull()) {
-    doc.to<JsonArray>();
+  // Add each command as an array of values in the same order as header
+  for (const auto& kv : allCommandsByKey) {
+    const Command& command = kv.second;
+    JsonArray array = doc.add<JsonArray>();
+    array.add(command.key);
+    array.add(command.name);
+    array.add(ebus::to_string(command.read_cmd));
+    array.add(ebus::to_string(command.write_cmd));
+    array.add(command.unit);
+    array.add(command.active);
+    array.add(command.interval);
+    array.add(command.master);
+    array.add(command.position);
+    array.add(ebus::datatype_2_string(command.datatype));
+    array.add(command.divider);
+    array.add(command.min);
+    array.add(command.max);
+    array.add(command.digits);
+    array.add(command.ha);
+    array.add(command.ha_component);
+    array.add(command.ha_device_class);
+    array.add(command.ha_entity_category);
+    array.add(command.ha_number_step);
+    array.add(command.ha_number_mode);
+    array.add(command.ha_select_options);
+    array.add(command.ha_select_options_default);
   }
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
-
   return payload;
 }
 
-// deprecated
 void Store::deserializeCommands(const char* payload) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);
 
   if (!error) {
     JsonArray array = doc.as<JsonArray>();
-    for (JsonVariant variant : array) {
+    if (array.size() < 2) return;  // Need at least header + one command
+
+    // Read header
+    JsonArray header = array[0];
+    std::vector<std::string> fields;
+    for (JsonVariant v : header) fields.push_back(v.as<std::string>());
+
+    // Read each command
+    for (size_t i = 1; i < array.size(); ++i) {
+      JsonArray values = array[i];
       JsonDocument tmpDoc;
-
-      tmpDoc["key"] = variant[0];
-      tmpDoc["name"] = variant[1];
-      tmpDoc["read_cmd"] = variant[2];
-      tmpDoc["write_cmd"] = variant[3];
-      tmpDoc["unit"] = variant[4];
-      tmpDoc["active"] = variant[5];
-      tmpDoc["interval"] = variant[6];
-      tmpDoc["master"] = variant[7];
-      tmpDoc["position"] = variant[8];
-      tmpDoc["datatype"] = variant[9];
-      tmpDoc["divider"] = variant[10];
-      tmpDoc["min"] = variant[11];
-      tmpDoc["max"] = variant[12];
-      tmpDoc["digits"] = variant[13];
-      tmpDoc["ha"] = variant[14];
-      tmpDoc["ha_component"] = variant[15];
-      tmpDoc["ha_device_class"] = variant[16];
-      tmpDoc["ha_entity_category"] = variant[17];
-      tmpDoc["ha_number_step"] = variant[18];
-      tmpDoc["ha_number_mode"] = variant[19];
-      tmpDoc["ha_select_options"] = variant[20];
-      tmpDoc["ha_select_options_default"] = variant[21];
-
-      insertCommand(createCommand(tmpDoc));
-    }
-  }
-}
-
-const std::string Store::serializeCommandsBinary() const {
-  std::string payload;
-  JsonDocument doc = getCommandsJsonDocument();
-  serializeMsgPack(doc, payload);
-  return payload;
-}
-
-void Store::deserializeCommandsBinary(const char* payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeMsgPack(doc, payload);
-
-  if (!error) {
-    JsonArray array = doc.as<JsonArray>();
-    for (JsonObject obj : array) {
-      JsonDocument tmpDoc;
-      for (JsonPair kv : obj) tmpDoc[kv.key()] = kv.value();
+      for (size_t j = 0; j < fields.size() && j < values.size(); ++j) {
+        tmpDoc[fields[j]] = values[j];
+      }
       insertCommand(createCommand(tmpDoc));
     }
   }

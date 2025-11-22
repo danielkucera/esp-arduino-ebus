@@ -165,6 +165,8 @@ void Mqtt::handleLoad(const JsonDocument& doc) {
     mqtt.publishResponse("load", "failed");
   else
     mqtt.publishResponse("load", "no data");
+
+  if (mqttha.isEnabled()) mqttha.publishComponents();
 }
 
 void Mqtt::handleSave(const JsonDocument& doc) {
