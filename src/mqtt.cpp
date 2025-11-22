@@ -1,3 +1,4 @@
+#if defined(EBUS_INTERNAL)
 #include "mqtt.hpp"
 
 #include <functional>
@@ -338,4 +339,5 @@ void Mqtt::publishParticipant(const Participant* participant) {
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 
+#endif
 #endif

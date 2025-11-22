@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined(EBUS_INTERNAL)
 #include <ArduinoJson.h>
 #include <AsyncMqttClient.h>
 
@@ -179,3 +180,4 @@ class Mqtt {
 };
 
 extern Mqtt mqtt;
+#endif

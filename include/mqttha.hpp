@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined(EBUS_INTERNAL)
 #include <mqtt.hpp>
 #include <store.hpp>
 #include <string>
@@ -69,3 +70,4 @@ class MqttHA {
 };
 
 extern MqttHA mqttha;
+#endif

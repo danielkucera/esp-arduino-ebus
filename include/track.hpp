@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined(EBUS_INTERNAL)
 #include "mqtt.hpp"
 
 // The Track class can sum all kinds of primitive number types. After a minimum
@@ -79,3 +80,4 @@ class Track {
     }
   }
 };
+#endif

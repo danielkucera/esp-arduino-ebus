@@ -1,3 +1,4 @@
+#if defined(EBUS_INTERNAL)
 #include <mqttha.hpp>
 #include <sstream>
 
@@ -256,3 +257,5 @@ MqttHA::Component MqttHA::createDiagnosticLoopDuration() const {
   c.fields["value_template"] = "{{value|int}}";
   return c;
 }
+
+#endif
