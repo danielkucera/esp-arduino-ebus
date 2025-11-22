@@ -238,11 +238,11 @@ MqttHA::Component MqttHA::createDiagnosticUptime() const {
 
   c.device["name"] = "esp-ebus";
   c.device["manufacturer"] = "Daniel Kucera";
-  c.device["model"] = "";     // TODO(yuhu-): fill with thing data
-  c.device["model_id"] = "";  // TODO(yuhu-): fill with thing data
+  // c.device["model"] = "";     // TODO(yuhu-): fill with thing data
+  // c.device["model_id"] = "";  // TODO(yuhu-): fill with thing data
   c.device["serial_number"] = uniqueId;
-  c.device["hw_version"] = "";  // TODO(yuhu-): fill with thing data
-  c.device["sw_version"] = "";  // TODO(yuhu-): fill with thing data
+  // c.device["hw_version"] = "";  // TODO(yuhu-): fill with thing data
+  // c.device["sw_version"] = "";  // TODO(yuhu-): fill with thing data
   c.device["configuration_url"] = "http://esp-ebus.local";
   return c;
 }
