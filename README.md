@@ -7,7 +7,7 @@
 - you should see at least one LED on the adapter shining (HW v3.0+) - if not, switch eBus wires
 - LED D1 blinking indicates activity on the bus. The adapter comes pre-adjusted but if D1 is still on or off, you need to re-adjust it:
   - by a configuration in web interface for v6.0 and newer:
-    - open http://esp-ebus.local/param to adjust PWM value
+    - open http://esp-ebus.local/config to adjust PWM value
     - the default value is 130, max is 255, min is 1
     - when D1 is still on, you need to lower the value
     - when D1 is still off, you need to raise the value
@@ -207,95 +207,6 @@ You will need an USB-TTL adaptor (dongle) which suports 3V3 voltage levels and h
 - if that doesn't work, connect also TP1 to 3V3 and try again (see Issue #27)
 
 
-## MQTT support
-By setting the MQTT server IP address / hostname, MQTT support is activated. At the configuration web page you can set
-- server IP address or hostname
-- user name
-- password
-
-**Warning: The current implementation does not support TLS encryption. The MQTT server should therefore be run in a secure environment!**
-
-### MQTT interface
-- The device's MQTT **root topic** begins with ebus/,
-- followed by the last 6 characters of its MAC address as a unique device ID
-- and a trailing slash.
-- Example root topic: **`ebus/8406ac/`**.
-
-The following sub topics are available on any device and are published regularly.
-|***topic***                    |***description***
-|:-                             |:-
-|state/available                |indicates status for Home Assistant
-|state/uptime                   |uptime since last reboot in milliseconds 
-|state/free_heap                |free heap of the device in bytes
-|state/loop_duration            |duration of main loop in milliseconds
-
-### Details of MQTT commands
-The MQTT command interface is divided into two topics for bidirectional communication.
-- Commands can be sent to the **request** topic.
-- After processing, a response is sent to the **response** topic.
-- Only **JSON-encoded** messages are processed.
-- To distinguish between commands, each message contains a **unique ID**.
-
-|***communication***            |***description***
-|:-                             |:-   
-|request                        |JSON encoded request 
-|response                       |JSON encoded response / error message
-
-Available MQTT commands.
-|***command***                  |***description***                                              
-|:-                             |:-                                                            
-|restart                        |Restarting of the device                                      
-
-
-### Home Assistant Support
-Home Assistant support can be globally activated on the configuration web page.
-- Once Home Assistant support is activated there will be the followed MQTT topics created under **homeassistant**.
-- A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
-
-**MQTT Device - Diagnostic - Uptime of device (DD HH:MM:SS)**
-```
-topic: homeassistant/sensor/ebus8406ac/uptime/config
-payload:
-{
-  "name": "Uptime",
-  "entity_category": "diagnostic",
-  "unique_id": "ebus8406ac_uptime",
-  "state_topic": "ebus/8406ac/state/uptime",
-  "value_template": "{{timedelta(seconds=((value|float)/1000)|int)}}",
-  "device": {
-    "identifiers": "ebus8406ac",
-    "name": "esp-ebus",
-    "manufacturer": "",
-    "model": "",
-    "model_id": "",
-    "serial_number": "8406ac",
-    "hw_version": "",
-    "sw_version": "",
-    "configuration_url": "http://esp-ebus.local"
-  }
-}
-```
-
-**MQTT Device - Configuration - Restart button**
-```
-topic: homeassistant/button/ebus8406ac/restart/config
-payload:
-{
-  "name": "Restart",
-  "device_class": "restart",
-  "entity_category": "config",
-  "unique_id": "ebus8406ac_restart",
-  "availability_topic": "ebus/8406ac/state/available",
-  "command_topic": "ebus/8406ac/request",
-  "payload_press": "{\"id\":\"restart\",\"value\":true}",
-  "qos": 0,
-  "retain": false,
-  "device": {
-    "identifiers": "ebus8406ac"
-  }
-}
-``` 
-
 # Firmware marked with INTERNAL
 Firmware marked with `INTERNAL` is an alternative firmware that enables the device to operate as an independent eBUS device without external control software such as ebusd. In order to be able to evaluate passively received or actively sent commands, these must be installed in the internal command store. The results of the evaluated messages are also stored in the internal store or are actively sent via MQTT or can be retrieved via HTTP.
 
@@ -312,6 +223,7 @@ Key facts:
 - Pattern-recognized messages can be forwarded via MQTT.
 - Reading the value of a stored command via MQTT.
 - Writing a value using a stored command via MQTT.
+- Home Assistant auto discovery is available for some types.
 
 ## Structure of the internal command store
 For an example of how to install a command via MQTT, see `Inserting (Installing) of new commands`.
@@ -352,22 +264,55 @@ Available ebus data types:
 - numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (IEEE 754)
 - character: CHAR1 - CHAR8, HEX1 - HEX8
 
-### MQTT interface with `INTERNAL` firmware
 
-The following sub topics are available and are published regularly.
+## MQTT support
+By setting the MQTT server IP address / hostname, MQTT support is activated. At the configuration web page you can set
+- server IP address or hostname
+- user name
+- password
+
+**Warning: The current implementation does not support TLS encryption. The MQTT server should therefore be run in a secure environment!**
+
+### MQTT interface
+- The device's MQTT **root topic** begins with ebus/,
+- followed by the last 6 characters of its MAC address as a unique device ID
+- and a trailing slash.
+- Example root topic: **`ebus/8406ac/`**.
+
+The following sub topics are available on any device and are published regularly.
 |***topic***                    |***description***
 |:-                             |:-
-|values/...                     |received values of installed commands
+|state/available                |indicates status for Home Assistant
+|state/uptime                   |uptime since last reboot in milliseconds 
+|state/free_heap                |free heap of the device in bytes
+|state/loop_duration            |duration of main loop in milliseconds
+|***counters***                 |
 |state/addresses                |collected ebus addresses
 |state/errors                   |errors of finite state machine  
 |state/messages                 |processed messages
 |state/requests                 |bus requests (arbitration)
 |state/resets                   |resets of finite state machine (passive, reactive, active)
+|***timings***                  |
 |state/timings                  |time required by internal routines / states
+|***values***                   |
+|values/...                     |received values of installed commands
 
-Available MQTT commands
-|***command***                  |***description***                                                  
-|:-                             |:-                                                                                         
+### Details of MQTT commands
+The MQTT command interface is divided into two topics for bidirectional communication.
+- Commands can be sent to the **request** topic.
+- After processing, a response is sent to the **response** topic.
+- Only **JSON-encoded** messages are processed.
+- To distinguish between commands, each message contains a **unique ID**.
+
+|***communication***            |***description***
+|:-                             |:-   
+|request                        |JSON encoded request 
+|response                       |JSON encoded response / error message
+
+Available MQTT commands.
+|***command***                  |***description***                                              
+|:-                             |:-                                                            
+|restart                        |Restarting of the device
 |insert                         |Inserting (Installing) of new commands                        
 |remove                         |Removing installed commands                                   
 |publish                        |Publishing installed commands                                 
@@ -383,7 +328,27 @@ Available MQTT commands
 |write                          |Writing a value using a stored command     
 
 
-### Home Assistant Support with `INTERNAL` firmware
+## HTTP endpoints
+Most of the listed MQTT commands are also available via the web interface http://esp-ebus.local.
+
+The following endpoints are not listed on the main page:
+- http://esp-ebus.local/api/v1/GetStatus
+- http://esp-ebus.local/api/v1/GetCounter
+- http://esp-ebus.local/api/v1/GetTiming
+
+
+## Home Assistant Support
+Home Assistant support can be globally activated on the configuration web page.
+- Once Home Assistant support is activated there will be the followed MQTT topics created under **homeassistant**.
+- A running Home Assistant instance should create new entities in Home Assistant if MQTT autodiscovery is enabled.
+
+**The following entries should be displayed below MQTT Device**
+- Diagnostic - Uptime of device (DD HH:MM:SS)
+- Diagnostic - Free Heap
+- Diagnostic - Loop Duration
+- Configuration - Restart button
+
+
 **MQTT Device - Sensors**
 - When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. 
 - A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
@@ -431,6 +396,7 @@ payload: - sensor
   "commands": [
     {
       "key": "01",                       // unique key of command
+      "name": "outdoor/temperature",     // mqtt topic below "values/"
       "read_cmd": "fe070009",            // read command as vector of "ZZPBSBNNDBx"
       "unit": "°C",                      // unit of the interested part
       "active": false,                   // active sending of command
@@ -440,7 +406,6 @@ payload: - sensor
       "datatype": "DATA2B",              // ebus datatype
       "divider": 1,                      // divider for value conversion
       "digits": 2,                       // deciaml digits of value
-      "topic": "outdoor_temperature",    // mqtt topic below "values/"
       "ha": true,                        // home assistant support for auto discovery
       "ha_component": "sensor",          // home assistant component type
       "ha_device_class": "temperature"   // home assistant device class
@@ -462,6 +427,7 @@ payload: - number
   "commands": [
     {
       "key": "55",                       // unique key of command
+      "name": "desired_temp_low",        // mqtt topic below "values/"
       "read_cmd": "50b509030d3300",      // read command as vector of "ZZPBSBNNDBx"
       "write_cmd": "50b509040e3300",     // write command as vector of "ZZPBSBNNDBx"
       "unit": "°C",                      // unit of the interested part
@@ -474,7 +440,6 @@ payload: - number
       "min": 15,                         // minimum value
       "max": 20,                         // maximum value
       "digits": 2,                       // deciaml digits of value
-      "topic": "desired_temp_low",       // mqtt topic below "values/"
       "ha": true,                        // home assistant support for auto discovery
       "ha_component": "number",          // home assistant component type
       "ha_device_class": "temperature",  // home assistant device class
@@ -488,7 +453,40 @@ payload: - number
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"55","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","unit":"°C","active":true,"interval":60,"master":false,"position":1,"datatype":"DATA1C","divider":1,"min":15,"max":20,"digits":2,"topic":"desired_temp_low","ha":true,"ha_component":"number","ha_device_class":"temperature","ha_number_step":1,"ha_number_mode":"box"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"55","name":"desired_temp_low","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","unit":"°C","active":true,"interval":60,"master":false,"position":1,"datatype":"DATA1C","divider":1,"min":15,"max":20,"digits":2,"ha":true,"ha_component":"number","ha_device_class":"temperature","ha_number_step":1,"ha_number_mode":"box"}]}'
+```
+
+```
+payload: - select
+{
+  "id": "insert",
+  "commands": [
+    {
+      "key": "66",                       // unique key of command
+      "name": "operating_mode",          // mqtt topic below "values/"
+      "read_cmd": "50b509030d2b00",      // read command as vector of "ZZPBSBNNDBx"
+      "write_cmd": "50b509040e2b00",     // write command as vector of "ZZPBSBNNDBx"
+      "unit": "",                        // unit of the interested part
+      "active": true,                    // active sending of command
+      "interval": 60,                    // minimum interval between two commands in seconds
+      "master": false,                   // value of interest is in master or slave part
+      "position": 1,                     // starting position in the interested part
+      "datatype": "UINT8",               // ebus datatype
+      "ha": true,                        // home assistant support for auto discovery
+      "ha_component": "select",          // home assistant component type
+      "ha_device_class": "enum",         // home assistant device class
+      "ha_entity_category": "config",    // home assistant entity category
+      "ha_select_options": "On:1,Off:2,Auto:3,Eco:4,Night:5", // home assistant possible options
+      "ha_select_options_default": "Auto" // home assistant default option
+    },
+    {
+    ...
+    }
+  ]
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"66","name":"operating_mode","read_cmd":"50b509030d2b00","write_cmd":"50b509040e2b00","unit":"","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"select","ha_device_class":"enum","ha_entity_category":"config","ha_select_options":"On:1,Off:2,Auto:3,Eco:4,Night:5","ha_select_options_default":"Auto"}]}'
 ```
 
 **Removing installed commands**
