@@ -36,26 +36,35 @@ void Mqtt::setCredentials(const char* username, const char* password) {
   client.setCredentials(username, password);
 }
 
-// void Mqtt::setHASupport(const bool enable) { haSupport = enable; }
+void Mqtt::setEnabled(const bool enable) { enabled = enable; }
+
+const bool Mqtt::isEnabled() const { return enabled; }
 
 void Mqtt::connect() { client.connect(); }
 
 const bool Mqtt::connected() const { return client.connected(); }
 
+void Mqtt::disconnect() { client.disconnect(); }
+
 uint16_t Mqtt::publish(const char* topic, uint8_t qos, bool retain,
                        const char* payload, bool prefix) {
+  if (!enabled) return 0;
+
   std::string mqttTopic = prefix ? rootTopic + topic : topic;
   return client.publish(mqttTopic.c_str(), qos, retain, payload);
 }
 
 void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
+  if (!mqtt.enabled) return;
+
   mqtt.outgoingQueue.push(action);
 }
 
-#if defined(EBUS_INTERNAL)
 void Mqtt::publishData(const std::string& id,
                        const std::vector<uint8_t>& master,
                        const std::vector<uint8_t>& slave) {
+  if (!mqtt.enabled) return;
+
   std::string payload;
   JsonDocument doc;
   doc["id"] = id;
@@ -67,6 +76,8 @@ void Mqtt::publishData(const std::string& id,
 }
 
 void Mqtt::publishValue(const Command* command, const JsonDocument& doc) {
+  if (!mqtt.enabled) return;
+
   std::string payload;
   serializeJson(doc, payload);
 
@@ -83,7 +94,6 @@ void Mqtt::doLoop() {
   checkIncomingQueue();
   checkOutgoingQueue();
 }
-#endif
 
 uint16_t Mqtt::subscribe(const char* topic, uint8_t qos) {
   return client.subscribe(topic, qos);
@@ -132,7 +142,6 @@ void Mqtt::onMessage(const char* topic, const char* payload,
 
 void Mqtt::handleRestart(const JsonDocument& doc) { restart(); }
 
-#if defined(EBUS_INTERNAL)
 void Mqtt::handleInsert(const JsonDocument& doc) {
   JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
   if (!commands.isNull()) {
@@ -341,5 +350,4 @@ void Mqtt::publishParticipant(const Participant* participant) {
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 
-#endif
 #endif

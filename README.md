@@ -266,7 +266,8 @@ Available ebus data types:
 
 
 ## MQTT support
-By setting the MQTT server IP address / hostname, MQTT support is activated. At the configuration web page you can set
+MQTT support can be enabled globally on the configuration webpage. For a minimal configuration, at least the IP address or hostname of the MQTT server must be specified.
+At the configuration web page you can set
 - server IP address or hostname
 - user name
 - password

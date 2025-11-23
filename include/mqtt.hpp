@@ -70,15 +70,19 @@ class Mqtt {
   void setServer(const char* host, uint16_t port);
   void setCredentials(const char* username, const char* password = nullptr);
 
+  void setEnabled(const bool enable);
+  const bool isEnabled() const;
+
   void connect();
   const bool connected() const;
+
+  void disconnect();
 
   uint16_t publish(const char* topic, uint8_t qos, bool retain,
                    const char* payload = nullptr, bool prefix = true);
 
   static void enqueueOutgoing(const OutgoingAction& action);
 
-#if defined(EBUS_INTERNAL)
   static void publishData(const std::string& id,
                           const std::vector<uint8_t>& master,
                           const std::vector<uint8_t>& slave);
@@ -86,7 +90,6 @@ class Mqtt {
   static void publishValue(const Command* command, const JsonDocument& doc);
 
   void doLoop();
-#endif
 
  private:
   AsyncMqttClient client;
@@ -94,7 +97,8 @@ class Mqtt {
   std::string rootTopic;
   std::string topicWill;
 
-#if defined(EBUS_INTERNAL)
+  bool enabled = false;
+
   std::queue<IncomingAction> incomingQueue;
   uint32_t lastIncoming = 0;
   uint32_t incomingInterval = 200;  // ms
@@ -102,12 +106,10 @@ class Mqtt {
   std::queue<OutgoingAction> outgoingQueue;
   uint32_t lastOutgoing = 0;
   uint32_t outgoingInterval = 200;  // ms
-#endif
 
   // Command handlers map
   std::unordered_map<std::string, CommandHandler> commandHandlers = {
       {"restart", [this](const JsonDocument& doc) { handleRestart(doc); }},
-#if defined(EBUS_INTERNAL)
       {"insert", [this](const JsonDocument& doc) { handleInsert(doc); }},
       {"remove", [this](const JsonDocument& doc) { handleRemove(doc); }},
       {"publish", [this](const JsonDocument& doc) { handlePublish(doc); }},
@@ -127,7 +129,6 @@ class Mqtt {
 
       {"read", [this](const JsonDocument& doc) { handleRead(doc); }},
       {"write", [this](const JsonDocument& doc) { handleWrite(doc); }},
-#endif
   };
 
   uint16_t subscribe(const char* topic, uint8_t qos);
@@ -146,7 +147,6 @@ class Mqtt {
 
   // Command handlers
   static void handleRestart(const JsonDocument& doc);
-#if defined(EBUS_INTERNAL)
   void handleInsert(const JsonDocument& doc);
   void handleRemove(const JsonDocument& doc);
   static void handlePublish(const JsonDocument& doc);
@@ -175,8 +175,6 @@ class Mqtt {
   void publishCommand(const Command* command);
 
   void publishParticipant(const Participant* participant);
-
-#endif
 };
 
 extern Mqtt mqtt;
