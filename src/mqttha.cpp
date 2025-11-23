@@ -1,6 +1,7 @@
 #if defined(EBUS_INTERNAL)
 #include <mqttha.hpp>
 #include <sstream>
+#include <WiFi.h>
 
 MqttHA mqttha;
 
@@ -231,13 +232,15 @@ MqttHA::Component MqttHA::createDiagnostic(const std::string& component,
 }
 
 MqttHA::Component MqttHA::createDiagnosticUptime() const {
+  std::string url = "http://" + std::string(WiFi.localIP().toString().c_str()) + "/";
+
   Component c = createDiagnostic("sensor", "uptime", "Uptime");
   c.fields["state_topic"] = createStateTopic("state", "uptime");
   c.fields["value_template"] =
       "{{timedelta(seconds=((value|float)/1000)|int)}}";
 
   c.device["name"] = "esp-ebus";
-  c.device["manufacturer"] = "Daniel Kucera";
+  c.device["manufacturer"] = "danman.eu";
   // c.device["model"] = "";     // TODO(yuhu-): fill with thing data
   // c.device["model_id"] = "";  // TODO(yuhu-): fill with thing data
   c.device["serial_number"] = uniqueId;
