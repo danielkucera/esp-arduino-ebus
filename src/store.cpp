@@ -3,13 +3,187 @@
 
 #include <Preferences.h>
 
+const double getDoubleFromVector(const Command* command) {
+  double value = 0;
+
+  switch (command->datatype) {
+    case ebus::DataType::BCD:
+      value = ebus::byte_2_bcd(command->data);
+      break;
+    case ebus::DataType::UINT8:
+      value = ebus::byte_2_uint8(command->data);
+      break;
+    case ebus::DataType::INT8:
+      value = ebus::byte_2_int8(command->data);
+      break;
+    case ebus::DataType::UINT16:
+      value = ebus::byte_2_uint16(command->data);
+      break;
+    case ebus::DataType::INT16:
+      value = ebus::byte_2_int16(command->data);
+      break;
+    case ebus::DataType::UINT32:
+      value = ebus::byte_2_uint32(command->data);
+      break;
+    case ebus::DataType::INT32:
+      value = ebus::byte_2_int32(command->data);
+      break;
+    case ebus::DataType::DATA1B:
+      value = ebus::byte_2_data1b(command->data);
+      break;
+    case ebus::DataType::DATA1C:
+      value = ebus::byte_2_data1c(command->data);
+      break;
+    case ebus::DataType::DATA2B:
+      value = ebus::byte_2_data2b(command->data);
+      break;
+    case ebus::DataType::DATA2C:
+      value = ebus::byte_2_data2c(command->data);
+      break;
+    case ebus::DataType::FLOAT:
+      value = ebus::byte_2_float(command->data);
+      break;
+    default:
+      break;
+  }
+
+  value = value / command->divider;
+  value = ebus::round_digits(value, command->digits);
+
+  return value;
+}
+
+const std::vector<uint8_t> getVectorFromDouble(const Command* command,
+                                               double value) {
+  std::vector<uint8_t> result;
+  if (!command) return result;
+
+  value = value * command->divider;
+  value = ebus::round_digits(value, command->digits);
+
+  switch (command->datatype) {
+    case ebus::DataType::BCD:
+      result = ebus::bcd_2_byte(value);
+      break;
+    case ebus::DataType::UINT8:
+      result = ebus::uint8_2_byte(value);
+      break;
+    case ebus::DataType::INT8:
+      result = ebus::int8_2_byte(value);
+      break;
+    case ebus::DataType::UINT16:
+      result = ebus::uint16_2_byte(value);
+      break;
+    case ebus::DataType::INT16:
+      result = ebus::int16_2_byte(value);
+      break;
+    case ebus::DataType::UINT32:
+      result = ebus::uint32_2_byte(value);
+      break;
+    case ebus::DataType::INT32:
+      result = ebus::int32_2_byte(value);
+      break;
+    case ebus::DataType::DATA1B:
+      result = ebus::data1b_2_byte(value);
+      break;
+    case ebus::DataType::DATA1C:
+      result = ebus::data1c_2_byte(value);
+      break;
+    case ebus::DataType::DATA2B:
+      result = ebus::data2b_2_byte(value);
+      break;
+    case ebus::DataType::DATA2C:
+      result = ebus::data2c_2_byte(value);
+      break;
+    case ebus::DataType::FLOAT:
+      result = ebus::float_2_byte(value);
+      break;
+    default:
+      break;
+  }
+
+  return result;
+}
+
+const std::string getStringFromVector(const Command* command) {
+  std::string value;
+
+  switch (command->datatype) {
+    case ebus::DataType::CHAR1:
+    case ebus::DataType::CHAR2:
+    case ebus::DataType::CHAR3:
+    case ebus::DataType::CHAR4:
+    case ebus::DataType::CHAR5:
+    case ebus::DataType::CHAR6:
+    case ebus::DataType::CHAR7:
+    case ebus::DataType::CHAR8:
+      value = ebus::byte_2_char(command->data);
+      break;
+    case ebus::DataType::HEX1:
+    case ebus::DataType::HEX2:
+    case ebus::DataType::HEX3:
+    case ebus::DataType::HEX4:
+    case ebus::DataType::HEX5:
+    case ebus::DataType::HEX6:
+    case ebus::DataType::HEX7:
+    case ebus::DataType::HEX8:
+      value = ebus::byte_2_hex(command->data);
+      break;
+    default:
+      break;
+  }
+
+  return value;
+}
+
+const std::vector<uint8_t> getVectorFromString(const Command* command,
+                                               const std::string& value) {
+  std::vector<uint8_t> result;
+  if (!command) return result;
+
+  switch (command->datatype) {
+    case ebus::DataType::CHAR1:
+    case ebus::DataType::CHAR2:
+    case ebus::DataType::CHAR3:
+    case ebus::DataType::CHAR4:
+    case ebus::DataType::CHAR5:
+    case ebus::DataType::CHAR6:
+    case ebus::DataType::CHAR7:
+    case ebus::DataType::CHAR8:
+      result = ebus::char_2_byte(value.substr(0, command->length));
+      break;
+    case ebus::DataType::HEX1:
+    case ebus::DataType::HEX2:
+    case ebus::DataType::HEX3:
+    case ebus::DataType::HEX4:
+    case ebus::DataType::HEX5:
+    case ebus::DataType::HEX6:
+    case ebus::DataType::HEX7:
+    case ebus::DataType::HEX8:
+      result = ebus::hex_2_byte(value.substr(0, command->length));
+      break;
+    default:
+      break;
+  }
+  return result;
+}
+
 Store store;
 
 Command Store::createCommand(const JsonDocument& doc) {
   Command command;
   // TODO(yuhu-): check incoming data for completeness
+  // if (doc["key"].isNull() || doc["name"].isNull() || doc["read_cmd"].isNull()
+  // ||
+  //     doc["write_cmd"].isNull() || doc["unit"].isNull() ||
+  //     doc["active"].isNull() || doc["master"].isNull() ||
+  //     doc["position"].isNull() || doc["datatype"].isNull()) {
+  //   return command;  // return empty command on invalid data
+  // }
   command.key = doc["key"].as<std::string>();
-  command.command = ebus::to_vector(doc["command"].as<std::string>());
+  command.name = doc["name"].as<std::string>();
+  command.read_cmd = ebus::to_vector(doc["read_cmd"].as<std::string>());
+  command.write_cmd = ebus::to_vector(doc["write_cmd"].as<std::string>());
   command.unit = doc["unit"].as<std::string>();
   command.active = doc["active"].as<bool>();
   command.interval =
@@ -25,13 +199,48 @@ Command Store::createCommand(const JsonDocument& doc) {
       doc["divider"].isNull()
           ? 1
           : (doc["divider"].as<float>() > 0 ? doc["divider"].as<float>() : 1);
+  command.min = doc["min"].isNull() ? 1 : doc["min"].as<float>();
+  command.max = doc["max"].isNull() ? 100 : doc["max"].as<float>();
   command.digits = doc["digits"].isNull() ? 2 : doc["digits"].as<uint8_t>();
-  command.topic = doc["topic"].as<std::string>();
   command.ha = doc["ha"].isNull() ? false : doc["ha"].as<bool>();
-  command.ha_class =
-      command.ha
-          ? (doc["ha_class"].isNull() ? "" : doc["ha_class"].as<std::string>())
-          : "";
+
+  if (command.ha) {
+    command.ha_component =
+        (doc["ha_component"].isNull() ? "sensor"
+                                      : doc["ha_component"].as<std::string>());
+    command.ha_device_class = (doc["ha_device_class"].isNull()
+                                   ? ""
+                                   : doc["ha_device_class"].as<std::string>());
+    command.ha_entity_category =
+        (doc["ha_entity_category"].isNull()
+             ? ""
+             : doc["ha_entity_category"].as<std::string>());
+
+    command.ha_number_step = (doc["ha_number_step"].isNull()
+                                  ? 1
+                                  : (doc["ha_number_step"].as<float>() > 0
+                                         ? doc["ha_number_step"].as<float>()
+                                         : 1));
+    command.ha_number_mode = (doc["ha_number_mode"].isNull()
+                                  ? "auto"
+                                  : doc["ha_number_mode"].as<std::string>());
+    command.ha_select_options =
+        (doc["ha_select_options"].isNull()
+             ? ""
+             : doc["ha_select_options"].as<std::string>());
+    command.ha_select_options_default =
+        (doc["ha_select_options_default"].isNull()
+             ? ""
+             : doc["ha_select_options_default"].as<std::string>());
+  } else {
+    command.ha_component = "";
+    command.ha_device_class = "";
+    command.ha_entity_category = "";
+    command.ha_number_step = 1;
+    command.ha_number_mode = "";
+    command.ha_select_options = "";
+    command.ha_select_options_default = "";
+  }
 
   return command;
 }
@@ -66,7 +275,7 @@ void Store::insertCommand(const Command& command) {
   if (command.active)
     activeCommands.push_back(cmdPtr);
   else
-    passiveCommands[command.command] = cmdPtr;
+    passiveCommands[command.read_cmd] = cmdPtr;
 }
 
 void Store::removeCommand(const std::string& key) {
@@ -90,7 +299,7 @@ void Store::removeCommand(const std::string& key) {
   }
 }
 
-const Command* Store::findCommand(const std::string& key) {
+Command* Store::findCommand(const std::string& key) {
   std::unordered_map<std::string, Command>::iterator it =
       allCommandsByKey.find(key);
   if (it != allCommandsByKey.end())
@@ -125,9 +334,10 @@ int64_t Store::saveCommands() const {
   Preferences preferences;
   preferences.begin("commands", false);
 
-  int64_t bytes = strlen(serializeCommands().c_str());
+  std::string payload = serializeCommands();
+  int64_t bytes = payload.size();
   if (bytes > 2) {  // 2 = empty json array "[]"
-    bytes = preferences.putBytes("ebus", serializeCommands().c_str(), bytes);
+    bytes = preferences.putBytes("ebus", payload.data(), bytes);
     if (bytes == 0) bytes = -1;
   } else {
     bytes = 0;
@@ -154,7 +364,9 @@ JsonDocument Store::getCommandJson(const Command* command) {
   JsonDocument doc;
 
   doc["key"] = command->key;
-  doc["command"] = ebus::to_string(command->command);
+  doc["name"] = command->name;
+  doc["read_cmd"] = ebus::to_string(command->read_cmd);
+  doc["write_cmd"] = ebus::to_string(command->write_cmd);
   doc["unit"] = command->unit;
   doc["active"] = command->active;
   doc["interval"] = command->interval;
@@ -162,17 +374,23 @@ JsonDocument Store::getCommandJson(const Command* command) {
   doc["position"] = command->position;
   doc["datatype"] = ebus::datatype_2_string(command->datatype);
   doc["divider"] = command->divider;
+  doc["min"] = command->min;
+  doc["max"] = command->max;
   doc["digits"] = command->digits;
-  doc["topic"] = command->topic;
   doc["ha"] = command->ha;
-  doc["ha_class"] = command->ha_class;
+  doc["ha_component"] = command->ha_component;
+  doc["ha_device_class"] = command->ha_device_class;
+  doc["ha_entity_category"] = command->ha_entity_category;
+  doc["ha_number_step"] = command->ha_number_step;
+  doc["ha_number_mode"] = command->ha_number_mode;
+  doc["ha_select_options"] = command->ha_select_options;
+  doc["ha_select_options_default"] = command->ha_select_options_default;
 
   doc.shrinkToFit();
   return doc;
 }
 
-const std::string Store::getCommandsJson() const {
-  std::string payload;
+const JsonDocument Store::getCommandsJsonDocument() const {
   JsonDocument doc;
 
   if (!allCommandsByKey.empty()) {
@@ -183,8 +401,13 @@ const std::string Store::getCommandsJson() const {
   if (doc.isNull()) doc.to<JsonArray>();
 
   doc.shrinkToFit();
-  serializeJson(doc, payload);
+  return doc;
+}
 
+const std::string Store::getCommandsJson() const {
+  std::string payload;
+  JsonDocument doc = getCommandsJsonDocument();
+  serializeJson(doc, payload);
   return payload;
 }
 
@@ -271,12 +494,30 @@ JsonDocument Store::getValueJson(const Command* command) {
   JsonDocument doc;
 
   if (command->numeric)
-    doc["value"] = store.getValueDouble(command);
+    doc["value"] = getDoubleFromVector(command);
   else
-    doc["value"] = store.getValueString(command);
+    doc["value"] = getStringFromVector(command);
 
   doc.shrinkToFit();
   return doc;
+}
+
+const std::string Store::getValueFullJson(const Command* command) {
+  std::string payload;
+  JsonDocument doc;
+
+  doc["key"] = command->key;
+  if (command->numeric)
+    doc["value"] = getDoubleFromVector(command);
+  else
+    doc["value"] = getStringFromVector(command);
+  doc["unit"] = command->unit;
+  doc["name"] = command->name;
+  doc["age"] = static_cast<uint32_t>((millis() - command->last) / 1000);
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload;
 }
 
 const std::string Store::getValuesJson() const {
@@ -293,12 +534,12 @@ const std::string Store::getValuesJson() const {
       const Command& command = kv.second;
       JsonArray array = results[index][command.key].to<JsonArray>();
       if (command.numeric)
-        array.add(store.getValueDouble(&command));
+        array.add(getDoubleFromVector(&command));
       else
-        array.add(store.getValueString(&command));
+        array.add(getStringFromVector(&command));
 
       array.add(command.unit);
-      array.add(command.topic);
+      array.add(command.name);
       array.add(static_cast<uint32_t>((now - command.last) / 1000));
       index++;
     }
@@ -316,34 +557,64 @@ const std::string Store::serializeCommands() const {
   std::string payload;
   JsonDocument doc;
 
-  if (!allCommandsByKey.empty()) {
-    for (const std::pair<const std::string, Command>& kv : allCommandsByKey) {
-      const Command& command = kv.second;
-      JsonArray array = doc.add<JsonArray>();
+  // Define field names (order matters)
+  std::vector<std::string> fields = {"key",
+                                     "name",
+                                     "read_cmd",
+                                     "write_cmd",
+                                     "unit",
+                                     "active",
+                                     "interval",
+                                     "master",
+                                     "position",
+                                     "datatype",
+                                     "divider",
+                                     "min",
+                                     "max",
+                                     "digits",
+                                     "ha",
+                                     "ha_component",
+                                     "ha_device_class",
+                                     "ha_entity_category",
+                                     "ha_number_step",
+                                     "ha_number_mode",
+                                     "ha_select_options",
+                                     "ha_select_options_default"};
 
-      array.add(command.key);
-      array.add(ebus::to_string(command.command));
-      array.add(command.unit);
-      array.add(command.active);
-      array.add(command.interval);
-      array.add(command.master);
-      array.add(command.position);
-      array.add(ebus::datatype_2_string(command.datatype));
-      array.add(command.divider);
-      array.add(command.digits);
-      array.add(command.topic);
-      array.add(command.ha);
-      array.add(command.ha_class);
-    }
-  }
+  // Add header as first entry
+  JsonArray header = doc.add<JsonArray>();
+  for (const auto& field : fields) header.add(field);
 
-  if (doc.isNull()) {
-    doc.to<JsonArray>();
+  // Add each command as an array of values in the same order as header
+  for (const auto& kv : allCommandsByKey) {
+    const Command& command = kv.second;
+    JsonArray array = doc.add<JsonArray>();
+    array.add(command.key);
+    array.add(command.name);
+    array.add(ebus::to_string(command.read_cmd));
+    array.add(ebus::to_string(command.write_cmd));
+    array.add(command.unit);
+    array.add(command.active);
+    array.add(command.interval);
+    array.add(command.master);
+    array.add(command.position);
+    array.add(ebus::datatype_2_string(command.datatype));
+    array.add(command.divider);
+    array.add(command.min);
+    array.add(command.max);
+    array.add(command.digits);
+    array.add(command.ha);
+    array.add(command.ha_component);
+    array.add(command.ha_device_class);
+    array.add(command.ha_entity_category);
+    array.add(command.ha_number_step);
+    array.add(command.ha_number_mode);
+    array.add(command.ha_select_options);
+    array.add(command.ha_select_options_default);
   }
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
-
   return payload;
 }
 
@@ -353,106 +624,23 @@ void Store::deserializeCommands(const char* payload) {
 
   if (!error) {
     JsonArray array = doc.as<JsonArray>();
-    for (JsonVariant variant : array) {
+    if (array.size() < 2) return;  // Need at least header + one command
+
+    // Read header
+    JsonArray header = array[0];
+    std::vector<std::string> fields;
+    for (JsonVariant v : header) fields.push_back(v.as<std::string>());
+
+    // Read each command
+    for (size_t i = 1; i < array.size(); ++i) {
+      JsonArray values = array[i];
       JsonDocument tmpDoc;
-
-      tmpDoc["key"] = variant[0];
-      tmpDoc["command"] = variant[1];
-      tmpDoc["unit"] = variant[2];
-      tmpDoc["active"] = variant[3];
-      tmpDoc["interval"] = variant[4];
-      tmpDoc["master"] = variant[5];
-      tmpDoc["position"] = variant[6];
-      tmpDoc["datatype"] = variant[7];
-      tmpDoc["divider"] = variant[8];
-      tmpDoc["digits"] = variant[9];
-      tmpDoc["topic"] = variant[10];
-      tmpDoc["ha"] = variant[11];
-      tmpDoc["ha_class"] = variant[12];
-
+      for (size_t j = 0; j < fields.size() && j < values.size(); ++j) {
+        tmpDoc[fields[j]] = values[j];
+      }
       insertCommand(createCommand(tmpDoc));
     }
   }
 }
 
-const double Store::getValueDouble(const Command* command) {
-  double value = 0;
-
-  switch (command->datatype) {
-    case ebus::DataType::BCD:
-      value = ebus::byte_2_bcd(command->data);
-      break;
-    case ebus::DataType::UINT8:
-      value = ebus::byte_2_uint8(command->data);
-      break;
-    case ebus::DataType::INT8:
-      value = ebus::byte_2_int8(command->data);
-      break;
-    case ebus::DataType::UINT16:
-      value = ebus::byte_2_uint16(command->data);
-      break;
-    case ebus::DataType::INT16:
-      value = ebus::byte_2_int16(command->data);
-      break;
-    case ebus::DataType::UINT32:
-      value = ebus::byte_2_uint32(command->data);
-      break;
-    case ebus::DataType::INT32:
-      value = ebus::byte_2_int32(command->data);
-      break;
-    case ebus::DataType::DATA1B:
-      value = ebus::byte_2_data1b(command->data);
-      break;
-    case ebus::DataType::DATA1C:
-      value = ebus::byte_2_data1c(command->data);
-      break;
-    case ebus::DataType::DATA2B:
-      value = ebus::byte_2_data2b(command->data);
-      break;
-    case ebus::DataType::DATA2C:
-      value = ebus::byte_2_data2c(command->data);
-      break;
-    case ebus::DataType::FLOAT:
-      value = ebus::byte_2_float(command->data);
-      break;
-    default:
-      break;
-  }
-
-  value = value / command->divider;
-  value = ebus::round_digits(value, command->digits);
-
-  return value;
-}
-
-const std::string Store::getValueString(const Command* command) {
-  std::string value;
-
-  switch (command->datatype) {
-    case ebus::DataType::CHAR1:
-    case ebus::DataType::CHAR2:
-    case ebus::DataType::CHAR3:
-    case ebus::DataType::CHAR4:
-    case ebus::DataType::CHAR5:
-    case ebus::DataType::CHAR6:
-    case ebus::DataType::CHAR7:
-    case ebus::DataType::CHAR8:
-      value = ebus::byte_2_char(command->data);
-      break;
-    case ebus::DataType::HEX1:
-    case ebus::DataType::HEX2:
-    case ebus::DataType::HEX3:
-    case ebus::DataType::HEX4:
-    case ebus::DataType::HEX5:
-    case ebus::DataType::HEX6:
-    case ebus::DataType::HEX7:
-    case ebus::DataType::HEX8:
-      value = ebus::byte_2_hex(command->data);
-      break;
-    default:
-      break;
-  }
-
-  return value;
-}
 #endif

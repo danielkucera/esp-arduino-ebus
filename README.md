@@ -7,7 +7,7 @@
 - you should see at least one LED on the adapter shining (HW v3.0+) - if not, switch eBus wires
 - LED D1 blinking indicates activity on the bus. The adapter comes pre-adjusted but if D1 is still on or off, you need to re-adjust it:
   - by a configuration in web interface for v6.0 and newer:
-    - open http://esp-ebus.local/param to adjust PWM value
+    - open http://esp-ebus.local/config to adjust PWM value
     - the default value is 130, max is 255, min is 1
     - when D1 is still on, you need to lower the value
     - when D1 is still off, you need to raise the value
@@ -207,6 +207,64 @@ You will need an USB-TTL adaptor (dongle) which suports 3V3 voltage levels and h
 - if that doesn't work, connect also TP1 to 3V3 and try again (see Issue #27)
 
 
+# Firmware marked with INTERNAL
+Firmware marked with `INTERNAL` is an alternative firmware that enables the device to operate as an independent eBUS device without external control software such as ebusd. In order to be able to evaluate passively received or actively sent commands, these must be installed in the internal command store. The results of the evaluated messages are also stored in the internal store or are actively sent via MQTT or can be retrieved via HTTP.
+
+Key facts:
+- Read and write access via port 3333, 3334 and port 3335 (ebusd enhanced protocol) is supported.
+- Status queries via port 5555 is supported.
+- Internal command store for active and passive commands.
+- Installing commands via MQTT or HTTP upload.
+- Installed commands can be stored in NVS memory and are automatically loaded on restart.
+- Received or sent messages are evaluated and the results are published to MQTT.
+- Sending of non-installed commands is supported via MQTT.
+- Scanning of eBUS devices is supported.
+- Automatic scan of eBUS devices at startup.
+- Pattern-recognized messages can be forwarded via MQTT.
+- Reading the value of a stored command via MQTT.
+- Writing a value using a stored command via MQTT.
+- Home Assistant auto discovery is available for some types.
+
+## Structure of the internal command store
+For an example of how to install a command via MQTT, see `Inserting (Installing) of new commands`.
+
+```
+struct Command {
+  std::string key;                       // unique key of command
+  std::string name;                      // name of the command used as mqtt topic below "values/"
+  std::vector<uint8_t> read_cmd;         // read command as vector of "ZZPBSBNNDBx"
+  std::vector<uint8_t> write_cmd;        // write command as vector of "ZZPBSBNNDBx" (OPTIONAL, default: empty)
+  std::string unit;                      // unit of the interested part
+  bool active;                           // active sending of command
+  uint32_t interval;                     // minimum interval between two commands in seconds (OPTIONAL, default: 60)
+  uint32_t last;                         // last time of the successful command (INTERNAL)
+  std::vector<uint8_t> data;             // received raw data (INTERNAL)
+  bool master;                           // value of interest is in master or slave part
+  size_t position;                       // starting position in the interested part
+  ebus::DataType datatype;               // ebus data type
+  size_t length;                         // length of interested part (INTERNAL)
+  bool numeric;                          // indicate numeric types (INTERNAL)
+  float divider;                         // divider for value conversion (OPTIONAL, default: 1)
+  float min;                             // minimum value (OPTIONAL, default: 1)
+  float max;                             // maximum value (OPTIONAL, default: 100)
+  uint8_t digits;                        // decimal digits of value (OPTIONAL, default: 2)
+  bool ha;                               // home assistant support for auto discovery (OPTIONAL, default: false)
+  std::string ha_component;              // home assistant component type (sensor, number) (OPTIONAL, default: sensor) 
+  std::string ha_device_class;           // home assistant device class (OPTIONAL, default: empty)
+  std::string ha_entity_category;        // home assistant entity category (OPTIONAL, default: empty)
+  float ha_number_step;                  // home assistant step value  (OPTIONAL, default: 1)
+  std::string ha_number_mode;            // home assistant mode (slider, box) (OPTIONAL, default: auto)
+  std::string ha_select_options;         // home assistant select options (OPTIONAL, default: empty)
+                                         // key:value,... e.g. "On:1,Off:2,Auto:3,Eco:4,Night:5"
+  std::string ha_select_options_default; // home assistant select default option (OPTIONAL, default: first option)
+};
+```
+
+Available ebus data types: 
+- numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (IEEE 754)
+- character: CHAR1 - CHAR8, HEX1 - HEX8
+
+
 ## MQTT support
 By setting the MQTT server IP address / hostname, MQTT support is activated. At the configuration web page you can set
 - server IP address or hostname
@@ -228,6 +286,16 @@ The following sub topics are available on any device and are published regularly
 |state/uptime                   |uptime since last reboot in milliseconds 
 |state/free_heap                |free heap of the device in bytes
 |state/loop_duration            |duration of main loop in milliseconds
+|***counters***                 |
+|state/addresses                |collected ebus addresses
+|state/errors                   |errors of finite state machine  
+|state/messages                 |processed messages
+|state/requests                 |bus requests (arbitration)
+|state/resets                   |resets of finite state machine (passive, reactive, active)
+|***timings***                  |
+|state/timings                  |time required by internal routines / states
+|***values***                   |
+|values/...                     |received values of installed commands
 
 ### Details of MQTT commands
 The MQTT command interface is divided into two topics for bidirectional communication.
@@ -244,118 +312,7 @@ The MQTT command interface is divided into two topics for bidirectional communic
 Available MQTT commands.
 |***command***                  |***description***                                              
 |:-                             |:-                                                            
-|restart                        |Restarting of the device                                      
-
-
-### Home Assistant Support
-Home Assistant support can be globally activated on the configuration web page.
-- Once Home Assistant support is activated there will be the followed MQTT topics created under **homeassistant**.
-- A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
-
-**MQTT Device - Diagnostic - Uptime of device (DD HH:MM:SS)**
-```
-topic: homeassistant/sensor/ebus8406ac/uptime/config
-payload:
-{
-  "name": "Uptime",
-  "entity_category": "diagnostic",
-  "unique_id": "ebus8406ac_uptime",
-  "state_topic": "ebus/8406ac/state/uptime",
-  "value_template": "{{timedelta(seconds=((value|float)/1000)|int)}}",
-  "device": {
-    "identifiers": "ebus8406ac",
-    "name": "esp-ebus",
-    "manufacturer": "",
-    "model": "",
-    "model_id": "",
-    "serial_number": "8406ac",
-    "hw_version": "",
-    "sw_version": "",
-    "configuration_url": "http://esp-ebus.local"
-  }
-}
-```
-
-**MQTT Device - Configuration - Restart button**
-```
-topic: homeassistant/button/ebus8406ac/restart/config
-payload:
-{
-  "name": "Restart",
-  "device_class": "restart",
-  "entity_category": "config",
-  "unique_id": "ebus8406ac_restart",
-  "availability_topic": "ebus/8406ac/state/available",
-  "command_topic": "ebus/8406ac/request",
-  "payload_press": "{\"id\":\"restart\",\"value\":true}",
-  "qos": 0,
-  "retain": false,
-  "device": {
-    "identifiers": "ebus8406ac"
-  }
-}
-``` 
-
-# Firmware marked with INTERNAL
-Firmware marked with `INTERNAL` is an alternative firmware that enables the device to operate as an independent eBUS device without external control software such as ebusd. In order to be able to evaluate passively received or actively sent commands, these must be installed in the internal command store. The results of the evaluated messages are also stored in the internal store or are actively sent via MQTT or can be retrieved via HTTP.
-
-Key facts:
-- Read and write access via port 3333, 3334 and port 3335 (ebusd enhanced protocol) is supported.
-- Status queries via port 5555 is supported.
-- Internal command store for active and passive commands.
-- Installing commands via MQTT or HTTP upload.
-- Installed commands can be stored in NVS memory and are automatically loaded on restart.
-- Received or sent messages are evaluated and the results are published to MQTT.
-- Sending of non-installed commands is supported via MQTT.
-- Scanning of eBUS devices is supported.
-- Automatic scan of eBUS devices at startup.
-- Pattern-recognized messages can be forwarded via MQTT.
-
-## Structure of the internal command store
-For an example of how to install a command via MQTT, see `Inserting (Installing) of new commands`.
-
-```
-struct Command {
-  std::string key;               // unique key of command
-  std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
-  std::string unit;              // unit of the interested part
-  bool active;                   // active sending of command
-  uint32_t interval;             // minimum interval between two commands in seconds
-  uint32_t last;                 // last time of the successful command (INTERNAL)
-  std::vector<uint8_t> data;     // received raw data (INTERNAL)
-  bool master;                   // value of interest is in master or slave part
-  size_t position;               // starting position in the interested part
-  ebus::DataType datatype;       // ebus data type
-  size_t length;                 // length of interested part (INTERNAL)
-  bool numeric;                  // indicate numeric types (INTERNAL)
-  float divider;                 // divider for value conversion
-  uint8_t digits;                // deciaml digits of value
-  std::string topic;             // mqtt topic below "values/"
-  bool ha;                       // home assistant support for auto discovery
-  std::string ha_class;          // home assistant device_class
-};
-```
-
-Available ebus data types: 
-- numeric: BCD, UINT8, INT8, DATA1B, DATA1C, UINT16, INT16, DATA2B, DATA2C, UINT32, INT32, FLOAT (IEEE 754)
-- character: CHAR1 - CHAR8, HEX1 - HEX8
-
-### MQTT interface with `INTERNAL` firmware
-
-The following sub topics are available and are published regularly.
-|***topic***                    |***description***
-|:-                             |:-
-|values/...                     |received values of installed commands
-|state/addresses                |collected ebus addresses
-|state/errors                   |errors of finite state machine  
-|state/messages                 |processed messages
-|state/requests                 |bus requests (arbitration)
-|state/resets                   |resets of finite state machine (passive, reactive, active)
-|state/timings                  |time required by internal routines / states
-
-Available MQTT commands
-|***command***                  |***description***                                                  
-|:-                             |:-                                                                                         
+|restart                        |Restarting of the device
 |insert                         |Inserting (Installing) of new commands                        
 |remove                         |Removing installed commands                                   
 |publish                        |Publishing installed commands                                 
@@ -366,10 +323,32 @@ Available MQTT commands
 |participants                   |Publishing scanned ebus participants                          
 |send                           |Sending ebus commands once                                    
 |forward                        |Activate/deactivate data forwarding (including filtering)     
-|reset                          |Resetting counter and timing values                           
+|reset                          |Resetting counter and timing values
+|read                           |Reading the value of a stored command
+|write                          |Writing a value using a stored command     
 
 
-### Home Assistant Support with `INTERNAL` firmware
+## HTTP endpoints
+Most of the listed MQTT commands are also available via the web interface http://esp-ebus.local.
+
+The following endpoints are not listed on the main page:
+- http://esp-ebus.local/api/v1/GetStatus
+- http://esp-ebus.local/api/v1/GetCounter
+- http://esp-ebus.local/api/v1/GetTiming
+
+
+## Home Assistant Support
+Home Assistant support can be globally activated on the configuration web page.
+- Once Home Assistant support is activated there will be the followed MQTT topics created under **homeassistant**.
+- A running Home Assistant instance should create new entities in Home Assistant if MQTT autodiscovery is enabled.
+
+**The following entries should be displayed below MQTT Device**
+- Diagnostic - Uptime of device (DD HH:MM:SS)
+- Diagnostic - Free Heap
+- Diagnostic - Loop Duration
+- Configuration - Restart button
+
+
 **MQTT Device - Sensors**
 - When a command is loaded with **ha** (true), an MQTT topic is automatically created under **homeassistant**. 
 - A running Home Assistant instance should create a new entity in Home Assistant if MQTT autodiscovery is enabled. 
@@ -411,13 +390,14 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart"}'
 
 **Inserting (Installing) of new commands**
 ```
-payload:
+payload: - sensor
 {
   "id": "insert",
   "commands": [
     {
       "key": "01",                       // unique key of command
-      "command": "fe070009",             // ebus command as vector of "ZZPBSBNNDBx"
+      "name": "outdoor/temperature",     // mqtt topic below "values/"
+      "read_cmd": "fe070009",            // read command as vector of "ZZPBSBNNDBx"
       "unit": "°C",                      // unit of the interested part
       "active": false,                   // active sending of command
       "interval": 0,                     // minimum interval between two commands in seconds
@@ -426,9 +406,9 @@ payload:
       "datatype": "DATA2B",              // ebus datatype
       "divider": 1,                      // divider for value conversion
       "digits": 2,                       // deciaml digits of value
-      "topic": "outdoor_temperature",    // mqtt topic below "values/"
       "ha": true,                        // home assistant support for auto discovery
-      "ha_class": "temperature"          // home assistant device_class
+      "ha_component": "sensor",          // home assistant component type
+      "ha_device_class": "temperature"   // home assistant device class
     },
     {
     ...
@@ -437,7 +417,76 @@ payload:
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","command":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_class":"temperature"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","read_cmd":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_component":"sensor","ha_device_class":"temperature"}]}'
+```
+
+```
+payload: - number
+{
+  "id": "insert",
+  "commands": [
+    {
+      "key": "55",                       // unique key of command
+      "name": "desired_temp_low",        // mqtt topic below "values/"
+      "read_cmd": "50b509030d3300",      // read command as vector of "ZZPBSBNNDBx"
+      "write_cmd": "50b509040e3300",     // write command as vector of "ZZPBSBNNDBx"
+      "unit": "°C",                      // unit of the interested part
+      "active": true,                    // active sending of command
+      "interval": 60,                    // minimum interval between two commands in seconds
+      "master": false,                   // value of interest is in master or slave part
+      "position": 1,                     // starting position in the interested part
+      "datatype": "DATA1C",              // ebus datatype
+      "divider": 1,                      // divider for value conversion
+      "min": 15,                         // minimum value
+      "max": 20,                         // maximum value
+      "digits": 2,                       // deciaml digits of value
+      "ha": true,                        // home assistant support for auto discovery
+      "ha_component": "number",          // home assistant component type
+      "ha_device_class": "temperature",  // home assistant device class
+      "ha_number_step": 1,               // home assistant step value
+      "ha_number_mode": "box"            // home assistant mode
+    },
+    {
+    ...
+    }
+  ]
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"55","name":"desired_temp_low","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","unit":"°C","active":true,"interval":60,"master":false,"position":1,"datatype":"DATA1C","divider":1,"min":15,"max":20,"digits":2,"ha":true,"ha_component":"number","ha_device_class":"temperature","ha_number_step":1,"ha_number_mode":"box"}]}'
+```
+
+```
+payload: - select
+{
+  "id": "insert",
+  "commands": [
+    {
+      "key": "66",                       // unique key of command
+      "name": "operating_mode",          // mqtt topic below "values/"
+      "read_cmd": "50b509030d2b00",      // read command as vector of "ZZPBSBNNDBx"
+      "write_cmd": "50b509040e2b00",     // write command as vector of "ZZPBSBNNDBx"
+      "unit": "",                        // unit of the interested part
+      "active": true,                    // active sending of command
+      "interval": 60,                    // minimum interval between two commands in seconds
+      "master": false,                   // value of interest is in master or slave part
+      "position": 1,                     // starting position in the interested part
+      "datatype": "UINT8",               // ebus datatype
+      "ha": true,                        // home assistant support for auto discovery
+      "ha_component": "select",          // home assistant component type
+      "ha_device_class": "enum",         // home assistant device class
+      "ha_entity_category": "config",    // home assistant entity category
+      "ha_select_options": "On:1,Off:2,Auto:3,Eco:4,Night:5", // home assistant possible options
+      "ha_select_options_default": "Auto" // home assistant default option
+    },
+    {
+    ...
+    }
+  ]
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"66","name":"operating_mode","read_cmd":"50b509030d2b00","write_cmd":"50b509040e2b00","unit":"","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"select","ha_device_class":"enum","ha_entity_category":"config","ha_select_options":"On:1,Off:2,Auto:3,Eco:4,Night:5","ha_select_options_default":"Auto"}]}'
 ```
 
 **Removing installed commands**
@@ -445,14 +494,14 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[
 payload:
 {
   "id": "remove",
-  "keys": [
+  "keys": [                              // optional
     "UNIQUE_KEY",
     ...
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01"]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"remove","keys":["01","02"]}'
 ```
 
 **Publishing installed commands**
@@ -570,4 +619,29 @@ payload:
 ```
 ```
 mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"reset"}' 
+```
+
+**Reading the value of a stored command**
+```
+payload:
+{
+  "id": "read",
+  "key": "01"
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"read","key":"01"}' 
+```
+
+**Writing a value using a stored command**
+```
+payload:
+{
+  "id": "write",
+  "key": "01",
+  "value": 1.25                          // character types within quotation marks 
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"write","key":"01","value":1.25}' 
 ```

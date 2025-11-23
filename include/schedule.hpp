@@ -46,17 +46,22 @@ class Schedule {
   void start(ebus::Request* request, ebus::Handler* handler);
   void stop();
 
+  void setSendInquiryOfExistence(const bool enable);
+  void setScanOnStartup(const bool enable);
   void setDistance(const uint8_t distance);
 
   void handleScanFull();
   void handleScan();
-  void handleScanAddresses(const JsonArray& addresses);
+  void handleScanAddresses(const JsonArrayConst& addresses);
   void handleScanVendor();
 
-  void handleSend(const JsonArray& commands);
+  void handleSend(const std::vector<uint8_t>& command);
+  void handleSend(const JsonArrayConst& commands);
+
+  void handleWrite(const std::vector<uint8_t>& command);
 
   void toggleForward(const bool enable);
-  void handleForwardFilter(const JsonArray& filters);
+  void handleForwardFilter(const JsonArrayConst& filters);
 
   void setPublishCounter(const bool enable);
   void resetCounter();
@@ -79,17 +84,37 @@ class Schedule {
 
   volatile bool stopRunner = false;
 
-  bool sendInquiryOfExistence = true;
+  bool sendInquiryOfExistence = false;
+  bool scanOnStartup = false;
 
-  enum class Mode { scan, send, normal };
-  Mode mode = Mode::normal;
+  enum class Mode { schedule, internal, scan, fullscan, send, read, write };
+  Mode mode = Mode::schedule;
+
+  struct QueuedCommand {
+    Mode mode;
+    uint8_t priority;    // higher = higher priority
+    uint32_t timestamp;  // millis() when enqueued older = higher priority
+    std::vector<uint8_t> command;
+    Command* scheduleCommand = nullptr;
+
+    QueuedCommand(Mode m, uint8_t p, std::vector<uint8_t> cmd, Command* active)
+        : mode(m),
+          priority(p),
+          timestamp(millis()),
+          command(cmd),
+          scheduleCommand(active) {}
+  };
+
+  std::vector<QueuedCommand> queuedCommands;
 
   Command* scheduleCommand = nullptr;
+  uint32_t scheduleCommandSetTime = 0;  // time when command was scheduled
+  uint32_t scheduleCommandTimeout = 2 * 1000;  // 2 seconds after schedule
 
   uint32_t distanceCommands = 0;     // in milliseconds
   uint32_t lastCommand = 10 * 1000;  // 10 seconds after start
 
-  uint32_t distanceScans = 11 * 1000;  // 11 seconds after start
+  uint32_t distanceScans = 10 * 1000;  // 10 seconds after start
   uint32_t lastScan = 0;               // in milliseconds
   uint8_t maxScans = 5;                // maximum number of scans
   uint8_t currentScan = 0;             // current scan count
@@ -98,9 +123,6 @@ class Schedule {
   uint8_t scanIndex = 0;
 
   std::map<uint8_t, Participant> allParticipants;
-
-  std::deque<std::vector<uint8_t>> scanCommands;
-  std::deque<std::vector<uint8_t>> sendCommands;
 
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;
@@ -130,9 +152,15 @@ class Schedule {
 
   void handleEvents();
 
-  void nextCommand();
+  void handleCommands();
 
-  void nextScanCommand();
+  void enqueueCommand(const QueuedCommand& cmd);
+
+  void enqueueStartupScanCommands();
+
+  void enqueueScheduleCommand();
+
+  void enqueueFullScanCommand();
 
   static void reactiveMasterSlaveCallback(const std::vector<uint8_t>& master,
                                           std::vector<uint8_t>* const slave);

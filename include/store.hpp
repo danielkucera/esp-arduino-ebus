@@ -25,25 +25,45 @@ struct VectorHash {
   }
 };
 
+// clang-format off
 struct Command {
-  std::string key;               // unique key of command
-  std::vector<uint8_t> command;  // ebus command as vector of "ZZPBSBNNDBx"
-  std::string unit;              // unit of the interested part
-  bool active;                   // active sending of command
-  uint32_t interval;  // minimum interval between two commands in seconds
-  uint32_t last;      // last time of the successful command (INTERNAL)
-  std::vector<uint8_t> data;  // received raw data (INTERNAL)
-  bool master;                // value of interest is in master or slave part
-  size_t position;            // starting position in the interested part
-  ebus::DataType datatype;    // ebus data type
-  size_t length;              // length of interested part (INTERNAL)
-  bool numeric;               // indicate numeric types (INTERNAL)
-  float divider;              // divider for value conversion
-  uint8_t digits;             // deciaml digits of value
-  std::string topic;          // mqtt topic below "values/"
-  bool ha;                    // home assistant support for auto discovery
-  std::string ha_class;       // home assistant device_class
+  std::string key;                       // unique key of command
+  std::string name;                      // name of the command used as mqtt topic below "values/"
+  std::vector<uint8_t> read_cmd;         // read command as vector of "ZZPBSBNNDBx"
+  std::vector<uint8_t> write_cmd;        // write command as vector of "ZZPBSBNNDBx" (OPTIONAL, default: empty)
+  std::string unit;                      // unit of the interested part
+  bool active;                           // active sending of command
+  uint32_t interval;                     // minimum interval between two commands in seconds (OPTIONAL, default: 60)
+  uint32_t last;                         // last time of the successful command (INTERNAL)
+  std::vector<uint8_t> data;             // received raw data (INTERNAL)
+  bool master;                           // value of interest is in master or slave part
+  size_t position;                       // starting position in the interested part
+  ebus::DataType datatype;               // ebus data type
+  size_t length;                         // length of interested part (INTERNAL)
+  bool numeric;                          // indicate numeric types (INTERNAL)
+  float divider;                         // divider for value conversion (OPTIONAL, default: 1)
+  float min;                             // minimum value (OPTIONAL, default: 1)
+  float max;                             // maximum value (OPTIONAL, default: 100)
+  uint8_t digits;                        // decimal digits of value (OPTIONAL, default: 2)
+  bool ha;                               // home assistant support for auto discovery (OPTIONAL, default: false)
+  std::string ha_component;              // home assistant component type (sensor, number) (OPTIONAL, default: sensor) 
+  std::string ha_device_class;           // home assistant device class (OPTIONAL, default: empty)
+  std::string ha_entity_category;        // home assistant entity category (OPTIONAL, default: empty)
+  float ha_number_step;                  // home assistant step value  (OPTIONAL, default: 1)
+  std::string ha_number_mode;            // home assistant mode (slider, box) (OPTIONAL, default: auto)
+  std::string ha_select_options;         // home assistant select options (OPTIONAL, default: empty)
+                                         // key:value,... e.g. "On:1,Off:2,Auto:3,Eco:4,Night:5"
+  std::string ha_select_options_default; // home assistant select default option (OPTIONAL, default: first option)
 };
+// clang-format on
+
+const double getDoubleFromVector(const Command* command);
+const std::vector<uint8_t> getVectorFromDouble(const Command* command,
+                                               double value);
+
+const std::string getStringFromVector(const Command* command);
+const std::vector<uint8_t> getVectorFromString(const Command* command,
+                                               const std::string& value);
 
 class Store {
  public:
@@ -51,13 +71,14 @@ class Store {
 
   void insertCommand(const Command& command);
   void removeCommand(const std::string& key);
-  const Command* findCommand(const std::string& key);
+  Command* findCommand(const std::string& key);
 
   int64_t loadCommands();
   int64_t saveCommands() const;
   static int64_t wipeCommands();
 
   static JsonDocument getCommandJson(const Command* command);
+  const JsonDocument getCommandsJsonDocument() const;
   const std::string getCommandsJson() const;
 
   const std::vector<Command*> getCommands();
@@ -75,6 +96,7 @@ class Store {
                                    const std::vector<uint8_t>& slave);
 
   static JsonDocument getValueJson(const Command* command);
+  static const std::string getValueFullJson(const Command* command);
   const std::string getValuesJson() const;
 
  private:
@@ -86,11 +108,9 @@ class Store {
   // For active commands, just keep a vector of pointers
   std::vector<Command*> activeCommands;
 
+  // Flexible serialization/deserialization
   const std::string serializeCommands() const;
   void deserializeCommands(const char* payload);
-
-  static const double getValueDouble(const Command* command);
-  static const std::string getValueString(const Command* command);
 };
 
 extern Store store;

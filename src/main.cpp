@@ -8,15 +8,16 @@
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
 
+#include "mqtt.hpp"
+#include "mqttha.hpp"
 #include "schedule.hpp"
+#include "track.hpp"
 #else
 #include "bus.hpp"
 #endif
 
 #include "client.hpp"
 #include "http.hpp"
-#include "mqtt.hpp"
-#include "track.hpp"
 
 #if defined(ESP32)
 #include <ESPmDNS.h>
@@ -89,10 +90,12 @@ static char ebus_address_values[][NUMBER_LEN] = {
     "00", "10", "30", "70", "f0", "01", "11", "31", "71",
     "f1", "03", "13", "33", "73", "f3", "07", "17", "37",
     "77", "f7", "0f", "1f", "3f", "7f", "ff"};
-
-char command_distance[NUMBER_LEN];
 char busisr_window[NUMBER_LEN];
 char busisr_offset[NUMBER_LEN];
+
+char inquiryOfExistenceValue[STRING_LEN];
+char scanOnStartupValue[STRING_LEN];
+char command_distance[NUMBER_LEN];
 #endif
 
 char mqtt_server[STRING_LEN];
@@ -130,16 +133,26 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     reinterpret_cast<char*>(ebus_address_values),
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
-iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
-    "Command distance (seconds)", "command_distance", command_distance,
-    NUMBER_LEN, "2", "1..60", "min='1' max='60' step='1'");
 iotwebconf::NumberParameter busIsrWindowParam = iotwebconf::NumberParameter(
     "Bus ISR window (micro seconds)", "busisr_window", busisr_window,
     NUMBER_LEN, "4300", "4250..4500", "min='4250' max='4500' step='1'");
 iotwebconf::NumberParameter busIsrOffsetParam = iotwebconf::NumberParameter(
     "Bus ISR offset (micro seconds)", "busisr_offset", busisr_offset,
     NUMBER_LEN, "80", "0..200", "min='0' max='200' step='1'");
-#endif
+
+iotwebconf::ParameterGroup scheduleGroup =
+    iotwebconf::ParameterGroup("schedule", "Schedule configuration");
+iotwebconf::CheckboxParameter inquiryOfExistenceParam =
+    iotwebconf::CheckboxParameter("Send an inquiry of existence command",
+                                  "inquiryOfExistenceParam",
+                                  inquiryOfExistenceValue, STRING_LEN);
+iotwebconf::CheckboxParameter scanOnStartupParam =
+    iotwebconf::CheckboxParameter("Scan for eBUS participants on startup",
+                                  "scanOnStartupParam", scanOnStartupValue,
+                                  STRING_LEN);
+iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
+    "Command distance (seconds)", "command_distance", command_distance,
+    NUMBER_LEN, "2", "1..60", "min='1' max='60' step='1'");
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
@@ -151,7 +164,6 @@ iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
 iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
     "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", DUMMY_MQTT_PASS);
 
-#if defined(EBUS_INTERNAL)
 iotwebconf::CheckboxParameter mqttPublishCounterParam =
     iotwebconf::CheckboxParameter("Publish Counter to MQTT",
                                   "mqttPublishCounterParam",
@@ -160,12 +172,12 @@ iotwebconf::CheckboxParameter mqttPublishTimingParam =
     iotwebconf::CheckboxParameter("Publish Timing to MQTT",
                                   "mqttPublishTimingParam",
                                   mqttPublishTimingValue, STRING_LEN);
-#endif
 
 iotwebconf::ParameterGroup haGroup =
     iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
 iotwebconf::CheckboxParameter haSupportParam = iotwebconf::CheckboxParameter(
     "Home Assistant support", "haSupportParam", haSupportValue, STRING_LEN);
+#endif
 
 IPAddress ipAddress;
 IPAddress gateway;
@@ -188,15 +200,22 @@ volatile uint32_t last_comms = 0;
 
 // status
 uint32_t reset_code = 0;
+#if defined(EBUS_INTERNAL)
 Track<uint32_t> uptime("state/uptime", 10);
-Track<uint32_t> loopDuration("state/loop_duration", 10);
-uint32_t maxLoopDuration;
 Track<uint32_t> free_heap("state/free_heap", 10);
+Track<uint32_t> loopDuration("state/loop_duration", 10);
+#else
+uint32_t uptime = 0;
+uint32_t free_heap = 0;
+uint32_t loopDuration = 0;
+#endif
+uint32_t maxLoopDuration;
 
 // wifi
 uint32_t last_connect = 0;
 int reconnect_count = 0;
 
+#if defined(EBUS_INTERNAL)
 // mqtt
 bool needMqttConnect = false;
 int mqtt_reconnect_count = 0;
@@ -217,11 +236,14 @@ bool connectMqtt() {
 
   return true;
 }
+#endif
 
 void wifiConnected() {
   last_connect = millis();
   ++reconnect_count;
+#if defined(EBUS_INTERNAL)
   needMqttConnect = true;
+#endif
 }
 
 void wdt_start() {
@@ -312,7 +334,11 @@ void loop_duration() {
 
   lastTime = now;
 
+#if defined(EBUS_INTERNAL)
   loopDuration = ((1 - alpha) * loopDuration.value() + (alpha * delta));
+#else
+  loopDuration = ((1 - alpha) * loopDuration + (alpha * delta));
+#endif
 
   if (delta > maxLoopDuration) {
     maxLoopDuration = delta;
@@ -381,7 +407,7 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
       valid = false;
     }
   }
-
+#if defined(EBUS_INTERNAL)
   if (webRequestWrapper->arg(mqttServerParam.getId()).length() >
       STRING_LEN - 1) {
     String tmp = "max. ";
@@ -390,6 +416,7 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
     mqttServerParam.errorMessage = tmp.c_str();
     valid = false;
   }
+#endif
 
   return valid;
 }
@@ -401,21 +428,23 @@ void saveParamsCallback() {
 #if defined(EBUS_INTERNAL)
   ebus::handler->setSourceAddress(
       uint8_t(std::strtoul(ebus_address, nullptr, 16)));
-  schedule.setDistance(atoi(command_distance));
   ebus::setBusIsrWindow(atoi(busisr_window));
   ebus::setBusIsrOffset(atoi(busisr_offset));
-#endif
+
+  schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
+  schedule.setScanOnStartup(scanOnStartupParam.isChecked());
+  schedule.setDistance(atoi(command_distance));
 
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
 
-#if defined(EBUS_INTERNAL)
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
-#endif
 
-  mqtt.setHASupport(haSupportParam.isChecked());
-  mqtt.publishHA();
+  mqttha.setEnabled(haSupportParam.isChecked());
+  mqttha.publishDeviceInfo();
+  mqttha.publishComponents();
+#endif
 }
 
 void connectWifi(const char* ssid, const char* password) {
@@ -457,12 +486,23 @@ char* status_string() {
                   reconnect_count);
   pos +=
       snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
+#if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n",
                   free_heap.value());
+#else
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n", free_heap);
+#endif
   pos +=
       snprintf(status + pos, bufferSize - pos, "reset_code: %u\n", reset_code);
+
+#if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
                   loopDuration.value());
+#else
+  pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
+                  loopDuration);
+#endif
   pos += snprintf(status + pos, bufferSize - pos,
                   "max_loop_duration: %u us\r\n", maxLoopDuration);
   pos +=
@@ -474,17 +514,22 @@ char* status_string() {
 #if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
                   ebus_address);
-  pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
-                  atoi(command_distance));
   pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %i us\r\n",
                   atoi(busisr_window));
   pos += snprintf(status + pos, bufferSize - pos, "busisr_offset: %i us\r\n",
                   atoi(busisr_offset));
+
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "inquiry_of_existence: %s\r\n",
+               inquiryOfExistenceParam.isChecked() ? "true" : "false");
+  pos += snprintf(status + pos, bufferSize - pos, "scan_on_startup: %s\r\n",
+                  scanOnStartupParam.isChecked() ? "true" : "false");
+  pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
+                  atoi(command_distance));
   pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
                   store.getPassiveCommands());
-#endif
 
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.connected() ? "true" : "false");
@@ -494,17 +539,15 @@ char* status_string() {
                   mqtt_server);
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_user: %s\r\n", mqtt_user);
-
-#if defined(EBUS_INTERNAL)
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_publish_counter: %s\r\n",
                mqttPublishCounterParam.isChecked() ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_publish_timing: %s\r\n",
                   mqttPublishTimingParam.isChecked() ? "true" : "false");
-#endif
 
   pos += snprintf(status + pos, bufferSize - pos, "ha_support: %s\r\n",
                   haSupportParam.isChecked() ? "true" : "false");
+#endif
 
   if (pos >= bufferSize) status[bufferSize - 1] = '\0';
 
@@ -517,10 +560,16 @@ const std::string getStatusJson() {
 
   JsonObject Status = doc["Status"].to<JsonObject>();
   Status["Reset_Code"] = reset_code;
+#if defined(EBUS_INTERNAL)
   Status["Uptime"] = uptime.value();
-  Status["Loop_Duration"] = loopDuration.value();
-  Status["Loop_Duration_Max"] = maxLoopDuration;
   Status["Free_Heap"] = free_heap.value();
+  Status["Loop_Duration"] = loopDuration.value();
+#else
+  Status["Uptime"] = uptime;
+  Status["Free_Heap"] = free_heap;
+  Status["Loop_Duration"] = loopDuration;
+#endif
+  Status["Loop_Duration_Max"] = maxLoopDuration;
 
 #if !defined(EBUS_INTERNAL)
   // Arbitration
@@ -578,12 +627,16 @@ const std::string getStatusJson() {
   eBUS["PWM"] = get_pwm();
 #if defined(EBUS_INTERNAL)
   eBUS["Ebus_Address"] = ebus_address;
-  eBUS["Command_Distance"] = atoi(command_distance);
   eBUS["BusIsr_Window"] = atoi(busisr_window);
   eBUS["BusIsr_Offset"] = atoi(busisr_offset);
-  eBUS["Active_Commands"] = store.getActiveCommands();
-  eBUS["Passive_Commands"] = store.getPassiveCommands();
-#endif
+
+  // Schedule
+  JsonObject Schedule = doc["Schedule"].to<JsonObject>();
+  Schedule["Inquiry_Of_Existence"] = inquiryOfExistenceParam.isChecked();
+  Schedule["Scan_On_Startup"] = scanOnStartupParam.isChecked();
+  Schedule["Command_Distance"] = atoi(command_distance);
+  Schedule["Active_Commands"] = store.getActiveCommands();
+  Schedule["Passive_Commands"] = store.getPassiveCommands();
 
   // MQTT
   JsonObject MQTT = doc["MQTT"].to<JsonObject>();
@@ -591,14 +644,13 @@ const std::string getStatusJson() {
   MQTT["User"] = mqtt_user;
   MQTT["Connected"] = mqtt.connected();
   MQTT["Reconnect_Count"] = mqtt_reconnect_count;
-#if defined(EBUS_INTERNAL)
   MQTT["Publish_Counter"] = mqttPublishCounterParam.isChecked();
   MQTT["Publish_Timing"] = mqttPublishTimingParam.isChecked();
-#endif
 
   // HomeAssistant
   JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
   HomeAssistant["Support"] = haSupportParam.isChecked();
+#endif
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
@@ -658,25 +710,30 @@ void setup() {
 
 #if defined(EBUS_INTERNAL)
   ebusGroup.addItem(&ebusAddressParam);
-  ebusGroup.addItem(&commandDistanceParam);
   ebusGroup.addItem(&busIsrWindowParam);
   ebusGroup.addItem(&busIsrOffsetParam);
-#endif
+
+  scheduleGroup.addItem(&inquiryOfExistenceParam);
+  scheduleGroup.addItem(&scanOnStartupParam);
+  scheduleGroup.addItem(&commandDistanceParam);
 
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
-#if defined(EBUS_INTERNAL)
+
   mqttGroup.addItem(&mqttPublishCounterParam);
   mqttGroup.addItem(&mqttPublishTimingParam);
-#endif
 
   haGroup.addItem(&haSupportParam);
+#endif
 
   iotWebConf.addParameterGroup(&connGroup);
   iotWebConf.addParameterGroup(&ebusGroup);
+#if defined(EBUS_INTERNAL)
+  iotWebConf.addParameterGroup(&scheduleGroup);
   iotWebConf.addParameterGroup(&mqttGroup);
   iotWebConf.addParameterGroup(&haGroup);
+#endif
   iotWebConf.setFormValidator(&formValidator);
   iotWebConf.setConfigSavedCallback(&saveParamsCallback);
   iotWebConf.getApTimeoutParameter()->visible = true;
@@ -721,10 +778,15 @@ void setup() {
     iotWebConf.doLoop();
   }
 
+#if defined(EBUS_INTERNAL)
   mqtt.setUniqueId(unique_id);
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
-  mqtt.setHASupport(haSupportParam.isChecked());
+
+  mqttha.setUniqueId(mqtt.getUniqueId());
+  mqttha.setRootTopic(mqtt.getRootTopic());
+  mqttha.setEnabled(haSupportParam.isChecked());
+#endif
 
 #if !defined(EBUS_INTERNAL)
   wifiServer.begin();
@@ -744,9 +806,12 @@ void setup() {
 #if defined(EBUS_INTERNAL)
   ebus::handler->setSourceAddress(
       uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+
+  schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
+  schedule.setScanOnStartup(scanOnStartupParam.isChecked());
+  schedule.setDistance(atoi(command_distance));
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
-  schedule.setDistance(atoi(command_distance));
   schedule.start(ebus::request, ebus::handler);
 
   ebus::setBusIsrWindow(atoi(busisr_window));
@@ -763,7 +828,7 @@ void setup() {
   });
 
   store.loadCommands();  // install saved commands
-  mqtt.publishHASensors(false);
+  mqttha.publishComponents();
 #else
 #if defined(ESP32)
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
@@ -786,6 +851,7 @@ void loop() {
   iotWebConf.doLoop();
 #endif
 
+#if defined(EBUS_INTERNAL)
   if (needMqttConnect) {
     if (connectMqtt()) {
       needMqttConnect = false;
@@ -802,15 +868,12 @@ void loop() {
     if (currentMillis > lastMqttUpdate + 5 * 1000) {
       lastMqttUpdate = currentMillis;
 
-#if defined(EBUS_INTERNAL)
       schedule.fetchCounter();
       schedule.fetchTiming();
-#endif
     }
-#if defined(EBUS_INTERNAL)
     mqtt.doLoop();
-#endif
   }
+#endif
 
   uptime = millis();
   free_heap = ESP.getFreeHeap();
