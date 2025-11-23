@@ -97,7 +97,7 @@ char inquiryOfExistenceValue[STRING_LEN];
 char scanOnStartupValue[STRING_LEN];
 char command_distance[NUMBER_LEN];
 
-char mqtt_support[STRING_LEN];
+char mqtt_enabled[STRING_LEN];
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
@@ -105,7 +105,7 @@ char mqtt_pass[STRING_LEN];
 char mqttPublishCounterValue[STRING_LEN];
 char mqttPublishTimingValue[STRING_LEN];
 
-char haSupportValue[STRING_LEN];
+char haEnabledValue[STRING_LEN];
 #endif
 
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, DEFAULT_APMODE_PASS,
@@ -156,8 +156,8 @@ iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
-iotwebconf::CheckboxParameter mqttSupportParam = iotwebconf::CheckboxParameter(
-    "MQTT support", "mqttSupportParam", mqtt_support, STRING_LEN);
+iotwebconf::CheckboxParameter mqttEnabledParam = iotwebconf::CheckboxParameter(
+    "MQTT enabled", "mqttEnabledParam", mqtt_enabled, STRING_LEN);
 iotwebconf::TextParameter mqttServerParam =
     iotwebconf::TextParameter("MQTT server", "mqtt_server", mqtt_server,
                               STRING_LEN, "", DUMMY_MQTT_SERVER);
@@ -177,8 +177,8 @@ iotwebconf::CheckboxParameter mqttPublishTimingParam =
 
 iotwebconf::ParameterGroup haGroup =
     iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
-iotwebconf::CheckboxParameter haSupportParam = iotwebconf::CheckboxParameter(
-    "Home Assistant support", "haSupportParam", haSupportValue, STRING_LEN);
+iotwebconf::CheckboxParameter haEnabledParam = iotwebconf::CheckboxParameter(
+    "Home Assistant enabled", "haEnabledParam", haEnabledValue, STRING_LEN);
 #endif
 
 IPAddress ipAddress;
@@ -437,7 +437,7 @@ void saveParamsCallback() {
   schedule.setScanOnStartup(scanOnStartupParam.isChecked());
   schedule.setDistance(atoi(command_distance));
 
-  mqtt.setEnabled(mqttSupportParam.isChecked());
+  mqtt.setEnabled(mqttEnabledParam.isChecked());
   if (!mqtt.isEnabled() && mqtt.connected()) mqtt.disconnect();
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
@@ -445,7 +445,7 @@ void saveParamsCallback() {
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
 
-  mqttha.setEnabled(haSupportParam.isChecked());
+  mqttha.setEnabled(haEnabledParam.isChecked());
   mqttha.publishDeviceInfo();
   mqttha.publishComponents();
 #endif
@@ -535,8 +535,8 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
                   store.getPassiveCommands());
 
-  pos += snprintf(status + pos, bufferSize - pos, "mqtt_support: %s\r\n",
-                  mqttSupportParam.isChecked() ? "true" : "false");
+  pos += snprintf(status + pos, bufferSize - pos, "mqtt_enabled: %s\r\n",
+                  mqttEnabledParam.isChecked() ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.connected() ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_reconnect_count: %d \n",
@@ -551,8 +551,8 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_publish_timing: %s\r\n",
                   mqttPublishTimingParam.isChecked() ? "true" : "false");
 
-  pos += snprintf(status + pos, bufferSize - pos, "ha_support: %s\r\n",
-                  haSupportParam.isChecked() ? "true" : "false");
+  pos += snprintf(status + pos, bufferSize - pos, "ha_enabled: %s\r\n",
+                  haEnabledParam.isChecked() ? "true" : "false");
 #endif
 
   if (pos >= bufferSize) status[bufferSize - 1] = '\0';
@@ -646,7 +646,7 @@ const std::string getStatusJson() {
 
   // MQTT
   JsonObject MQTT = doc["MQTT"].to<JsonObject>();
-  MQTT["Support"] = mqttSupportParam.isChecked();
+  MQTT["Enabled"] = mqttEnabledParam.isChecked();
   MQTT["Server"] = mqtt_server;
   MQTT["User"] = mqtt_user;
   MQTT["Connected"] = mqtt.connected();
@@ -656,7 +656,7 @@ const std::string getStatusJson() {
 
   // HomeAssistant
   JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
-  HomeAssistant["Support"] = haSupportParam.isChecked();
+  HomeAssistant["Enabled"] = haEnabledParam.isChecked();
 #endif
 
   doc.shrinkToFit();
@@ -724,7 +724,7 @@ void setup() {
   scheduleGroup.addItem(&scanOnStartupParam);
   scheduleGroup.addItem(&commandDistanceParam);
 
-  mqttGroup.addItem(&mqttSupportParam);
+  mqttGroup.addItem(&mqttEnabledParam);
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
@@ -732,7 +732,7 @@ void setup() {
   mqttGroup.addItem(&mqttPublishCounterParam);
   mqttGroup.addItem(&mqttPublishTimingParam);
 
-  haGroup.addItem(&haSupportParam);
+  haGroup.addItem(&haEnabledParam);
 #endif
 
   iotWebConf.addParameterGroup(&connGroup);
@@ -787,14 +787,14 @@ void setup() {
   }
 
 #if defined(EBUS_INTERNAL)
-  mqtt.setEnabled(mqttSupportParam.isChecked());
+  mqtt.setEnabled(mqttEnabledParam.isChecked());
   mqtt.setUniqueId(unique_id);
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
 
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
-  mqttha.setEnabled(haSupportParam.isChecked());
+  mqttha.setEnabled(haEnabledParam.isChecked());
 #endif
 
 #if !defined(EBUS_INTERNAL)

@@ -5,7 +5,7 @@
 #include <store.hpp>
 #include <string>
 
-// Home Assistant MQTT support class for auto discovery
+// Home Assistant MQTT class for auto discovery
 
 class MqttHA {
  public:
