@@ -250,6 +250,7 @@ MqttHA::Component MqttHA::createDiagnosticUptime() const {
 MqttHA::Component MqttHA::createDiagnosticFreeHeap() const {
   Component c = createDiagnostic("sensor", "free_heap", "Free Heap");
   c.fields["state_topic"] = createStateTopic("state", "free_heap");
+  c.fields["unit_of_measurement"] = "B";
   c.fields["value_template"] = "{{value|int}}";
   return c;
 }
@@ -257,6 +258,7 @@ MqttHA::Component MqttHA::createDiagnosticFreeHeap() const {
 MqttHA::Component MqttHA::createDiagnosticLoopDuration() const {
   Component c = createDiagnostic("sensor", "loop_duration", "Loop Duration");
   c.fields["state_topic"] = createStateTopic("state", "loop_duration");
+  c.fields["unit_of_measurement"] = "µs";
   c.fields["value_template"] = "{{value|int}}";
   return c;
 }
