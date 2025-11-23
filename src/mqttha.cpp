@@ -246,7 +246,7 @@ MqttHA::Component MqttHA::createDiagnosticUptime() const {
   c.device["serial_number"] = uniqueId;
   // c.device["hw_version"] = "";  // TODO(yuhu-): fill with thing data
   // c.device["sw_version"] = "";  // TODO(yuhu-): fill with thing data
-  c.device["configuration_url"] = "http://esp-ebus.local";
+  c.device["configuration_url"] = url;
   return c;
 }
 
