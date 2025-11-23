@@ -96,17 +96,17 @@ char busisr_offset[NUMBER_LEN];
 char inquiryOfExistenceValue[STRING_LEN];
 char scanOnStartupValue[STRING_LEN];
 char command_distance[NUMBER_LEN];
-#endif
 
+char mqtt_support[STRING_LEN];
 char mqtt_server[STRING_LEN];
 char mqtt_user[STRING_LEN];
 char mqtt_pass[STRING_LEN];
-#if defined(EBUS_INTERNAL)
+
 char mqttPublishCounterValue[STRING_LEN];
 char mqttPublishTimingValue[STRING_LEN];
-#endif
 
 char haSupportValue[STRING_LEN];
+#endif
 
 IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, DEFAULT_APMODE_PASS,
                       CONFIG_VERSION);
@@ -156,6 +156,8 @@ iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
+iotwebconf::CheckboxParameter mqttSupportParam = iotwebconf::CheckboxParameter(
+    "MQTT support", "mqttSupportParam", mqtt_support, STRING_LEN);
 iotwebconf::TextParameter mqttServerParam =
     iotwebconf::TextParameter("MQTT server", "mqtt_server", mqtt_server,
                               STRING_LEN, "", DUMMY_MQTT_SERVER);
@@ -435,6 +437,8 @@ void saveParamsCallback() {
   schedule.setScanOnStartup(scanOnStartupParam.isChecked());
   schedule.setDistance(atoi(command_distance));
 
+  mqtt.setEnabled(mqttSupportParam.isChecked());
+  if (!mqtt.isEnabled() && mqtt.connected()) mqtt.disconnect();
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
 
@@ -531,6 +535,8 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
                   store.getPassiveCommands());
 
+  pos += snprintf(status + pos, bufferSize - pos, "mqtt_support: %s\r\n",
+                  mqttSupportParam.isChecked() ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.connected() ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_reconnect_count: %d \n",
@@ -640,6 +646,7 @@ const std::string getStatusJson() {
 
   // MQTT
   JsonObject MQTT = doc["MQTT"].to<JsonObject>();
+  MQTT["Support"] = mqttSupportParam.isChecked();
   MQTT["Server"] = mqtt_server;
   MQTT["User"] = mqtt_user;
   MQTT["Connected"] = mqtt.connected();
@@ -717,6 +724,7 @@ void setup() {
   scheduleGroup.addItem(&scanOnStartupParam);
   scheduleGroup.addItem(&commandDistanceParam);
 
+  mqttGroup.addItem(&mqttSupportParam);
   mqttGroup.addItem(&mqttServerParam);
   mqttGroup.addItem(&mqttUserParam);
   mqttGroup.addItem(&mqttPasswordParam);
@@ -779,6 +787,7 @@ void setup() {
   }
 
 #if defined(EBUS_INTERNAL)
+  mqtt.setEnabled(mqttSupportParam.isChecked());
   mqtt.setUniqueId(unique_id);
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
@@ -852,26 +861,32 @@ void loop() {
 #endif
 
 #if defined(EBUS_INTERNAL)
-  if (needMqttConnect) {
-    if (connectMqtt()) {
-      needMqttConnect = false;
-      ++mqtt_reconnect_count;
+  if (mqtt.isEnabled()) {
+    if (needMqttConnect) {
+      if (connectMqtt()) {
+        needMqttConnect = false;
+        ++mqtt_reconnect_count;
+      }
+
+    } else if ((iotWebConf.getState() == iotwebconf::OnLine) &&
+               (!mqtt.connected())) {
+      needMqttConnect = true;
     }
 
-  } else if ((iotWebConf.getState() == iotwebconf::OnLine) &&
-             (!mqtt.connected())) {
-    needMqttConnect = true;
-  }
+    if (mqtt.connected()) {
+      uint32_t currentMillis = millis();
+      if (currentMillis > lastMqttUpdate + 5 * 1000) {
+        lastMqttUpdate = currentMillis;
 
-  if (mqtt.connected()) {
-    uint32_t currentMillis = millis();
-    if (currentMillis > lastMqttUpdate + 5 * 1000) {
-      lastMqttUpdate = currentMillis;
-
-      schedule.fetchCounter();
-      schedule.fetchTiming();
+        schedule.fetchCounter();
+        schedule.fetchTiming();
+      }
+      mqtt.doLoop();
     }
-    mqtt.doLoop();
+  } else {
+    if (mqtt.connected()) {
+      mqtt.disconnect();
+    }
   }
 #endif
 
