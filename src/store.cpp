@@ -254,12 +254,13 @@ void Store::insertCommand(const Command& command) {
     allCommandsByKey.insert(std::make_pair(command.key, command));
 
   // Remove from previous index if exists
-  for (auto it = passiveCommands.begin(); it != passiveCommands.end(); ++it) {
-    it->second.erase(std::remove_if(it->second.begin(), it->second.end(),
-                                    [&](const Command* cmd) {
-                                      return cmd->key == command.key;
-                                    }),
-                     it->second.end());
+  for (auto itp = passiveCommands.begin(); itp != passiveCommands.end();
+       ++itp) {
+    itp->second.erase(std::remove_if(itp->second.begin(), itp->second.end(),
+                                     [&](const Command* cmd) {
+                                       return cmd->key == command.key;
+                                     }),
+                      itp->second.end());
   }
 
   activeCommands.erase(
