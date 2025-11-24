@@ -815,14 +815,13 @@ void Schedule::enqueueCommand(const QueuedCommand& cmd) {
     }
   }
   // insert sorted: higher priority first, then older timestamp first
-  std::vector<Schedule::QueuedCommand>::iterator it =
-      std::find_if(queuedCommands.begin(), queuedCommands.end(),
-                   [&](const QueuedCommand& other) {
-                     if (cmd.priority > other.priority) return true;
-                     if (cmd.priority == other.priority)
-                       return cmd.timestamp < other.timestamp;
-                     return false;
-                   });
+  auto it = std::find_if(queuedCommands.begin(), queuedCommands.end(),
+                         [&](const QueuedCommand& other) {
+                           if (cmd.priority > other.priority) return true;
+                           if (cmd.priority == other.priority)
+                             return cmd.timestamp < other.timestamp;
+                           return false;
+                         });
   queuedCommands.insert(it, cmd);
 }
 

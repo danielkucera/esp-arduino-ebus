@@ -102,8 +102,8 @@ class Store {
  private:
   // Use unordered_map for fast key lookup
   std::unordered_map<std::string, Command> allCommandsByKey;
-  // For passive commands, use command.command as key
-  std::unordered_map<std::vector<uint8_t>, Command*, VectorHash>
+  // For passive commands, use command.read_cmd as key for fast lookup
+  std::unordered_map<std::vector<uint8_t>, std::vector<Command*>, VectorHash>
       passiveCommands;
   // For active commands, just keep a vector of pointers
   std::vector<Command*> activeCommands;
