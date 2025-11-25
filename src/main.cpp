@@ -795,6 +795,15 @@ void setup() {
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
   mqttha.setEnabled(haEnabledParam.isChecked());
+
+  mqttha.setThingName(iotWebConf.getThingName());
+  mqttha.setThingModel(ESP.getChipModel());
+  mqttha.setThingModelId("Revision: " + std::to_string(ESP.getChipRevision()));
+  mqttha.setThingManufacturer("danman.eu");
+  mqttha.setThingSwVersion(AUTO_VERSION);
+  // mqttha.setThingHwVersion(""); // how to determine hardware version?
+  mqttha.setThingConfigurationUrl(
+      "http://" + std::string(WiFi.localIP().toString().c_str()) + "/");
 #endif
 
 #if !defined(EBUS_INTERNAL)

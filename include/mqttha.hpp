@@ -15,6 +15,14 @@ class MqttHA {
   void setEnabled(const bool enable);
   const bool isEnabled() const;
 
+  void setThingName(const std::string& name);
+  void setThingModel(const std::string& model);
+  void setThingModelId(const std::string& modelId);
+  void setThingManufacturer(const std::string& manufacturer);
+  void setThingSwVersion(const std::string& swVersion);
+  void setThingHwVersion(const std::string& hwVersion);
+  void setThingConfigurationUrl(const std::string& configurationUrl);
+
   void publishDeviceInfo() const;
 
   void publishComponents() const;
@@ -28,6 +36,15 @@ class MqttHA {
   std::string commandTopic;       // e.g. "ebus/8406ac/request"
 
   bool enabled = false;
+
+  // Common thing data
+  std::string thingName;
+  std::string thingModel;
+  std::string thingModelId;
+  std::string thingManufacturer;
+  std::string thingSwVersion;
+  std::string thingHwVersion;
+  std::string thingConfigurationUrl;
 
   struct Component {
     // Mandatory Home Assistant config fields

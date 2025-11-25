@@ -18,6 +18,30 @@ void MqttHA::setEnabled(const bool enable) { enabled = enable; }
 
 const bool MqttHA::isEnabled() const { return enabled; }
 
+void MqttHA::setThingName(const std::string& name) { thingName = name; }
+
+void MqttHA::setThingModel(const std::string& model) { thingModel = model; }
+
+void MqttHA::setThingModelId(const std::string& modelId) {
+  thingModelId = modelId;
+}
+
+void MqttHA::setThingManufacturer(const std::string& manufacturer) {
+  thingManufacturer = manufacturer;
+}
+
+void MqttHA::setThingSwVersion(const std::string& swVersion) {
+  thingSwVersion = swVersion;
+}
+
+void MqttHA::setThingHwVersion(const std::string& hwVersion) {
+  thingHwVersion = hwVersion;
+}
+
+void MqttHA::setThingConfigurationUrl(const std::string& configurationUrl) {
+  thingConfigurationUrl = configurationUrl;
+}
+
 void MqttHA::publishDeviceInfo() const {
   mqttha.publishComponent(createButtonRestart(), !enabled);
 
@@ -236,14 +260,14 @@ MqttHA::Component MqttHA::createDiagnosticUptime() const {
   c.fields["value_template"] =
       "{{timedelta(seconds=((value|float)/1000)|int)}}";
 
-  c.device["name"] = "esp-ebus";
-  c.device["manufacturer"] = "Daniel Kucera";
-  // c.device["model"] = "";     // TODO(yuhu-): fill with thing data
-  // c.device["model_id"] = "";  // TODO(yuhu-): fill with thing data
+  c.device["name"] = thingName;
+  c.device["manufacturer"] = thingManufacturer;
+  c.device["model"] = thingModel;
+  c.device["model_id"] = thingModelId;
   c.device["serial_number"] = uniqueId;
-  // c.device["hw_version"] = "";  // TODO(yuhu-): fill with thing data
-  // c.device["sw_version"] = "";  // TODO(yuhu-): fill with thing data
-  c.device["configuration_url"] = "http://esp-ebus.local";
+  c.device["hw_version"] = thingHwVersion;
+  c.device["sw_version"] = thingSwVersion;
+  c.device["configuration_url"] = thingConfigurationUrl;
   return c;
 }
 
