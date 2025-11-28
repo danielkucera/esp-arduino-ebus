@@ -71,9 +71,11 @@ class MqttHA {
                             const std::string& uniqueIdKey,
                             const std::string& name) const;
 
+  Component createBinarySensor(const Command* command) const;
   Component createSensor(const Command* command) const;
   Component createNumber(const Command* command) const;
   Component createSelect(const Command* command) const;
+  Component createSwitch(const Command* command) const;
 
   Component createButtonRestart() const;
 

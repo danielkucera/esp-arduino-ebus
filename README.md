@@ -234,7 +234,7 @@ struct Command {
   std::string name;                      // name of the command used as mqtt topic below "values/"
   std::vector<uint8_t> read_cmd;         // read command as vector of "ZZPBSBNNDBx"
   std::vector<uint8_t> write_cmd;        // write command as vector of "ZZPBSBNNDBx" (OPTIONAL, default: empty)
-  std::string unit;                      // unit of the interested part
+  std::string unit;                      // unit of the interested part (OPTIONAL, default: empty)
   bool active;                           // active sending of command
   uint32_t interval;                     // minimum interval between two commands in seconds (OPTIONAL, default: 60)
   uint32_t last;                         // last time of the successful command (INTERNAL)
@@ -249,14 +249,16 @@ struct Command {
   float max;                             // maximum value (OPTIONAL, default: 100)
   uint8_t digits;                        // decimal digits of value (OPTIONAL, default: 2)
   bool ha;                               // home assistant support for auto discovery (OPTIONAL, default: false)
-  std::string ha_component;              // home assistant component type (sensor, number) (OPTIONAL, default: sensor) 
+  std::string ha_component;              // home assistant component type (OPTIONAL, default: sensor) 
   std::string ha_device_class;           // home assistant device class (OPTIONAL, default: empty)
   std::string ha_entity_category;        // home assistant entity category (OPTIONAL, default: empty)
   float ha_number_step;                  // home assistant step value  (OPTIONAL, default: 1)
-  std::string ha_number_mode;            // home assistant mode (slider, box) (OPTIONAL, default: auto)
+  std::string ha_number_mode;            // home assistant mode (OPTIONAL, default: auto)
   std::string ha_select_options;         // home assistant select options (OPTIONAL, default: empty)
                                          // key:value,... e.g. "On:1,Off:2,Auto:3,Eco:4,Night:5"
   std::string ha_select_options_default; // home assistant select default option (OPTIONAL, default: first option)
+  uint8_t ha_payload_on;                 // home assistant payload for ON state (OPTIONAL, default: 1)
+  uint8_t ha_payload_off;                // home assistant payload for OFF state (OPTIONAL, default: 0)
 };
 ```
 
@@ -391,6 +393,22 @@ mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"restart"}'
 
 **Inserting (Installing) of new commands**
 ```
+payload:
+{
+  "id": "insert",
+  "commands": [
+    {
+      ...
+    },
+    {
+      ...
+    }
+   ]
+} 
+```
+
+**Specific examples:**
+```
 payload: - sensor
 {
   "id": "insert",
@@ -410,9 +428,6 @@ payload: - sensor
       "ha": true,                        // home assistant support for auto discovery
       "ha_component": "sensor",          // home assistant component type
       "ha_device_class": "temperature"   // home assistant device class
-    },
-    {
-    ...
     }
   ]
 }
@@ -446,9 +461,6 @@ payload: - number
       "ha_device_class": "temperature",  // home assistant device class
       "ha_number_step": 1,               // home assistant step value
       "ha_number_mode": "box"            // home assistant mode
-    },
-    {
-    ...
     }
   ]
 }
@@ -467,7 +479,6 @@ payload: - select
       "name": "operating_mode",          // mqtt topic below "values/"
       "read_cmd": "50b509030d2b00",      // read command as vector of "ZZPBSBNNDBx"
       "write_cmd": "50b509040e2b00",     // write command as vector of "ZZPBSBNNDBx"
-      "unit": "",                        // unit of the interested part
       "active": true,                    // active sending of command
       "interval": 60,                    // minimum interval between two commands in seconds
       "master": false,                   // value of interest is in master or slave part
@@ -479,15 +490,68 @@ payload: - select
       "ha_entity_category": "config",    // home assistant entity category
       "ha_select_options": "On:1,Off:2,Auto:3,Eco:4,Night:5", // home assistant possible options
       "ha_select_options_default": "Auto" // home assistant default option
-    },
-    {
-    ...
     }
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"66","name":"operating_mode","read_cmd":"50b509030d2b00","write_cmd":"50b509040e2b00","unit":"","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"select","ha_device_class":"enum","ha_entity_category":"config","ha_select_options":"On:1,Off:2,Auto:3,Eco:4,Night:5","ha_select_options_default":"Auto"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"66","name":"operating_mode","read_cmd":"50b509030d2b00","write_cmd":"50b509040e2b00","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"select","ha_device_class":"enum","ha_entity_category":"config","ha_select_options":"On:1,Off:2,Auto:3,Eco:4,Night:5","ha_select_options_default":"Auto"}]}'
+```
+
+```
+payload: - binary_sensor
+{
+  "id": "insert",
+  "commands": [
+    {
+      "key": "88",                       // unique key of command
+      "name": "compressor",              // mqtt topic below "values/"
+      "read_cmd": "08b509030d1d00",      // read command as vector of "ZZPBSBNNDBx"
+      "active": true,                    // active sending of command
+      "interval": 60,                    // minimum interval between two commands in seconds
+      "master": false,                   // value of interest is in master or slave part
+      "position": 1,                     // starting position in the interested part
+      "datatype": "UINT8",               // ebus datatype
+      "ha": true,                        // home assistant support for auto discovery
+      "ha_component": "binary_sensor",   // home assistant component type
+      "ha_device_class": "running",      // home assistant device class
+      "payload_on": 1,                   // home assistant payload for ON state               
+      "payload_off": 0                   // home assistant payload for OFF state 
+    }
+  ]
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"77","name":"compressor","read_cmd":"08b509030d1d00","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"binary_sensor","ha_device_class":"running","payload_on":1,"payload_off":0}]}'
+
+```
+
+```
+payload: - switch
+{
+  "id": "insert",
+  "commands": [
+    {
+      "key": "88",                       // unique key of command
+      "name": "cooling_supported",       // mqtt topic below "values/"
+      "read_cmd": "50b509030d8601",      // read command as vector of "ZZPBSBNNDBx"
+      "write_cmd": "50b509040e8601",     // write command as vector of "ZZPBSBNNDBx"      
+      "active": true,                    // active sending of command
+      "interval": 60,                    // minimum interval between two commands in seconds
+      "master": false,                   // value of interest is in master or slave part
+      "position": 1,                     // starting position in the interested part
+      "datatype": "UINT8",               // ebus datatype
+      "ha": true,                        // home assistant support for auto discovery
+      "ha_component": "switch",          // home assistant component type
+      "payload_on": 1,                   // home assistant payload for ON state               
+      "payload_off": 0                   // home assistant payload for OFF state 
+    }
+  ]
+}
+```
+```
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"88","name":"cooling_supported","read_cmd":"50b509030d8601","write_cmd":"50b509040e8601","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"switch","payload_on":1,"payload_off":0}]}'
+
 ```
 
 **Removing installed commands**

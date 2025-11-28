@@ -57,12 +57,16 @@ void MqttHA::publishComponents() const {
 }
 
 void MqttHA::publishComponent(const Command* command, const bool remove) const {
-  if (command->ha_component == "sensor") {
+  if (command->ha_component == "binary_sensor") {
+    publishComponent(createBinarySensor(command), remove);
+  } else if (command->ha_component == "sensor") {
     publishComponent(createSensor(command), remove);
   } else if (command->ha_component == "number") {
     publishComponent(createNumber(command), remove);
   } else if (command->ha_component == "select") {
     publishComponent(createSelect(command), remove);
+  } else if (command->ha_component == "switch") {
+    publishComponent(createSwitch(command), remove);
   }
 }
 
@@ -144,11 +148,26 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
   return c;
 }
 
+MqttHA::Component MqttHA::createBinarySensor(const Command* command) const {
+  Component c = createComponent("binary_sensor", command->key, command->name);
+  c.fields["state_topic"] = createStateTopic("values", command->name);
+  if (!command->ha_device_class.empty())
+    c.fields["device_class"] = command->ha_device_class;
+  if (!command->ha_entity_category.empty())
+    c.fields["entity_category"] = command->ha_entity_category;
+  c.fields["payload_on"] = std::to_string(command->ha_payload_on);
+  c.fields["payload_off"] = std::to_string(command->ha_payload_off);
+  c.fields["value_template"] = "{{value_json.value}}";
+  return c;
+}
+
 MqttHA::Component MqttHA::createSensor(const Command* command) const {
   Component c = createComponent("sensor", command->key, command->name);
   c.fields["state_topic"] = createStateTopic("values", command->name);
   if (!command->ha_device_class.empty())
     c.fields["device_class"] = command->ha_device_class;
+  if (!command->ha_entity_category.empty())
+    c.fields["entity_category"] = command->ha_entity_category;
   c.fields["unit_of_measurement"] = command->unit;
   c.fields["value_template"] = "{{value_json.value}}";
   return c;
@@ -235,6 +254,22 @@ MqttHA::Component MqttHA::createSelect(const Command* command) const {
   c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" + command->key +
                                  "\",\"value\":" + cmdMap + "}";
 
+  return c;
+}
+
+MqttHA::Component MqttHA::createSwitch(const Command* command) const {
+  Component c = createComponent("switch", command->key, command->name);
+  c.fields["state_topic"] = createStateTopic("values", command->name);
+  if (!command->ha_device_class.empty())
+    c.fields["device_class"] = command->ha_device_class;
+  if (!command->ha_entity_category.empty())
+    c.fields["entity_category"] = command->ha_entity_category;
+  c.fields["payload_on"] = std::to_string(command->ha_payload_on);
+  c.fields["payload_off"] = std::to_string(command->ha_payload_off);
+  c.fields["value_template"] = "{{value_json.value}}";
+  c.fields["command_topic"] = commandTopic;
+  c.fields["command_template"] =
+      "{\"id\":\"write\",\"key\":\"" + command->key + "\",\"value\":{{value}}}";
   return c;
 }
 
