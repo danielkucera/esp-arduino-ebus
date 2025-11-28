@@ -184,7 +184,7 @@ Command Store::createCommand(const JsonDocument& doc) {
   command.name = doc["name"].as<std::string>();
   command.read_cmd = ebus::to_vector(doc["read_cmd"].as<std::string>());
   command.write_cmd = ebus::to_vector(doc["write_cmd"].as<std::string>());
-  command.unit = doc["unit"].as<std::string>();
+  command.unit = doc["unit"].isNull() ? "" : doc["unit"].as<std::string>();
   command.active = doc["active"].as<bool>();
   command.interval =
       doc["interval"].isNull() ? 60 : doc["interval"].as<uint32_t>();
@@ -232,6 +232,11 @@ Command Store::createCommand(const JsonDocument& doc) {
         (doc["ha_select_options_default"].isNull()
              ? ""
              : doc["ha_select_options_default"].as<std::string>());
+    command.ha_payload_on =
+        doc["ha_payload_on"].isNull() ? 1 : doc["ha_payload_on"].as<uint8_t>();
+    command.ha_payload_off = doc["ha_payload_off"].isNull()
+                                 ? 0
+                                 : doc["ha_payload_off"].as<uint8_t>();
   } else {
     command.ha_component = "";
     command.ha_device_class = "";
@@ -240,6 +245,8 @@ Command Store::createCommand(const JsonDocument& doc) {
     command.ha_number_mode = "";
     command.ha_select_options = "";
     command.ha_select_options_default = "";
+    command.ha_payload_on = 1;
+    command.ha_payload_off = 0;
   }
 
   return command;
@@ -384,6 +391,8 @@ JsonDocument Store::getCommandJson(const Command* command) {
   doc["ha_number_mode"] = command->ha_number_mode;
   doc["ha_select_options"] = command->ha_select_options;
   doc["ha_select_options_default"] = command->ha_select_options_default;
+  doc["ha_payload_on"] = command->ha_payload_on;
+  doc["ha_payload_off"] = command->ha_payload_off;
 
   doc.shrinkToFit();
   return doc;
@@ -575,7 +584,9 @@ const std::string Store::serializeCommands() const {
                                      "ha_number_step",
                                      "ha_number_mode",
                                      "ha_select_options",
-                                     "ha_select_options_default"};
+                                     "ha_select_options_default",
+                                     "ha_payload_on",
+                                     "ha_payload_off"};
 
   // Add header as first entry
   JsonArray header = doc.add<JsonArray>();
@@ -607,6 +618,8 @@ const std::string Store::serializeCommands() const {
     array.add(command.ha_number_mode);
     array.add(command.ha_select_options);
     array.add(command.ha_select_options_default);
+    array.add(command.ha_payload_on);
+    array.add(command.ha_payload_off);
   }
 
   doc.shrinkToFit();
