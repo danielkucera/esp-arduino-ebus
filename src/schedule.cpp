@@ -754,7 +754,6 @@ void Schedule::handleEvents() {
               schedule.processActive(event->mode,
                                      std::vector<uint8_t>(event->data.master),
                                      std::vector<uint8_t>(event->data.slave));
-              break;
             case ebus::MessageType::passive:
             case ebus::MessageType::reactive:
               schedule.processPassive(std::vector<uint8_t>(event->data.master),
