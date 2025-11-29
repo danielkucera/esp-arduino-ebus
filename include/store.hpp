@@ -113,6 +113,7 @@ class Store {
   // Flexible serialization/deserialization
   const std::string serializeCommands() const;
   void deserializeCommands(const char* payload);
+  void getDefaultForField(JsonDocument& doc, const std::string& field);
 };
 
 extern Store store;

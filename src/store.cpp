@@ -644,12 +644,42 @@ void Store::deserializeCommands(const char* payload) {
     for (size_t i = 1; i < array.size(); ++i) {
       JsonArray values = array[i];
       JsonDocument tmpDoc;
-      for (size_t j = 0; j < fields.size() && j < values.size(); ++j) {
-        tmpDoc[fields[j]] = values[j];
+      for (size_t j = 0; j < fields.size(); ++j) {
+        if (j < values.size())
+          tmpDoc[fields[j]] = values[j];
+        else
+          getDefaultForField(tmpDoc, fields[j]);
       }
       insertCommand(createCommand(tmpDoc));
     }
   }
+}
+
+void Store::getDefaultForField(JsonDocument& doc, const std::string& field) {
+  if (field == "key") doc[field] = "";
+  if (field == "name") doc[field] = "";
+  if (field == "read_cmd") doc[field] = "";
+  if (field == "write_cmd") doc[field] = "";
+  if (field == "unit") doc[field] = "";
+  if (field == "active") doc[field] = false;
+  if (field == "interval") doc[field] = 60;
+  if (field == "master") doc[field] = false;
+  if (field == "position") doc[field] = 1;
+  if (field == "datatype") doc[field] = "UINT8";
+  if (field == "divider") doc[field] = 1.0f;
+  if (field == "min") doc[field] = 1.0f;
+  if (field == "max") doc[field] = 100.0f;
+  if (field == "digits") doc[field] = 2;
+  if (field == "ha") doc[field] = false;
+  if (field == "ha_component") doc[field] = "";
+  if (field == "ha_device_class") doc[field] = "";
+  if (field == "ha_entity_category") doc[field] = "";
+  if (field == "ha_number_step") doc[field] = 1.0f;
+  if (field == "ha_number_mode") doc[field] = "";
+  if (field == "ha_select_options") doc[field] = "";
+  if (field == "ha_select_options_default") doc[field] = "";
+  if (field == "ha_payload_on") doc[field] = 1;
+  if (field == "ha_payload_off") doc[field] = 0;
 }
 
 #endif
