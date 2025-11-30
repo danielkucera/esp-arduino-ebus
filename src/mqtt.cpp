@@ -258,7 +258,6 @@ void Mqtt::handleWrite(const JsonDocument& doc) {
     std::vector<uint8_t> valueBytes;
     if (command->numeric) {
       double value = doc["value"].as<double>();
-      value = value * command->divider;
       valueBytes = getVectorFromDouble(command, value);
     } else {
       std::string value = doc["value"].as<std::string>();
