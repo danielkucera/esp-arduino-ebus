@@ -168,7 +168,9 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
     c.fields["device_class"] = command->ha_device_class;
   if (!command->ha_entity_category.empty())
     c.fields["entity_category"] = command->ha_entity_category;
-  c.fields["unit_of_measurement"] = command->unit;
+  if (!command->ha_state_class.empty())
+    c.fields["state_class"] = command->ha_state_class;
+  if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
   c.fields["value_template"] = "{{value_json.value}}";
   return c;
 }
@@ -180,15 +182,15 @@ MqttHA::Component MqttHA::createNumber(const Command* command) const {
     c.fields["device_class"] = command->ha_device_class;
   if (!command->ha_entity_category.empty())
     c.fields["entity_category"] = command->ha_entity_category;
-  c.fields["unit_of_measurement"] = command->unit;
+  if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
   c.fields["value_template"] = "{{value_json.value}}";
   c.fields["command_topic"] = commandTopic;
   c.fields["command_template"] =
       "{\"id\":\"write\",\"key\":\"" + command->key + "\",\"value\":{{value}}}";
   c.fields["min"] = std::to_string(command->min);
   c.fields["max"] = std::to_string(command->max);
-  c.fields["step"] = std::to_string(command->ha_number_step);
-  c.fields["mode"] = command->ha_number_mode;  // "box" or "slider"
+  c.fields["step"] = std::to_string(command->ha_step);
+  c.fields["mode"] = command->ha_mode;  // "box" or "slider"
   return c;
 }
 
@@ -201,9 +203,9 @@ MqttHA::Component MqttHA::createSelect(const Command* command) const {
     c.fields["entity_category"] = command->ha_entity_category;
   c.fields["command_topic"] = commandTopic;
 
-  // Parse ha_select_options string into vector of pairs
+  // Parse ha_options string into vector of pairs
   std::vector<std::pair<std::string, int>> optionsVec;
-  std::istringstream ss(command->ha_select_options);
+  std::istringstream ss(command->ha_options);
   std::string token;
   while (std::getline(ss, token, ',')) {
     size_t sep = token.find(':');
@@ -219,7 +221,7 @@ MqttHA::Component MqttHA::createSelect(const Command* command) const {
   const auto defaultIt =
       std::find_if(optionsVec.begin(), optionsVec.end(),
                    [&](const std::pair<std::string, int>& opt) {
-                     return opt.first == command->ha_select_options_default;
+                     return opt.first == command->ha_options_default;
                    });
 
   std::string defaultOptionName = optionsVec.empty() ? "" : optionsVec[0].first;
