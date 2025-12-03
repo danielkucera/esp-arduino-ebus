@@ -535,14 +535,14 @@ payload: - number
       "ha": true,                        // home assistant support for auto discovery
       "ha_component": "number",          // home assistant component type
       "ha_device_class": "temperature",  // home assistant device class
-      "ha_number_step": 1,               // home assistant step value
-      "ha_number_mode": "box"            // home assistant mode
+      "ha_step": 1,                      // home assistant step value
+      "ha_mode": "box"                   // home assistant mode
     }
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"55","name":"desired_temp_low","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","active":true,"interval":60,"master":false,"position":1,"datatype":"DATA1C","divider":1,"min":15,"max":20,"digits":2,"unit":"°C","ha":true,"ha_component":"number","ha_device_class":"temperature","ha_number_step":1,"ha_number_mode":"box"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"55","name":"desired_temp_low","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","active":true,"interval":60,"master":false,"position":1,"datatype":"DATA1C","divider":1,"min":15,"max":20,"digits":2,"unit":"°C","ha":true,"ha_component":"number","ha_device_class":"temperature","ha_step":1,"ha_mode":"box"}]}'
 ```
 
 ```
@@ -564,14 +564,14 @@ payload: - select
       "ha_component": "select",          // home assistant component type
       "ha_device_class": "enum",         // home assistant device class
       "ha_entity_category": "config",    // home assistant entity category
-      "ha_select_options": "On:1,Off:2,Auto:3,Eco:4,Night:5", // home assistant possible options
-      "ha_select_options_default": "Auto" // home assistant default option
+      "ha_options": "On:1,Off:2,Auto:3,Eco:4,Night:5", // home assistant possible options
+      "ha_options_default": "Auto"       // home assistant default option
     }
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"66","name":"operating_mode","read_cmd":"50b509030d2b00","write_cmd":"50b509040e2b00","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"select","ha_device_class":"enum","ha_entity_category":"config","ha_select_options":"On:1,Off:2,Auto:3,Eco:4,Night:5","ha_select_options_default":"Auto"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"66","name":"operating_mode","read_cmd":"50b509030d2b00","write_cmd":"50b509040e2b00","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"select","ha_device_class":"enum","ha_entity_category":"config","ha_options":"On:1,Off:2,Auto:3,Eco:4,Night:5","ha_options_default":"Auto"}]}'
 ```
 
 ```
@@ -619,14 +619,14 @@ payload: - switch
       "datatype": "UINT8",               // ebus datatype
       "ha": true,                        // home assistant support for auto discovery
       "ha_component": "switch",          // home assistant component type
-      "payload_on": 1,                   // home assistant payload for ON state               
-      "payload_off": 0                   // home assistant payload for OFF state 
+      "ha_payload_on": 1,                // home assistant payload for ON state               
+      "ha_payload_off": 0                // home assistant payload for OFF state 
     }
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"88","name":"cooling_supported","read_cmd":"50b509030d8601","write_cmd":"50b509040e8601","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"switch","payload_on":1,"payload_off":0}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"88","name":"cooling_supported","read_cmd":"50b509030d8601","write_cmd":"50b509040e8601","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"switch","ha_payload_on":1,"ha_payload_off":0}]}'
 
 ```
 
