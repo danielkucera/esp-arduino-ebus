@@ -148,6 +148,63 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
   return c;
 }
 
+std::tuple<std::vector<std::string>, std::string, std::string>
+MqttHA::createOptions(const std::string& ha_options,
+                      const std::string& ha_options_default) const {
+  // Parse ha_options string into vector of pairs
+  std::vector<std::pair<std::string, int>> optionsVec;
+  std::vector<std::string> options;
+  std::istringstream ss(ha_options);
+  std::string token;
+  while (std::getline(ss, token, ',')) {
+    size_t sep = token.find(':');
+    if (sep != std::string::npos) {
+      std::string name = token.substr(0, sep);
+      int value = std::stoi(token.substr(sep + 1));
+      optionsVec.push_back({name, value});
+      options.push_back(name);
+    }
+  }
+
+  // Determine default option name and value
+  const auto defaultIt =
+      std::find_if(optionsVec.begin(), optionsVec.end(),
+                   [&](const std::pair<std::string, int>& opt) {
+                     return opt.first == ha_options_default;
+                   });
+
+  std::string defaultOptionName = optionsVec.empty() ? "" : optionsVec[0].first;
+  int defaultOptionValue = optionsVec.empty() ? 0 : optionsVec[0].second;
+  if (defaultIt != optionsVec.end()) {
+    defaultOptionName = defaultIt->first;
+    defaultOptionValue = defaultIt->second;
+  }
+
+  // Build value_template for displaying option name from value
+  std::string valueMap = "{% set values = {";
+  for (size_t i = 0; i < optionsVec.size(); ++i) {
+    valueMap +=
+        std::to_string(optionsVec[i].second) + ":'" + optionsVec[i].first + "'";
+    if (i < optionsVec.size() - 1) valueMap += ",";
+  }
+  valueMap +=
+      "} %}{{ values[value_json.value] if value_json.value in values.keys() "
+      "else '" +
+      defaultOptionName + "' }}";
+
+  // Build command_template for sending value from option name
+  std::string cmdMap = "{% set values = {";
+  for (size_t i = 0; i < optionsVec.size(); ++i) {
+    cmdMap +=
+        "'" + optionsVec[i].first + "':" + std::to_string(optionsVec[i].second);
+    if (i < optionsVec.size() - 1) cmdMap += ",";
+  }
+  cmdMap += "} %}{{ values[value] if value in values.keys() else " +
+            std::to_string(defaultOptionValue) + " }}";
+
+  return std::make_tuple(options, valueMap, cmdMap);
+}
+
 MqttHA::Component MqttHA::createBinarySensor(const Command* command) const {
   Component c = createComponent("binary_sensor", command->key, command->name);
   c.fields["state_topic"] = createStateTopic("values", command->name);
@@ -171,7 +228,16 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
   if (!command->ha_state_class.empty())
     c.fields["state_class"] = command->ha_state_class;
   if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
-  c.fields["value_template"] = "{{value_json.value}}";
+
+  if (!command->ha_options.empty()) {
+    std::tuple<std::vector<std::string>, std::string, std::string> options =
+        createOptions(command->ha_options, command->ha_options_default);
+
+    c.options = std::get<0>(options);
+    c.fields["value_template"] = std::get<1>(options);
+  } else {
+    c.fields["value_template"] = "{{value_json.value}}";
+  }
   return c;
 }
 
@@ -203,58 +269,13 @@ MqttHA::Component MqttHA::createSelect(const Command* command) const {
     c.fields["entity_category"] = command->ha_entity_category;
   c.fields["command_topic"] = commandTopic;
 
-  // Parse ha_options string into vector of pairs
-  std::vector<std::pair<std::string, int>> optionsVec;
-  std::istringstream ss(command->ha_options);
-  std::string token;
-  while (std::getline(ss, token, ',')) {
-    size_t sep = token.find(':');
-    if (sep != std::string::npos) {
-      std::string name = token.substr(0, sep);
-      int value = std::stoi(token.substr(sep + 1));
-      optionsVec.push_back({name, value});
-      c.options.push_back(name);
-    }
-  }
+  std::tuple<std::vector<std::string>, std::string, std::string> options =
+      createOptions(command->ha_options, command->ha_options_default);
 
-  // Determine default option name and value
-  const auto defaultIt =
-      std::find_if(optionsVec.begin(), optionsVec.end(),
-                   [&](const std::pair<std::string, int>& opt) {
-                     return opt.first == command->ha_options_default;
-                   });
-
-  std::string defaultOptionName = optionsVec.empty() ? "" : optionsVec[0].first;
-  int defaultOptionValue = optionsVec.empty() ? 0 : optionsVec[0].second;
-  if (defaultIt != optionsVec.end()) {
-    defaultOptionName = defaultIt->first;
-    defaultOptionValue = defaultIt->second;
-  }
-
-  // Build value_template for displaying option name from value
-  std::string valueMap = "{% set values = {";
-  for (size_t i = 0; i < optionsVec.size(); ++i) {
-    valueMap +=
-        std::to_string(optionsVec[i].second) + ":'" + optionsVec[i].first + "'";
-    if (i < optionsVec.size() - 1) valueMap += ",";
-  }
-  valueMap +=
-      "} %}{{ values[value_json.value] if value_json.value in values.keys() "
-      "else '" +
-      defaultOptionName + "' }}";
-  c.fields["value_template"] = valueMap;
-
-  // Build command_template for sending value from option name
-  std::string cmdMap = "{% set values = {";
-  for (size_t i = 0; i < optionsVec.size(); ++i) {
-    cmdMap +=
-        "'" + optionsVec[i].first + "':" + std::to_string(optionsVec[i].second);
-    if (i < optionsVec.size() - 1) cmdMap += ",";
-  }
-  cmdMap += "} %}{{ values[value] if value in values.keys() else " +
-            std::to_string(defaultOptionValue) + " }}";
+  c.options = std::get<0>(options);
+  c.fields["value_template"] = std::get<1>(options);
   c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" + command->key +
-                                 "\",\"value\":" + cmdMap + "}";
+                                 "\",\"value\":" + std::get<2>(options) + "}";
 
   return c;
 }

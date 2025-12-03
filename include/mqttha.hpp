@@ -4,6 +4,7 @@
 #include <mqtt.hpp>
 #include <store.hpp>
 #include <string>
+#include <tuple>
 
 // Home Assistant MQTT class for auto discovery
 
@@ -66,6 +67,11 @@ class MqttHA {
 
   std::string createStateTopic(const std::string& prefix,
                                const std::string& topic) const;
+
+  // <0> options, <1> valueMap, <2> cmdMap
+  std::tuple<std::vector<std::string>, std::string, std::string> createOptions(
+      const std::string& ha_options,
+      const std::string& ha_options_default) const;
 
   Component createComponent(const std::string& component,
                             const std::string& uniqueIdKey,
