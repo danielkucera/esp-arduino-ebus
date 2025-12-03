@@ -171,25 +171,22 @@ const std::vector<uint8_t> getVectorFromString(const Command* command,
 Store store;
 
 Command Store::createCommand(const JsonDocument& doc) {
+  // TODO(yuhu-): Validation of required fields ?
+
   Command command;
-  // TODO(yuhu-): check incoming data for completeness
-  // if (doc["key"].isNull() || doc["name"].isNull() || doc["read_cmd"].isNull()
-  // ||
-  //     doc["write_cmd"].isNull() || doc["unit"].isNull() ||
-  //     doc["active"].isNull() || doc["master"].isNull() ||
-  //     doc["position"].isNull() || doc["datatype"].isNull()) {
-  //   return command;  // return empty command on invalid data
-  // }
+
+  // Command Fields
   command.key = doc["key"].as<std::string>();
   command.name = doc["name"].as<std::string>();
   command.read_cmd = ebus::to_vector(doc["read_cmd"].as<std::string>());
   command.write_cmd = ebus::to_vector(doc["write_cmd"].as<std::string>());
-  command.unit = doc["unit"].isNull() ? "" : doc["unit"].as<std::string>();
   command.active = doc["active"].as<bool>();
   command.interval =
       doc["interval"].isNull() ? 60 : doc["interval"].as<uint32_t>();
   command.last = 0;
   command.data = std::vector<uint8_t>();
+
+  // Data Fields
   command.master = doc["master"].as<bool>();
   command.position = doc["position"].as<size_t>();
   command.datatype = ebus::string_2_datatype(doc["datatype"].as<const char*>());
@@ -202,6 +199,9 @@ Command Store::createCommand(const JsonDocument& doc) {
   command.min = doc["min"].isNull() ? 1 : doc["min"].as<float>();
   command.max = doc["max"].isNull() ? 100 : doc["max"].as<float>();
   command.digits = doc["digits"].isNull() ? 2 : doc["digits"].as<uint8_t>();
+  command.unit = doc["unit"].isNull() ? "" : doc["unit"].as<std::string>();
+
+  // Home Assistant (OPTIONAL)
   command.ha = doc["ha"].isNull() ? false : doc["ha"].as<bool>();
 
   if (command.ha) {
@@ -215,44 +215,46 @@ Command Store::createCommand(const JsonDocument& doc) {
         (doc["ha_entity_category"].isNull()
              ? ""
              : doc["ha_entity_category"].as<std::string>());
-
-    command.ha_number_step = (doc["ha_number_step"].isNull()
-                                  ? 1
-                                  : (doc["ha_number_step"].as<float>() > 0
-                                         ? doc["ha_number_step"].as<float>()
-                                         : 1));
-    command.ha_number_mode = (doc["ha_number_mode"].isNull()
-                                  ? "auto"
-                                  : doc["ha_number_mode"].as<std::string>());
-    command.ha_select_options =
-        (doc["ha_select_options"].isNull()
+    command.ha_mode =
+        (doc["ha_mode"].isNull() ? "auto" : doc["ha_mode"].as<std::string>());
+    command.ha_options =
+        (doc["ha_options"].isNull() ? "" : doc["ha_options"].as<std::string>());
+    command.ha_options_default =
+        (doc["ha_options_default"].isNull()
              ? ""
-             : doc["ha_select_options"].as<std::string>());
-    command.ha_select_options_default =
-        (doc["ha_select_options_default"].isNull()
-             ? ""
-             : doc["ha_select_options_default"].as<std::string>());
+             : doc["ha_options_default"].as<std::string>());
     command.ha_payload_on =
         doc["ha_payload_on"].isNull() ? 1 : doc["ha_payload_on"].as<uint8_t>();
     command.ha_payload_off = doc["ha_payload_off"].isNull()
                                  ? 0
                                  : doc["ha_payload_off"].as<uint8_t>();
+    command.ha_state_class = (doc["ha_state_class"].isNull()
+                                  ? ""
+                                  : doc["ha_state_class"].as<std::string>());
+    command.ha_step =
+        (doc["ha_step"].isNull()
+             ? 1
+             : (doc["ha_step"].as<float>() > 0 ? doc["ha_step"].as<float>()
+                                               : 1));
   } else {
     command.ha_component = "";
     command.ha_device_class = "";
     command.ha_entity_category = "";
-    command.ha_number_step = 1;
-    command.ha_number_mode = "";
-    command.ha_select_options = "";
-    command.ha_select_options_default = "";
+    command.ha_mode = "";
+    command.ha_options = "";
+    command.ha_options_default = "";
     command.ha_payload_on = 1;
     command.ha_payload_off = 0;
+    command.ha_state_class = "";
+    command.ha_step = 1;
   }
 
   return command;
 }
 
 void Store::insertCommand(const Command& command) {
+  // TODO(yuhu-): Validation of required fields ?
+
   // Insert or update in allCommandsByKey
   auto it = allCommandsByKey.find(command.key);
   if (it != allCommandsByKey.end())
@@ -369,13 +371,15 @@ int64_t Store::wipeCommands() {
 JsonDocument Store::getCommandJson(const Command* command) {
   JsonDocument doc;
 
+  // Command Fields
   doc["key"] = command->key;
   doc["name"] = command->name;
   doc["read_cmd"] = ebus::to_string(command->read_cmd);
   doc["write_cmd"] = ebus::to_string(command->write_cmd);
-  doc["unit"] = command->unit;
   doc["active"] = command->active;
   doc["interval"] = command->interval;
+
+  // Data Fields
   doc["master"] = command->master;
   doc["position"] = command->position;
   doc["datatype"] = ebus::datatype_2_string(command->datatype);
@@ -383,16 +387,20 @@ JsonDocument Store::getCommandJson(const Command* command) {
   doc["min"] = command->min;
   doc["max"] = command->max;
   doc["digits"] = command->digits;
+  doc["unit"] = command->unit;
+
+  // Home Assistant (OPTIONAL)
   doc["ha"] = command->ha;
   doc["ha_component"] = command->ha_component;
   doc["ha_device_class"] = command->ha_device_class;
   doc["ha_entity_category"] = command->ha_entity_category;
-  doc["ha_number_step"] = command->ha_number_step;
-  doc["ha_number_mode"] = command->ha_number_mode;
-  doc["ha_select_options"] = command->ha_select_options;
-  doc["ha_select_options_default"] = command->ha_select_options_default;
+  doc["ha_mode"] = command->ha_mode;
+  doc["ha_options"] = command->ha_options;
+  doc["ha_options_default"] = command->ha_options_default;
   doc["ha_payload_on"] = command->ha_payload_on;
   doc["ha_payload_off"] = command->ha_payload_off;
+  doc["ha_state_class"] = command->ha_state_class;
+  doc["ha_step"] = command->ha_step;
 
   doc.shrinkToFit();
   return doc;
@@ -563,30 +571,16 @@ const std::string Store::serializeCommands() const {
   JsonDocument doc;
 
   // Define field names (order matters)
-  std::vector<std::string> fields = {"key",
-                                     "name",
-                                     "read_cmd",
-                                     "write_cmd",
-                                     "unit",
-                                     "active",
-                                     "interval",
-                                     "master",
-                                     "position",
-                                     "datatype",
-                                     "divider",
-                                     "min",
-                                     "max",
-                                     "digits",
-                                     "ha",
-                                     "ha_component",
-                                     "ha_device_class",
-                                     "ha_entity_category",
-                                     "ha_number_step",
-                                     "ha_number_mode",
-                                     "ha_select_options",
-                                     "ha_select_options_default",
-                                     "ha_payload_on",
-                                     "ha_payload_off"};
+  std::vector<std::string> fields = {
+      // Command Fields
+      "key", "name", "read_cmd", "write_cmd", "active", "interval",
+      // Data Fields
+      "master", "position", "datatype", "divider", "min", "max", "digits",
+      "unit",
+      // Home Assistant (OPTIONAL)
+      "ha", "ha_component", "ha_device_class", "ha_entity_category", "ha_mode",
+      "ha_options", "ha_options_default", "ha_payload_on", "ha_payload_off",
+      "ha_state_class", "ha_step"};
 
   // Add header as first entry
   JsonArray header = doc.add<JsonArray>();
@@ -596,13 +590,14 @@ const std::string Store::serializeCommands() const {
   for (const auto& kv : allCommandsByKey) {
     const Command& command = kv.second;
     JsonArray array = doc.add<JsonArray>();
+    // Command Fields
     array.add(command.key);
     array.add(command.name);
     array.add(ebus::to_string(command.read_cmd));
     array.add(ebus::to_string(command.write_cmd));
-    array.add(command.unit);
     array.add(command.active);
     array.add(command.interval);
+    // Data Fields
     array.add(command.master);
     array.add(command.position);
     array.add(ebus::datatype_2_string(command.datatype));
@@ -610,16 +605,19 @@ const std::string Store::serializeCommands() const {
     array.add(command.min);
     array.add(command.max);
     array.add(command.digits);
+    array.add(command.unit);
+    // Home Assistant (OPTIONAL)
     array.add(command.ha);
     array.add(command.ha_component);
     array.add(command.ha_device_class);
     array.add(command.ha_entity_category);
-    array.add(command.ha_number_step);
-    array.add(command.ha_number_mode);
-    array.add(command.ha_select_options);
-    array.add(command.ha_select_options_default);
+    array.add(command.ha_mode);
+    array.add(command.ha_options);
+    array.add(command.ha_options_default);
     array.add(command.ha_payload_on);
     array.add(command.ha_payload_off);
+    array.add(command.ha_state_class);
+    array.add(command.ha_step);
   }
 
   doc.shrinkToFit();

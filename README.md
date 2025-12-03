@@ -230,35 +230,41 @@ For an example of how to install a command via MQTT, see `Inserting (Installing)
 
 ```
 struct Command {
-  std::string key;                       // unique key of command
-  std::string name;                      // name of the command used as mqtt topic below "values/"
-  std::vector<uint8_t> read_cmd;         // read command as vector of "ZZPBSBNNDBx"
-  std::vector<uint8_t> write_cmd;        // write command as vector of "ZZPBSBNNDBx" (OPTIONAL, default: empty)
-  std::string unit;                      // unit of the interested part (OPTIONAL, default: empty)
-  bool active;                           // active sending of command
-  uint32_t interval;                     // minimum interval between two commands in seconds (OPTIONAL, default: 60)
-  uint32_t last;                         // last time of the successful command (INTERNAL)
-  std::vector<uint8_t> data;             // received raw data (INTERNAL)
-  bool master;                           // value of interest is in master or slave part
-  size_t position;                       // starting position in the interested part
-  ebus::DataType datatype;               // ebus data type
-  size_t length;                         // length of interested part (INTERNAL)
-  bool numeric;                          // indicate numeric types (INTERNAL)
-  float divider;                         // divider for value conversion (OPTIONAL, default: 1)
-  float min;                             // minimum value (OPTIONAL, default: 1)
-  float max;                             // maximum value (OPTIONAL, default: 100)
-  uint8_t digits;                        // decimal digits of value (OPTIONAL, default: 2)
-  bool ha;                               // home assistant support for auto discovery (OPTIONAL, default: false)
-  std::string ha_component;              // home assistant component type (OPTIONAL, default: sensor) 
-  std::string ha_device_class;           // home assistant device class (OPTIONAL, default: empty)
-  std::string ha_entity_category;        // home assistant entity category (OPTIONAL, default: empty)
-  float ha_number_step;                  // home assistant step value  (OPTIONAL, default: 1)
-  std::string ha_number_mode;            // home assistant mode (OPTIONAL, default: auto)
-  std::string ha_select_options;         // home assistant select options (OPTIONAL, default: empty)
-                                         // key:value,... e.g. "On:1,Off:2,Auto:3,Eco:4,Night:5"
-  std::string ha_select_options_default; // home assistant select default option (OPTIONAL, default: first option)
-  uint8_t ha_payload_on;                 // home assistant payload for ON state (OPTIONAL, default: 1)
-  uint8_t ha_payload_off;                // home assistant payload for OFF state (OPTIONAL, default: 0)
+  // Command Fields
+  std::string key = "";                           // unique key of command
+  std::string name = "";                          // name of the command used as mqtt topic below "values/"
+  std::vector<uint8_t> read_cmd = {};             // read command as vector of "ZZPBSBNNDBx"
+  std::vector<uint8_t> write_cmd = {};            // write command as vector of "ZZPBSBNNDBx" (OPTIONAL)
+  bool active = false;                            // active sending of command
+  uint32_t interval = 60;                         // minimum interval between two commands in seconds (OPTIONAL)
+  uint32_t last = 0;                              // last time of the successful command (INTERNAL)
+  std::vector<uint8_t> data = {};                 // received raw data (INTERNAL)
+
+  // Data Fields
+  bool master = false;                            // value of interest is in master or slave part
+  size_t position = 1;                            // starting position
+  ebus::DataType datatype = ebus::DataType::HEX1; // ebus data type
+  size_t length = 1;                              // length (INTERNAL)
+  bool numeric = false;                           // indicate numeric types (INTERNAL)
+  float divider = 1;                              // divider for value conversion (OPTIONAL)
+  float min = 1;                                  // minimum value (OPTIONAL)
+  float max = 100;                                // maximum value (OPTIONAL)
+  uint8_t digits = 2;                             // decimal digits of value (OPTIONAL)
+  std::string unit = "";                          // unit (OPTIONAL)
+          
+  // Home Assistant (OPTIONAL)          
+  bool ha = false;                                // home assistant support for auto discovery
+  std::string ha_component = "";                  // home assistant component type
+  std::string ha_device_class = "";               // home assistant device class
+  std::string ha_entity_category = "";            // home assistant entity category
+  std::string ha_mode = "auto";                   // home assistant mode
+  std::string ha_options = "";                    // home assistant select options
+                                                  // key:value,... e.g. "On:1,Off:2,Auto:3,Eco:4,Night:5"
+  std::string ha_options_default = "";            // home assistant select default option
+  uint8_t ha_payload_on = 1;                      // home assistant payload for ON state
+  uint8_t ha_payload_off = 0;                     // home assistant payload for OFF state
+  std::string ha_state_class = "";                // home assistant state class
+  float ha_step = 1;                              // home assistant step value
 };
 ```
 
@@ -345,6 +351,76 @@ Home Assistant support can be globally activated on the configuration web page.
 - Once Home Assistant support is activated there will be the followed MQTT topics created under **homeassistant**.
 - A running Home Assistant instance should create new entities in Home Assistant if MQTT autodiscovery is enabled.
 
+
+**Table of used fields / components**
+
+- x...Used / Supported
+- O...Optional
+- R...Required
+
+| Used | Field                       | Type           | Default | Sensor | Binary Sensor | Switch | Number | Select |
+| ---- | --------------------------- | -------------- | ------- | ------ | ------------- | ------ | ------ | ------ |
+|      | availability                | list           |         | O      | O             | O      | O      | O      |
+|      | \- payload_available        | string         | online  | O      | O             | O      | O      | O      |
+|      | \- payload_not_available    | string         | offline | O      | O             | O      | O      | O      |
+|      | \- topic                    | string         |         | O      | O             | O      | O      | O      |
+|      | \- value_template           | template       |         | O      | O             | O      |        | O      |
+|      | availability_mode           | string         | latest  | O      | O             | O      | O      | O      |
+|      | availability_template       | template       |         | O      | O             | O      |        | O      |
+|      | availability_topic          | string         |         | O      | O             | O      | O      | O      |
+| x    | command_template            | template       |         |        |               | O      | O      | O      |
+| x    | command_topic               | string         |         |        |               | O      | O      | O      |
+|      | default_entity_id           | string         |         | O      | O             | O      | O      | O      |
+| x    | device                      | map            |         | O      | O             | O      | O      | O      |
+| x    | \- configuration_url        | string         |         | O      | O             | O      | O      | O      |
+|      | \- connections              | list           |         | O      | O             | O      | O      | O      |
+| x    | \- hw_version               | string         |         | O      | O             | O      | O      | O      |
+| x    | \- identifiers              | list \| string |         | O      | O             | O      | O      | O      |
+| x    | \- manufacturer             | string         |         | O      | O             | O      | O      | O      |
+| x    | \- model                    | string         |         | O      | O             | O      | O      | O      |
+| x    | \- model_id                 | string         |         | O      | O             | O      | O      | O      |
+| x    | \- name                     | string         |         | O      | O             | O      | O      | O      |
+| x    | \- serial_number            | string         |         | O      | O             | O      | O      | O      |
+|      | \- suggested_area           | string         |         | O      | O             | O      | O      | O      |
+| x    | \- sw_version               | string         |         | O      | O             | O      | O      | O      |
+|      | \- via_device               | string         |         | O      | O             | O      | O      | O      |
+| x    | device_class                | string         |         | O      | O             | O      | O      |        |
+|      | enabled_by_default          | boolean        | true    | O      | O             | O      | O      | O      |
+|      | encoding                    | string         | Utf-8   | O      | O             | O      | O      | O      |
+| x    | entity_category             | string         |         | O      | O             | O      | O      | O      |
+|      | entity_picture              | string         |         | O      | O             | O      | O      | O      |
+|      | expire_after                | integer        | 0       | O      | O             |        |        |        |
+|      | force_update                | boolean        | false   | O      | O             |        |        |        |
+|      | icon                        | icon           |         | O      | O             | O      | O      | O      |
+|      | json_attributes_template    | template       |         | O      | O             | O      | O      | O      |
+|      | json_attributes_topic       | string         |         | O      | O             | O      | O      | O      |
+|      | last_reset_value_template   | template       |         | O      |               |        |        |        |
+| x    | min                         | float          | 1       |        |               |        | O      |        |
+| x    | max                         | float          | 100     |        |               |        | O      |        |
+| x    | mode                        | string         | auto    |        |               |        | O      |        |
+| x    | name                        | string         |         | O      | O             | O      | O      | O      |
+|      | off_delay                   | integer        |         |        | O             |        |        |        |
+|      | optimistic                  | boolean        | true    |        |               | O      | O      | O      |
+| x    | options                     | list           |         | O      |               |        |        | R      |
+|      | payload_available           | string         | online  | O      | O             | O      |        |        |
+|      | payload_not_available       | string         | offline | O      | O             | O      |        |        |
+| x    | payload_off                 | string         | OFF     |        | O             | O      |        |        |
+| x    | payload_on                  | string         | ON      |        | O             | O      |        |        |
+|      | payload_reset               | string         | None    |        |               |        | O      |        |
+|      | platform                    | string         |         | R      | R             | R      | R      | R      |
+|      | retain                      | boolean        | false   |        |               | O      | O      | O      |
+|      | suggested_display_precision | integer        |         | O      |               |        |        |        |
+|      | qos                         | integer        | 0       | O      | O             | O      | O      | O      |
+| x    | state_class                 | string         |         | O      |               |        |        |        |
+| x    | step                        | float          | 1       |        |               |        | O      |        |
+|      | state_off                   | string         |         |        |               | O      |        |        |
+|      | state_on                    | string         |         |        |               | O      |        |        |
+|      | state_topic                 | string         |         | R      | R             | O      | O      | O      |
+| x    | unique_id                   | string         |         | O      | O             | O      | O      | O      |
+| x    | unit_of_measurement         | string         |         | O      |               |        | O      |        |
+| x    | value_template              | template       |         | O      | O             | O      | O      | O      |
+
+
 **The following entries should be displayed below MQTT Device**
 - Diagnostic - Uptime of device (DD HH:MM:SS)
 - Diagnostic - Free Heap
@@ -417,7 +493,6 @@ payload: - sensor
       "key": "01",                       // unique key of command
       "name": "outdoor/temperature",     // mqtt topic below "values/"
       "read_cmd": "fe070009",            // read command as vector of "ZZPBSBNNDBx"
-      "unit": "°C",                      // unit of the interested part
       "active": false,                   // active sending of command
       "interval": 0,                     // minimum interval between two commands in seconds
       "master": true,                    // value of interest is in master or slave part
@@ -425,6 +500,7 @@ payload: - sensor
       "datatype": "DATA2B",              // ebus datatype
       "divider": 1,                      // divider for value conversion
       "digits": 2,                       // deciaml digits of value
+      "unit": "°C",                      // unit of the interested part
       "ha": true,                        // home assistant support for auto discovery
       "ha_component": "sensor",          // home assistant component type
       "ha_device_class": "temperature"   // home assistant device class
@@ -433,7 +509,7 @@ payload: - sensor
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","read_cmd":"fe070009","unit":"°C","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","ha":true,"ha_component":"sensor","ha_device_class":"temperature"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"01","read_cmd":"fe070009","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"digits":2,"topic":"outdoor/temperature","unit":"°C","ha":true,"ha_component":"sensor","ha_device_class":"temperature"}]}'
 ```
 
 ```
@@ -446,7 +522,6 @@ payload: - number
       "name": "desired_temp_low",        // mqtt topic below "values/"
       "read_cmd": "50b509030d3300",      // read command as vector of "ZZPBSBNNDBx"
       "write_cmd": "50b509040e3300",     // write command as vector of "ZZPBSBNNDBx"
-      "unit": "°C",                      // unit of the interested part
       "active": true,                    // active sending of command
       "interval": 60,                    // minimum interval between two commands in seconds
       "master": false,                   // value of interest is in master or slave part
@@ -456,6 +531,7 @@ payload: - number
       "min": 15,                         // minimum value
       "max": 20,                         // maximum value
       "digits": 2,                       // deciaml digits of value
+      "unit": "°C",                      // unit of the interested part
       "ha": true,                        // home assistant support for auto discovery
       "ha_component": "number",          // home assistant component type
       "ha_device_class": "temperature",  // home assistant device class
@@ -466,7 +542,7 @@ payload: - number
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"55","name":"desired_temp_low","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","unit":"°C","active":true,"interval":60,"master":false,"position":1,"datatype":"DATA1C","divider":1,"min":15,"max":20,"digits":2,"ha":true,"ha_component":"number","ha_device_class":"temperature","ha_number_step":1,"ha_number_mode":"box"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"55","name":"desired_temp_low","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","active":true,"interval":60,"master":false,"position":1,"datatype":"DATA1C","divider":1,"min":15,"max":20,"digits":2,"unit":"°C","ha":true,"ha_component":"number","ha_device_class":"temperature","ha_number_step":1,"ha_number_mode":"box"}]}'
 ```
 
 ```
@@ -515,14 +591,14 @@ payload: - binary_sensor
       "ha": true,                        // home assistant support for auto discovery
       "ha_component": "binary_sensor",   // home assistant component type
       "ha_device_class": "running",      // home assistant device class
-      "payload_on": 1,                   // home assistant payload for ON state               
-      "payload_off": 0                   // home assistant payload for OFF state 
+      "ha_payload_on": 1,                // home assistant payload for ON state               
+      "ha_payload_off": 0                // home assistant payload for OFF state 
     }
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"77","name":"compressor","read_cmd":"08b509030d1d00","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"binary_sensor","ha_device_class":"running","payload_on":1,"payload_off":0}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"77","name":"compressor","read_cmd":"08b509030d1d00","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"binary_sensor","ha_device_class":"running","ha_payload_on":1,"ha_payload_off":0}]}'
 
 ```
 
