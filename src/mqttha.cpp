@@ -170,7 +170,7 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
     c.fields["entity_category"] = command->ha_entity_category;
   if (!command->ha_state_class.empty())
     c.fields["state_class"] = command->ha_state_class;
-  c.fields["unit_of_measurement"] = command->unit;
+  if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
   c.fields["value_template"] = "{{value_json.value}}";
   return c;
 }
@@ -182,7 +182,7 @@ MqttHA::Component MqttHA::createNumber(const Command* command) const {
     c.fields["device_class"] = command->ha_device_class;
   if (!command->ha_entity_category.empty())
     c.fields["entity_category"] = command->ha_entity_category;
-  c.fields["unit_of_measurement"] = command->unit;
+  if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
   c.fields["value_template"] = "{{value_json.value}}";
   c.fields["command_topic"] = commandTopic;
   c.fields["command_template"] =
