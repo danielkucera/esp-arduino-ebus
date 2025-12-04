@@ -217,8 +217,9 @@ Command Store::createCommand(const JsonDocument& doc) {
              : doc["ha_entity_category"].as<std::string>());
     command.ha_mode =
         (doc["ha_mode"].isNull() ? "auto" : doc["ha_mode"].as<std::string>());
-    command.ha_options =
-        (doc["ha_options"].isNull() ? "" : doc["ha_options"].as<std::string>());
+    command.ha_options_list = (doc["ha_options_list"].isNull()
+                                   ? ""
+                                   : doc["ha_options_list"].as<std::string>());
     command.ha_options_default =
         (doc["ha_options_default"].isNull()
              ? ""
@@ -241,7 +242,7 @@ Command Store::createCommand(const JsonDocument& doc) {
     command.ha_device_class = "";
     command.ha_entity_category = "";
     command.ha_mode = "";
-    command.ha_options = "";
+    command.ha_options_list = "";
     command.ha_options_default = "";
     command.ha_payload_on = 1;
     command.ha_payload_off = 0;
@@ -395,7 +396,7 @@ JsonDocument Store::getCommandJson(const Command* command) {
   doc["ha_device_class"] = command->ha_device_class;
   doc["ha_entity_category"] = command->ha_entity_category;
   doc["ha_mode"] = command->ha_mode;
-  doc["ha_options"] = command->ha_options;
+  doc["ha_options_list"] = command->ha_options_list;
   doc["ha_options_default"] = command->ha_options_default;
   doc["ha_payload_on"] = command->ha_payload_on;
   doc["ha_payload_off"] = command->ha_payload_off;
@@ -579,8 +580,8 @@ const std::string Store::serializeCommands() const {
       "unit",
       // Home Assistant (OPTIONAL)
       "ha", "ha_component", "ha_device_class", "ha_entity_category", "ha_mode",
-      "ha_options", "ha_options_default", "ha_payload_on", "ha_payload_off",
-      "ha_state_class", "ha_step"};
+      "ha_options_list", "ha_options_default", "ha_payload_on",
+      "ha_payload_off", "ha_state_class", "ha_step"};
 
   // Add header as first entry
   JsonArray header = doc.add<JsonArray>();
@@ -612,7 +613,7 @@ const std::string Store::serializeCommands() const {
     array.add(command.ha_device_class);
     array.add(command.ha_entity_category);
     array.add(command.ha_mode);
-    array.add(command.ha_options);
+    array.add(command.ha_options_list);
     array.add(command.ha_options_default);
     array.add(command.ha_payload_on);
     array.add(command.ha_payload_off);

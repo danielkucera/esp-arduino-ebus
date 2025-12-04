@@ -55,9 +55,9 @@ struct Command {
   std::string ha_device_class = "";               // home assistant device class
   std::string ha_entity_category = "";            // home assistant entity category
   std::string ha_mode = "auto";                   // home assistant mode
-  std::string ha_options = "";                    // home assistant select options
-                                                  // key:value,... e.g. "On:1,Off:2,Auto:3,Eco:4,Night:5"
-  std::string ha_options_default = "";            // home assistant select default option
+  std::string ha_options_list = "";               // home assistant options
+                                                  // key=value;... e.g. "On=1;Off=2;Auto=3"
+  std::string ha_options_default = "";            // home assistant default option
   uint8_t ha_payload_on = 1;                      // home assistant payload for ON state
   uint8_t ha_payload_off = 0;                     // home assistant payload for OFF state
   std::string ha_state_class = "";                // home assistant state class

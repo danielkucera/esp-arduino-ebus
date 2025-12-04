@@ -149,15 +149,15 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
 }
 
 std::tuple<std::vector<std::string>, std::string, std::string>
-MqttHA::createOptions(const std::string& ha_options,
+MqttHA::createOptions(const std::string& ha_options_list,
                       const std::string& ha_options_default) const {
-  // Parse ha_options string into vector of pairs
+  // Parse ha_options_list string into vector of pairs
   std::vector<std::pair<std::string, int>> optionsVec;
   std::vector<std::string> options;
-  std::istringstream ss(ha_options);
+  std::istringstream ss(ha_options_list);
   std::string token;
-  while (std::getline(ss, token, ',')) {
-    size_t sep = token.find(':');
+  while (std::getline(ss, token, ';')) {
+    size_t sep = token.find('=');
     if (sep != std::string::npos) {
       std::string name = token.substr(0, sep);
       int value = std::stoi(token.substr(sep + 1));
@@ -229,9 +229,9 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
     c.fields["state_class"] = command->ha_state_class;
   if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
 
-  if (!command->ha_options.empty()) {
+  if (!command->ha_options_list.empty()) {
     std::tuple<std::vector<std::string>, std::string, std::string> options =
-        createOptions(command->ha_options, command->ha_options_default);
+        createOptions(command->ha_options_list, command->ha_options_default);
 
     c.options = std::get<0>(options);
     c.fields["value_template"] = std::get<1>(options);
@@ -270,7 +270,7 @@ MqttHA::Component MqttHA::createSelect(const Command* command) const {
   c.fields["command_topic"] = commandTopic;
 
   std::tuple<std::vector<std::string>, std::string, std::string> options =
-      createOptions(command->ha_options, command->ha_options_default);
+      createOptions(command->ha_options_list, command->ha_options_default);
 
   c.options = std::get<0>(options);
   c.fields["value_template"] = std::get<1>(options);

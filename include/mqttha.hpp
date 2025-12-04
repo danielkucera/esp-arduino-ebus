@@ -70,7 +70,7 @@ class MqttHA {
 
   // <0> options, <1> valueMap, <2> cmdMap
   std::tuple<std::vector<std::string>, std::string, std::string> createOptions(
-      const std::string& ha_options,
+      const std::string& ha_options_list,
       const std::string& ha_options_default) const;
 
   Component createComponent(const std::string& component,
