@@ -101,10 +101,11 @@ void handleCommandsInsert() {
   if (error) {
     configServer.send(403, "text/html", "INVALID JSON");
   } else {
-    JsonArray array = doc["commands"].as<JsonArray>();
-    if (array != nullptr) {
-      for (JsonVariant variant : array)
-        store.insertCommand(store.createCommand(variant));
+    JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
+    if (!commands.isNull()) {
+      for (JsonVariantConst command : commands)
+        store.insertCommand(store.createCommand(command));
+      if (mqttha.isEnabled()) mqttha.publishComponents();
       configServer.send(200, "text/html", "OK");
     } else {
       configServer.send(403, "text/html", "NO COMMANDS");
