@@ -215,9 +215,11 @@ Command Store::createCommand(const JsonDocument& doc) {
 
     if (!doc["ha_options_list"].isNull()) {
       JsonObjectConst ha_options_list = doc["ha_options_list"];
-      for (JsonPairConst kv : ha_options_list)
+      for (JsonPairConst kv : ha_options_list) {
+        // TODO(yuhu-): handle std::stoi exceptions
         command.ha_options_list[std::stoi(kv.key().c_str())] =
             kv.value().as<std::string>();
+      }
     }
 
     if (!doc["ha_options_default"].isNull())
