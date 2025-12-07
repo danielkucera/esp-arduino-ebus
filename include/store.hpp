@@ -36,7 +36,7 @@ struct Command {
   uint32_t interval = 60;                         // minimum interval between two commands in seconds (OPTIONAL)
   uint32_t last = 0;                              // last time of the successful command (INTERNAL)
   std::vector<uint8_t> data = {};                 // received raw data (INTERNAL)
-
+  
   // Data Fields
   bool master = false;                            // value of interest is in master or slave part
   size_t position = 1;                            // starting position
@@ -55,8 +55,8 @@ struct Command {
   std::string ha_device_class = "";               // home assistant device class
   std::string ha_entity_category = "";            // home assistant entity category
   std::string ha_mode = "auto";                   // home assistant mode
-  std::string ha_options_list = "";               // home assistant options
-                                                  // key=value;... e.g. "On=1;Off=2;Auto=3"
+  std::unordered_map<std::string, int>            
+    ha_options_list = {};                         // home assistant options as pairs of "key":value 
   std::string ha_options_default = "";            // home assistant default option
   uint8_t ha_payload_on = 1;                      // home assistant payload for ON state
   uint8_t ha_payload_off = 0;                     // home assistant payload for OFF state

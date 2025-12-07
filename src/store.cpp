@@ -179,10 +179,11 @@ Command Store::createCommand(const JsonDocument& doc) {
   command.key = doc["key"].as<std::string>();
   command.name = doc["name"].as<std::string>();
   command.read_cmd = ebus::to_vector(doc["read_cmd"].as<std::string>());
-  command.write_cmd = ebus::to_vector(doc["write_cmd"].as<std::string>());
+  if (!doc["write_cmd"].isNull())
+    command.write_cmd = ebus::to_vector(doc["write_cmd"].as<std::string>());
   command.active = doc["active"].as<bool>();
-  command.interval =
-      doc["interval"].isNull() ? 60 : doc["interval"].as<uint32_t>();
+  if (!doc["interval"].isNull())
+    command.interval = doc["interval"].as<uint32_t>();
   command.last = 0;
   command.data = std::vector<uint8_t>();
 
@@ -192,62 +193,43 @@ Command Store::createCommand(const JsonDocument& doc) {
   command.datatype = ebus::string_2_datatype(doc["datatype"].as<const char*>());
   command.length = ebus::sizeof_datatype(command.datatype);
   command.numeric = ebus::typeof_datatype(command.datatype);
-  command.divider =
-      doc["divider"].isNull()
-          ? 1
-          : (doc["divider"].as<float>() > 0 ? doc["divider"].as<float>() : 1);
-  command.min = doc["min"].isNull() ? 1 : doc["min"].as<float>();
-  command.max = doc["max"].isNull() ? 100 : doc["max"].as<float>();
-  command.digits = doc["digits"].isNull() ? 2 : doc["digits"].as<uint8_t>();
-  command.unit = doc["unit"].isNull() ? "" : doc["unit"].as<std::string>();
+  if (!doc["divider"].isNull() && doc["divider"].as<float>() > 0)
+    command.divider = doc["divider"].as<float>();
+  if (!doc["min"].isNull()) command.min = doc["min"].as<float>();
+  if (!doc["max"].isNull()) command.max = doc["max"].as<float>();
+  if (!doc["digits"].isNull()) command.digits = doc["digits"].as<uint8_t>();
+  if (!doc["unit"].isNull()) command.unit = doc["unit"].as<std::string>();
 
   // Home Assistant (OPTIONAL)
-  command.ha = doc["ha"].isNull() ? false : doc["ha"].as<bool>();
+  if (!doc["ha"].isNull()) command.ha = doc["ha"].as<bool>();
 
   if (command.ha) {
-    command.ha_component =
-        (doc["ha_component"].isNull() ? "sensor"
-                                      : doc["ha_component"].as<std::string>());
-    command.ha_device_class = (doc["ha_device_class"].isNull()
-                                   ? ""
-                                   : doc["ha_device_class"].as<std::string>());
-    command.ha_entity_category =
-        (doc["ha_entity_category"].isNull()
-             ? ""
-             : doc["ha_entity_category"].as<std::string>());
-    command.ha_mode =
-        (doc["ha_mode"].isNull() ? "auto" : doc["ha_mode"].as<std::string>());
-    command.ha_options_list = (doc["ha_options_list"].isNull()
-                                   ? ""
-                                   : doc["ha_options_list"].as<std::string>());
-    command.ha_options_default =
-        (doc["ha_options_default"].isNull()
-             ? ""
-             : doc["ha_options_default"].as<std::string>());
-    command.ha_payload_on =
-        doc["ha_payload_on"].isNull() ? 1 : doc["ha_payload_on"].as<uint8_t>();
-    command.ha_payload_off = doc["ha_payload_off"].isNull()
-                                 ? 0
-                                 : doc["ha_payload_off"].as<uint8_t>();
-    command.ha_state_class = (doc["ha_state_class"].isNull()
-                                  ? ""
-                                  : doc["ha_state_class"].as<std::string>());
-    command.ha_step =
-        (doc["ha_step"].isNull()
-             ? 1
-             : (doc["ha_step"].as<float>() > 0 ? doc["ha_step"].as<float>()
-                                               : 1));
-  } else {
-    command.ha_component = "";
-    command.ha_device_class = "";
-    command.ha_entity_category = "";
-    command.ha_mode = "";
-    command.ha_options_list = "";
-    command.ha_options_default = "";
-    command.ha_payload_on = 1;
-    command.ha_payload_off = 0;
-    command.ha_state_class = "";
-    command.ha_step = 1;
+    if (!doc["ha_component"].isNull())
+      command.ha_component = doc["ha_component"].as<std::string>();
+    if (!doc["ha_device_class"].isNull())
+      command.ha_device_class = doc["ha_device_class"].as<std::string>();
+    if (!doc["ha_entity_category"].isNull())
+      command.ha_entity_category = doc["ha_entity_category"].as<std::string>();
+    if (!doc["ha_mode"].isNull())
+      command.ha_mode = doc["ha_mode"].as<std::string>();
+
+    if (!doc["ha_options_list"].isNull()) {
+      JsonObjectConst ha_options_list = doc["ha_options_list"];
+      for (JsonPairConst kv : ha_options_list)
+        command.ha_options_list[std::string(kv.key().c_str())] =
+            kv.value().as<int>();
+    }
+
+    if (!doc["ha_options_default"].isNull())
+      command.ha_options_default = doc["ha_options_default"].as<std::string>();
+    if (!doc["ha_payload_on"].isNull())
+      command.ha_payload_on = doc["ha_payload_on"].as<uint8_t>();
+    if (!doc["ha_payload_off"].isNull())
+      command.ha_payload_off = doc["ha_payload_off"].as<uint8_t>();
+    if (!doc["ha_state_class"].isNull())
+      command.ha_state_class = doc["ha_state_class"].as<std::string>();
+    if (!doc["ha_step"].isNull() && doc["ha_step"].as<float>() > 0)
+      command.ha_step = doc["ha_step"].as<float>();
   }
 
   return command;
@@ -396,7 +378,11 @@ JsonDocument Store::getCommandJson(const Command* command) {
   doc["ha_device_class"] = command->ha_device_class;
   doc["ha_entity_category"] = command->ha_entity_category;
   doc["ha_mode"] = command->ha_mode;
-  doc["ha_options_list"] = command->ha_options_list;
+
+  JsonObject ha_options_list = doc["ha_options_list"].to<JsonObject>();
+  for (const auto& option : command->ha_options_list)
+    ha_options_list[option.first] = option.second;
+
   doc["ha_options_default"] = command->ha_options_default;
   doc["ha_payload_on"] = command->ha_payload_on;
   doc["ha_payload_off"] = command->ha_payload_off;
@@ -575,9 +561,11 @@ const std::string Store::serializeCommands() const {
   std::vector<std::string> fields = {
       // Command Fields
       "key", "name", "read_cmd", "write_cmd", "active", "interval",
+
       // Data Fields
       "master", "position", "datatype", "divider", "min", "max", "digits",
       "unit",
+
       // Home Assistant (OPTIONAL)
       "ha", "ha_component", "ha_device_class", "ha_entity_category", "ha_mode",
       "ha_options_list", "ha_options_default", "ha_payload_on",
@@ -591,6 +579,7 @@ const std::string Store::serializeCommands() const {
   for (const auto& kv : allCommandsByKey) {
     const Command& command = kv.second;
     JsonArray array = doc.add<JsonArray>();
+
     // Command Fields
     array.add(command.key);
     array.add(command.name);
@@ -598,6 +587,7 @@ const std::string Store::serializeCommands() const {
     array.add(ebus::to_string(command.write_cmd));
     array.add(command.active);
     array.add(command.interval);
+
     // Data Fields
     array.add(command.master);
     array.add(command.position);
@@ -607,13 +597,18 @@ const std::string Store::serializeCommands() const {
     array.add(command.max);
     array.add(command.digits);
     array.add(command.unit);
+
     // Home Assistant (OPTIONAL)
     array.add(command.ha);
     array.add(command.ha_component);
     array.add(command.ha_device_class);
     array.add(command.ha_entity_category);
     array.add(command.ha_mode);
-    array.add(command.ha_options_list);
+
+    JsonObject ha_options_list = array.add<JsonObject>();
+    for (const auto& option : command.ha_options_list)
+      ha_options_list[option.first] = option.second;
+
     array.add(command.ha_options_default);
     array.add(command.ha_payload_on);
     array.add(command.ha_payload_off);
@@ -644,7 +639,17 @@ void Store::deserializeCommands(const char* payload) {
       JsonArray values = array[i];
       JsonDocument tmpDoc;
       for (size_t j = 0; j < fields.size() && j < values.size(); ++j) {
-        tmpDoc[fields[j]] = values[j];
+        // Special handling for 'ha_options_list'
+        if (fields[j] == "ha_options_list") {
+          JsonObjectConst options = values[j].as<JsonObject>();
+          JsonObject ha_options_list =
+              tmpDoc["ha_options_list"].to<JsonObject>();
+
+          for (JsonPairConst option : options)
+            ha_options_list[option.key()] = option.value();
+        } else {
+          tmpDoc[fields[j]] = values[j];
+        }
       }
       insertCommand(createCommand(tmpDoc));
     }

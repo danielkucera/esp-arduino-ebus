@@ -258,8 +258,8 @@ struct Command {
   std::string ha_device_class = "";               // home assistant device class
   std::string ha_entity_category = "";            // home assistant entity category
   std::string ha_mode = "auto";                   // home assistant mode
-  std::string ha_options_list = "";               // home assistant options
-                                                  // key=value;... e.g. "On=1;Off=2;Auto=3"
+  std::unordered_map<std::string, int>            
+    ha_options_list = {};                         // home assistant options as pairs of "key":value 
   std::string ha_options_default = "";            // home assistant default option
   uint8_t ha_payload_on = 1;                      // home assistant payload for ON state
   uint8_t ha_payload_off = 0;                     // home assistant payload for OFF state
@@ -415,7 +415,7 @@ Home Assistant support can be globally activated on the configuration web page.
 | x    | step                        | float          | 1       |        |               |        | O      |        |
 |      | state_off                   | string         |         |        |               | O      |        |        |
 |      | state_on                    | string         |         |        |               | O      |        |        |
-|      | state_topic                 | string         |         | R      | R             | O      | O      | O      |
+| x    | state_topic                 | string         |         | R      | R             | O      | O      | O      |
 | x    | unique_id                   | string         |         | O      | O             | O      | O      | O      |
 | x    | unit_of_measurement         | string         |         | O      |               |        | O      |        |
 | x    | value_template              | template       |         | O      | O             | O      | O      | O      |
@@ -564,14 +564,14 @@ payload: - select
       "ha_component": "select",          // home assistant component type
       "ha_device_class": "enum",         // home assistant device class
       "ha_entity_category": "config",    // home assistant entity category
-      "ha_options": "On=1;Off=2;Auto=3;Eco=4;Night=5", // home assistant possible options
+      "ha_options_list": "ha_options_list":{"On":1,"Off":2,"Auto":3,"Eco":4,"Night":5}, // home assistant possible options
       "ha_options_default": "Auto"       // home assistant default option
     }
   ]
 }
 ```
 ```
-mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"66","name":"operating_mode","read_cmd":"50b509030d2b00","write_cmd":"50b509040e2b00","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"select","ha_device_class":"enum","ha_entity_category":"config","ha_options":"On=1;Off=2;Auto=3;Eco=4;Night=5","ha_options_default":"Auto"}]}'
+mosquitto_pub -h server -t 'ebus/8406ac/request' -m '{"id":"insert","commands":[{"key":"66","name":"operating_mode","read_cmd":"50b509030d2b00","write_cmd":"50b509040e2b00","active":true,"interval":60,"master":false,"position":1,"datatype":"UINT8","ha":true,"ha_component":"select","ha_device_class":"enum","ha_entity_category":"config","ha_options_list":{"On":1,"Off":2,"Auto":3,"Eco":4,"Night":5},"ha_options_default":"Auto"}]}'
 ```
 
 ```

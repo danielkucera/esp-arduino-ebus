@@ -1,6 +1,5 @@
 #if defined(EBUS_INTERNAL)
 #include <mqttha.hpp>
-#include <sstream>
 
 MqttHA mqttha;
 
@@ -149,21 +148,17 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
 }
 
 std::tuple<std::vector<std::string>, std::string, std::string>
-MqttHA::createOptions(const std::string& ha_options_list,
-                      const std::string& ha_options_default) const {
-  // Parse ha_options_list string into vector of pairs
+MqttHA::createOptions(
+    const std::unordered_map<std::string, int>& ha_options_list,
+    const std::string& ha_options_default) {
+  // Create a vector of options names and a vector of pairs
   std::vector<std::pair<std::string, int>> optionsVec;
   std::vector<std::string> options;
-  std::istringstream ss(ha_options_list);
-  std::string token;
-  while (std::getline(ss, token, ';')) {
-    size_t sep = token.find('=');
-    if (sep != std::string::npos) {
-      std::string name = token.substr(0, sep);
-      int value = std::stoi(token.substr(sep + 1));
-      optionsVec.push_back({name, value});
-      options.push_back(name);
-    }
+
+  // Populate optionsVec and options from the unordered_map
+  for (const auto& pair : ha_options_list) {
+    optionsVec.push_back(pair);
+    options.push_back(pair.first);
   }
 
   // Determine default option name and value
