@@ -221,7 +221,7 @@ Command Store::createCommand(const JsonDocument& doc) {
     }
 
     if (!doc["ha_options_default"].isNull())
-      command.ha_options_default = doc["ha_options_default"].as<std::string>();
+      command.ha_options_default = doc["ha_options_default"].as<int>();
     if (!doc["ha_payload_on"].isNull())
       command.ha_payload_on = doc["ha_payload_on"].as<uint8_t>();
     if (!doc["ha_payload_off"].isNull())

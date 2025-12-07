@@ -56,7 +56,7 @@ struct Command {
   std::string ha_entity_category = "";             // home assistant entity category
   std::string ha_mode = "auto";                    // home assistant mode
   std::map<int, std::string> ha_options_list = {}; // home assistant options as pairs of "key":"value"
-  std::string ha_options_default = "";             // home assistant default option
+  int ha_options_default = 0;                      // home assistant options default key
   uint8_t ha_payload_on = 1;                       // home assistant payload for ON state
   uint8_t ha_payload_off = 0;                      // home assistant payload for OFF state
   std::string ha_state_class = "";                 // home assistant state class

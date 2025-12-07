@@ -149,7 +149,7 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
 
 std::tuple<std::vector<std::string>, std::string, std::string>
 MqttHA::createOptions(const std::map<int, std::string>& ha_options_list,
-                      const std::string& ha_options_default) {
+                      const int& ha_options_default) {
   // Create a vector of options names and a vector of pairs
   std::vector<std::pair<std::string, int>> optionsVec;
   std::vector<std::string> options;
@@ -165,7 +165,7 @@ MqttHA::createOptions(const std::map<int, std::string>& ha_options_list,
   const auto defaultIt =
       std::find_if(optionsVec.begin(), optionsVec.end(),
                    [&](const std::pair<std::string, int>& opt) {
-                     return opt.first == ha_options_default;
+                     return opt.second == ha_options_default;
                    });
 
   std::string defaultOptionName = optionsVec.empty() ? "" : optionsVec[0].first;
