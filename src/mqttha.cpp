@@ -147,9 +147,9 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
   return c;
 }
 
-std::tuple<std::vector<std::string>, std::string, std::string>
-MqttHA::createOptions(const std::map<int, std::string>& ha_options_list,
-                      const int& ha_options_default) {
+MqttHA::OptionsResult MqttHA::createOptions(
+    const std::map<int, std::string>& ha_options_list,
+    const int& ha_options_default) {
   // Create a vector of options names and a vector of pairs
   std::vector<std::pair<std::string, int>> optionsVec;
   std::vector<std::string> options;
@@ -197,7 +197,7 @@ MqttHA::createOptions(const std::map<int, std::string>& ha_options_list,
   cmdMap += "} %}{{ values[value] if value in values.keys() else " +
             std::to_string(defaultOptionValue) + " }}";
 
-  return std::make_tuple(options, valueMap, cmdMap);
+  return OptionsResult{options, valueMap, cmdMap};
 }
 
 MqttHA::Component MqttHA::createBinarySensor(const Command* command) const {
@@ -225,11 +225,11 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
   if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
 
   if (!command->ha_options_list.empty()) {
-    std::tuple<std::vector<std::string>, std::string, std::string> options =
+    OptionsResult optionsResult =
         createOptions(command->ha_options_list, command->ha_options_default);
 
-    c.options = std::get<0>(options);
-    c.fields["value_template"] = std::get<1>(options);
+    c.options = optionsResult.options;
+    c.fields["value_template"] = optionsResult.valueMap;
   } else {
     c.fields["value_template"] = "{{value_json.value}}";
   }
@@ -264,13 +264,13 @@ MqttHA::Component MqttHA::createSelect(const Command* command) const {
     c.fields["entity_category"] = command->ha_entity_category;
   c.fields["command_topic"] = commandTopic;
 
-  std::tuple<std::vector<std::string>, std::string, std::string> options =
+  OptionsResult optionsResult =
       createOptions(command->ha_options_list, command->ha_options_default);
 
-  c.options = std::get<0>(options);
-  c.fields["value_template"] = std::get<1>(options);
+  c.options = optionsResult.options;
+  c.fields["value_template"] = optionsResult.valueMap;
   c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" + command->key +
-                                 "\",\"value\":" + std::get<2>(options) + "}";
+                                 "\",\"value\":" + optionsResult.cmdMap + "}";
 
   return c;
 }

@@ -68,10 +68,15 @@ class MqttHA {
   std::string createStateTopic(const std::string& prefix,
                                const std::string& topic) const;
 
-  // <0> options, <1> valueMap, <2> cmdMap
-  static std::tuple<std::vector<std::string>, std::string, std::string>
-  createOptions(const std::map<int, std::string>& ha_options_list,
-                const int& ha_options_default);
+  struct OptionsResult {
+    std::vector<std::string> options;
+    std::string valueMap;
+    std::string cmdMap;
+  };
+
+  static OptionsResult createOptions(
+      const std::map<int, std::string>& ha_options_list,
+      const int& ha_options_default);
 
   Component createComponent(const std::string& component,
                             const std::string& uniqueIdKey,
