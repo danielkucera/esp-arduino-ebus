@@ -4,7 +4,6 @@
 #include <mqtt.hpp>
 #include <store.hpp>
 #include <string>
-#include <tuple>
 
 // Home Assistant MQTT class for auto discovery
 
