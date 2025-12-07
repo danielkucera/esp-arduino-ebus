@@ -216,8 +216,8 @@ Command Store::createCommand(const JsonDocument& doc) {
     if (!doc["ha_options_list"].isNull()) {
       JsonObjectConst ha_options_list = doc["ha_options_list"];
       for (JsonPairConst kv : ha_options_list)
-        command.ha_options_list[std::string(kv.key().c_str())] =
-            kv.value().as<int>();
+        command.ha_options_list[std::stoi(kv.key().c_str())] =
+            kv.value().as<std::string>();
     }
 
     if (!doc["ha_options_default"].isNull())
@@ -381,7 +381,7 @@ JsonDocument Store::getCommandJson(const Command* command) {
 
   JsonObject ha_options_list = doc["ha_options_list"].to<JsonObject>();
   for (const auto& option : command->ha_options_list)
-    ha_options_list[option.first] = option.second;
+    ha_options_list[std::to_string(option.first)] = option.second;
 
   doc["ha_options_default"] = command->ha_options_default;
   doc["ha_payload_on"] = command->ha_payload_on;
@@ -607,7 +607,7 @@ const std::string Store::serializeCommands() const {
 
     JsonObject ha_options_list = array.add<JsonObject>();
     for (const auto& option : command.ha_options_list)
-      ha_options_list[option.first] = option.second;
+      ha_options_list[std::to_string(option.first)] = option.second;
 
     array.add(command.ha_options_default);
     array.add(command.ha_payload_on);

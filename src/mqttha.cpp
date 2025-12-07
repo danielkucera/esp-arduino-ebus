@@ -148,17 +148,17 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
 }
 
 std::tuple<std::vector<std::string>, std::string, std::string>
-MqttHA::createOptions(
-    const std::unordered_map<std::string, int>& ha_options_list,
-    const std::string& ha_options_default) {
+MqttHA::createOptions(const std::map<int, std::string>& ha_options_list,
+                      const std::string& ha_options_default) {
   // Create a vector of options names and a vector of pairs
   std::vector<std::pair<std::string, int>> optionsVec;
   std::vector<std::string> options;
 
-  // Populate optionsVec and options from the unordered_map
+  // Populate optionsVec and options from the map
   for (const auto& pair : ha_options_list) {
-    optionsVec.push_back(pair);
-    options.push_back(pair.first);
+    // Use pair.second as name and pair.first as value
+    optionsVec.emplace_back(pair.second, pair.first);
+    options.push_back(pair.second);
   }
 
   // Determine default option name and value
