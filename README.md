@@ -356,6 +356,7 @@ Home Assistant support can be globally activated on the configuration web page.
 - x...Used / Supported
 - O...Optional
 - R...Required
+- N...Documented, but not supported
 
 | Used | Field                       | Type           | Default | Sensor | Binary Sensor | Switch | Number | Select |
 | ---- | --------------------------- | -------------- | ------- | ------ | ------------- | ------ | ------ | ------ |
@@ -400,7 +401,7 @@ Home Assistant support can be globally activated on the configuration web page.
 | x    | name                        | string         |         | O      | O             | O      | O      | O      |
 |      | off_delay                   | integer        |         |        | O             |        |        |        |
 |      | optimistic                  | boolean        | true    |        |               | O      | O      | O      |
-| x    | options                     | list           |         | O      |               |        |        | R      |
+| x    | options                     | list           |         | N      |               |        |        | R      |
 |      | payload_available           | string         | online  | O      | O             | O      |        |        |
 |      | payload_not_available       | string         | offline | O      | O             | O      |        |        |
 | x    | payload_off                 | string         | OFF     |        | O             | O      |        |        |

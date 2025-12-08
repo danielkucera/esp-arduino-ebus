@@ -228,7 +228,6 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
     OptionsResult optionsResult =
         createOptions(command->ha_options_list, command->ha_options_default);
 
-    c.options = optionsResult.options;
     c.fields["value_template"] = optionsResult.valueMap;
   } else {
     c.fields["value_template"] = "{{value_json.value}}";
