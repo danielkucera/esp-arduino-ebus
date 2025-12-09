@@ -213,17 +213,17 @@ Command Store::createCommand(const JsonDocument& doc) {
     if (!doc["ha_mode"].isNull())
       command.ha_mode = doc["ha_mode"].as<std::string>();
 
-    if (!doc["ha_options_list"].isNull()) {
-      JsonObjectConst ha_options_list = doc["ha_options_list"];
-      for (JsonPairConst kv : ha_options_list) {
+    if (!doc["ha_key_value_map"].isNull()) {
+      JsonObjectConst ha_key_value_map = doc["ha_key_value_map"];
+      for (JsonPairConst kv : ha_key_value_map) {
         // TODO(yuhu-): handle std::stoi exceptions
-        command.ha_options_list[std::stoi(kv.key().c_str())] =
+        command.ha_key_value_map[std::stoi(kv.key().c_str())] =
             kv.value().as<std::string>();
       }
     }
 
-    if (!doc["ha_options_default"].isNull())
-      command.ha_options_default = doc["ha_options_default"].as<int>();
+    if (!doc["ha_default_key"].isNull())
+      command.ha_default_key = doc["ha_default_key"].as<int>();
     if (!doc["ha_payload_on"].isNull())
       command.ha_payload_on = doc["ha_payload_on"].as<uint8_t>();
     if (!doc["ha_payload_off"].isNull())
@@ -381,11 +381,11 @@ JsonDocument Store::getCommandJson(const Command* command) {
   doc["ha_entity_category"] = command->ha_entity_category;
   doc["ha_mode"] = command->ha_mode;
 
-  JsonObject ha_options_list = doc["ha_options_list"].to<JsonObject>();
-  for (const auto& option : command->ha_options_list)
-    ha_options_list[std::to_string(option.first)] = option.second;
+  JsonObject ha_key_value_map = doc["ha_key_value_map"].to<JsonObject>();
+  for (const auto& kv : command->ha_key_value_map)
+    ha_key_value_map[std::to_string(kv.first)] = kv.second;
 
-  doc["ha_options_default"] = command->ha_options_default;
+  doc["ha_default_key"] = command->ha_default_key;
   doc["ha_payload_on"] = command->ha_payload_on;
   doc["ha_payload_off"] = command->ha_payload_off;
   doc["ha_state_class"] = command->ha_state_class;
@@ -570,8 +570,8 @@ const std::string Store::serializeCommands() const {
 
       // Home Assistant (OPTIONAL)
       "ha", "ha_component", "ha_device_class", "ha_entity_category", "ha_mode",
-      "ha_options_list", "ha_options_default", "ha_payload_on",
-      "ha_payload_off", "ha_state_class", "ha_step"};
+      "ha_key_value_map", "ha_default_key", "ha_payload_on", "ha_payload_off",
+      "ha_state_class", "ha_step"};
 
   // Add header as first entry
   JsonArray header = doc.add<JsonArray>();
@@ -607,11 +607,11 @@ const std::string Store::serializeCommands() const {
     array.add(command.ha_entity_category);
     array.add(command.ha_mode);
 
-    JsonObject ha_options_list = array.add<JsonObject>();
-    for (const auto& option : command.ha_options_list)
-      ha_options_list[std::to_string(option.first)] = option.second;
+    JsonObject ha_key_value_map = array.add<JsonObject>();
+    for (const auto& kv : command.ha_key_value_map)
+      ha_key_value_map[std::to_string(kv.first)] = kv.second;
 
-    array.add(command.ha_options_default);
+    array.add(command.ha_default_key);
     array.add(command.ha_payload_on);
     array.add(command.ha_payload_off);
     array.add(command.ha_state_class);
@@ -641,14 +641,14 @@ void Store::deserializeCommands(const char* payload) {
       JsonArray values = array[i];
       JsonDocument tmpDoc;
       for (size_t j = 0; j < fields.size() && j < values.size(); ++j) {
-        // Special handling for 'ha_options_list'
-        if (fields[j] == "ha_options_list") {
-          JsonObjectConst options = values[j].as<JsonObject>();
-          JsonObject ha_options_list =
-              tmpDoc["ha_options_list"].to<JsonObject>();
+        // Special handling for 'ha_key_value_map'
+        if (fields[j] == "ha_key_value_map") {
+          JsonObjectConst kvObject = values[j].as<JsonObject>();
+          JsonObject ha_key_value_map =
+              tmpDoc["ha_key_value_map"].to<JsonObject>();
 
-          for (JsonPairConst option : options)
-            ha_options_list[option.key()] = option.value();
+          for (JsonPairConst kv : kvObject)
+            ha_key_value_map[kv.key()] = kv.value();
         } else {
           tmpDoc[fields[j]] = values[j];
         }
