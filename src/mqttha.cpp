@@ -147,25 +147,24 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
   return c;
 }
 
-MqttHA::OptionsResult MqttHA::createOptions(
-    const std::map<int, std::string>& ha_options_list,
-    const int& ha_options_default) {
+MqttHA::KeyValueMapping MqttHA::createOptions(
+    const std::map<int, std::string>& ha_key_value_map,
+    const int& ha_default_key) {
   // Create a vector of options names and a vector of pairs
   std::vector<std::pair<std::string, int>> optionsVec;
   std::vector<std::string> options;
 
   // Populate optionsVec and options from the map
-  for (const auto& pair : ha_options_list) {
-    // Use pair.second as name and pair.first as value
-    optionsVec.emplace_back(pair.second, pair.first);
-    options.push_back(pair.second);
+  for (const auto& kv : ha_key_value_map) {
+    optionsVec.emplace_back(kv.second, kv.first);
+    options.push_back(kv.second);
   }
 
   // Determine default option name and value
   const auto defaultIt =
       std::find_if(optionsVec.begin(), optionsVec.end(),
                    [&](const std::pair<std::string, int>& opt) {
-                     return opt.second == ha_options_default;
+                     return opt.second == ha_default_key;
                    });
 
   std::string defaultOptionName = optionsVec.empty() ? "" : optionsVec[0].first;
@@ -197,7 +196,7 @@ MqttHA::OptionsResult MqttHA::createOptions(
   cmdMap += "} %}{{ values[value] if value in values.keys() else " +
             std::to_string(defaultOptionValue) + " }}";
 
-  return OptionsResult{options, valueMap, cmdMap};
+  return KeyValueMapping{options, valueMap, cmdMap};
 }
 
 MqttHA::Component MqttHA::createBinarySensor(const Command* command) const {
@@ -224,9 +223,9 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
     c.fields["state_class"] = command->ha_state_class;
   if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
 
-  if (!command->ha_options_list.empty()) {
-    OptionsResult optionsResult =
-        createOptions(command->ha_options_list, command->ha_options_default);
+  if (!command->ha_key_value_map.empty()) {
+    KeyValueMapping optionsResult =
+        createOptions(command->ha_key_value_map, command->ha_default_key);
 
     c.fields["value_template"] = optionsResult.valueMap;
   } else {
@@ -263,8 +262,8 @@ MqttHA::Component MqttHA::createSelect(const Command* command) const {
     c.fields["entity_category"] = command->ha_entity_category;
   c.fields["command_topic"] = commandTopic;
 
-  OptionsResult optionsResult =
-      createOptions(command->ha_options_list, command->ha_options_default);
+  KeyValueMapping optionsResult =
+      createOptions(command->ha_key_value_map, command->ha_default_key);
 
   c.options = optionsResult.options;
   c.fields["value_template"] = optionsResult.valueMap;
