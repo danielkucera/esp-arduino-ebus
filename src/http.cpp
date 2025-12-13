@@ -22,7 +22,7 @@ void handleCommandsList() {
 
 void handleCommandsUpload() {
   configServer.send(200, "text/html", F(R"(<html>
-  <head><title>esp-eBus adapter</title>
+  <head><title>esp-eBus upload</title>
   <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
   </head><body>
   <h3>Upload Commands</h3>
@@ -153,6 +153,52 @@ void handleResetStatistic() {
   schedule.resetTiming();
   configServer.send(200, "text/html", "Statistic reset");
 }
+
+#define MAX_LOG_ENTRIES 35
+String logBuffer[MAX_LOG_ENTRIES];
+int logIndex = 0;
+int currentEntries = 0;  // Track the number of current entries
+
+String getTimestamp() {
+  time_t now = time(nullptr);
+  struct tm timeinfo;
+  localtime_r(&now, &timeinfo);
+
+  char buffer[30];
+  snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+           timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+           timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, millis() % 1000);
+
+  return String(buffer);
+}
+
+void addLog(String entry) {
+  String timestampedEntry = getTimestamp() + " " + entry;
+
+  // If the buffer is full, shift all entries upwards
+  if (currentEntries >= MAX_LOG_ENTRIES) {
+    for (int i = 1; i < MAX_LOG_ENTRIES; i++)
+      logBuffer[i - 1] = logBuffer[i];  // Shift up
+
+    // Add new entry at the last position
+    logBuffer[MAX_LOG_ENTRIES - 1] = timestampedEntry;
+  } else {
+    // Add the new entry to the first empty spot
+    logBuffer[currentEntries] = timestampedEntry;
+    currentEntries++;  // Increase the count of current entries
+  }
+}
+
+void handleMonitorData() {
+  String response = "";
+
+  // Loop through current log entries
+  for (int i = 0; i < currentEntries; i++)
+    response += logBuffer[i] + "\n";  // Add non-empty entries to the response
+
+  configServer.send(200, "text/plain", response);
+}
+
 #endif
 
 void handleRoot() {
@@ -161,50 +207,88 @@ void handleRoot() {
     // -- Captive portal request were already served.
     return;
   }
-  String s = "<html><head><title>esp-eBus adapter</title>";
-  s += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, "
-       "user-scalable=no\"/>";
-  s += "  <script type='text/javascript'>";
-  s += "     function confirmAction(action){ return confirm(\"Are you sure you "
-       "want to \" + action + \"?\"); }\n";
-  s += "  </script>\n";
-  s += "</head><body>";
+  // clang-format off
+  String s;
+  s += "<html><head><title>esp-eBus adapter</title>";
+  s += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";
+  s += R"(
+    <script type='text/javascript'>
+      function confirmAction(action) {
+        return confirm("Are you sure you want to " + action + "?");
+      }
+    </script>
+  </head><body>
+  )";
+
   s += "<a href='/status'>Adapter status</a><br>";
+
 #if defined(EBUS_INTERNAL)
-  s += "<a href='/commands/list'>List commands</a><br>";
-  s += "<a href='/commands/upload'>Upload commands</a><br>";
-  s += "<a href='/commands/download'>Download commands</a><br>";
-  s += "<a href='/commands/load' onclick=\"return "
-       "confirmAction('load commands');\">Load commands</a><br>";
-  s += "<a href='/commands/save' onclick=\"return "
-       "confirmAction('save commands');\">Save commands</a><br>";
-  s += "<a href='/commands/wipe' onclick=\"return "
-       "confirmAction('wipe commands');\">Wipe commands</a><br>";
-  s += "<a href='/values'>Values</a><br>";
-  s += "<a href='/scan' onclick=\"return "
-       "confirmAction('scan');\">Scan</a><br>";
-  s += "<a href='/scanfull' onclick=\"return "
-       "confirmAction('scan full');\">Scan full</a><br>";
-  s += "<a href='/scanvendor' onclick=\"return "
-       "confirmAction('scan vendor');\">Scan vendor</a><br>";
-  s += "<a href='/participants'>Participants</a><br>";
-  s += "<a href='/reset' onclick=\"return "
-       "confirmAction('reset');\">Reset statistic</a><br>";
+  s += R"(
+    <a href='/commands/list'>List commands</a><br>
+    <a href='/commands/upload'>Upload commands</a><br>
+    <a href='/commands/download'>Download commands</a><br>
+    <a href='/commands/load' onclick="return confirmAction('load commands');">Load commands</a><br>
+    <a href='/commands/save' onclick="return confirmAction('save commands');">Save commands</a><br>
+    <a href='/commands/wipe' onclick="return confirmAction('wipe commands');">Wipe commands</a><br>
+    <a href='/values'>Values</a><br>
+    <a href='/scan' onclick="return confirmAction('scan');">Scan</a><br>
+    <a href='/scanfull' onclick="return confirmAction('scan full');">Scan full</a><br>
+    <a href='/scanvendor' onclick="return confirmAction('scan vendor');">Scan vendor</a><br>
+    <a href='/participants'>Participants</a><br>
+    <a href='/reset' onclick="return confirmAction('reset');">Reset statistic</a><br>
+    <a href='/monitor'>Monitor</a><br>
+  )";
 #endif
-  s += "<a href='/restart' onclick=\"return "
-       "confirmAction('restart');\">Restart</a><br>";
-  s += "<a href='/config'>Configuration</a> - user: admin password: your "
-       "configured AP mode password or default password";
-  s += "<br>";
-  s += "<a href='/firmware'>Firmware update</a><br>";
-  s += "<br>";
-  s += "For more info see project page: <a "
-       "href='https://github.com/danielkucera/esp-arduino-ebus'>https://"
-       "github.com/danielkucera/esp-arduino-ebus</a>";
-  s += "</body></html>";
+
+  s += R"(
+    <a href='/restart' onclick="return confirmAction('restart');">Restart</a><br>
+    <a href='/config'>Configuration</a> - user: admin password: your configured AP mode password or default password<br>
+    <a href='/firmware'>Firmware update</a><br><br>
+    For more info see project page: <a href='https://github.com/danielkucera/esp-arduino-ebus'>https://github.com/danielkucera/esp-arduino-ebus</a>
+  </body></html>
+  )";
+  // clang-format on
 
   configServer.send(200, "text/html", s);
 }
+
+#if defined(EBUS_INTERNAL)
+void handleMonitor() {
+  const char* monitorHtml = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>esp-eBus monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 16px; }
+        pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Monitor</h1>
+    <pre id="logContainer">Loading logs...</pre>
+    <script>
+        function fetchLogs() {
+            fetch('/monitordata') 
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.text();
+                })
+                .then(data => { document.getElementById('logContainer').innerText = data; })
+                .catch(error => { console.error('Fetch error:', error); });
+        }
+        setInterval(fetchLogs, 500);  // Fetch logs every 500 milliseconds
+        fetchLogs();  // Initial fetch
+    </script>
+</body>
+</html>
+)rawliteral";
+
+  configServer.send(200, "text/html", monitorHtml);
+}
+#endif
 
 void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
@@ -227,6 +311,8 @@ void SetupHttpHandlers() {
   configServer.on("/api/v1/GetCounter", [] { handleGetCounter(); });
   configServer.on("/api/v1/GetTiming", [] { handleGetTiming(); });
   configServer.on("/reset", [] { handleResetStatistic(); });
+  configServer.on("/monitor", [] { handleMonitor(); });
+  configServer.on("/monitordata", [] { handleMonitorData(); });
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });

@@ -25,6 +25,7 @@
 #include <esp_task_wdt.h>
 
 #include "esp32c3/rom/rtc.h"
+#include "esp_sntp.h"
 
 HTTPUpdateServer httpUpdater;
 
@@ -68,6 +69,9 @@ Preferences preferences;
 #define DUMMY_GATEWAY "192.168.1.1"
 #define DUMMY_NETMASK "255.255.255.0"
 
+#define DUMMY_SNTP_SERVER "pool.ntp.org"
+#define DUMMY_SNTP_TIMEZONE "UTC0"
+
 #define DUMMY_MQTT_SERVER DUMMY_GATEWAY
 #define DUMMY_MQTT_USER "roger"
 #define DUMMY_MQTT_PASS "password"
@@ -80,6 +84,10 @@ char staticIPValue[STRING_LEN];
 char ipAddressValue[STRING_LEN];
 char gatewayValue[STRING_LEN];
 char netmaskValue[STRING_LEN];
+
+char sntpEnabled[STRING_LEN];
+char sntpServer[STRING_LEN];
+char sntpTimezone[STRING_LEN];
 
 uint32_t pwm;
 char pwm_value[NUMBER_LEN];
@@ -122,6 +130,18 @@ iotwebconf::TextParameter gatewayParam = iotwebconf::TextParameter(
 iotwebconf::TextParameter netmaskParam = iotwebconf::TextParameter(
     "Subnet mask", "netmask", netmaskValue, STRING_LEN, "", DUMMY_NETMASK);
 
+#if defined(EBUS_INTERNAL)
+iotwebconf::ParameterGroup sntpGroup =
+    iotwebconf::ParameterGroup("sntp", "SNTP configuration");
+iotwebconf::CheckboxParameter sntpEnabledParam = iotwebconf::CheckboxParameter(
+    "SNTP enabled", "sntpEnabled", sntpEnabled, STRING_LEN);
+iotwebconf::TextParameter sntpServerParam = iotwebconf::TextParameter(
+    "SNTP server (need restart)", "sntpServer", sntpServer, STRING_LEN, "", DUMMY_SNTP_SERVER);
+iotwebconf::TextParameter sntpTimezoneParam =
+    iotwebconf::TextParameter("SNTP timezone (need restart)", "sntpTimezone", sntpTimezone,
+                              STRING_LEN, "", DUMMY_SNTP_TIMEZONE);
+#endif
+
 iotwebconf::ParameterGroup ebusGroup =
     iotwebconf::ParameterGroup("ebus", "eBUS configuration");
 iotwebconf::NumberParameter pwmParam =
@@ -152,7 +172,7 @@ iotwebconf::CheckboxParameter scanOnStartupParam =
                                   STRING_LEN);
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     "Command distance (seconds)", "command_distance", command_distance,
-    NUMBER_LEN, "2", "1..60", "min='1' max='60' step='1'");
+    NUMBER_LEN, "1", "1..60", "min='1' max='60' step='1'");
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
@@ -392,6 +412,50 @@ void data_loop(void* pvParameters) {
 }
 #endif
 
+#if defined(EBUS_INTERNAL)
+void initSNTP(const char* server, const char* timezone) {
+  // Set the synchronization interval
+  int syncInterval = 1 * 60 * 60 * 1000UL;  // 1 hour
+  sntp_set_sync_interval(syncInterval);
+
+  // Configure SNTP
+  esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+  esp_sntp_setservername(0, server);
+  esp_sntp_init();
+
+  // Optionally set timezone, if provided
+  if (strlen(timezone) > 0) {
+    setenv("TZ", timezone, 1);
+    tzset();  // Timezone settings must be applied
+  }
+}
+
+void waitForSNTP() {
+  const int timeout_limit = 100;  // Maximum wait time of 10 seconds
+  const int delay_time = 100;     // Delay time in milliseconds
+
+  addLog("Waiting for SNTP synchronization...");
+
+  for (int count = 1; count <= timeout_limit; ++count) {
+    delay(delay_time);
+
+    // Check the sync status once and store it
+    sntp_sync_status_t status = sntp_get_sync_status();
+
+    if (status == SNTP_SYNC_STATUS_COMPLETED) {
+      addLog("SNTP synchronized.");
+      return;
+    }
+
+    if (count % (1000 / delay_time) == 0)  // Log every second
+      addLog(String(count * delay_time) + "ms elapsed...");
+  }
+
+  addLog("SNTP synchronization failed after " +
+         String(timeout_limit * delay_time) + "ms.");
+}
+#endif
+
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   bool valid = true;
 
@@ -410,6 +474,24 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
     }
   }
 #if defined(EBUS_INTERNAL)
+  if (webRequestWrapper->arg(sntpServerParam.getId()).length() >
+      STRING_LEN - 1) {
+    String tmp = "max. ";
+    tmp += String(STRING_LEN);
+    tmp += " characters allowed";
+    sntpServerParam.errorMessage = tmp.c_str();
+    valid = false;
+  }
+
+  if (webRequestWrapper->arg(sntpTimezoneParam.getId()).length() >
+      STRING_LEN - 1) {
+    String tmp = "max. ";
+    tmp += String(STRING_LEN);
+    tmp += " characters allowed";
+    sntpTimezoneParam.errorMessage = tmp.c_str();
+    valid = false;
+  }
+
   if (webRequestWrapper->arg(mqttServerParam.getId()).length() >
       STRING_LEN - 1) {
     String tmp = "max. ";
@@ -511,6 +593,15 @@ char* status_string() {
                   "max_loop_duration: %u us\r\n", maxLoopDuration);
   pos +=
       snprintf(status + pos, bufferSize - pos, "version: %s\r\n", AUTO_VERSION);
+
+#if defined(EBUS_INTERNAL)
+  pos += snprintf(status + pos, bufferSize - pos, "sntpEnabled: %s\r\n",
+                  sntpEnabledParam.isChecked() ? "true" : "false");
+  pos += snprintf(status + pos, bufferSize - pos, "sntpServer: %s\r\n",
+                  sntpServer);
+  pos += snprintf(status + pos, bufferSize - pos, "sntpTimezone: %s\r\n",
+                  sntpTimezone);
+#endif
 
   pos +=
       snprintf(status + pos, bufferSize - pos, "pwm_value: %u\r\n", get_pwm());
@@ -628,6 +719,14 @@ const std::string getStatusJson() {
   WIFI["Hostname"] = WiFi.getHostname();
   WIFI["MAC_Address"] = WiFi.macAddress();
 
+// SNTP
+#if defined(EBUS_INTERNAL)
+  JsonObject SNTP = doc["SNTP"].to<JsonObject>();
+  SNTP["Enabled"] = sntpEnabledParam.isChecked();
+  SNTP["Server"] = sntpServer;
+  SNTP["Timezone"] = sntpTimezone;
+#endif
+
   // eBUS
   JsonObject eBUS = doc["eBUS"].to<JsonObject>();
   eBUS["PWM"] = get_pwm();
@@ -713,6 +812,12 @@ void setup() {
   connGroup.addItem(&gatewayParam);
   connGroup.addItem(&netmaskParam);
 
+#if defined(EBUS_INTERNAL)
+  sntpGroup.addItem(&sntpEnabledParam);
+  sntpGroup.addItem(&sntpServerParam);
+  sntpGroup.addItem(&sntpTimezoneParam);
+#endif
+
   ebusGroup.addItem(&pwmParam);
 
 #if defined(EBUS_INTERNAL)
@@ -736,6 +841,9 @@ void setup() {
 #endif
 
   iotWebConf.addParameterGroup(&connGroup);
+#if defined(EBUS_INTERNAL)
+  iotWebConf.addParameterGroup(&sntpGroup);
+#endif
   iotWebConf.addParameterGroup(&ebusGroup);
 #if defined(EBUS_INTERNAL)
   iotWebConf.addParameterGroup(&scheduleGroup);
@@ -787,6 +895,11 @@ void setup() {
   }
 
 #if defined(EBUS_INTERNAL)
+  if (sntpEnabledParam.isChecked()) {
+    initSNTP(sntpServer, sntpTimezone);
+    waitForSNTP();
+  }
+
   mqtt.setEnabled(mqttEnabledParam.isChecked());
   mqtt.setUniqueId(unique_id);
   mqtt.setServer(mqtt_server, 1883);

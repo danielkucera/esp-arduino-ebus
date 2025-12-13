@@ -3,6 +3,7 @@
 
 #include <set>
 
+#include "http.hpp"
 #include "mqtt.hpp"
 #include "track.hpp"
 
@@ -730,24 +731,29 @@ void Schedule::handleEvents() {
   while (eventQueue.try_pop(event)) {
     if (event) {
       switch (event->type) {
-        case CallbackType::error:
+        case CallbackType::error: {
+          std::string payload = event->data.error + " : master '" +
+                                ebus::to_string(event->data.master) +
+                                "' slave '" +
+                                ebus::to_string(event->data.slave) + "'";
+          addLog(payload.c_str());
+
           if (schedule.publishCounter) {
             std::string topic = "state/reset/last";
-            std::string payload = event->data.error + " : master '" +
-                                  ebus::to_string(event->data.master) +
-                                  "' slave '" +
-                                  ebus::to_string(event->data.slave) + "'";
-
             mqtt.publish(topic.c_str(), 0, false, payload.c_str());
           }
-          break;
-        case CallbackType::telegram:
+        } break;
+        case CallbackType::telegram: {
           if (!event->data.master.empty()) {
             seenMasters[event->data.master[0]] += 1;
             if (event->data.master.size() > 1 &&
                 ebus::isSlave(event->data.master[1]))
               seenSlaves[event->data.master[1]] += 1;
           }
+
+          std::string payload = ebus::to_string(event->data.master) +
+                                ebus::to_string(event->data.slave);
+          addLog(payload.c_str());
 
           switch (event->data.messageType) {
             case ebus::MessageType::active:
@@ -760,7 +766,7 @@ void Schedule::handleEvents() {
                                       std::vector<uint8_t>(event->data.slave));
               break;
           }
-          break;
+        } break;
       }
       delete event;
     }
