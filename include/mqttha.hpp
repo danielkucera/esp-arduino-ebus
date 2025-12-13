@@ -1,7 +1,6 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <mqtt.hpp>
 #include <store.hpp>
 #include <string>
 
@@ -11,6 +10,7 @@ class MqttHA {
  public:
   void setUniqueId(const std::string& id);
   void setRootTopic(const std::string& topic);
+  void setWillTopic(const std::string& topic);
 
   void setEnabled(const bool enable);
   const bool isEnabled() const;
@@ -34,6 +34,7 @@ class MqttHA {
   std::string deviceIdentifiers;  // e.g. "ebus8406ac"
   std::string rootTopic;          // e.g. "ebus/8406ac/"
   std::string commandTopic;       // e.g. "ebus/8406ac/request"
+  std::string willTopic;          // e.g. "ebus/8406ac/state/available"
 
   bool enabled = false;
 
