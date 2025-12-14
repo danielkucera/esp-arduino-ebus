@@ -19,7 +19,6 @@
 #include "client.hpp"
 #include "http.hpp"
 
-#if defined(ESP32)
 #include <ESPmDNS.h>
 #include <IotWebConfESP32HTTPUpdateServer.h>
 #include <esp_task_wdt.h>
@@ -29,16 +28,8 @@
 
 HTTPUpdateServer httpUpdater;
 
-#if defined(ESP32) && !defined(EBUS_INTERNAL)
+#if !defined(EBUS_INTERNAL)
 TaskHandle_t Task1;
-#endif
-
-#else
-#include <ESP8266HTTPUpdateServer.h>
-#include <ESP8266TrueRandom.h>
-#include <ESP8266mDNS.h>
-
-ESP8266HTTPUpdateServer httpUpdater;
 #endif
 
 Preferences preferences;
@@ -270,19 +261,11 @@ void wifiConnected() {
 }
 
 void wdt_start() {
-#if defined(ESP32)
   esp_task_wdt_init(6, true);
-#else
-  ESP.wdtDisable();
-#endif
 }
 
 void wdt_feed() {
-#if defined(ESP32)
   esp_task_wdt_reset();
-#else
-  ESP.wdtFeed();
-#endif
 }
 
 inline void disableTX() {
@@ -318,13 +301,9 @@ uint32_t get_pwm() {
 
 void calcUniqueId() {
   uint32_t id = 0;
-#if defined(ESP32)
   for (int i = 0; i < 6; ++i) {
     id |= ((ESP.getEfuseMac() >> (8 * (5 - i))) & 0xff) << (8 * i);
   }
-#else
-  id = ESP.getChipId();
-#endif
   char tmp[9]{};
   snprintf(tmp, sizeof(tmp), "%08x", id);
   strncpy(unique_id, &tmp[2], 6);
@@ -547,12 +526,10 @@ char* status_string() {
                   USE_SOFTWARE_SERIAL ? "true" : "false");
 #endif
   pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
-#if defined(ESP32)
   pos += snprintf(status + pos, bufferSize - pos, "clock_speed: %u Mhz\n",
                   getCpuFrequencyMhz());
   pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %u Hz\n",
                   getApbFrequency());
-#endif
   pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
                   last_connect);
@@ -679,10 +656,8 @@ const std::string getStatusJson() {
   Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
 #endif
   Firmware["Unique_ID"] = unique_id;
-#if defined(ESP32)
   Firmware["Clock_Speed"] = getCpuFrequencyMhz();
   Firmware["Apb_Speed"] = getApbFrequency();
-#endif
 
   // WIFI
   JsonObject WIFI = doc["WIFI"].to<JsonObject>();
@@ -773,11 +748,7 @@ void setup() {
 
   check_reset();
 
-#if defined(ESP32)
   reset_code = rtc_get_reset_reason(0);
-#else
-  reset_code = ESP.getResetInfoPtr()->reason;
-#endif
 
   calcUniqueId();
 
@@ -950,26 +921,17 @@ void setup() {
   store.loadCommands();  // install saved commands
   mqttha.publishComponents();
 #else
-#if defined(ESP32)
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
   ArduinoOTA.onStart([]() { vTaskDelete(Task1); });
-#endif
 #endif
 }
 
 void loop() {
   ArduinoOTA.handle();
 
-#if defined(ESP8266)
-  MDNS.update();
-  data_process();
-#endif
-
   wdt_feed();
 
-#if defined(ESP32)
   iotWebConf.doLoop();
-#endif
 
 #if defined(EBUS_INTERNAL)
   if (mqtt.isEnabled()) {

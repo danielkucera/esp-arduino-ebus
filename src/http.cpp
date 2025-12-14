@@ -57,6 +57,8 @@ void handleCommandsDownload() {
   String s = "{\"id\":\"insert\",\"commands\":";
   s += store.getCommandsJson().c_str();
   s += "}";
+  configServer.sendHeader("Content-Disposition",
+                          "attachment; filename=esp-ebus-commands.json");
   configServer.send(200, "application/json", s);
 }
 
@@ -201,49 +203,9 @@ void handleRoot() {
     // -- Captive portal request were already served.
     return;
   }
-  // clang-format off
-  String s;
-  s += "<html><head><title>esp-eBus adapter</title>";
-  s += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";
-  s += R"(
-    <script type='text/javascript'>
-      function confirmAction(action) {
-        return confirm("Are you sure you want to " + action + "?");
-      }
-    </script>
-  </head><body>
-  )";
-
-  s += "<a href='/status'>Adapter status</a><br>";
-
-#if defined(EBUS_INTERNAL)
-  s += R"(
-    <a href='/commands/list'>List commands</a><br>
-    <a href='/commands/upload'>Upload commands</a><br>
-    <a href='/commands/download'>Download commands</a><br>
-    <a href='/commands/load' onclick="return confirmAction('load commands');">Load commands</a><br>
-    <a href='/commands/save' onclick="return confirmAction('save commands');">Save commands</a><br>
-    <a href='/commands/wipe' onclick="return confirmAction('wipe commands');">Wipe commands</a><br>
-    <a href='/values'>Values</a><br>
-    <a href='/scan' onclick="return confirmAction('scan');">Scan</a><br>
-    <a href='/scanfull' onclick="return confirmAction('scan full');">Scan full</a><br>
-    <a href='/scanvendor' onclick="return confirmAction('scan vendor');">Scan vendor</a><br>
-    <a href='/participants'>Participants</a><br>
-    <a href='/reset' onclick="return confirmAction('reset');">Reset statistic</a><br>
-    <a href='/log'>Log</a><br>
-  )";
-#endif
-
-  s += R"(
-    <a href='/restart' onclick="return confirmAction('restart');">Restart</a><br>
-    <a href='/config'>Configuration</a> - user: admin password: your configured AP mode password or default password<br>
-    <a href='/firmware'>Firmware update</a><br><br>
-    For more info see project page: <a href='https://github.com/danielkucera/esp-arduino-ebus'>https://github.com/danielkucera/esp-arduino-ebus</a>
-  </body></html>
-  )";
-  // clang-format on
-
-  configServer.send(200, "text/html", s);
+  
+  extern const char root_html_start[] asm("_binary_static_root_html_start");
+  configServer.send(200, "text/html", root_html_start);
 }
 
 #if defined(EBUS_INTERNAL)
