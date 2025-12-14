@@ -477,9 +477,9 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   }
 #if defined(EBUS_INTERNAL)
   if (webRequestWrapper->arg(sntpServerParam.getId()).length() >
-      STRING_LEN - 1) {
+      DNS_LEN - 1) {
     String tmp = "max. ";
-    tmp += String(STRING_LEN);
+    tmp += String(DNS_LEN);
     tmp += " characters allowed";
     sntpServerParam.errorMessage = tmp.c_str();
     valid = false;
