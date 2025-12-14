@@ -210,39 +210,8 @@ void handleRoot() {
 
 #if defined(EBUS_INTERNAL)
 void handleLog() {
-  const char* logHtml = R"rawliteral(
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>esp-eBus log</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 16px; }
-        pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
-    </style>
-</head>
-<body>
-    <h1>Log</h1>
-    <pre id="logContainer">Loading logs...</pre>
-    <script>
-        function fetchLogs() {
-            fetch('/logdata') 
-                .then(response => {
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    return response.text();
-                })
-                .then(data => { document.getElementById('logContainer').innerText = data; })
-                .catch(error => { console.error('Fetch error:', error); });
-        }
-        setInterval(fetchLogs, 500);  // Fetch logs every 500 milliseconds
-        fetchLogs();  // Initial fetch
-    </script>
-</body>
-</html>
-)rawliteral";
-
-  configServer.send(200, "text/html", logHtml);
+  extern const char log_html_start[] asm("_binary_static_log_html_start");
+  configServer.send(200, "text/html", log_html_start);
 }
 #endif
 
