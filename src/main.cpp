@@ -59,6 +59,7 @@ Preferences preferences;
 #define CONFIG_VERSION "eeb"
 
 #define STRING_LEN 64
+#define DNS_LEN 255
 #define NUMBER_LEN 8
 
 #define DEFAULT_APMODE_PASS "ebusebus"
@@ -86,7 +87,7 @@ char gatewayValue[STRING_LEN];
 char netmaskValue[STRING_LEN];
 
 char sntpEnabled[STRING_LEN];
-char sntpServer[STRING_LEN];
+char sntpServer[DNS_LEN];
 char sntpTimezone[STRING_LEN];
 
 uint32_t pwm;
@@ -135,11 +136,12 @@ iotwebconf::ParameterGroup sntpGroup =
     iotwebconf::ParameterGroup("sntp", "SNTP configuration");
 iotwebconf::CheckboxParameter sntpEnabledParam = iotwebconf::CheckboxParameter(
     "SNTP enabled", "sntpEnabled", sntpEnabled, STRING_LEN);
-iotwebconf::TextParameter sntpServerParam = iotwebconf::TextParameter(
-    "SNTP server (need restart)", "sntpServer", sntpServer, STRING_LEN, "", DUMMY_SNTP_SERVER);
-iotwebconf::TextParameter sntpTimezoneParam =
-    iotwebconf::TextParameter("SNTP timezone (need restart)", "sntpTimezone", sntpTimezone,
-                              STRING_LEN, "", DUMMY_SNTP_TIMEZONE);
+iotwebconf::TextParameter sntpServerParam =
+    iotwebconf::TextParameter("SNTP server (need restart)", "sntpServer",
+                              sntpServer, DNS_LEN, "", DUMMY_SNTP_SERVER);
+iotwebconf::TextParameter sntpTimezoneParam = iotwebconf::TextParameter(
+    "SNTP timezone (need restart)", "sntpTimezone", sntpTimezone, STRING_LEN,
+    "", DUMMY_SNTP_TIMEZONE);
 #endif
 
 iotwebconf::ParameterGroup ebusGroup =
