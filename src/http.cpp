@@ -182,7 +182,7 @@ void addLog(String entry) {
   if (logEntries < MAX_LOG_ENTRIES) logEntries++;
 }
 
-void handleMonitorData() {
+void handleLogData() {
   String response = "";
 
   for (int i = 0; i < logEntries; i++) {
@@ -230,7 +230,7 @@ void handleRoot() {
     <a href='/scanvendor' onclick="return confirmAction('scan vendor');">Scan vendor</a><br>
     <a href='/participants'>Participants</a><br>
     <a href='/reset' onclick="return confirmAction('reset');">Reset statistic</a><br>
-    <a href='/monitor'>Monitor</a><br>
+    <a href='/log'>Log</a><br>
   )";
 #endif
 
@@ -247,25 +247,25 @@ void handleRoot() {
 }
 
 #if defined(EBUS_INTERNAL)
-void handleMonitor() {
-  const char* monitorHtml = R"rawliteral(
+void handleLog() {
+  const char* logHtml = R"rawliteral(
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>esp-eBus monitor</title>
+    <title>esp-eBus log</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 16px; }
         pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
-    <h1>Monitor</h1>
+    <h1>Log</h1>
     <pre id="logContainer">Loading logs...</pre>
     <script>
         function fetchLogs() {
-            fetch('/monitordata') 
+            fetch('/logdata') 
                 .then(response => {
                     if (!response.ok) throw new Error('Network response was not ok');
                     return response.text();
@@ -280,7 +280,7 @@ void handleMonitor() {
 </html>
 )rawliteral";
 
-  configServer.send(200, "text/html", monitorHtml);
+  configServer.send(200, "text/html", logHtml);
 }
 #endif
 
@@ -305,8 +305,8 @@ void SetupHttpHandlers() {
   configServer.on("/api/v1/GetCounter", [] { handleGetCounter(); });
   configServer.on("/api/v1/GetTiming", [] { handleGetTiming(); });
   configServer.on("/reset", [] { handleResetStatistic(); });
-  configServer.on("/monitor", [] { handleMonitor(); });
-  configServer.on("/monitordata", [] { handleMonitorData(); });
+  configServer.on("/log", [] { handleLog(); });
+  configServer.on("/logdata", [] { handleLogData(); });
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
