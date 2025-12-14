@@ -1,4 +1,5 @@
 #if defined(EBUS_INTERNAL)
+#include <mqtt.hpp>
 #include <mqttha.hpp>
 
 MqttHA mqttha;
@@ -12,6 +13,8 @@ void MqttHA::setRootTopic(const std::string& topic) {
   rootTopic = topic;
   commandTopic = rootTopic + "request";
 }
+
+void MqttHA::setWillTopic(const std::string& topic) { willTopic = topic; }
 
 void MqttHA::setEnabled(const bool enable) { enabled = enable; }
 
@@ -144,6 +147,7 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
   c.uniqueId = deviceIdentifiers + '_' + key;
   c.name = prettyName;
   c.deviceIdentifiers = deviceIdentifiers;
+  c.fields["availability_topic"] = willTopic;
   return c;
 }
 
@@ -249,7 +253,7 @@ MqttHA::Component MqttHA::createNumber(const Command* command) const {
   c.fields["min"] = std::to_string(command->min);
   c.fields["max"] = std::to_string(command->max);
   c.fields["step"] = std::to_string(command->ha_step);
-  c.fields["mode"] = command->ha_mode;  // "box" or "slider"
+  c.fields["mode"] = command->ha_mode;
   return c;
 }
 

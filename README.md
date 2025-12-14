@@ -353,10 +353,10 @@ Home Assistant support can be globally activated on the configuration web page.
 
 **Table of used fields / components**
 
-- x...Used / Supported
+- X...Used
 - O...Optional
 - R...Required
-- N...Documented, but not supported
+- N...Documented, but not used
 
 | Used | Field                       | Type           | Default | Sensor | Binary Sensor | Switch | Number | Select |
 | ---- | --------------------------- | -------------- | ------- | ------ | ------------- | ------ | ------ | ------ |
@@ -367,27 +367,27 @@ Home Assistant support can be globally activated on the configuration web page.
 |      | \- value_template           | template       |         | O      | O             | O      |        | O      |
 |      | availability_mode           | string         | latest  | O      | O             | O      | O      | O      |
 |      | availability_template       | template       |         | O      | O             | O      |        | O      |
-|      | availability_topic          | string         |         | O      | O             | O      | O      | O      |
-| x    | command_template            | template       |         |        |               | O      | O      | O      |
-| x    | command_topic               | string         |         |        |               | O      | O      | O      |
+| X    | availability_topic          | string         |         | O      | O             | O      | O      | O      |
+| X    | command_template            | template       |         |        |               | O      | O      | O      |
+| X    | command_topic               | string         |         |        |               | O      | O      | O      |
 |      | default_entity_id           | string         |         | O      | O             | O      | O      | O      |
-| x    | device                      | map            |         | O      | O             | O      | O      | O      |
-| x    | \- configuration_url        | string         |         | O      | O             | O      | O      | O      |
+| X    | device                      | map            |         | O      | O             | O      | O      | O      |
+| X    | \- configuration_url        | string         |         | O      | O             | O      | O      | O      |
 |      | \- connections              | list           |         | O      | O             | O      | O      | O      |
-| x    | \- hw_version               | string         |         | O      | O             | O      | O      | O      |
-| x    | \- identifiers              | list \| string |         | O      | O             | O      | O      | O      |
-| x    | \- manufacturer             | string         |         | O      | O             | O      | O      | O      |
-| x    | \- model                    | string         |         | O      | O             | O      | O      | O      |
-| x    | \- model_id                 | string         |         | O      | O             | O      | O      | O      |
-| x    | \- name                     | string         |         | O      | O             | O      | O      | O      |
-| x    | \- serial_number            | string         |         | O      | O             | O      | O      | O      |
+| X    | \- hw_version               | string         |         | O      | O             | O      | O      | O      |
+| X    | \- identifiers              | list \| string |         | O      | O             | O      | O      | O      |
+| X    | \- manufacturer             | string         |         | O      | O             | O      | O      | O      |
+| X    | \- model                    | string         |         | O      | O             | O      | O      | O      |
+| X    | \- model_id                 | string         |         | O      | O             | O      | O      | O      |
+| X    | \- name                     | string         |         | O      | O             | O      | O      | O      |
+| X    | \- serial_number            | string         |         | O      | O             | O      | O      | O      |
 |      | \- suggested_area           | string         |         | O      | O             | O      | O      | O      |
-| x    | \- sw_version               | string         |         | O      | O             | O      | O      | O      |
+| X    | \- sw_version               | string         |         | O      | O             | O      | O      | O      |
 |      | \- via_device               | string         |         | O      | O             | O      | O      | O      |
-| x    | device_class                | string         |         | O      | O             | O      | O      |        |
+| X    | device_class                | string         |         | O      | O             | O      | O      |        |
 |      | enabled_by_default          | boolean        | true    | O      | O             | O      | O      | O      |
 |      | encoding                    | string         | Utf-8   | O      | O             | O      | O      | O      |
-| x    | entity_category             | string         |         | O      | O             | O      | O      | O      |
+| X    | entity_category             | string         |         | O      | O             | O      | O      | O      |
 |      | entity_picture              | string         |         | O      | O             | O      | O      | O      |
 |      | expire_after                | integer        | 0       | O      | O             |        |        |        |
 |      | force_update                | boolean        | false   | O      | O             |        |        |        |
@@ -395,30 +395,30 @@ Home Assistant support can be globally activated on the configuration web page.
 |      | json_attributes_template    | template       |         | O      | O             | O      | O      | O      |
 |      | json_attributes_topic       | string         |         | O      | O             | O      | O      | O      |
 |      | last_reset_value_template   | template       |         | O      |               |        |        |        |
-| x    | min                         | float          | 1       |        |               |        | O      |        |
-| x    | max                         | float          | 100     |        |               |        | O      |        |
-| x    | mode                        | string         | auto    |        |               |        | O      |        |
-| x    | name                        | string         |         | O      | O             | O      | O      | O      |
+| X    | min                         | float          | 1       |        |               |        | O      |        |
+| X    | max                         | float          | 100     |        |               |        | O      |        |
+| X    | mode                        | string         | auto    |        |               |        | O      |        |
+| X    | name                        | string         |         | O      | O             | O      | O      | O      |
 |      | off_delay                   | integer        |         |        | O             |        |        |        |
 |      | optimistic                  | boolean        | true    |        |               | O      | O      | O      |
-| x    | options                     | list           |         | N      |               |        |        | R      |
+| X    | options                     | list           |         | N      |               |        |        | R      |
 |      | payload_available           | string         | online  | O      | O             | O      |        |        |
 |      | payload_not_available       | string         | offline | O      | O             | O      |        |        |
-| x    | payload_off                 | string         | OFF     |        | O             | O      |        |        |
-| x    | payload_on                  | string         | ON      |        | O             | O      |        |        |
+| X    | payload_off                 | string         | OFF     |        | O             | O      |        |        |
+| X    | payload_on                  | string         | ON      |        | O             | O      |        |        |
 |      | payload_reset               | string         | None    |        |               |        | O      |        |
 |      | platform                    | string         |         | R      | R             | R      | R      | R      |
 |      | retain                      | boolean        | false   |        |               | O      | O      | O      |
 |      | suggested_display_precision | integer        |         | O      |               |        |        |        |
 |      | qos                         | integer        | 0       | O      | O             | O      | O      | O      |
-| x    | state_class                 | string         |         | O      |               |        |        |        |
-| x    | step                        | float          | 1       |        |               |        | O      |        |
+| X    | state_class                 | string         |         | O      |               |        |        |        |
+| X    | step                        | float          | 1       |        |               |        | O      |        |
 |      | state_off                   | string         |         |        |               | O      |        |        |
 |      | state_on                    | string         |         |        |               | O      |        |        |
-| x    | state_topic                 | string         |         | R      | R             | O      | O      | O      |
-| x    | unique_id                   | string         |         | O      | O             | O      | O      | O      |
-| x    | unit_of_measurement         | string         |         | O      |               |        | O      |        |
-| x    | value_template              | template       |         | O      | O             | O      | O      | O      |
+| X    | state_topic                 | string         |         | R      | R             | O      | O      | O      |
+| X    | unique_id                   | string         |         | O      | O             | O      | O      | O      |
+| X    | unit_of_measurement         | string         |         | O      |               |        | O      |        |
+| X    | value_template              | template       |         | O      | O             | O      | O      | O      |
 
 
 **The following entries should be displayed below MQTT Device**
@@ -436,11 +436,12 @@ Home Assistant support can be globally activated on the configuration web page.
 topic: homeassistant/sensor/ebus8406ac/outdoor_temperature/config
 payload:
 {
+  "unique_id": "ebus8406ac_01",
   "name": "outdoor temperature",
+  "availability_topic": "ebus/8406ac/state/available",
   "device_class": "temperature",
   "state_topic": "ebus/8406ac/values/outdoor_temperature",
   "unit_of_measurement": "°C",
-  "unique_id": "ebus8406ac_01",
   "value_template": "{{value_json.value}}",
   "device": {
     "identifiers": "ebus8406ac"

@@ -794,6 +794,7 @@ void setup() {
 
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
+  mqttha.setWillTopic(mqtt.getWillTopic());
   mqttha.setEnabled(haEnabledParam.isChecked());
 
   mqttha.setThingName(iotWebConf.getThingName());

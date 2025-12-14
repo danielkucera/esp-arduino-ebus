@@ -66,6 +66,7 @@ class Mqtt {
 
   const std::string& getUniqueId() const;
   const std::string& getRootTopic() const;
+  const std::string& getWillTopic() const;
 
   void setServer(const char* host, uint16_t port);
   void setCredentials(const char* username, const char* password = nullptr);
@@ -95,7 +96,7 @@ class Mqtt {
   AsyncMqttClient client;
   std::string uniqueId;
   std::string rootTopic;
-  std::string topicWill;
+  std::string willTopic;
 
   bool enabled = false;
 

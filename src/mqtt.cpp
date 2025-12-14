@@ -20,13 +20,15 @@ Mqtt::Mqtt() {
 void Mqtt::setUniqueId(const char* id) {
   uniqueId = id;
   rootTopic = "ebus/" + uniqueId + "/";
-  topicWill = mqtt.rootTopic + "state/available";
-  client.setWill(topicWill.c_str(), 0, true, "offline");
+  willTopic = mqtt.rootTopic + "state/available";
+  client.setWill(willTopic.c_str(), 0, true, "offline");
 }
 
 const std::string& Mqtt::getUniqueId() const { return uniqueId; }
 
 const std::string& Mqtt::getRootTopic() const { return rootTopic; }
+
+const std::string& Mqtt::getWillTopic() const { return willTopic; }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
   client.setServer(host, port);
@@ -103,7 +105,7 @@ void Mqtt::onConnect(bool sessionPresent) {
   std::string topicRequest = mqtt.rootTopic + "request";
   mqtt.subscribe(topicRequest.c_str(), 0);
 
-  mqtt.publish(mqtt.topicWill.c_str(), 0, true, "online", false);
+  mqtt.publish(mqtt.willTopic.c_str(), 0, true, "online", false);
 
   if (mqttha.isEnabled()) mqttha.publishDeviceInfo();
 }
