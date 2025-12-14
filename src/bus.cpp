@@ -184,11 +184,7 @@ void BusType::readDataFromSoftwareSerial(void* args) {
 
 void BusType::begin() {
 #if USE_SOFTWARE_SERIAL
-#if defined(ESP32)
   BusSer.begin(2400, SERIAL_8N1, -1, UART_TX);  // used for writing
-#elif defined(ESP8266)
-  BusSer.begin(2400, SERIAL_8N1, SERIAL_TX_ONLY, UART_TX);
-#endif
   mySerial.enableStartBitTimeStampRecording(true);
   mySerial.enableTx(false);
   mySerial.enableIntTx(false);
@@ -196,12 +192,8 @@ void BusType::begin() {
                  RXBUFFERSIZE);  // used for reading
 #else
   BusSer.setRxBufferSize(RXBUFFERSIZE);
-#if defined(ESP32)
   BusSer.begin(2400, SERIAL_8N1, UART_RX, UART_TX);  // used for writing
   BusSer.setRxFIFOFull(1);
-#elif defined(ESP8266)
-  BusSer.begin(2400);
-#endif
 #endif
 
 #if USE_ASYNCHRONOUS

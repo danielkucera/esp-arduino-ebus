@@ -26,12 +26,9 @@ bool setArbitrationClient(WiFiClient*& client, uint8_t& address);
 void arbitrationDone();
 WiFiClient* arbitrationRequested(uint8_t& address);
 
-#if defined(ESP32)
 #include "atomic"
 #define ATOMIC_INT std::atomic<int>
-#else
-#define ATOMIC_INT int
-#endif
+
 // This object retrieves data from the Serial object and let's
 // it flow through the arbitration process. The "read" method
 // will return data with meta information that tells what should

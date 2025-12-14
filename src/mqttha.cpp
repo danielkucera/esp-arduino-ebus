@@ -1,6 +1,6 @@
 #if defined(EBUS_INTERNAL)
+#include <mqtt.hpp>
 #include <mqttha.hpp>
-#include <sstream>
 
 MqttHA mqttha;
 
@@ -13,6 +13,8 @@ void MqttHA::setRootTopic(const std::string& topic) {
   rootTopic = topic;
   commandTopic = rootTopic + "request";
 }
+
+void MqttHA::setWillTopic(const std::string& topic) { willTopic = topic; }
 
 void MqttHA::setEnabled(const bool enable) { enabled = enable; }
 
@@ -145,7 +147,60 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
   c.uniqueId = deviceIdentifiers + '_' + key;
   c.name = prettyName;
   c.deviceIdentifiers = deviceIdentifiers;
+  c.fields["availability_topic"] = willTopic;
   return c;
+}
+
+MqttHA::KeyValueMapping MqttHA::createOptions(
+    const std::map<int, std::string>& ha_key_value_map,
+    const int& ha_default_key) {
+  // Create a vector of options names and a vector of pairs
+  std::vector<std::pair<std::string, int>> optionsVec;
+  std::vector<std::string> options;
+
+  // Populate optionsVec and options from the map
+  for (const auto& kv : ha_key_value_map) {
+    optionsVec.emplace_back(kv.second, kv.first);
+    options.push_back(kv.second);
+  }
+
+  // Determine default option name and value
+  const auto defaultIt =
+      std::find_if(optionsVec.begin(), optionsVec.end(),
+                   [&](const std::pair<std::string, int>& opt) {
+                     return opt.second == ha_default_key;
+                   });
+
+  std::string defaultOptionName = optionsVec.empty() ? "" : optionsVec[0].first;
+  int defaultOptionValue = optionsVec.empty() ? 0 : optionsVec[0].second;
+  if (defaultIt != optionsVec.end()) {
+    defaultOptionName = defaultIt->first;
+    defaultOptionValue = defaultIt->second;
+  }
+
+  // Build value_template for displaying option name from value
+  std::string valueMap = "{% set values = {";
+  for (size_t i = 0; i < optionsVec.size(); ++i) {
+    valueMap +=
+        std::to_string(optionsVec[i].second) + ":'" + optionsVec[i].first + "'";
+    if (i < optionsVec.size() - 1) valueMap += ",";
+  }
+  valueMap +=
+      "} %}{{ values[value_json.value] if value_json.value in values.keys() "
+      "else '" +
+      defaultOptionName + "' }}";
+
+  // Build command_template for sending value from option name
+  std::string cmdMap = "{% set values = {";
+  for (size_t i = 0; i < optionsVec.size(); ++i) {
+    cmdMap +=
+        "'" + optionsVec[i].first + "':" + std::to_string(optionsVec[i].second);
+    if (i < optionsVec.size() - 1) cmdMap += ",";
+  }
+  cmdMap += "} %}{{ values[value] if value in values.keys() else " +
+            std::to_string(defaultOptionValue) + " }}";
+
+  return KeyValueMapping{options, valueMap, cmdMap};
 }
 
 MqttHA::Component MqttHA::createBinarySensor(const Command* command) const {
@@ -171,7 +226,15 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
   if (!command->ha_state_class.empty())
     c.fields["state_class"] = command->ha_state_class;
   if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
-  c.fields["value_template"] = "{{value_json.value}}";
+
+  if (!command->ha_key_value_map.empty()) {
+    KeyValueMapping optionsResult =
+        createOptions(command->ha_key_value_map, command->ha_default_key);
+
+    c.fields["value_template"] = optionsResult.valueMap;
+  } else {
+    c.fields["value_template"] = "{{value_json.value}}";
+  }
   return c;
 }
 
@@ -190,7 +253,7 @@ MqttHA::Component MqttHA::createNumber(const Command* command) const {
   c.fields["min"] = std::to_string(command->min);
   c.fields["max"] = std::to_string(command->max);
   c.fields["step"] = std::to_string(command->ha_step);
-  c.fields["mode"] = command->ha_mode;  // "box" or "slider"
+  c.fields["mode"] = command->ha_mode;
   return c;
 }
 
@@ -203,58 +266,13 @@ MqttHA::Component MqttHA::createSelect(const Command* command) const {
     c.fields["entity_category"] = command->ha_entity_category;
   c.fields["command_topic"] = commandTopic;
 
-  // Parse ha_options string into vector of pairs
-  std::vector<std::pair<std::string, int>> optionsVec;
-  std::istringstream ss(command->ha_options);
-  std::string token;
-  while (std::getline(ss, token, ',')) {
-    size_t sep = token.find(':');
-    if (sep != std::string::npos) {
-      std::string name = token.substr(0, sep);
-      int value = std::stoi(token.substr(sep + 1));
-      optionsVec.push_back({name, value});
-      c.options.push_back(name);
-    }
-  }
+  KeyValueMapping optionsResult =
+      createOptions(command->ha_key_value_map, command->ha_default_key);
 
-  // Determine default option name and value
-  const auto defaultIt =
-      std::find_if(optionsVec.begin(), optionsVec.end(),
-                   [&](const std::pair<std::string, int>& opt) {
-                     return opt.first == command->ha_options_default;
-                   });
-
-  std::string defaultOptionName = optionsVec.empty() ? "" : optionsVec[0].first;
-  int defaultOptionValue = optionsVec.empty() ? 0 : optionsVec[0].second;
-  if (defaultIt != optionsVec.end()) {
-    defaultOptionName = defaultIt->first;
-    defaultOptionValue = defaultIt->second;
-  }
-
-  // Build value_template for displaying option name from value
-  std::string valueMap = "{% set values = {";
-  for (size_t i = 0; i < optionsVec.size(); ++i) {
-    valueMap +=
-        std::to_string(optionsVec[i].second) + ":'" + optionsVec[i].first + "'";
-    if (i < optionsVec.size() - 1) valueMap += ",";
-  }
-  valueMap +=
-      "} %}{{ values[value_json.value] if value_json.value in values.keys() "
-      "else '" +
-      defaultOptionName + "' }}";
-  c.fields["value_template"] = valueMap;
-
-  // Build command_template for sending value from option name
-  std::string cmdMap = "{% set values = {";
-  for (size_t i = 0; i < optionsVec.size(); ++i) {
-    cmdMap +=
-        "'" + optionsVec[i].first + "':" + std::to_string(optionsVec[i].second);
-    if (i < optionsVec.size() - 1) cmdMap += ",";
-  }
-  cmdMap += "} %}{{ values[value] if value in values.keys() else " +
-            std::to_string(defaultOptionValue) + " }}";
+  c.options = optionsResult.options;
+  c.fields["value_template"] = optionsResult.valueMap;
   c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" + command->key +
-                                 "\",\"value\":" + cmdMap + "}";
+                                 "\",\"value\":" + optionsResult.cmdMap + "}";
 
   return c;
 }
