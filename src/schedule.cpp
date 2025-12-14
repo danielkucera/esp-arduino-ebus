@@ -4,6 +4,7 @@
 #include <set>
 
 #include "http.hpp"
+#include "log.hpp"
 #include "mqtt.hpp"
 #include "track.hpp"
 

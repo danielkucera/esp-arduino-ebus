@@ -8,6 +8,7 @@
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
 
+#include "log.hpp"
 #include "mqtt.hpp"
 #include "mqttha.hpp"
 #include "schedule.hpp"
@@ -16,15 +17,14 @@
 #include "bus.hpp"
 #endif
 
-#include "client.hpp"
-#include "http.hpp"
-
 #include <ESPmDNS.h>
 #include <IotWebConfESP32HTTPUpdateServer.h>
 #include <esp_task_wdt.h>
 
+#include "client.hpp"
 #include "esp32c3/rom/rtc.h"
 #include "esp_sntp.h"
+#include "http.hpp"
 
 HTTPUpdateServer httpUpdater;
 
@@ -260,13 +260,9 @@ void wifiConnected() {
 #endif
 }
 
-void wdt_start() {
-  esp_task_wdt_init(6, true);
-}
+void wdt_start() { esp_task_wdt_init(6, true); }
 
-void wdt_feed() {
-  esp_task_wdt_reset();
-}
+void wdt_feed() { esp_task_wdt_reset(); }
 
 inline void disableTX() {
 #if defined(TX_DISABLE_PIN)
