@@ -8,6 +8,7 @@
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
 
+#include "log.hpp"
 #include "mqtt.hpp"
 #include "mqttha.hpp"
 #include "schedule.hpp"
@@ -16,14 +17,14 @@
 #include "bus.hpp"
 #endif
 
-#include "client.hpp"
-#include "http.hpp"
-
 #include <ESPmDNS.h>
 #include <IotWebConfESP32HTTPUpdateServer.h>
 #include <esp_task_wdt.h>
 
+#include "client.hpp"
 #include "esp32c3/rom/rtc.h"
+#include "esp_sntp.h"
+#include "http.hpp"
 
 HTTPUpdateServer httpUpdater;
 
@@ -49,6 +50,7 @@ Preferences preferences;
 #define CONFIG_VERSION "eeb"
 
 #define STRING_LEN 64
+#define DNS_LEN 255
 #define NUMBER_LEN 8
 
 #define DEFAULT_APMODE_PASS "ebusebus"
@@ -58,6 +60,9 @@ Preferences preferences;
 #define DUMMY_STATIC_IP "192.168.1.180"
 #define DUMMY_GATEWAY "192.168.1.1"
 #define DUMMY_NETMASK "255.255.255.0"
+
+#define DUMMY_SNTP_SERVER "pool.ntp.org"
+#define DUMMY_SNTP_TIMEZONE "UTC0"
 
 #define DUMMY_MQTT_SERVER DUMMY_GATEWAY
 #define DUMMY_MQTT_USER "roger"
@@ -71,6 +76,10 @@ char staticIPValue[STRING_LEN];
 char ipAddressValue[STRING_LEN];
 char gatewayValue[STRING_LEN];
 char netmaskValue[STRING_LEN];
+
+char sntpEnabled[STRING_LEN];
+char sntpServer[DNS_LEN];
+char sntpTimezone[STRING_LEN];
 
 uint32_t pwm;
 char pwm_value[NUMBER_LEN];
@@ -113,6 +122,18 @@ iotwebconf::TextParameter gatewayParam = iotwebconf::TextParameter(
 iotwebconf::TextParameter netmaskParam = iotwebconf::TextParameter(
     "Subnet mask", "netmask", netmaskValue, STRING_LEN, "", DUMMY_NETMASK);
 
+#if defined(EBUS_INTERNAL)
+iotwebconf::ParameterGroup sntpGroup =
+    iotwebconf::ParameterGroup("sntp", "SNTP configuration");
+iotwebconf::CheckboxParameter sntpEnabledParam = iotwebconf::CheckboxParameter(
+    "SNTP enabled", "sntpEnabled", sntpEnabled, STRING_LEN);
+iotwebconf::TextParameter sntpServerParam = iotwebconf::TextParameter(
+    "SNTP server", "sntpServer", sntpServer, DNS_LEN, "", DUMMY_SNTP_SERVER);
+iotwebconf::TextParameter sntpTimezoneParam =
+    iotwebconf::TextParameter("SNTP timezone", "sntpTimezone", sntpTimezone,
+                              STRING_LEN, "", DUMMY_SNTP_TIMEZONE);
+#endif
+
 iotwebconf::ParameterGroup ebusGroup =
     iotwebconf::ParameterGroup("ebus", "eBUS configuration");
 iotwebconf::NumberParameter pwmParam =
@@ -143,7 +164,7 @@ iotwebconf::CheckboxParameter scanOnStartupParam =
                                   STRING_LEN);
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
     "Command distance (seconds)", "command_distance", command_distance,
-    NUMBER_LEN, "2", "1..60", "min='1' max='60' step='1'");
+    NUMBER_LEN, "1", "1..60", "min='1' max='60' step='1'");
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
@@ -239,13 +260,9 @@ void wifiConnected() {
 #endif
 }
 
-void wdt_start() {
-  esp_task_wdt_init(6, true);
-}
+void wdt_start() { esp_task_wdt_init(6, true); }
 
-void wdt_feed() {
-  esp_task_wdt_reset();
-}
+void wdt_feed() { esp_task_wdt_reset(); }
 
 inline void disableTX() {
 #if defined(TX_DISABLE_PIN)
@@ -371,6 +388,30 @@ void data_loop(void* pvParameters) {
 }
 #endif
 
+#if defined(EBUS_INTERNAL)
+void time_sync_notification_cb(struct timeval* tv) {
+  addLog("SNTP synchronized to " + String(sntpServer));
+}
+
+void initSNTP(const char* server) {
+  sntp_set_sync_interval(1 * 60 * 60 * 1000UL);  // 1 hour
+
+  esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+  esp_sntp_setservername(0, server);
+
+  sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+  esp_sntp_init();
+}
+
+void setTimezone(const char* timezone) {
+  if (strlen(timezone) > 0) {
+    addLog("Timezone set to " + String(timezone));
+    setenv("TZ", timezone, 1);
+    tzset();
+  }
+}
+#endif
+
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
   bool valid = true;
 
@@ -389,6 +430,23 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
     }
   }
 #if defined(EBUS_INTERNAL)
+  if (webRequestWrapper->arg(sntpServerParam.getId()).length() > DNS_LEN - 1) {
+    String tmp = "max. ";
+    tmp += String(DNS_LEN);
+    tmp += " characters allowed";
+    sntpServerParam.errorMessage = tmp.c_str();
+    valid = false;
+  }
+
+  if (webRequestWrapper->arg(sntpTimezoneParam.getId()).length() >
+      STRING_LEN - 1) {
+    String tmp = "max. ";
+    tmp += String(STRING_LEN);
+    tmp += " characters allowed";
+    sntpTimezoneParam.errorMessage = tmp.c_str();
+    valid = false;
+  }
+
   if (webRequestWrapper->arg(mqttServerParam.getId()).length() >
       STRING_LEN - 1) {
     String tmp = "max. ";
@@ -411,6 +469,14 @@ void saveParamsCallback() {
       uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   ebus::setBusIsrWindow(atoi(busisr_window));
   ebus::setBusIsrOffset(atoi(busisr_offset));
+
+  if (sntpEnabledParam.isChecked()) {
+    esp_sntp_stop();
+    initSNTP(sntpServer);
+    setTimezone(sntpTimezone);
+  } else {
+    esp_sntp_stop();
+  }
 
   schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
   schedule.setScanOnStartup(scanOnStartupParam.isChecked());
@@ -488,6 +554,15 @@ char* status_string() {
                   "max_loop_duration: %u us\r\n", maxLoopDuration);
   pos +=
       snprintf(status + pos, bufferSize - pos, "version: %s\r\n", AUTO_VERSION);
+
+#if defined(EBUS_INTERNAL)
+  pos += snprintf(status + pos, bufferSize - pos, "sntpEnabled: %s\r\n",
+                  sntpEnabledParam.isChecked() ? "true" : "false");
+  pos += snprintf(status + pos, bufferSize - pos, "sntpServer: %s\r\n",
+                  sntpServer);
+  pos += snprintf(status + pos, bufferSize - pos, "sntpTimezone: %s\r\n",
+                  sntpTimezone);
+#endif
 
   pos +=
       snprintf(status + pos, bufferSize - pos, "pwm_value: %u\r\n", get_pwm());
@@ -603,6 +678,14 @@ const std::string getStatusJson() {
   WIFI["Hostname"] = WiFi.getHostname();
   WIFI["MAC_Address"] = WiFi.macAddress();
 
+// SNTP
+#if defined(EBUS_INTERNAL)
+  JsonObject SNTP = doc["SNTP"].to<JsonObject>();
+  SNTP["Enabled"] = sntpEnabledParam.isChecked();
+  SNTP["Server"] = sntpServer;
+  SNTP["Timezone"] = sntpTimezone;
+#endif
+
   // eBUS
   JsonObject eBUS = doc["eBUS"].to<JsonObject>();
   eBUS["PWM"] = get_pwm();
@@ -684,6 +767,12 @@ void setup() {
   connGroup.addItem(&gatewayParam);
   connGroup.addItem(&netmaskParam);
 
+#if defined(EBUS_INTERNAL)
+  sntpGroup.addItem(&sntpEnabledParam);
+  sntpGroup.addItem(&sntpServerParam);
+  sntpGroup.addItem(&sntpTimezoneParam);
+#endif
+
   ebusGroup.addItem(&pwmParam);
 
 #if defined(EBUS_INTERNAL)
@@ -707,6 +796,9 @@ void setup() {
 #endif
 
   iotWebConf.addParameterGroup(&connGroup);
+#if defined(EBUS_INTERNAL)
+  iotWebConf.addParameterGroup(&sntpGroup);
+#endif
   iotWebConf.addParameterGroup(&ebusGroup);
 #if defined(EBUS_INTERNAL)
   iotWebConf.addParameterGroup(&scheduleGroup);
@@ -758,6 +850,11 @@ void setup() {
   }
 
 #if defined(EBUS_INTERNAL)
+  if (sntpEnabledParam.isChecked()) {
+    initSNTP(sntpServer);
+    setTimezone(sntpTimezone);
+  }
+
   mqtt.setEnabled(mqttEnabledParam.isChecked());
   mqtt.setUniqueId(unique_id);
   mqtt.setServer(mqtt_server, 1883);

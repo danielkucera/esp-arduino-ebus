@@ -1,5 +1,6 @@
 #include "http.hpp"
 
+#include "log.hpp"
 #include "main.hpp"
 #include "mqttha.hpp"
 #include "schedule.hpp"
@@ -22,7 +23,7 @@ void handleCommandsList() {
 
 void handleCommandsUpload() {
   configServer.send(200, "text/html", F(R"(<html>
-  <head><title>esp-eBus adapter</title>
+  <head><title>esp-eBus upload</title>
   <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
   </head><body>
   <h3>Upload Commands</h3>
@@ -155,6 +156,9 @@ void handleResetStatistic() {
   schedule.resetTiming();
   configServer.send(200, "text/html", "Statistic reset");
 }
+
+void handleLogData() { configServer.send(200, "text/plain", getLog()); }
+
 #endif
 
 void handleRoot() {
@@ -163,10 +167,17 @@ void handleRoot() {
     // -- Captive portal request were already served.
     return;
   }
-  
+
   extern const char root_html_start[] asm("_binary_static_root_html_start");
   configServer.send(200, "text/html", root_html_start);
 }
+
+#if defined(EBUS_INTERNAL)
+void handleLog() {
+  extern const char log_html_start[] asm("_binary_static_log_html_start");
+  configServer.send(200, "text/html", log_html_start);
+}
+#endif
 
 void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
@@ -189,6 +200,8 @@ void SetupHttpHandlers() {
   configServer.on("/api/v1/GetCounter", [] { handleGetCounter(); });
   configServer.on("/api/v1/GetTiming", [] { handleGetTiming(); });
   configServer.on("/reset", [] { handleResetStatistic(); });
+  configServer.on("/log", [] { handleLog(); });
+  configServer.on("/logdata", [] { handleLogData(); });
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
