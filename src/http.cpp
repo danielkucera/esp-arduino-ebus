@@ -163,11 +163,8 @@ void handleRoot() {
     return;
   }
   
-  extern const unsigned char root_html_start[] asm("_binary_static_root_html_start");
-  extern const unsigned char root_html_end[] asm("_binary_static_root_html_end");
-  
-  String html((const char*)root_html_start, root_html_end - root_html_start);
-  configServer.send(200, "text/html", html);
+  extern const char root_html_start[] asm("_binary_static_root_html_start");
+  configServer.send(200, "text/html", root_html_start);
 }
 
 void SetupHttpHandlers() {
