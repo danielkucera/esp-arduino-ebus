@@ -354,7 +354,7 @@ Most of the listed MQTT commands are also available via the web interface http:/
 |http://esp-ebus.local/scanvendor          |Start vendor spedific scan
 |http://esp-ebus.local/participants        |List of scanned ebus participants
 |http://esp-ebus.local/reset               |Resetting counter and timing values
-|http://esp-ebus.local/monitor             |Online monitoring of internal messages
+|http://esp-ebus.local/log                 |Online logging of internal messages
 |http://esp-ebus.local/restart             |Restarting of the device
 |http://esp-ebus.local/config              |Configuration webpage
 |http://esp-ebus.local/firmware            |Uploading new firmware
@@ -362,7 +362,7 @@ Most of the listed MQTT commands are also available via the web interface http:/
 The following endpoints are not listed on the main page:
 |***endpoint***                            |***description***                                              
 |:-                                        |:-
-|http://esp-ebus.local/monitordata         |Raw value of monitor data     
+|http://esp-ebus.local/logdata             |Raw value of logging data     
 |http://esp-ebus.local/api/v1/GetStatus    |Displays the current status (JSON)
 |http://esp-ebus.local/api/v1/GetCounter   |Displays internal counters (JSON)
 |http://esp-ebus.local/api/v1/GetTiming    |Displays internal timings (JSON)
