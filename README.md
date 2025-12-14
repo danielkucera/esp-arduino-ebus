@@ -339,33 +339,10 @@ Available MQTT commands.
 ## HTTP endpoints
 Most of the listed MQTT commands are also available via the web interface http://esp-ebus.local.
 
-|***endpoint***                            |***description***                                              
-|:-                                        |:-         
-|http://esp-ebus.local/status              |Displays the current status
-|http://esp-ebus.local/commands/list       |List of installed commands
-|http://esp-ebus.local/commands/upload     |Uploading of new commands
-|http://esp-ebus.local/commands/download   |Downloading of installed commands
-|http://esp-ebus.local/commands/load       |Loading (Installing) saved commands
-|http://esp-ebus.local/commands/save       |Saving the currently installed commands
-|http://esp-ebus.local/commands/wipe       |Wiping of the saved commands
-|http://esp-ebus.local/values              |List all commands with current values         
-|http://esp-ebus.local/scan                |Start scanning of seen ebus participants 
-|http://esp-ebus.local/scanfull            |Start a full scan 
-|http://esp-ebus.local/scanvendor          |Start vendor spedific scan
-|http://esp-ebus.local/participants        |List of scanned ebus participants
-|http://esp-ebus.local/reset               |Resetting counter and timing values
-|http://esp-ebus.local/log                 |Online logging of internal messages
-|http://esp-ebus.local/restart             |Restarting of the device
-|http://esp-ebus.local/config              |Configuration webpage
-|http://esp-ebus.local/firmware            |Uploading new firmware
-
 The following endpoints are not listed on the main page:
-|***endpoint***                            |***description***                                              
-|:-                                        |:-
-|http://esp-ebus.local/logdata             |Raw value of logging data     
-|http://esp-ebus.local/api/v1/GetStatus    |Displays the current status (JSON)
-|http://esp-ebus.local/api/v1/GetCounter   |Displays internal counters (JSON)
-|http://esp-ebus.local/api/v1/GetTiming    |Displays internal timings (JSON)
+- http://esp-ebus.local/api/v1/GetStatus
+- http://esp-ebus.local/api/v1/GetCounter
+- http://esp-ebus.local/api/v1/GetTiming
 
 
 ## Home Assistant Support
