@@ -136,12 +136,11 @@ iotwebconf::ParameterGroup sntpGroup =
     iotwebconf::ParameterGroup("sntp", "SNTP configuration");
 iotwebconf::CheckboxParameter sntpEnabledParam = iotwebconf::CheckboxParameter(
     "SNTP enabled", "sntpEnabled", sntpEnabled, STRING_LEN);
-iotwebconf::TextParameter sntpServerParam =
-    iotwebconf::TextParameter("SNTP server (need restart)", "sntpServer",
-                              sntpServer, DNS_LEN, "", DUMMY_SNTP_SERVER);
-iotwebconf::TextParameter sntpTimezoneParam = iotwebconf::TextParameter(
-    "SNTP timezone (need restart)", "sntpTimezone", sntpTimezone, STRING_LEN,
-    "", DUMMY_SNTP_TIMEZONE);
+iotwebconf::TextParameter sntpServerParam = iotwebconf::TextParameter(
+    "SNTP server", "sntpServer", sntpServer, DNS_LEN, "", DUMMY_SNTP_SERVER);
+iotwebconf::TextParameter sntpTimezoneParam =
+    iotwebconf::TextParameter("SNTP timezone", "sntpTimezone", sntpTimezone,
+                              STRING_LEN, "", DUMMY_SNTP_TIMEZONE);
 #endif
 
 iotwebconf::ParameterGroup ebusGroup =
@@ -415,46 +414,26 @@ void data_loop(void* pvParameters) {
 #endif
 
 #if defined(EBUS_INTERNAL)
-void initSNTP(const char* server, const char* timezone) {
-  // Set the synchronization interval
-  int syncInterval = 1 * 60 * 60 * 1000UL;  // 1 hour
-  sntp_set_sync_interval(syncInterval);
-
-  // Configure SNTP
-  esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
-  esp_sntp_setservername(0, server);
-  esp_sntp_init();
-
-  // Optionally set timezone, if provided
-  if (strlen(timezone) > 0) {
-    setenv("TZ", timezone, 1);
-    tzset();  // Timezone settings must be applied
-  }
+void time_sync_notification_cb(struct timeval* tv) {
+  addLog("SNTP synchronized to " + String(sntpServer));
 }
 
-void waitForSNTP() {
-  const int timeout_limit = 100;  // Maximum wait time of 10 seconds
-  const int delay_time = 100;     // Delay time in milliseconds
+void initSNTP(const char* server) {
+  sntp_set_sync_interval(1 * 60 * 60 * 1000UL);  // 1 hour
 
-  addLog("Waiting for SNTP synchronization...");
+  esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+  esp_sntp_setservername(0, server);
 
-  for (int count = 1; count <= timeout_limit; ++count) {
-    delay(delay_time);
+  sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+  esp_sntp_init();
+}
 
-    // Check the sync status once and store it
-    sntp_sync_status_t status = sntp_get_sync_status();
-
-    if (status == SNTP_SYNC_STATUS_COMPLETED) {
-      addLog("SNTP synchronized.");
-      return;
-    }
-
-    if (count % (1000 / delay_time) == 0)  // Log every second
-      addLog(String(count * delay_time) + "ms elapsed...");
+void setTimezone(const char* timezone) {
+  if (strlen(timezone) > 0) {
+    addLog("Timezone set to " + String(timezone));
+    setenv("TZ", timezone, 1);
+    tzset();
   }
-
-  addLog("SNTP synchronization failed after " +
-         String(timeout_limit * delay_time) + "ms.");
 }
 #endif
 
@@ -476,8 +455,7 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
     }
   }
 #if defined(EBUS_INTERNAL)
-  if (webRequestWrapper->arg(sntpServerParam.getId()).length() >
-      DNS_LEN - 1) {
+  if (webRequestWrapper->arg(sntpServerParam.getId()).length() > DNS_LEN - 1) {
     String tmp = "max. ";
     tmp += String(DNS_LEN);
     tmp += " characters allowed";
@@ -516,6 +494,14 @@ void saveParamsCallback() {
       uint8_t(std::strtoul(ebus_address, nullptr, 16)));
   ebus::setBusIsrWindow(atoi(busisr_window));
   ebus::setBusIsrOffset(atoi(busisr_offset));
+
+  if (sntpEnabledParam.isChecked()) {
+    esp_sntp_stop();
+    initSNTP(sntpServer);
+    setTimezone(sntpTimezone);
+  } else {
+    esp_sntp_stop();
+  }
 
   schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
   schedule.setScanOnStartup(scanOnStartupParam.isChecked());
@@ -898,8 +884,8 @@ void setup() {
 
 #if defined(EBUS_INTERNAL)
   if (sntpEnabledParam.isChecked()) {
-    initSNTP(sntpServer, sntpTimezone);
-    waitForSNTP();
+    initSNTP(sntpServer);
+    setTimezone(sntpTimezone);
   }
 
   mqtt.setEnabled(mqttEnabledParam.isChecked());
