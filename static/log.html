@@ -6,24 +6,81 @@
     <title>esp-eBus log</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 16px; }
-        pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
+        pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; max-height: 60vh; overflow:auto; }
+        button { border:0;border-radius:0.3rem;background-color:#16A1E7;color:#fff;line-height:2.0rem;font-size:1rem;padding:6px 12px;margin-right:6px;cursor:pointer; }
+        button.secondary { background:#6c6c6c }
+        button.danger { background:#E71616 }
+        .controls { margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     </style>
 </head>
 <body>
     <h1>Log</h1>
+    <div class="controls">
+        <button id="pauseBtn">Pause</button>
+        <button id="downloadBtn">Download</button>
+        <label style="font-size:0.9rem;"><input type="checkbox" id="autoScroll" checked> Auto-scroll</label>
+        <span id="status" style="margin-left:6px;font-size:0.9rem;color:#666">Connecting…</span>
+    </div>
     <pre id="logContainer">Loading logs...</pre>
     <script>
-        function fetchLogs() {
-            fetch('/logdata') 
-                .then(response => {
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    return response.text();
-                })
-                .then(data => { document.getElementById('logContainer').innerText = data; })
-                .catch(error => { console.error('Fetch error:', error); });
+        const intervalMs = 1000; // minimum interval between fetches
+        let paused = false;
+        let fetching = false;
+
+        async function fetchLogs() {
+            if (paused) return;
+            if (fetching) return; // don't overlap
+            fetching = true;
+            const statusEl = document.getElementById('status');
+            try {
+                statusEl.textContent = 'Fetching...';
+                const response = await fetch('/logdata');
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.text();
+                const pre = document.getElementById('logContainer');
+                pre.innerText = data;
+                if (document.getElementById('autoScroll').checked) {
+                    pre.scrollTop = pre.scrollHeight;
+                }
+                statusEl.textContent = new Date().toLocaleTimeString();
+            } catch (err) {
+                console.error('Fetch error:', err);
+                statusEl.textContent = 'Error';
+            } finally {
+                fetching = false;
+                // schedule next fetch
+                if (!paused) setTimeout(fetchLogs, intervalMs);
+            }
         }
-        setInterval(fetchLogs, 500);  // Fetch logs every 500 milliseconds
-        fetchLogs();  // Initial fetch
+
+        document.getElementById('pauseBtn').addEventListener('click', function() {
+            paused = !paused;
+            this.textContent = paused ? 'Resume' : 'Pause';
+            document.getElementById('status').textContent = paused ? 'Paused' : 'Resuming…';
+            if (!paused) fetchLogs();
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', async function() {
+            try {
+                const res = await fetch('/logdata');
+                if (!res.ok) throw new Error('Network response was not ok');
+                const text = await res.text();
+                const blob = new Blob([text], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'esp-ebus-log.txt';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                console.error('Download error:', err);
+            }
+        });
+
+        // kick off
+        fetchLogs();
     </script>
 </body>
 </html>
