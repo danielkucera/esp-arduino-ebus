@@ -57,6 +57,8 @@ void handleCommandsDownload() {
   String s = "{\"id\":\"insert\",\"commands\":";
   s += store.getCommandsJson().c_str();
   s += "}";
+  configServer.sendHeader("Content-Disposition",
+                          "attachment; filename=esp-ebus-commands.json");
   configServer.send(200, "application/json", s);
 }
 
