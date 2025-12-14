@@ -157,7 +157,7 @@ void handleResetStatistic() {
 #define MAX_LOG_ENTRIES 35
 String logBuffer[MAX_LOG_ENTRIES];
 int logIndex = 0;
-int currentEntries = 0;  // Track the number of current entries
+int logEntries = 0;
 
 String getTimestamp() {
   time_t now = time(nullptr);
@@ -175,26 +175,20 @@ String getTimestamp() {
 void addLog(String entry) {
   String timestampedEntry = getTimestamp() + " " + entry;
 
-  // If the buffer is full, shift all entries upwards
-  if (currentEntries >= MAX_LOG_ENTRIES) {
-    for (int i = 1; i < MAX_LOG_ENTRIES; i++)
-      logBuffer[i - 1] = logBuffer[i];  // Shift up
+  logBuffer[logIndex] = timestampedEntry;
 
-    // Add new entry at the last position
-    logBuffer[MAX_LOG_ENTRIES - 1] = timestampedEntry;
-  } else {
-    // Add the new entry to the first empty spot
-    logBuffer[currentEntries] = timestampedEntry;
-    currentEntries++;  // Increase the count of current entries
-  }
+  logIndex = (logIndex + 1) % MAX_LOG_ENTRIES;
+
+  if (logEntries < MAX_LOG_ENTRIES) logEntries++;
 }
 
 void handleMonitorData() {
   String response = "";
 
-  // Loop through current log entries
-  for (int i = 0; i < currentEntries; i++)
-    response += logBuffer[i] + "\n";  // Add non-empty entries to the response
+  for (int i = 0; i < logEntries; i++) {
+    int index = (logIndex - logEntries + i + MAX_LOG_ENTRIES) % MAX_LOG_ENTRIES;
+    response += logBuffer[index] + "\n";
+  }
 
   configServer.send(200, "text/plain", response);
 }
