@@ -7,23 +7,129 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 16px; }
         pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
+        button { border:0;border-radius:0.3rem;background-color:#16A1E7;color:#fff;line-height:2.0rem;font-size:1rem;padding:6px 12px;margin-right:6px;cursor:pointer; }
+        button.secondary { background:#6c6c6c }
+        button.danger { background:#E71616 }
+        .controls { margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     </style>
 </head>
 <body>
     <h1>Log</h1>
+    <div class="controls">
+        <button id="pauseBtn">Pause</button>
+        <button id="downloadBtn">Download</button>
+        <label style="font-size:0.9rem;"><input type="checkbox" id="autoScroll" checked> Auto-scroll</label>
+        <span id="status" style="margin-left:6px;font-size:0.9rem;color:#666">Connecting…</span>
+    </div>
     <pre id="logContainer">Loading logs...</pre>
     <script>
-        function fetchLogs() {
-            fetch('/logdata') 
-                .then(response => {
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    return response.text();
-                })
-                .then(data => { document.getElementById('logContainer').innerText = data; })
-                .catch(error => { console.error('Fetch error:', error); });
+        const intervalMs = 500; // minimum interval between fetches (500ms per request)
+        let paused = false;
+        let fetching = false;
+        let lastSnapshot = null;
+        let lastUpdateTime = '';
+        const lines = []; // newest-first array of lines
+        const seen = new Set();
+        const maxLines = 2000;
+
+        async function fetchLogs() {
+            if (paused) return;
+            if (fetching) return; // don't overlap
+            fetching = true;
+            const statusEl = document.getElementById('status');
+            try {
+                // show last update time and append a progress char while fetching
+                statusEl.textContent = (lastUpdateTime || 'Connecting…') + ' ▉';
+                const response = await fetch('/logdata');
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.text();
+                const pre = document.getElementById('logContainer');
+
+                // If snapshot identical to last fetched snapshot, do nothing except update time
+                if (data === lastSnapshot) {
+                    // keep lastUpdateTime as-is (no blink); show time without removing
+                    statusEl.textContent = lastUpdateTime || new Date().toLocaleTimeString();
+                } else {
+                    // Process server snapshot (assumed oldest->newest). We will add any unseen lines
+                    const serverLines = data.split(/\r?\n/);
+                    let added = 0;
+                    for (let i = 0; i < serverLines.length; i++) {
+                        const line = serverLines[i];
+                        // skip empty trailing line
+                        if (i === serverLines.length - 1 && line === '') continue;
+                        if (!seen.has(line)) {
+                            // new line -> add to front (newest-first display)
+                            lines.unshift(line);
+                            seen.add(line);
+                            added++;
+                        }
+                    }
+
+                    // Trim oldest lines if too many
+                    while (lines.length > maxLines) {
+                        const removed = lines.pop();
+                        seen.delete(removed);
+                    }
+
+                    // Render lines newest-first
+                    pre.innerText = lines.join('\n');
+
+                    // Update snapshot and time
+                    lastSnapshot = data;
+                    lastUpdateTime = new Date().toLocaleTimeString();
+
+                    if (document.getElementById('autoScroll').checked) {
+                        // scroll to top so newest (at top) is visible
+                        pre.scrollTop = 0;
+                    }
+                    // display last update time without blinking
+                    statusEl.textContent = lastUpdateTime;
+                }
+            } catch (err) {
+                console.error('Fetch error:', err);
+                statusEl.textContent = (lastUpdateTime || 'Error');
+            } finally {
+                fetching = false;
+                // schedule next fetch
+                if (!paused) setTimeout(fetchLogs, intervalMs);
+            }
         }
-        setInterval(fetchLogs, 500);  // Fetch logs every 500 milliseconds
-        fetchLogs();  // Initial fetch
+
+        document.getElementById('pauseBtn').addEventListener('click', function() {
+            paused = !paused;
+            this.textContent = paused ? 'Resume' : 'Pause';
+            // keep last update time visible and indicate paused state without removing it
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = (lastUpdateTime || 'Idle') + (paused ? ' (paused)' : '');
+            if (!paused) fetchLogs();
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', async function() {
+            try {
+                // Prefer client-side accumulated content (lines array). Download oldest-first for readability.
+                let text = '';
+                if (lines.length > 0) {
+                    text = lines.slice().reverse().join('\n');
+                } else {
+                    // Fallback: use current displayed content
+                    text = document.getElementById('logContainer').innerText || '';
+                }
+                const blob = new Blob([text], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'esp-ebus-log.txt';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                console.error('Download error:', err);
+            }
+        });
+
+        // kick off
+        fetchLogs();
     </script>
 </body>
 </html>
