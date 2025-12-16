@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>esp-eBus Commands</title>
+    <style>
+      body{font-family:verdana;padding:10px}
+      textarea{width:100%;height:320px;padding:8px;font-family:monospace;font-size:13px}
+      .row{display:flex;gap:8px;flex-wrap:wrap}
+      button{border:0;border-radius:0.3rem;background-color:#16A1E7;color:#fff;padding:8px 12px;cursor:pointer}
+      button.danger{background:#E71616}
+      button.secondary{background:#6c6c6c}
+      .status{margin-left:8px;color:#666;font-size:0.9rem}
+    </style>
+</head>
+<body>
+  <h2>Commands Editor</h2>
+  <div class="row" style="margin-bottom:8px;">
+    <button id="btnLoad">Load (from storage)</button>
+    <button id="btnSave">Save (to storage)</button>
+    <button id="btnWipe" class="danger">Wipe</button>
+    <button id="btnFetch">Fetch (download)</button>
+    <button id="btnInsert">Upload / Insert</button>
+    <button id="btnFormat" class="secondary">Format JSON</button>
+    <input type="file" id="fileUpload" style="display:none" accept="application/json">
+    <button id="btnOpenFile" class="secondary">Open file</button>
+    <button id="btnDownload" class="secondary">Download file</button>
+    <span class="status" id="status">&nbsp;</span>
+  </div>
+  <textarea id="commandsArea">Loading...</textarea>
+  <script>
+    const statusEl = document.getElementById('status');
+    function setStatus(s){ statusEl.textContent = s; }
+
+    async function fetchCommands() {
+      setStatus('Fetching...');
+      try {
+        const res = await fetch('/commands/download');
+        if(!res.ok) throw new Error('Fetch failed');
+        const js = await res.json();
+        document.getElementById('commandsArea').value = JSON.stringify(js, null, 2);
+        setStatus('Fetched');
+      } catch (err) { console.error(err); setStatus('Error fetching'); }
+    }
+
+    async function insertCommandsFromArea() {
+      const txt = document.getElementById('commandsArea').value;
+      try {
+        const obj = JSON.parse(txt);
+        // ensure it has 'commands' array
+        if(!obj.commands) throw new Error("JSON must include 'commands' array");
+        setStatus('Uploading...');
+        const res = await fetch('/commands/insert', { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(obj)});
+        setStatus(res.ok? 'Uploaded' : 'Upload failed');
+      } catch (err) { console.error(err); setStatus('Invalid JSON or upload failed'); }
+    }
+
+    async function postSimple(path) {
+      setStatus('Processing...');
+      try {
+        const res = await fetch(path);
+        const text = await res.text();
+        setStatus(text || (res.ok? 'OK' : 'Error'));
+      } catch (err) { console.error(err); setStatus('Error'); }
+    }
+
+    document.getElementById('btnFetch').addEventListener('click', fetchCommands);
+    document.getElementById('btnInsert').addEventListener('click', insertCommandsFromArea);
+    document.getElementById('btnFormat').addEventListener('click', function(){ try{ const o = JSON.parse(document.getElementById('commandsArea').value); document.getElementById('commandsArea').value = JSON.stringify(o,null,2); setStatus('Formatted'); } catch(e){ setStatus('Invalid JSON'); } });
+    document.getElementById('btnOpenFile').addEventListener('click', ()=> document.getElementById('fileUpload').click());
+    document.getElementById('fileUpload').addEventListener('change', function(ev){ const f = ev.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e)=> { try{ const obj = JSON.parse(e.target.result); document.getElementById('commandsArea').value = JSON.stringify(obj,null,2); setStatus('Loaded file'); } catch(err){ setStatus('Invalid JSON in file'); } }; r.readAsText(f); });
+    document.getElementById('btnDownload').addEventListener('click', ()=>{
+      try{ const text = document.getElementById('commandsArea').value; const blob = new Blob([text], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'commands.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); setStatus('Downloaded'); } catch(err){ setStatus('Download failed'); }
+    });
+    document.getElementById('btnLoad').addEventListener('click', ()=> postSimple('/commands/load'));
+    document.getElementById('btnSave').addEventListener('click', ()=> postSimple('/commands/save'));
+    document.getElementById('btnWipe').addEventListener('click', ()=> { if(confirm('Wipe all commands?')) postSimple('/commands/wipe'); });
+
+    // initial load
+    fetchCommands();
+  </script>
+</body>
+</html>
