@@ -11,26 +11,49 @@
       button.danger{background:#E71616}
       button.secondary{background:#6c6c6c}
       .status{margin-left:8px;color:#666;font-size:0.9rem}
+      table { width:100%; border-collapse: collapse; margin-top:12px; }
+      table th, table td { border:1px solid #ddd; padding:6px; text-align:left; font-size:13px }
+      table th { background:#f7f7f7 }
+      .table-actions { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap }
     </style>
 </head>
 <body>
   <h2>Commands Editor</h2>
   <div class="row" style="margin-bottom:8px;">
-    <button id="btnLoad">Load (from storage)</button>
-    <button id="btnSave">Save (to storage)</button>
-    <button id="btnWipe" class="danger">Wipe</button>
-    <button id="btnFetch">Fetch (download)</button>
-    <button id="btnInsert">Upload / Insert</button>
+    <button id="btnHome" class="secondary">Home</button>
+    <button id="btnFetch">Load from adapter</button>
+    <button id="btnOpenFile" class="secondary">Load from file...</button>
+    <button id="btnWipe" class="danger">Wipe all from adapter</button>
+    <button id="btnInsert">Apply to adapter</button>
+    <button id="btnLoad">Reload from adapter storage</button>
+    <button id="btnSave">Save permanently to storage</button>
+    <button id="btnDownload" class="secondary">Save as file</button>
     <button id="btnFormat" class="secondary">Format JSON</button>
     <input type="file" id="fileUpload" style="display:none" accept="application/json">
-    <button id="btnOpenFile" class="secondary">Open file</button>
-    <button id="btnDownload" class="secondary">Download file</button>
     <span class="status" id="status">&nbsp;</span>
+    <span id="size" style="margin-left:10px;color:#666;font-size:0.9rem">0 bytes</span>
   </div>
   <textarea id="commandsArea">Loading...</textarea>
+  <div>
+    <div class="table-actions">
+      <button id="btnEditorToTable" class="secondary">Refresh table from editor</button>
+      <label style="margin-left:auto;color:#666;font-size:0.9rem">Table view (read-only)</label>
+    </div>
+    <table id="commandsTable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
   <script>
     const statusEl = document.getElementById('status');
     function setStatus(s){ statusEl.textContent = s; }
+
+    function updateSize() {
+      const txt = document.getElementById('commandsArea').value || '';
+      const bytes = new TextEncoder().encode(txt).length;
+      const chars = txt.length;
+      document.getElementById('size').textContent = bytes + ' bytes (' + chars + ' chars)';
+    }
 
     async function fetchCommands() {
       setStatus('Fetching...');
@@ -39,6 +62,7 @@
         if(!res.ok) throw new Error('Fetch failed');
         const js = await res.json();
         document.getElementById('commandsArea').value = JSON.stringify(js, null, 2);
+        renderTable(js.commands || []);
         setStatus('Fetched');
       } catch (err) { console.error(err); setStatus('Error fetching'); }
     }
@@ -64,20 +88,91 @@
       } catch (err) { console.error(err); setStatus('Error'); }
     }
 
-    document.getElementById('btnFetch').addEventListener('click', fetchCommands);
+    // Table rendering and synchronization
+    function renderTable(commands) {
+      const thead = document.querySelector('#commandsTable thead');
+      const tbody = document.querySelector('#commandsTable tbody');
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+      // gather all keys
+      const keys = new Set();
+      commands.forEach(cmd => { Object.keys(cmd || {}).forEach(k => keys.add(k)); });
+      const cols = Array.from(keys);
+      // header row (no selection column)
+      const trh = document.createElement('tr');
+      cols.forEach(k => { const th = document.createElement('th'); th.textContent = k; trh.appendChild(th); });
+      thead.appendChild(trh);
+      // rows
+      commands.forEach(cmd => {
+        const tr = document.createElement('tr');
+        cols.forEach(k => {
+          const td = document.createElement('td');
+          td.contentEditable = 'false';
+          const v = cmd[k];
+          if (typeof v === 'object' && v !== null) td.textContent = JSON.stringify(v);
+          else td.textContent = (v === undefined ? '' : String(v));
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    function tableToEditor() {
+      const tbody = document.querySelector('#commandsTable tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr')).filter((tr, i) => tr.querySelector('input.row-check').checked);
+      const useRows = rows.length ? rows : Array.from(tbody.querySelectorAll('tr'));
+      const headers = Array.from(document.querySelectorAll('#commandsTable thead th')).slice(1).map(th => th.textContent);
+      const cmds = useRows.map(tr => {
+        const obj = {};
+        Array.from(tr.querySelectorAll('td')).slice(1).forEach((td, i) => {
+          const key = headers[i];
+          let text = td.textContent || '';
+          try { obj[key] = JSON.parse(text); } catch(e) { obj[key] = text; }
+        });
+        return obj;
+      });
+      const wrapper = { id: 'insert', commands: cmds };
+      document.getElementById('commandsArea').value = JSON.stringify(wrapper, null, 2);
+      updateSize(); setStatus('Table copied to editor');
+    }
+
+    function editorToTable() {
+      try { const txt = document.getElementById('commandsArea').value; const obj = JSON.parse(txt); renderTable(obj.commands || []); setStatus('Table updated from editor'); } catch (err) { setStatus('Invalid JSON'); }
+    }
+
+    document.getElementById('btnHome').addEventListener('click', ()=> { window.location.href = '/'; });
+    document.getElementById('btnFetch').addEventListener('click', async ()=> { await fetchCommands(); updateSize(); });
     document.getElementById('btnInsert').addEventListener('click', insertCommandsFromArea);
-    document.getElementById('btnFormat').addEventListener('click', function(){ try{ const o = JSON.parse(document.getElementById('commandsArea').value); document.getElementById('commandsArea').value = JSON.stringify(o,null,2); setStatus('Formatted'); } catch(e){ setStatus('Invalid JSON'); } });
+    document.getElementById('btnFormat').addEventListener('click', function(){ try{ const o = JSON.parse(document.getElementById('commandsArea').value); document.getElementById('commandsArea').value = JSON.stringify(o,null,2); setStatus('Formatted'); updateSize(); } catch(e){ setStatus('Invalid JSON'); } });
     document.getElementById('btnOpenFile').addEventListener('click', ()=> document.getElementById('fileUpload').click());
-    document.getElementById('fileUpload').addEventListener('change', function(ev){ const f = ev.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e)=> { try{ const obj = JSON.parse(e.target.result); document.getElementById('commandsArea').value = JSON.stringify(obj,null,2); setStatus('Loaded file'); } catch(err){ setStatus('Invalid JSON in file'); } }; r.readAsText(f); });
+    document.getElementById('fileUpload').addEventListener('change', function(ev){ const f = ev.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e)=> { try{ const obj = JSON.parse(e.target.result); document.getElementById('commandsArea').value = JSON.stringify(obj,null,2); setStatus('Loaded file'); updateSize(); } catch(err){ setStatus('Invalid JSON in file'); } }; r.readAsText(f); });
     document.getElementById('btnDownload').addEventListener('click', ()=>{
       try{ const text = document.getElementById('commandsArea').value; const blob = new Blob([text], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'commands.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); setStatus('Downloaded'); } catch(err){ setStatus('Download failed'); }
     });
     document.getElementById('btnLoad').addEventListener('click', ()=> postSimple('/commands/load'));
     document.getElementById('btnSave').addEventListener('click', ()=> postSimple('/commands/save'));
-    document.getElementById('btnWipe').addEventListener('click', ()=> { if(confirm('Wipe all commands?')) postSimple('/commands/wipe'); });
+    document.getElementById('btnWipe').addEventListener('click', ()=> { if(confirm('Clear all commands?')) postSimple('/commands/wipe'); });
+    document.getElementById('btnEditorToTable').addEventListener('click', editorToTable);
+
+    // Debounce helper and auto-refresh table from editor (debounced to avoid excessive parsing)
+    function debounce(func, wait) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+    const debouncedEditorToTable = debounce(editorToTable, 300);
+
+    // Prevent keyboard editing for table (read-only)
+    const commandsTable = document.getElementById('commandsTable');
+    commandsTable.addEventListener('keydown', function(e) { e.preventDefault(); });
+
+    document.getElementById('commandsArea').addEventListener('input', updateSize);
+    document.getElementById('commandsArea').addEventListener('input', debouncedEditorToTable);
 
     // initial load
-    fetchCommands();
+    fetchCommands().then(updateSize);
   </script>
 </body>
 </html>
