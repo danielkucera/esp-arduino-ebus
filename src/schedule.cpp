@@ -731,31 +731,27 @@ void Schedule::handleEvents() {
   CallbackEvent* event = nullptr;
   while (eventQueue.try_pop(event)) {
     if (event) {
+      std::string payload;
       switch (event->type) {
         case CallbackType::error: {
-          std::string payload = event->data.error + " : master '" +
-                                ebus::to_string(event->data.master) +
-                                "' slave '" +
-                                ebus::to_string(event->data.slave) + "'";
-          addLog(payload.c_str());
-
+          payload = event->data.error + " : master '" +
+                    ebus::to_string(event->data.master) + "' slave '" +
+                    ebus::to_string(event->data.slave) + "'";
           if (schedule.publishCounter) {
             std::string topic = "state/reset/last";
             mqtt.publish(topic.c_str(), 0, false, payload.c_str());
           }
+
         } break;
         case CallbackType::telegram: {
+          payload = ebus::to_string(event->data.master) + " / " +
+                    ebus::to_string(event->data.slave);
           if (!event->data.master.empty()) {
             seenMasters[event->data.master[0]] += 1;
             if (event->data.master.size() > 1 &&
                 ebus::isSlave(event->data.master[1]))
               seenSlaves[event->data.master[1]] += 1;
           }
-
-          std::string payload = ebus::to_string(event->data.master) +
-                                ebus::to_string(event->data.slave);
-          addLog(payload.c_str());
-
           switch (event->data.messageType) {
             case ebus::MessageType::active:
               schedule.processActive(event->mode,
@@ -769,6 +765,7 @@ void Schedule::handleEvents() {
           }
         } break;
       }
+      addLog(payload.c_str());
       delete event;
     }
   }
