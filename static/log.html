@@ -16,6 +16,7 @@
 <body>
     <h1>Log</h1>
     <div class="controls">
+        <button id="btnHome">Home</button>
         <button id="pauseBtn">Pause</button>
         <button id="downloadBtn">Download</button>
         <label style="font-size:0.9rem;"><input type="checkbox" id="autoScroll" checked> Auto-scroll</label>
@@ -80,7 +81,7 @@
 
                     if (document.getElementById('autoScroll').checked) {
                         // scroll to top so newest (at top) is visible
-                        pre.scrollTop = 0;
+                        pre.scrollTop = pre.scrollHeight;
                     }
                     // display last update time without blinking
                     statusEl.textContent = lastUpdateTime;
@@ -94,6 +95,8 @@
                 if (!paused) setTimeout(fetchLogs, intervalMs);
             }
         }
+
+        document.getElementById('btnHome').addEventListener('click', ()=> { window.location.href = '/'; });
 
         document.getElementById('pauseBtn').addEventListener('click', function() {
             paused = !paused;
