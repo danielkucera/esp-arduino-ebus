@@ -170,15 +170,15 @@ const std::vector<uint8_t> getVectorFromString(const Command* command,
 
 Store store;
 
-struct FieldValidation {
+struct FieldEvaluation {
   const char* name;
   bool required;
   const char* type;
 };
 
 const std::string Store::evaluateCommand(const JsonDocument& doc) const {
-  // Define the fields to validate
-  FieldValidation fields[] = {// Command Fields
+  // Define the fields to evaluate
+  FieldEvaluation fields[] = {// Command Fields
                               {"key", true, "string"},
                               {"name", true, "string"},
                               {"read_cmd", true, "string"},
@@ -207,7 +207,7 @@ const std::string Store::evaluateCommand(const JsonDocument& doc) const {
                               {"ha_state_class", false, "string"},
                               {"ha_step", false, "float"}};
 
-  // Validate each field in a loop
+  // Evaluate each field in a loop
   for (const auto& field : fields) {
     std::string error =
         isFieldValid(doc, field.name, field.required, field.type);
@@ -627,7 +627,7 @@ const std::string Store::isFieldValid(const JsonDocument& doc,
     return isKeyValueMapValid(ha_key_value_map);
   }
 
-  return "";  // Passed validation checks
+  return "";  // Passed evaluation checks
 }
 
 const std::string Store::isKeyValueMapValid(
@@ -642,7 +642,7 @@ const std::string Store::isKeyValueMapValid(
       return "Key out of range: " + std::string(kv.key().c_str());
     }
   }
-  return "";  // Passed key-value map validation checks
+  return "";  // Passed key-value map evaluation checks
 }
 
 const std::string Store::serializeCommands() const {
