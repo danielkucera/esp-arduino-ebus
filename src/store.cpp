@@ -170,9 +170,54 @@ const std::vector<uint8_t> getVectorFromString(const Command* command,
 
 Store store;
 
-Command Store::createCommand(const JsonDocument& doc) {
-  // TODO(yuhu-): Validation of required fields ?
+struct FieldValidation {
+  const char* name;
+  bool required;
+  const char* type;
+};
 
+const std::string Store::evaluateCommand(const JsonDocument& doc) const {
+  // Define the fields to validate
+  FieldValidation fields[] = {// Command Fields
+                              {"key", true, "string"},
+                              {"name", true, "string"},
+                              {"read_cmd", true, "string"},
+                              {"write_cmd", false, "string"},
+                              {"active", true, "bool"},
+                              {"interval", false, "int"},
+                              // Data Fields
+                              {"master", true, "bool"},
+                              {"position", true, "size_t"},
+                              {"datatype", true, "DataType"},
+                              {"divider", false, "float"},
+                              {"min", false, "float"},
+                              {"max", false, "float"},
+                              {"digits", false, "uint8_t"},
+                              {"unit", false, "string"},
+                              // Home Assistant
+                              {"ha", false, "bool"},
+                              {"ha_component", false, "string"},
+                              {"ha_device_class", false, "string"},
+                              {"ha_entity_category", false, "string"},
+                              {"ha_mode", false, "string"},
+                              {"ha_key_value_map", false, "ha_key_value_map"},
+                              {"ha_default_key", false, "int"},
+                              {"ha_payload_on", false, "uint8_t"},
+                              {"ha_payload_off", false, "uint8_t"},
+                              {"ha_state_class", false, "string"},
+                              {"ha_step", false, "float"}};
+
+  // Validate each field in a loop
+  for (const auto& field : fields) {
+    std::string error =
+        isFieldValid(doc, field.name, field.required, field.type);
+    if (!error.empty()) return error;  // Return the first error found
+  }
+
+  return "";  // No errors found
+}
+
+Command Store::createCommand(const JsonDocument& doc) {
   Command command;
 
   // Command Fields
@@ -200,7 +245,7 @@ Command Store::createCommand(const JsonDocument& doc) {
   if (!doc["digits"].isNull()) command.digits = doc["digits"].as<uint8_t>();
   if (!doc["unit"].isNull()) command.unit = doc["unit"].as<std::string>();
 
-  // Home Assistant (OPTIONAL)
+  // Home Assistant
   if (!doc["ha"].isNull()) command.ha = doc["ha"].as<bool>();
 
   if (command.ha) {
@@ -216,7 +261,6 @@ Command Store::createCommand(const JsonDocument& doc) {
     if (!doc["ha_key_value_map"].isNull()) {
       JsonObjectConst ha_key_value_map = doc["ha_key_value_map"];
       for (JsonPairConst kv : ha_key_value_map) {
-        // TODO(yuhu-): handle std::stoi exceptions
         command.ha_key_value_map[std::stoi(kv.key().c_str())] =
             kv.value().as<std::string>();
       }
@@ -238,8 +282,6 @@ Command Store::createCommand(const JsonDocument& doc) {
 }
 
 void Store::insertCommand(const Command& command) {
-  // TODO(yuhu-): Validation of required fields ?
-
   // Insert or update in allCommandsByKey
   auto it = allCommandsByKey.find(command.key);
   if (it != allCommandsByKey.end())
@@ -374,7 +416,7 @@ JsonDocument Store::getCommandJson(const Command* command) {
   doc["digits"] = command->digits;
   doc["unit"] = command->unit;
 
-  // Home Assistant (OPTIONAL)
+  // Home Assistant
   doc["ha"] = command->ha;
   doc["ha_component"] = command->ha_component;
   doc["ha_device_class"] = command->ha_device_class;
@@ -398,9 +440,8 @@ JsonDocument Store::getCommandJson(const Command* command) {
 const JsonDocument Store::getCommandsJsonDocument() const {
   JsonDocument doc;
 
-  if (!allCommandsByKey.empty()) {
+  if (!allCommandsByKey.empty())
     for (const auto kv : allCommandsByKey) doc.add(getCommandJson(&kv.second));
-  }
 
   if (doc.isNull()) doc.to<JsonArray>();
 
@@ -555,6 +596,55 @@ const std::string Store::getValuesJson() const {
   return payload;
 }
 
+const std::string Store::isFieldValid(const JsonDocument& doc,
+                                      const std::string& field, bool required,
+                                      const std::string& type) const {
+  // Check if the required field exists
+  if (required && !doc[field].is<JsonVariantConst>())
+    return "Missing required field: " + field;
+
+  // Skip type checking if the field is not present and not required
+  if (!doc[field].is<JsonVariantConst>()) return "";
+
+  // Type checking
+  if ((type == "string" && !doc[field].is<std::string>()) ||
+      (type == "bool" && !doc[field].is<bool>()) ||
+      (type == "int" && !doc[field].is<int>()) ||
+      (type == "float" && !doc[field].is<float>()) ||
+      (type == "uint8_t" && !doc[field].is<int>()) ||   // Cast to int for range
+      (type == "uint32_t" && !doc[field].is<int>()) ||  // Same for uint32_t
+      (type == "size_t" && !doc[field].is<int>()) ||    // Same for size_t
+      (type == "DataType" &&
+       (!doc[field].is<const char*>() ||
+        ebus::string_2_datatype(doc[field].as<const char*>()) ==
+            ebus::DataType::ERROR))) {
+    return "Invalid type for field: " + field;
+  }
+
+  // Check for ha_key_value_map field
+  if (type == "ha_key_value_map" && !doc["ha_key_value_map"].isNull()) {
+    JsonObjectConst ha_key_value_map = doc["ha_key_value_map"];
+    return isKeyValueMapValid(ha_key_value_map);
+  }
+
+  return "";  // Passed validation checks
+}
+
+const std::string Store::isKeyValueMapValid(
+    const JsonObjectConst ha_key_value_map) const {
+  for (JsonPairConst kv : ha_key_value_map) {
+    // Check if the key can be converted to an integer
+    try {
+      std::stoi(kv.key().c_str());
+    } catch (const std::invalid_argument& e) {
+      return "Invalid key: " + std::string(kv.key().c_str());
+    } catch (const std::out_of_range& e) {
+      return "Key out of range: " + std::string(kv.key().c_str());
+    }
+  }
+  return "";  // Passed key-value map validation checks
+}
+
 const std::string Store::serializeCommands() const {
   std::string payload;
   JsonDocument doc;
@@ -568,7 +658,7 @@ const std::string Store::serializeCommands() const {
       "master", "position", "datatype", "divider", "min", "max", "digits",
       "unit",
 
-      // Home Assistant (OPTIONAL)
+      // Home Assistant
       "ha", "ha_component", "ha_device_class", "ha_entity_category", "ha_mode",
       "ha_key_value_map", "ha_default_key", "ha_payload_on", "ha_payload_off",
       "ha_state_class", "ha_step"};
@@ -600,7 +690,7 @@ const std::string Store::serializeCommands() const {
     array.add(command.digits);
     array.add(command.unit);
 
-    // Home Assistant (OPTIONAL)
+    // Home Assistant
     array.add(command.ha);
     array.add(command.ha_component);
     array.add(command.ha_device_class);
@@ -653,6 +743,8 @@ void Store::deserializeCommands(const char* payload) {
           tmpDoc[fields[j]] = values[j];
         }
       }
+      std::string evalError = store.evaluateCommand(tmpDoc);
+      if (evalError.empty()) insertCommand(createCommand(tmpDoc));
       insertCommand(createCommand(tmpDoc));
     }
   }

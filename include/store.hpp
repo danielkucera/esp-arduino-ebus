@@ -27,40 +27,42 @@ struct VectorHash {
 
 // clang-format off
 struct Command {
-  // Command Fields
+  // Internal Fields
+  uint32_t last = 0;                                // last time of the successful command 
+  std::vector<uint8_t> data = {};                   // received raw data
+  size_t length = 1;                                // length of datatype
+  bool numeric = false;                             // indicates numeric datatype
+
+  // Command fields
   std::string key = "";                             // unique key of command
   std::string name = "";                            // name of the command used as mqtt topic below "values/"
   std::vector<uint8_t> read_cmd = {};               // read command as vector of "ZZPBSBNNDBx"
   std::vector<uint8_t> write_cmd = {};              // write command as vector of "ZZPBSBNNDBx" (OPTIONAL)
   bool active = false;                              // active sending of command
   uint32_t interval = 60;                           // minimum interval between two commands in seconds (OPTIONAL)
-  uint32_t last = 0;                                // last time of the successful command (INTERNAL)
-  std::vector<uint8_t> data = {};                   // received raw data (INTERNAL)
-  
+
   // Data Fields
   bool master = false;                              // value of interest is in master or slave part
   size_t position = 1;                              // starting position
   ebus::DataType datatype = ebus::DataType::HEX1;   // ebus data type
-  size_t length = 1;                                // length (INTERNAL)
-  bool numeric = false;                             // indicate numeric types (INTERNAL)
   float divider = 1;                                // divider for value conversion (OPTIONAL)
   float min = 1;                                    // minimum value (OPTIONAL)
   float max = 100;                                  // maximum value (OPTIONAL)
   uint8_t digits = 2;                               // decimal digits of value (OPTIONAL)
   std::string unit = "";                            // unit (OPTIONAL)
           
-  // Home Assistant (OPTIONAL)          
-  bool ha = false;                                  // home assistant support for auto discovery
-  std::string ha_component = "";                    // home assistant component type
-  std::string ha_device_class = "";                 // home assistant device class
-  std::string ha_entity_category = "";              // home assistant entity category
-  std::string ha_mode = "auto";                     // home assistant mode
-  std::map<int, std::string> ha_key_value_map = {}; // home assistant options as pairs of "key":"value"
-  int ha_default_key = 0;                           // home assistant options default key
-  uint8_t ha_payload_on = 1;                        // home assistant payload for ON state
-  uint8_t ha_payload_off = 0;                       // home assistant payload for OFF state
-  std::string ha_state_class = "";                  // home assistant state class
-  float ha_step = 1;                                // home assistant step value
+  // Home Assistant
+  bool ha = false;                                  // support for auto discovery (OPTIONAL)
+  std::string ha_component = "";                    // component type (OPTIONAL)
+  std::string ha_device_class = "";                 // device class (OPTIONAL)
+  std::string ha_entity_category = "";              // entity category (OPTIONAL)
+  std::string ha_mode = "auto";                     // mode (OPTIONAL)
+  std::map<int, std::string> ha_key_value_map = {}; // options as pairs of "key":"value" (OPTIONAL)
+  int ha_default_key = 0;                           // options default key (OPTIONAL)
+  uint8_t ha_payload_on = 1;                        // payload for ON state (OPTIONAL)
+  uint8_t ha_payload_off = 0;                       // payload for OFF state (OPTIONAL)
+  std::string ha_state_class = "";                  // state class (OPTIONAL)
+  float ha_step = 1;                                // step value (OPTIONAL)
 };
 // clang-format on
 
@@ -74,6 +76,8 @@ const std::vector<uint8_t> getVectorFromString(const Command* command,
 
 class Store {
  public:
+  const std::string evaluateCommand(const JsonDocument& doc) const;
+
   Command createCommand(const JsonDocument& doc);
 
   void insertCommand(const Command& command);
@@ -114,6 +118,13 @@ class Store {
       passiveCommands;
   // For active commands, just keep a vector of pointers
   std::vector<Command*> activeCommands;
+
+  const std::string isFieldValid(const JsonDocument& doc,
+                                 const std::string& field, bool required,
+                                 const std::string& type) const;
+
+  const std::string isKeyValueMapValid(
+      const JsonObjectConst ha_key_value_map) const;
 
   // Flexible serialization/deserialization
   const std::string serializeCommands() const;
