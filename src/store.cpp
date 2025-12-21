@@ -176,36 +176,37 @@ struct FieldEvaluation {
   const char* type;
 };
 
-const std::string Store::evaluateCommand(const JsonDocument& doc) const {
+const std::string Store::evaluateCommand(const JsonDocument& doc) {
   // Define the fields to evaluate
-  FieldEvaluation fields[] = {// Command Fields
-                              {"key", true, "string"},
-                              {"name", true, "string"},
-                              {"read_cmd", true, "string"},
-                              {"write_cmd", false, "string"},
-                              {"active", true, "bool"},
-                              {"interval", false, "int"},
-                              // Data Fields
-                              {"master", true, "bool"},
-                              {"position", true, "size_t"},
-                              {"datatype", true, "DataType"},
-                              {"divider", false, "float"},
-                              {"min", false, "float"},
-                              {"max", false, "float"},
-                              {"digits", false, "uint8_t"},
-                              {"unit", false, "string"},
-                              // Home Assistant
-                              {"ha", false, "bool"},
-                              {"ha_component", false, "string"},
-                              {"ha_device_class", false, "string"},
-                              {"ha_entity_category", false, "string"},
-                              {"ha_mode", false, "string"},
-                              {"ha_key_value_map", false, "ha_key_value_map"},
-                              {"ha_default_key", false, "int"},
-                              {"ha_payload_on", false, "uint8_t"},
-                              {"ha_payload_off", false, "uint8_t"},
-                              {"ha_state_class", false, "string"},
-                              {"ha_step", false, "float"}};
+  const FieldEvaluation fields[] = {
+      // Command Fields
+      {"key", true, "string"},
+      {"name", true, "string"},
+      {"read_cmd", true, "string"},
+      {"write_cmd", false, "string"},
+      {"active", true, "bool"},
+      {"interval", false, "int"},
+      // Data Fields
+      {"master", true, "bool"},
+      {"position", true, "size_t"},
+      {"datatype", true, "DataType"},
+      {"divider", false, "float"},
+      {"min", false, "float"},
+      {"max", false, "float"},
+      {"digits", false, "uint8_t"},
+      {"unit", false, "string"},
+      // Home Assistant
+      {"ha", false, "bool"},
+      {"ha_component", false, "string"},
+      {"ha_device_class", false, "string"},
+      {"ha_entity_category", false, "string"},
+      {"ha_mode", false, "string"},
+      {"ha_key_value_map", false, "ha_key_value_map"},
+      {"ha_default_key", false, "int"},
+      {"ha_payload_on", false, "uint8_t"},
+      {"ha_payload_off", false, "uint8_t"},
+      {"ha_state_class", false, "string"},
+      {"ha_step", false, "float"}};
 
   // Evaluate each field in a loop
   for (const auto& field : fields) {
@@ -598,7 +599,7 @@ const std::string Store::getValuesJson() const {
 
 const std::string Store::isFieldValid(const JsonDocument& doc,
                                       const std::string& field, bool required,
-                                      const std::string& type) const {
+                                      const std::string& type) {
   // Check if the required field exists
   if (required && !doc[field].is<JsonVariantConst>())
     return "Missing required field: " + field;
@@ -631,7 +632,7 @@ const std::string Store::isFieldValid(const JsonDocument& doc,
 }
 
 const std::string Store::isKeyValueMapValid(
-    const JsonObjectConst ha_key_value_map) const {
+    const JsonObjectConst ha_key_value_map) {
   for (JsonPairConst kv : ha_key_value_map) {
     // Check if the key can be converted to an integer
     try {
@@ -668,8 +669,8 @@ const std::string Store::serializeCommands() const {
   for (const auto& field : fields) header.add(field);
 
   // Add each command as an array of values in the same order as header
-  for (const auto& kv : allCommandsByKey) {
-    const Command& command = kv.second;
+  for (const auto& cmd : allCommandsByKey) {
+    const Command& command = cmd.second;
     JsonArray array = doc.add<JsonArray>();
 
     // Command Fields

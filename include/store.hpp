@@ -76,7 +76,7 @@ const std::vector<uint8_t> getVectorFromString(const Command* command,
 
 class Store {
  public:
-  const std::string evaluateCommand(const JsonDocument& doc) const;
+  static const std::string evaluateCommand(const JsonDocument& doc);
 
   Command createCommand(const JsonDocument& doc);
 
@@ -119,12 +119,12 @@ class Store {
   // For active commands, just keep a vector of pointers
   std::vector<Command*> activeCommands;
 
-  const std::string isFieldValid(const JsonDocument& doc,
-                                 const std::string& field, bool required,
-                                 const std::string& type) const;
+  static const std::string isFieldValid(const JsonDocument& doc,
+                                        const std::string& field, bool required,
+                                        const std::string& type);
 
-  const std::string isKeyValueMapValid(
-      const JsonObjectConst ha_key_value_map) const;
+  static const std::string isKeyValueMapValid(
+      const JsonObjectConst ha_key_value_map);
 
   // Flexible serialization/deserialization
   const std::string serializeCommands() const;
