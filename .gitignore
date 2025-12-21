@@ -2,4 +2,4 @@
 .pioenvs
 .piolibdeps
 .vscode/
-src/config.h
+.wiki/
