@@ -14,6 +14,18 @@
 // available. Permanently stored commands are automatically loaded when the
 // device is restarted.
 
+enum FieldType {
+  FT_String,
+  FT_Bool,
+  FT_Int,
+  FT_Float,
+  FT_Uint8,
+  FT_Uint32,
+  FT_SizeT,
+  FT_DataType,
+  FT_KeyValueMap
+};
+
 // Hash for std::vector<uint8_t>
 struct VectorHash {
   std::size_t operator()(const std::vector<uint8_t>& vec) const {
@@ -121,7 +133,7 @@ class Store {
 
   static const std::string isFieldValid(const JsonDocument& doc,
                                         const std::string& field, bool required,
-                                        const std::string& type);
+                                        FieldType type);
 
   static const std::string isKeyValueMapValid(
       const JsonObjectConst ha_key_value_map);

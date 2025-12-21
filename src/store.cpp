@@ -173,40 +173,39 @@ Store store;
 struct FieldEvaluation {
   const char* name;
   bool required;
-  const char* type;
+  FieldType type;
 };
 
 const std::string Store::evaluateCommand(const JsonDocument& doc) {
   // Define the fields to evaluate
-  const FieldEvaluation fields[] = {
-      // Command Fields
-      {"key", true, "string"},
-      {"name", true, "string"},
-      {"read_cmd", true, "string"},
-      {"write_cmd", false, "string"},
-      {"active", true, "bool"},
-      {"interval", false, "int"},
-      // Data Fields
-      {"master", true, "bool"},
-      {"position", true, "size_t"},
-      {"datatype", true, "DataType"},
-      {"divider", false, "float"},
-      {"min", false, "float"},
-      {"max", false, "float"},
-      {"digits", false, "uint8_t"},
-      {"unit", false, "string"},
-      // Home Assistant
-      {"ha", false, "bool"},
-      {"ha_component", false, "string"},
-      {"ha_device_class", false, "string"},
-      {"ha_entity_category", false, "string"},
-      {"ha_mode", false, "string"},
-      {"ha_key_value_map", false, "ha_key_value_map"},
-      {"ha_default_key", false, "int"},
-      {"ha_payload_on", false, "uint8_t"},
-      {"ha_payload_off", false, "uint8_t"},
-      {"ha_state_class", false, "string"},
-      {"ha_step", false, "float"}};
+  const FieldEvaluation fields[] = {// Command Fields
+                                    {"key", true, FT_String},
+                                    {"name", true, FT_String},
+                                    {"read_cmd", true, FT_String},
+                                    {"write_cmd", false, FT_String},
+                                    {"active", true, FT_Bool},
+                                    {"interval", false, FT_Uint32},
+                                    // Data Fields
+                                    {"master", true, FT_Bool},
+                                    {"position", true, FT_SizeT},
+                                    {"datatype", true, FT_DataType},
+                                    {"divider", false, FT_Float},
+                                    {"min", false, FT_Float},
+                                    {"max", false, FT_Float},
+                                    {"digits", false, FT_Uint8},
+                                    {"unit", false, FT_String},
+                                    // Home Assistant
+                                    {"ha", false, FT_Bool},
+                                    {"ha_component", false, FT_String},
+                                    {"ha_device_class", false, FT_String},
+                                    {"ha_entity_category", false, FT_String},
+                                    {"ha_mode", false, FT_String},
+                                    {"ha_key_value_map", false, FT_KeyValueMap},
+                                    {"ha_default_key", false, FT_Int},
+                                    {"ha_payload_on", false, FT_Uint8},
+                                    {"ha_payload_off", false, FT_Uint8},
+                                    {"ha_state_class", false, FT_String},
+                                    {"ha_step", false, FT_Float}};
 
   // Evaluate each field in a loop
   for (const auto& field : fields) {
@@ -599,36 +598,62 @@ const std::string Store::getValuesJson() const {
 
 const std::string Store::isFieldValid(const JsonDocument& doc,
                                       const std::string& field, bool required,
-                                      const std::string& type) {
+                                      FieldType type) {
+  JsonObjectConst root = doc.as<JsonObjectConst>();
+
   // Check if the required field exists
-  if (required && !doc[field].is<JsonVariantConst>())
+  if (required && !root[field.c_str()].is<JsonVariantConst>())
     return "Missing required field: " + field;
 
   // Skip type checking if the field is not present and not required
-  if (!doc[field].is<JsonVariantConst>()) return "";
+  if (!root[field.c_str()].is<JsonVariantConst>() ||
+      root[field.c_str()].isNull())
+    return "";  // not present and not required => ok
 
-  // Type checking
-  if ((type == "string" && !doc[field].is<std::string>()) ||
-      (type == "bool" && !doc[field].is<bool>()) ||
-      (type == "int" && !doc[field].is<int>()) ||
-      (type == "float" && !doc[field].is<float>()) ||
-      (type == "uint8_t" && !doc[field].is<int>()) ||   // Cast to int for range
-      (type == "uint32_t" && !doc[field].is<int>()) ||  // Same for uint32_t
-      (type == "size_t" && !doc[field].is<int>()) ||    // Same for size_t
-      (type == "DataType" &&
-       (!doc[field].is<const char*>() ||
-        ebus::string_2_datatype(doc[field].as<const char*>()) ==
-            ebus::DataType::ERROR))) {
-    return "Invalid type for field: " + field;
+  JsonVariantConst v = root[field.c_str()];
+
+  switch (type) {
+    case FT_String: {
+      if (!v.is<const char*>()) return "Invalid type for field: " + field;
+    } break;
+    case FT_Bool: {
+      if (!v.is<bool>()) return "Invalid type for field: " + field;
+    } break;
+    case FT_Int: {
+      if (!v.is<long>()) return "Invalid type for field: " + field;
+    } break;
+    case FT_Float: {
+      if (!v.is<float>() && !v.is<double>() && !v.is<long>())
+        return "Invalid type for field: " + field;
+    } break;
+    case FT_Uint8: {
+      if (!v.is<long>()) return "Invalid type for field: " + field;
+      long val = v.as<long>();
+      if (val < 0 || val > 0xFF) return "Out of range for field: " + field;
+    } break;
+    case FT_Uint32: {
+      if (!v.is<long>()) return "Invalid type for field: " + field;
+      long val = v.as<long>();
+      if (val < 0) return "Negative value not allowed for field: " + field;
+      if (val > UINT32_MAX) return "Value > UINT32_MAX for field: " + field;
+    } break;
+    case FT_SizeT: {
+      if (!v.is<long>()) return "Invalid type for field: " + field;
+      long val = v.as<long>();
+      if (val < 0) return "Negative value not allowed for field: " + field;
+    } break;
+    case FT_DataType: {
+      if (!v.is<const char*>() ||
+          ebus::string_2_datatype(v.as<const char*>()) == ebus::DataType::ERROR)
+        return "Invalid datatype for field : " + field;
+    } break;
+    case FT_KeyValueMap: {
+      if (!v.is<JsonObjectConst>()) return "Invalid type for field : " + field;
+      return isKeyValueMapValid(v.as<JsonObjectConst>());
+    } break;
   }
 
-  // Check for ha_key_value_map field
-  if (type == "ha_key_value_map" && !doc["ha_key_value_map"].isNull()) {
-    JsonObjectConst ha_key_value_map = doc["ha_key_value_map"];
-    return isKeyValueMapValid(ha_key_value_map);
-  }
-
-  return "";  // Passed evaluation checks
+  return "";
 }
 
 const std::string Store::isKeyValueMapValid(
