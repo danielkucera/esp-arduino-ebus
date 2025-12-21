@@ -70,7 +70,7 @@ void handleCommandsEvaluate() {
   DeserializationError error = deserializeJson(doc, body);
 
   if (error) {
-    configServer.send(403, "text/html", "INVALID JSON");
+    configServer.send(403, "text/html", "Json invalid");
   } else {
     JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
     if (!commands.isNull()) {
@@ -81,9 +81,9 @@ void handleCommandsEvaluate() {
           return;
         }
       }
-      configServer.send(200, "text/html", "OK");
+      configServer.send(200, "text/html", "Ok");
     } else {
-      configServer.send(403, "text/html", "NO COMMANDS");
+      configServer.send(403, "text/html", "No commands");
     }
   }
 }
@@ -95,7 +95,7 @@ void handleCommandsInsert() {
   DeserializationError error = deserializeJson(doc, body);
 
   if (error) {
-    configServer.send(403, "text/html", "INVALID JSON");
+    configServer.send(403, "text/html", "Json invalid");
   } else {
     JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
     if (!commands.isNull()) {
@@ -107,9 +107,9 @@ void handleCommandsInsert() {
           configServer.send(403, "text/html", evalError.c_str());
       }
       if (mqttha.isEnabled()) mqttha.publishComponents();
-      configServer.send(200, "text/html", "OK");
+      configServer.send(200, "text/html", "Ok");
     } else {
-      configServer.send(403, "text/html", "NO COMMANDS");
+      configServer.send(403, "text/html", "No commands");
     }
   }
 }
