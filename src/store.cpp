@@ -3,6 +3,8 @@
 
 #include <Preferences.h>
 
+#include <regex>
+
 const double getDoubleFromVector(const Command* command) {
   double value = 0;
 
@@ -181,10 +183,10 @@ const std::string Store::evaluateCommand(const JsonDocument& doc) {
   const FieldEvaluation fields[] = {// Command Fields
                                     {"key", true, FT_String},
                                     {"name", true, FT_String},
-                                    {"read_cmd", true, FT_String},
-                                    {"write_cmd", false, FT_String},
+                                    {"read_cmd", true, FT_HexString},
+                                    {"write_cmd", false, FT_HexString},
                                     {"active", true, FT_Bool},
-                                    {"interval", false, FT_Uint32},
+                                    {"interval", false, FT_Uint32T},
                                     // Data Fields
                                     {"master", true, FT_Bool},
                                     {"position", true, FT_SizeT},
@@ -192,7 +194,7 @@ const std::string Store::evaluateCommand(const JsonDocument& doc) {
                                     {"divider", false, FT_Float},
                                     {"min", false, FT_Float},
                                     {"max", false, FT_Float},
-                                    {"digits", false, FT_Uint8},
+                                    {"digits", false, FT_Uint8T},
                                     {"unit", false, FT_String},
                                     // Home Assistant
                                     {"ha", false, FT_Bool},
@@ -202,8 +204,8 @@ const std::string Store::evaluateCommand(const JsonDocument& doc) {
                                     {"ha_mode", false, FT_String},
                                     {"ha_key_value_map", false, FT_KeyValueMap},
                                     {"ha_default_key", false, FT_Int},
-                                    {"ha_payload_on", false, FT_Uint8},
-                                    {"ha_payload_off", false, FT_Uint8},
+                                    {"ha_payload_on", false, FT_Uint8T},
+                                    {"ha_payload_off", false, FT_Uint8T},
                                     {"ha_state_class", false, FT_String},
                                     {"ha_step", false, FT_Float}};
 
@@ -614,41 +616,48 @@ const std::string Store::isFieldValid(const JsonDocument& doc,
 
   switch (type) {
     case FT_String: {
-      if (!v.is<const char*>()) return "Invalid type for field: " + field;
+      if (!v.is<std::string>()) return "Invalid type for field: " + field;
+    } break;
+    case FT_HexString: {
+      if (!v.is<std::string>()) return "Invalid type for field: " + field;
+      const std::string hexStr = v.as<std::string>();
+      std::regex hexRegex(R"(^0[xX]?([0-9a-fA-F]+)$)");
+      if (!std::regex_match(hexStr, hexRegex))
+        return "Invalid hex string for field: " + field;
     } break;
     case FT_Bool: {
       if (!v.is<bool>()) return "Invalid type for field: " + field;
     } break;
     case FT_Int: {
-      if (!v.is<long>()) return "Invalid type for field: " + field;
+      if (!v.is<int>()) return "Invalid type for field: " + field;
     } break;
     case FT_Float: {
       if (!v.is<float>() && !v.is<double>() && !v.is<long>())
         return "Invalid type for field: " + field;
     } break;
-    case FT_Uint8: {
-      if (!v.is<long>()) return "Invalid type for field: " + field;
+    case FT_Uint8T: {
+      if (!v.is<uint8_t>()) return "Invalid type for field: " + field;
       long val = v.as<long>();
       if (val < 0 || val > 0xFF) return "Out of range for field: " + field;
     } break;
-    case FT_Uint32: {
-      if (!v.is<long>()) return "Invalid type for field: " + field;
+    case FT_Uint32T: {
+      if (!v.is<uint32_t>()) return "Invalid type for field: " + field;
       long val = v.as<long>();
-      if (val < 0) return "Negative value not allowed for field: " + field;
-      if (val > UINT32_MAX) return "Value > UINT32_MAX for field: " + field;
+      if (val < 0 || val > UINT32_MAX)
+        return "Out of range for field: " + field;
     } break;
     case FT_SizeT: {
-      if (!v.is<long>()) return "Invalid type for field: " + field;
+      if (!v.is<size_t>()) return "Invalid type for field: " + field;
       long val = v.as<long>();
-      if (val < 0) return "Negative value not allowed for field: " + field;
+      if (val < 0 || val > SIZE_MAX) return "Out of range for field: " + field;
     } break;
     case FT_DataType: {
       if (!v.is<const char*>() ||
           ebus::string_2_datatype(v.as<const char*>()) == ebus::DataType::ERROR)
-        return "Invalid datatype for field : " + field;
+        return "Invalid datatype for field: " + field;
     } break;
     case FT_KeyValueMap: {
-      if (!v.is<JsonObjectConst>()) return "Invalid type for field : " + field;
+      if (!v.is<JsonObjectConst>()) return "Invalid type for field: " + field;
       return isKeyValueMapValid(v.as<JsonObjectConst>());
     } break;
   }
@@ -667,6 +676,7 @@ const std::string Store::isKeyValueMapValid(
     } catch (const std::out_of_range& e) {
       return "Key out of range: " + std::string(kv.key().c_str());
     }
+    if (!kv.value().is<std::string>()) return "Invalid value type in map";
   }
   return "";  // Passed key-value map evaluation checks
 }

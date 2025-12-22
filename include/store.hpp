@@ -16,11 +16,12 @@
 
 enum FieldType {
   FT_String,
+  FT_HexString,
   FT_Bool,
   FT_Int,
   FT_Float,
-  FT_Uint8,
-  FT_Uint32,
+  FT_Uint8T,
+  FT_Uint32T,
   FT_SizeT,
   FT_DataType,
   FT_KeyValueMap
@@ -55,7 +56,7 @@ struct Command {
 
   // Data Fields
   bool master = false;                              // value of interest is in master or slave part
-  size_t position = 1;                              // starting position
+  size_t position = 1;                              // starting position within the data bytes, beginning with 1
   ebus::DataType datatype = ebus::DataType::HEX1;   // ebus data type
   float divider = 1;                                // divider for value conversion (OPTIONAL)
   float min = 1;                                    // minimum value (OPTIONAL)
