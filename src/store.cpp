@@ -621,9 +621,11 @@ const std::string Store::isFieldValid(const JsonDocument& doc,
     case FT_HexString: {
       if (!v.is<std::string>()) return "Invalid type for field: " + field;
       const std::string hexStr = v.as<std::string>();
-      std::regex hexRegex(R"(^0[xX]?([0-9a-fA-F]+)$)");
-      if (!std::regex_match(hexStr, hexRegex))
-        return "Invalid hex string for field: " + field;
+      if (!hexStr.empty()) {
+        std::regex hexRegex(R"(^([0-9A-Fa-f]{2})+$)");
+        if (!std::regex_match(hexStr, hexRegex))
+          return "Invalid hex string for field: " + field;
+      }
     } break;
     case FT_Bool: {
       if (!v.is<bool>()) return "Invalid type for field: " + field;
@@ -781,7 +783,6 @@ void Store::deserializeCommands(const char* payload) {
       }
       std::string evalError = store.evaluateCommand(tmpDoc);
       if (evalError.empty()) insertCommand(createCommand(tmpDoc));
-      insertCommand(createCommand(tmpDoc));
     }
   }
 }
