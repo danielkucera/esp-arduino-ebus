@@ -16,15 +16,16 @@ void handleGetStatus() {
 }
 
 #if defined(EBUS_INTERNAL)
-void handleCommandsList() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    store.getCommandsJson().c_str());
-}
-
 void handleCommandsPage() {
-  extern const char commands_html_start[] asm("_binary_static_commands_html_start");
+  extern const char commands_html_start[] asm(
+      "_binary_static_commands_html_start");
   configServer.send(200, "text/html", commands_html_start);
 }
+
+// void handleCommandsList() {
+//   configServer.send(200, "application/json;charset=utf-8",
+//                     store.getCommandsJson().c_str());
+// }
 
 void handleCommandsDownload() {
   String s = "{\"id\":\"insert\",\"commands\":";
@@ -187,7 +188,7 @@ void SetupHttpHandlers() {
   configServer.on("/api/v1/GetStatus", [] { handleGetStatus(); });
 #if defined(EBUS_INTERNAL)
   configServer.on("/commands", [] { handleCommandsPage(); });
-  configServer.on("/commands/list", [] { handleCommandsList(); });
+  // configServer.on("/commands/list", [] { handleCommandsList(); });
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
   configServer.on("/commands/evaluate", [] { handleCommandsEvaluate(); });
   configServer.on("/commands/insert", [] { handleCommandsInsert(); });

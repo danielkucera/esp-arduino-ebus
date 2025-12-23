@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <head>
+    <meta name="viewport"
+      content="width=device-width, initial-scale=1, user-scalable=no">
     <title>esp-eBus Commands</title>
     <style>
       body{font-family:verdana;padding:10px}
       textarea{width:100%;height:320px;padding:8px;font-family:monospace;font-size:13px}
+      .boxsizingBorder{-webkit-box-sizing: border-box;-moz-box-sizing: border-box;box-sizing: border-box;}
       .row{display:flex;gap:8px;flex-wrap:wrap}
       button{border:0;border-radius:0.3rem;background-color:#16A1E7;color:#fff;padding:8px 12px;cursor:pointer}
+      button.apply{background: #039505de}
       button.danger{background:#E71616}
       button.secondary{background:#6c6c6c}
       .status{margin-left:8px;color:#666;font-size:0.9rem}
@@ -16,35 +19,39 @@
       table th { background:#f7f7f7 }
       .table-actions { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap }
     </style>
-</head>
-<body>
-  <h2>Commands Editor</h2>
-  <div class="row" style="margin-bottom:8px;">
-    <button id="btnHome" class="secondary">Home</button>
-    <button id="btnFetch">Load from adapter</button>
-    <button id="btnOpenFile" class="secondary">Load from file...</button>
-    <button id="btnWipe" class="danger">Wipe all from adapter</button>
-    <button id="btnInsert">Apply to adapter</button>
-    <button id="btnLoad">Reload from adapter storage</button>
-    <button id="btnSave">Save permanently to storage</button>
-    <button id="btnDownload" class="secondary">Save as file</button>
-    <button id="btnFormat" class="secondary">Format JSON</button>
-    <input type="file" id="fileUpload" style="display:none" accept="application/json">
-    <span class="status" id="status">&nbsp;</span>
-    <span id="size" style="margin-left:10px;color:#666;font-size:0.9rem">0 bytes</span>
-  </div>
-  <textarea id="commandsArea">Loading...</textarea>
-  <div>
-    <div class="table-actions">
-      <button id="btnEditorToTable" class="secondary">Refresh table from editor</button>
-      <label style="margin-left:auto;color:#666;font-size:0.9rem">Table view (read-only)</label>
+  </head>
+  <body>
+    <h2>Commands Editor</h2>
+    <div class="row" style="margin-bottom:8px;">
+      <button id="btnHome">Home</button>
+      <button id="btnFetch">Load from adapter</button>
+      <button id="btnOpenFile" class="secondary">Load from file...</button>
+      <button id="btnClear">Clear</button>
+      <button id="btnFormat">Format</button>
+      <button id="btnEvaluate">Evaluate</button>
+      <button id="btnInsert" class="apply">Apply from editor</button>
+      <button id="btnDownload" class="secondary">Save as file</button>
+      <button id="btnLoad" class="apply">Apply from storage</button>
+      <button id="btnSave" class="danger">Save to storage</button>
+      <button id="btnWipe" class="danger">Wipe all from storage</button>
+
+      <input type="file" id="fileUpload" style="display:none"
+        accept="application/json">
+      <span class="status" id="status">&nbsp;</span>
+      <span id="size" style="margin-left:10px;color:#666;font-size:0.9rem">0 bytes</span>
     </div>
-    <table id="commandsTable">
-      <thead></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-  <script>
+    <textarea class="boxsizingBorder" id="commandsArea">Loading...</textarea>
+    <div>
+      <div class="table-actions">
+        <button id="btnEditorToTable">Refresh table from editor</button>
+        <label style="margin-left:auto;color:#666;font-size:0.9rem">Table view (read-only)</label>
+      </div>
+      <table id="commandsTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <script>
     const statusEl = document.getElementById('status');
     function setStatus(s){ statusEl.textContent = s; }
 
@@ -86,6 +93,19 @@
         const text = await res.text();
         setStatus(text || (res.ok? 'OK' : 'Error'));
       } catch (err) { console.error(err); setStatus('Error'); }
+    }
+
+    async function evaluateCommandsFromArea() {
+      const txt = document.getElementById('commandsArea').value;
+      try {
+        const obj = JSON.parse(txt);
+        // ensure it has 'commands' array
+        if(!obj.commands) throw new Error("JSON must include 'commands' array");
+        setStatus('Evaluating...');
+        const res = await fetch('/commands/insert', { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(obj)});
+        const text = await res.text();
+        setStatus(text || (res.ok? 'Evaluated' : 'Evaluation failed'));
+      } catch (err) { console.error(err); setStatus('Invalid JSON or evalution failed'); }
     }
 
     // Table rendering and synchronization
@@ -141,9 +161,11 @@
     }
 
     document.getElementById('btnHome').addEventListener('click', ()=> { window.location.href = '/'; });
+    document.getElementById('btnClear').addEventListener('click', function() { document.getElementById('commandsArea').value = ''; updateSize(); setStatus('Editor cleared'); });
     document.getElementById('btnFetch').addEventListener('click', async ()=> { await fetchCommands(); updateSize(); });
     document.getElementById('btnInsert').addEventListener('click', insertCommandsFromArea);
     document.getElementById('btnFormat').addEventListener('click', function(){ try{ const o = JSON.parse(document.getElementById('commandsArea').value); document.getElementById('commandsArea').value = JSON.stringify(o,null,2); setStatus('Formatted'); updateSize(); } catch(e){ setStatus('Invalid JSON'); } });
+    document.getElementById('btnEvaluate').addEventListener('click', evaluateCommandsFromArea);
     document.getElementById('btnOpenFile').addEventListener('click', ()=> document.getElementById('fileUpload').click());
     document.getElementById('fileUpload').addEventListener('change', function(ev){ const f = ev.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e)=> { try{ const obj = JSON.parse(e.target.result); document.getElementById('commandsArea').value = JSON.stringify(obj,null,2); setStatus('Loaded file'); updateSize(); } catch(err){ setStatus('Invalid JSON in file'); } }; r.readAsText(f); });
     document.getElementById('btnDownload').addEventListener('click', ()=>{
@@ -174,5 +196,5 @@
     // initial load
     fetchCommands().then(updateSize);
   </script>
-</body>
+  </body>
 </html>
