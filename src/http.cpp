@@ -35,10 +35,61 @@ void handleCommandsDownload() {
   configServer.send(200, "application/json", s);
 }
 
+void handleCommandsEvaluate() {
+  JsonDocument doc;
+  String body = configServer.arg("plain");
+
+  DeserializationError error = deserializeJson(doc, body);
+
+  if (error) {
+    configServer.send(403, "text/html", "Json invalid");
+  } else {
+    JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
+    if (!commands.isNull()) {
+      for (JsonVariantConst command : commands) {
+        std::string evalError = store.evaluateCommand(command);
+        if (!evalError.empty()) {
+          configServer.send(403, "text/html", evalError.c_str());
+          return;
+        }
+      }
+      configServer.send(200, "text/html", "Ok");
+    } else {
+      configServer.send(403, "text/html", "No commands");
+    }
+  }
+}
+
+void handleCommandsInsert() {
+  JsonDocument doc;
+  String body = configServer.arg("plain");
+
+  DeserializationError error = deserializeJson(doc, body);
+
+  if (error) {
+    configServer.send(403, "text/html", "Json invalid");
+  } else {
+    JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
+    if (!commands.isNull()) {
+      for (JsonVariantConst command : commands) {
+        std::string evalError = store.evaluateCommand(command);
+        if (evalError.empty())
+          store.insertCommand(store.createCommand(command));
+        else
+          configServer.send(403, "text/html", evalError.c_str());
+      }
+      if (mqttha.isEnabled()) mqttha.publishComponents();
+      configServer.send(200, "text/html", "Ok");
+    } else {
+      configServer.send(403, "text/html", "No commands");
+    }
+  }
+}
+
 void handleCommandsLoad() {
   int64_t bytes = store.loadCommands();
   if (bytes > 0)
-    configServer.send(200, "text/html", "Successfully loaded");
+    configServer.send(200, "text/html", String(bytes) + " bytes loaded");
   else if (bytes < 0)
     configServer.send(200, "text/html", "Loading failed");
   else
@@ -50,7 +101,7 @@ void handleCommandsLoad() {
 void handleCommandsSave() {
   int64_t bytes = store.saveCommands();
   if (bytes > 0)
-    configServer.send(200, "text/html", "Successfully saved");
+    configServer.send(200, "text/html", String(bytes) + " bytes saved");
   else if (bytes < 0)
     configServer.send(200, "text/html", "Saving failed");
   else
@@ -60,32 +111,11 @@ void handleCommandsSave() {
 void handleCommandsWipe() {
   int64_t bytes = store.wipeCommands();
   if (bytes > 0)
-    configServer.send(200, "text/html", "Successfully wiped");
+    configServer.send(200, "text/html", String(bytes) + " bytes wiped");
   else if (bytes < 0)
     configServer.send(200, "text/html", "Wiping failed");
   else
     configServer.send(200, "text/html", "No data wiped");
-}
-
-void handleCommandsInsert() {
-  JsonDocument doc;
-  String body = configServer.arg("plain");
-
-  DeserializationError error = deserializeJson(doc, body);
-
-  if (error) {
-    configServer.send(403, "text/html", "INVALID JSON");
-  } else {
-    JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
-    if (!commands.isNull()) {
-      for (JsonVariantConst command : commands)
-        store.insertCommand(store.createCommand(command));
-      if (mqttha.isEnabled()) mqttha.publishComponents();
-      configServer.send(200, "text/html", "OK");
-    } else {
-      configServer.send(403, "text/html", "NO COMMANDS");
-    }
-  }
 }
 
 void handleValues() {
@@ -130,7 +160,6 @@ void handleResetStatistic() {
 }
 
 void handleLogData() { configServer.send(200, "text/plain", getLog()); }
-
 #endif
 
 void handleRoot() {
@@ -160,6 +189,7 @@ void SetupHttpHandlers() {
   configServer.on("/commands", [] { handleCommandsPage(); });
   configServer.on("/commands/list", [] { handleCommandsList(); });
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
+  configServer.on("/commands/evaluate", [] { handleCommandsEvaluate(); });
   configServer.on("/commands/insert", [] { handleCommandsInsert(); });
   configServer.on("/commands/load", [] { handleCommandsLoad(); });
   configServer.on("/commands/save", [] { handleCommandsSave(); });

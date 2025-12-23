@@ -120,7 +120,7 @@ void Mqtt::onMessage(const char* topic, const char* payload,
     std::string errorPayload;
     JsonDocument errorDoc;
     errorDoc["error"] = error.c_str();
-    doc.shrinkToFit();
+    errorDoc.shrinkToFit();
     serializeJson(errorDoc, errorPayload);
     mqtt.publish("response", 0, false, errorPayload.c_str());
     return;
@@ -135,7 +135,7 @@ void Mqtt::onMessage(const char* topic, const char* payload,
     std::string errorPayload;
     JsonDocument errorDoc;
     errorDoc["error"] = "command '" + id + "' not found";
-    doc.shrinkToFit();
+    errorDoc.shrinkToFit();
     serializeJson(errorDoc, errorPayload);
     mqtt.publish("response", 0, false, errorPayload.c_str());
   }
@@ -146,8 +146,19 @@ void Mqtt::handleRestart(const JsonDocument& doc) { restart(); }
 void Mqtt::handleInsert(const JsonDocument& doc) {
   JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
   if (!commands.isNull()) {
-    for (JsonVariantConst command : commands)
-      incomingQueue.push(IncomingAction(store.createCommand(command)));
+    for (JsonVariantConst command : commands) {
+      std::string evalError = store.evaluateCommand(command);
+      if (evalError.empty()) {
+        incomingQueue.push(IncomingAction(store.createCommand(command)));
+      } else {
+        std::string errorPayload;
+        JsonDocument errorDoc;
+        errorDoc["error"] = evalError;
+        errorDoc.shrinkToFit();
+        serializeJson(errorDoc, errorPayload);
+        mqtt.publish("response", 0, false, errorPayload.c_str());
+      }
+    }
   }
 }
 
