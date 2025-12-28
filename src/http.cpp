@@ -16,43 +16,16 @@ void handleGetStatus() {
 }
 
 #if defined(EBUS_INTERNAL)
-void handleCommandsList() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    store.getCommandsJson().c_str());
+void handleCommandsPage() {
+  extern const char commands_html_start[] asm(
+      "_binary_static_commands_html_start");
+  configServer.send(200, "text/html", commands_html_start);
 }
 
-void handleCommandsUpload() {
-  configServer.send(200, "text/html", F(R"(<html>
-  <head><title>esp-eBus upload</title>
-  <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
-  </head><body>
-  <h3>Upload Commands</h3>
-  <input type='file' id='file-upload'>
-  <script type='text/javascript'>
-  window.onload = function(event) {
-    document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
-  }
-  function handleFileSelect(event) {
-    var fileReader = new FileReader();
-    fileReader.onload = function(event) {
-      try {
-        var commands=JSON.parse(event.target.result);
-        var headers = new Headers();
-        headers.append('Accept', 'text/plain');
-        headers.append('Content-Type', 'text/plain');
-        fetch('/commands/insert', { method: 'POST', headers: headers, body: JSON.stringify(commands) } )
-        .then( response => {  alert(response.ok?"Succesfully loaded":"Something went wrong"); } );
-      } catch (error) { 
-        alert('Invalid JSON Config file'); 
-      }
-    }
-    var file = event.target.files[0];
-    fileReader.readAsText(file);
-  }
-  </script>
-  </body></html>
-  )"));
-}
+// void handleCommandsList() {
+//   configServer.send(200, "application/json;charset=utf-8",
+//                     store.getCommandsJson().c_str());
+// }
 
 void handleCommandsDownload() {
   String s = "{\"id\":\"insert\",\"commands\":";
@@ -214,9 +187,9 @@ void SetupHttpHandlers() {
   configServer.on("/status", [] { handleStatus(); });
   configServer.on("/api/v1/GetStatus", [] { handleGetStatus(); });
 #if defined(EBUS_INTERNAL)
-  configServer.on("/commands/list", [] { handleCommandsList(); });
+  configServer.on("/commands", [] { handleCommandsPage(); });
+  // configServer.on("/commands/list", [] { handleCommandsList(); });
   configServer.on("/commands/download", [] { handleCommandsDownload(); });
-  configServer.on("/commands/upload", [] { handleCommandsUpload(); });
   configServer.on("/commands/evaluate", [] { handleCommandsEvaluate(); });
   configServer.on("/commands/insert", [] { handleCommandsInsert(); });
   configServer.on("/commands/load", [] { handleCommandsLoad(); });
