@@ -522,6 +522,16 @@ char* status_string() {
                   USE_SOFTWARE_SERIAL ? "true" : "false");
 #endif
   pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
+  pos += snprintf(status + pos, bufferSize - pos, "chip_model: %s\n",
+                  ESP.getChipModel());
+  pos += snprintf(status + pos, bufferSize - pos, "chip_revision: %u\n",
+                  ESP.getChipRevision());
+  pos += snprintf(status + pos, bufferSize - pos, "flash_chip_size: %u B\n",
+                  ESP.getFlashChipSize());
+  pos += snprintf(status + pos, bufferSize - pos, "flash_chip_speed: %u Hz\n",
+                  ESP.getFlashChipSpeed());
+  pos += snprintf(status + pos, bufferSize - pos, "flash_chip_mode: %u\n",
+                  ESP.getFlashChipMode());
   pos += snprintf(status + pos, bufferSize - pos, "clock_speed: %u Mhz\n",
                   getCpuFrequencyMhz());
   pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %u Hz\n",
