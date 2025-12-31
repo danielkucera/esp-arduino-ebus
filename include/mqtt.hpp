@@ -27,30 +27,30 @@ struct IncomingAction {
       : type(IncomingActionType::Remove), command(), key(k) {}
 };
 
-enum class OutgoingActionType { Command, Participant, Component };
+enum class OutgoingActionType { Command, Device, Component };
 
 struct OutgoingAction {
   OutgoingActionType type;
-  const Command* command;          // for Command and Component
-  const Participant* participant;  // for Participant
-  bool haRemove;                   // for Component
+  const Command* command;  // for Command and Component
+  const Device* device;    // for Device
+  bool haRemove;           // for Component
 
   explicit OutgoingAction(const Command* cmd)
       : type(OutgoingActionType::Command),
         command(cmd),
-        participant(nullptr),
+        device(nullptr),
         haRemove(false) {}
 
-  explicit OutgoingAction(const Participant* part)
-      : type(OutgoingActionType::Participant),
+  explicit OutgoingAction(const Device* part)
+      : type(OutgoingActionType::Device),
         command(nullptr),
-        participant(part),
+        device(part),
         haRemove(false) {}
 
   explicit OutgoingAction(const Command* cmd, bool remove)
       : type(OutgoingActionType::Component),
         command(cmd),
-        participant(nullptr),
+        device(nullptr),
         haRemove(remove) {}
 };
 
@@ -120,8 +120,7 @@ class Mqtt {
       {"wipe", [this](const JsonDocument& doc) { handleWipe(doc); }},
 
       {"scan", [this](const JsonDocument& doc) { handleScan(doc); }},
-      {"participants",
-       [this](const JsonDocument& doc) { handleParticipants(doc); }},
+      {"devices", [this](const JsonDocument& doc) { handleDevices(doc); }},
 
       {"send", [this](const JsonDocument& doc) { handleSend(doc); }},
       {"forward", [this](const JsonDocument& doc) { handleForward(doc); }},
@@ -157,7 +156,7 @@ class Mqtt {
   static void handleWipe(const JsonDocument& doc);
 
   void handleScan(const JsonDocument& doc);
-  static void handleParticipants(const JsonDocument& doc);
+  static void handleDevices(const JsonDocument& doc);
 
   void handleSend(const JsonDocument& doc);
   void handleForward(const JsonDocument& doc);
@@ -175,7 +174,7 @@ class Mqtt {
 
   void publishCommand(const Command* command);
 
-  void publishParticipant(const Participant* participant);
+  void publishDevice(const Device* device);
 };
 
 extern Mqtt mqtt;
