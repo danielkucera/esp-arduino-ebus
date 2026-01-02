@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>esp-eBus Status</title>
+    <style>
+        body {
+            font-family: verdana;
+            padding: 10px;
+            background: #fafbfc;
+        }
+
+        button {
+            border: 0;
+            border-radius: 0.3rem;
+            background-color: #16A1E7;
+            color: #fff;
+            padding: 8px 12px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-bottom: 4px;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.85;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .container {
+            margin-bottom: 20px;
+        }
+
+        .section {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #dddddd;
+            border-radius: 5px;
+        }
+
+        .title {
+            font-weight: bold;
+        }
+
+        .item {
+            margin: 5px 0;
+        }
+
+        .key {
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Status</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnStatus">Status</button>
+        <span id="status">...</span>
+    </div>
+    <div class="container" id="statusContainer"></div>
+
+    <script>
+        function setStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        async function fetchStatus(path) {
+            setStatus('Fetching...');
+            try {
+                const res = await fetch(path);
+                if (!res.ok) throw new Error('Fetch failed');
+                const jsonData = await res.json();
+                renderJsonData(jsonData);
+                setStatus('Fetched');
+            } catch (err) {
+                console.error(err);
+                setStatus('Error fetching');
+            }
+        }
+
+        function renderJsonData(data) {
+            const container = document.getElementById('statusContainer');
+            container.innerHTML = ''; // Clear previous data
+
+            // Recursive function to render key-value pairs and nested objects
+            function createSection(sectionName, values) {
+                const sectionDiv = document.createElement('div');
+                sectionDiv.classList.add('section');
+                sectionDiv.innerHTML = `<div class="title">${sectionName}</div>`;
+
+                for (const [key, value] of Object.entries(values)) {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.classList.add('item');
+
+                    if (typeof value === 'object' && value !== null) {
+                        // If value is an object, create a sub-section
+                        const nestedSectionDiv = createSection(key, value);
+                        sectionDiv.appendChild(nestedSectionDiv);
+                    } else {
+                        // If value is not an object, display the value
+                        itemDiv.innerHTML = `<span class="key">${key}:</span> ${value}`;
+                        sectionDiv.appendChild(itemDiv);
+                    }
+                }
+
+                return sectionDiv;
+            }
+
+            // Start rendering from the top-level object
+            for (const [section, values] of Object.entries(data)) {
+                const sectionDiv = createSection(section, values);
+                container.appendChild(sectionDiv);
+            }
+        }
+
+        document.getElementById('btnHome').addEventListener('click', () => { window.location.href = '/'; });
+        document.getElementById('btnStatus').addEventListener('click', async () => { await fetchStatus('/api/v1/GetStatus'); });
+
+        // Fetch the device status data on page load
+        fetchStatus('/api/v1/GetStatus');
+    </script>
+</body>
+
+</html>

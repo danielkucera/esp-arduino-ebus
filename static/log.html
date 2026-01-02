@@ -1,26 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>esp-eBus log</title>
+    <title>esp-eBus Log</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 16px; }
-        pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
-        button { border:0;border-radius:0.3rem;background-color:#16A1E7;color:#fff;line-height:2.0rem;font-size:1rem;padding:6px 12px;margin-right:6px;cursor:pointer; }
-        button.secondary { background:#6c6c6c }
-        button.danger { background:#E71616 }
-        .controls { margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        body {
+            font-family: verdana;
+            padding: 10px;
+            background: #fafbfc;
+        }
+
+        button {
+            border: 0;
+            border-radius: 0.3rem;
+            background-color: #16A1E7;
+            color: #fff;
+            padding: 8px 12px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-bottom: 4px;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.85;
+        }
+
+        .controls {
+            margin-bottom: 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        #status {
+            margin-left: 8px;
+            color: #666;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px 14px;
+            border-radius: 0.3rem;
+            font-size: 13px;
+            font-family: monospace;
+            margin-top: 12px;
+            width: 100%;
+            box-sizing: border-box;
+            color: #222;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 8px #0001;
+        }
     </style>
 </head>
+
 <body>
     <h1>Log</h1>
     <div class="controls">
         <button id="btnHome">Home</button>
-        <button id="pauseBtn">Pause</button>
-        <button id="downloadBtn">Download</button>
+        <button id="btnPause">Pause</button>
+        <button id="btnDownload">Download</button>
         <label style="font-size:0.9rem;"><input type="checkbox" id="autoScroll" checked> Auto-scroll</label>
-        <span id="status" style="margin-left:6px;font-size:0.9rem;color:#666">Connecting…</span>
+        <span id="status">Connecting…</span>
     </div>
     <pre id="logContainer">Loading logs...</pre>
     <script>
@@ -96,9 +143,9 @@
             }
         }
 
-        document.getElementById('btnHome').addEventListener('click', ()=> { window.location.href = '/'; });
+        document.getElementById('btnHome').addEventListener('click', () => { window.location.href = '/'; });
 
-        document.getElementById('pauseBtn').addEventListener('click', function() {
+        document.getElementById('btnPause').addEventListener('click', function () {
             paused = !paused;
             this.textContent = paused ? 'Resume' : 'Pause';
             // keep last update time visible and indicate paused state without removing it
@@ -107,7 +154,7 @@
             if (!paused) fetchLogs();
         });
 
-        document.getElementById('downloadBtn').addEventListener('click', async function() {
+        document.getElementById('btnDownload').addEventListener('click', async function () {
             try {
                 // Prefer client-side accumulated content (lines array). Download oldest-first for readability.
                 let text = '';
@@ -135,4 +182,5 @@
         fetchLogs();
     </script>
 </body>
+
 </html>

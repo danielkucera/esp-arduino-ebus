@@ -1,59 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta name="viewport"
-      content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>esp-eBus Commands</title>
-    <style>
-      body{font-family:verdana;padding:10px}
-      textarea{width:100%;height:320px;padding:8px;font-family:monospace;font-size:13px}
-      .boxsizingBorder{-webkit-box-sizing: border-box;-moz-box-sizing: border-box;box-sizing: border-box;}
-      .row{display:flex;gap:8px;flex-wrap:wrap}
-      button{border:0;border-radius:0.3rem;background-color:#16A1E7;color:#fff;padding:8px 12px;cursor:pointer}
-      button.apply{background: #039505de}
-      button.danger{background:#E71616}
-      button.secondary{background:#6c6c6c}
-      .status{margin-left:8px;color:#666;font-size:0.9rem}
-      table { width:100%; border-collapse: collapse; margin-top:12px; }
-      table th, table td { border:1px solid #ddd; padding:6px; text-align:left; font-size:13px }
-      table th { background:#f7f7f7 }
-      .table-actions { margin-top:8px; display:flex; gap:8px; flex-wrap:wrap }
-    </style>
-  </head>
-  <body>
-    <h2>Commands Editor</h2>
-    <div class="row" style="margin-bottom:8px;">
-      <button id="btnHome">Home</button>
-      <button id="btnFetch">Load from adapter</button>
-      <button id="btnOpenFile" class="secondary">Load from file...</button>
-      <button id="btnClear">Clear</button>
-      <button id="btnFormat">Format</button>
-      <button id="btnEvaluate">Evaluate</button>
-      <button id="btnInsert" class="apply">Apply from editor</button>
-      <button id="btnDownload" class="secondary">Save as file</button>
-      <button id="btnLoad" class="apply">Apply from storage</button>
-      <button id="btnSave" class="danger">Save to storage</button>
-      <button id="btnWipe" class="danger">Wipe all from storage</button>
 
-      <input type="file" id="fileUpload" style="display:none"
-        accept="application/json">
-      <span class="status" id="status">&nbsp;</span>
-      <span id="size" style="margin-left:10px;color:#666;font-size:0.9rem">0 bytes</span>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>esp-eBus Commands</title>
+  <style>
+    body {
+      font-family: verdana;
+      padding: 10px;
+      background: #fafbfc;
+    }
+
+    textarea {
+      width: 100%;
+      height: 320px;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 13px
+    }
+
+    .boxsizingBorder {
+      -webkit-box-sizing: border-box;
+      -moz-box-sizing: border-box;
+      box-sizing: border-box;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button {
+      border: 0;
+      border-radius: 0.3rem;
+      background-color: #16A1E7;
+      color: #fff;
+      padding: 8px 12px;
+      cursor: pointer
+    }
+
+    button.apply {
+      background: #039505de
+    }
+
+    button.danger {
+      background: #E71616
+    }
+
+    button.secondary {
+      background: #6c6c6c
+    }
+
+    button:hover {
+      opacity: 0.85;
+    }
+
+    .status,
+    #size {
+      margin-left: 6px;
+      color: #666;
+      font-size: 0.9rem;
+      align-self: center;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    table th,
+    table td {
+      border: 1px solid #ddd;
+      padding: 6px;
+      text-align: left;
+      font-size: 13px
+    }
+
+    table th {
+      background: #f7f7f7
+    }
+
+    .table-actions {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Commands Editor</h2>
+  <div class="row" style="margin-bottom:8px;">
+    <button id="btnHome">Home</button>
+    <button id="btnFetch">Load from adapter</button>
+    <button id="btnOpenFile" class="secondary">Load from file...</button>
+    <button id="btnClear">Clear</button>
+    <button id="btnFormat">Format</button>
+    <button id="btnEvaluate">Evaluate</button>
+    <button id="btnInsert" class="apply">Apply from editor</button>
+    <button id="btnDownload" class="secondary">Save as file</button>
+    <button id="btnLoad" class="apply">Apply from storage</button>
+    <button id="btnSave" class="danger">Save to storage</button>
+    <button id="btnWipe" class="danger">Wipe all from storage</button>
+
+    <input type="file" id="fileUpload" style="display:none" accept="application/json">
+    <span class="status" id="status"> </span>
+    <span id="size">0 bytes</span>
+  </div>
+  <textarea class="boxsizingBorder" id="commandsArea">Loading...</textarea>
+  <div>
+    <div class="table-actions">
+      <button id="btnEditorToTable">Refresh table from editor</button>
+      <label style="margin-left:auto;color:#666;font-size:0.9rem">Table view (read-only)</label>
     </div>
-    <textarea class="boxsizingBorder" id="commandsArea">Loading...</textarea>
-    <div>
-      <div class="table-actions">
-        <button id="btnEditorToTable">Refresh table from editor</button>
-        <label style="margin-left:auto;color:#666;font-size:0.9rem">Table view (read-only)</label>
-      </div>
-      <table id="commandsTable">
-        <thead></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <script>
+    <table id="commandsTable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <script>
     const statusEl = document.getElementById('status');
-    function setStatus(s){ statusEl.textContent = s; }
+    function setStatus(s) { statusEl.textContent = s; }
 
     function updateSize() {
       const txt = document.getElementById('commandsArea').value || '';
@@ -65,8 +137,8 @@
     async function fetchCommands() {
       setStatus('Fetching...');
       try {
-        const res = await fetch('/commands/download');
-        if(!res.ok) throw new Error('Fetch failed');
+        const res = await fetch('/api/v1/CommandsDownload');
+        if (!res.ok) throw new Error('Fetch failed');
         const js = await res.json();
         document.getElementById('commandsArea').value = JSON.stringify(js, null, 2);
         renderTable(js.commands || []);
@@ -79,10 +151,10 @@
       try {
         const obj = JSON.parse(txt);
         // ensure it has 'commands' array
-        if(!obj.commands) throw new Error("JSON must include 'commands' array");
+        if (!obj.commands) throw new Error("JSON must include 'commands' array");
         setStatus('Uploading...');
-        const res = await fetch('/commands/insert', { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(obj)});
-        setStatus(res.ok? 'Uploaded' : 'Upload failed');
+        const res = await fetch('/api/v1/CommandsInsert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj) });
+        setStatus(res.ok ? 'Uploaded' : 'Upload failed');
       } catch (err) { console.error(err); setStatus('Invalid JSON or upload failed'); }
     }
 
@@ -91,7 +163,7 @@
       try {
         const res = await fetch(path);
         const text = await res.text();
-        setStatus(text || (res.ok? 'OK' : 'Error'));
+        setStatus(text || (res.ok ? 'OK' : 'Error'));
       } catch (err) { console.error(err); setStatus('Error'); }
     }
 
@@ -100,11 +172,11 @@
       try {
         const obj = JSON.parse(txt);
         // ensure it has 'commands' array
-        if(!obj.commands) throw new Error("JSON must include 'commands' array");
+        if (!obj.commands) throw new Error("JSON must include 'commands' array");
         setStatus('Evaluating...');
-        const res = await fetch('/commands/insert', { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(obj)});
+        const res = await fetch('/api/v1/CommandsInsert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj) });
         const text = await res.text();
-        setStatus(text || (res.ok? 'Evaluated' : 'Evaluation failed'));
+        setStatus(text || (res.ok ? 'Evaluated' : 'Evaluation failed'));
       } catch (err) { console.error(err); setStatus('Invalid JSON or evalution failed'); }
     }
 
@@ -147,7 +219,7 @@
         Array.from(tr.querySelectorAll('td')).slice(1).forEach((td, i) => {
           const key = headers[i];
           let text = td.textContent || '';
-          try { obj[key] = JSON.parse(text); } catch(e) { obj[key] = text; }
+          try { obj[key] = JSON.parse(text); } catch (e) { obj[key] = text; }
         });
         return obj;
       });
@@ -160,26 +232,26 @@
       try { const txt = document.getElementById('commandsArea').value; const obj = JSON.parse(txt); renderTable(obj.commands || []); setStatus('Table updated from editor'); } catch (err) { setStatus('Invalid JSON'); }
     }
 
-    document.getElementById('btnHome').addEventListener('click', ()=> { window.location.href = '/'; });
-    document.getElementById('btnClear').addEventListener('click', function() { document.getElementById('commandsArea').value = ''; updateSize(); setStatus('Editor cleared'); });
-    document.getElementById('btnFetch').addEventListener('click', async ()=> { await fetchCommands(); updateSize(); });
+    document.getElementById('btnHome').addEventListener('click', () => { window.location.href = '/'; });
+    document.getElementById('btnClear').addEventListener('click', function () { document.getElementById('commandsArea').value = ''; updateSize(); setStatus('Editor cleared'); });
+    document.getElementById('btnFetch').addEventListener('click', async () => { await fetchCommands(); updateSize(); });
     document.getElementById('btnInsert').addEventListener('click', insertCommandsFromArea);
-    document.getElementById('btnFormat').addEventListener('click', function(){ try{ const o = JSON.parse(document.getElementById('commandsArea').value); document.getElementById('commandsArea').value = JSON.stringify(o,null,2); setStatus('Formatted'); updateSize(); } catch(e){ setStatus('Invalid JSON'); } });
+    document.getElementById('btnFormat').addEventListener('click', function () { try { const o = JSON.parse(document.getElementById('commandsArea').value); document.getElementById('commandsArea').value = JSON.stringify(o, null, 2); setStatus('Formatted'); updateSize(); } catch (e) { setStatus('Invalid JSON'); } });
     document.getElementById('btnEvaluate').addEventListener('click', evaluateCommandsFromArea);
-    document.getElementById('btnOpenFile').addEventListener('click', ()=> document.getElementById('fileUpload').click());
-    document.getElementById('fileUpload').addEventListener('change', function(ev){ const f = ev.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (e)=> { try{ const obj = JSON.parse(e.target.result); document.getElementById('commandsArea').value = JSON.stringify(obj,null,2); setStatus('Loaded file'); updateSize(); } catch(err){ setStatus('Invalid JSON in file'); } }; r.readAsText(f); });
-    document.getElementById('btnDownload').addEventListener('click', ()=>{
-      try{ const text = document.getElementById('commandsArea').value; const blob = new Blob([text], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'commands.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); setStatus('Downloaded'); } catch(err){ setStatus('Download failed'); }
+    document.getElementById('btnOpenFile').addEventListener('click', () => document.getElementById('fileUpload').click());
+    document.getElementById('fileUpload').addEventListener('change', function (ev) { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = (e) => { try { const obj = JSON.parse(e.target.result); document.getElementById('commandsArea').value = JSON.stringify(obj, null, 2); setStatus('Loaded file'); updateSize(); } catch (err) { setStatus('Invalid JSON in file'); } }; r.readAsText(f); });
+    document.getElementById('btnDownload').addEventListener('click', () => {
+      try { const text = document.getElementById('commandsArea').value; const blob = new Blob([text], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'commands.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); setStatus('Downloaded'); } catch (err) { setStatus('Download failed'); }
     });
-    document.getElementById('btnLoad').addEventListener('click', ()=> postSimple('/commands/load'));
-    document.getElementById('btnSave').addEventListener('click', ()=> postSimple('/commands/save'));
-    document.getElementById('btnWipe').addEventListener('click', ()=> { if(confirm('Clear all commands?')) postSimple('/commands/wipe'); });
+    document.getElementById('btnLoad').addEventListener('click', () => postSimple('/api/v1/CommandsLoad'));
+    document.getElementById('btnSave').addEventListener('click', () => postSimple('/api/v1/CommandsSave'));
+    document.getElementById('btnWipe').addEventListener('click', () => { if (confirm('Clear all commands?')) postSimple('/api/v1/CommandsWipe'); });
     document.getElementById('btnEditorToTable').addEventListener('click', editorToTable);
 
     // Debounce helper and auto-refresh table from editor (debounced to avoid excessive parsing)
     function debounce(func, wait) {
       let timeout;
-      return function(...args) {
+      return function (...args) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
       };
@@ -188,7 +260,7 @@
 
     // Prevent keyboard editing for table (read-only)
     const commandsTable = document.getElementById('commandsTable');
-    commandsTable.addEventListener('keydown', function(e) { e.preventDefault(); });
+    commandsTable.addEventListener('keydown', function (e) { e.preventDefault(); });
 
     document.getElementById('commandsArea').addEventListener('input', updateSize);
     document.getElementById('commandsArea').addEventListener('input', debouncedEditorToTable);
@@ -196,5 +268,6 @@
     // initial load
     fetchCommands().then(updateSize);
   </script>
-  </body>
+</body>
+
 </html>

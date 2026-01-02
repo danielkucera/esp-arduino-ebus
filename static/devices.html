@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>esp-eBus Devices</title>
+    <style>
+        body {
+            font-family: verdana;
+            padding: 10px;
+            background: #fafbfc;
+        }
+
+        button {
+            border: 0;
+            border-radius: 0.3rem;
+            background-color: #16A1E7;
+            color: #fff;
+            padding: 8px 12px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-bottom: 4px;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.85;
+        }
+
+        .controls {
+            margin-bottom: 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        #status {
+            margin-left: 8px;
+            color: #666;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            background: #fff;
+            box-shadow: 0 2px 8px #0001;
+            border-radius: 0.3rem;
+            overflow: hidden;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 7px 10px;
+            text-align: left;
+            font-size: 13px;
+        }
+
+        th {
+            background: #f7f7f7;
+            color: #222;
+        }
+
+        td {
+            background: #fcfcfc;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Devices</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnDevices">Devices</button>
+        <button id="btnScan">Scan</button>
+        <button id="btnScanFull">Scan full</button>
+        <button id="btnScanVendor">Scan vendor</button>
+        <span id="status">...</span>
+    </div>
+    <table>
+        <thead id="deviceTableHeader"></thead>
+        <tbody id="deviceTableBody"></tbody>
+    </table>
+
+    <script>
+        function setStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        async function fetchDevices() {
+            setStatus('Fetching...');
+            try {
+                const res = await fetch('/api/v1/GetDevices');
+                if (!res.ok) throw new Error('Fetch failed');
+                const js = await res.json();
+                renderTable(js);
+                setStatus('Fetched');
+            } catch (err) {
+                console.error(err);
+                setStatus('Error fetching');
+            }
+        }
+
+        async function postSimple(path) {
+            setStatus('Processing...');
+            try {
+                const res = await fetch(path);
+                const text = await res.text();
+                setStatus(text || (res.ok ? 'OK' : 'Error'));
+            } catch (err) { console.error(err); setStatus('Error'); }
+        }
+
+        function renderTable(devices) {
+            const thead = document.getElementById('deviceTableHeader');
+            const tbody = document.getElementById('deviceTableBody');
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+
+            // Gather all keys from the devices array
+            const keys = new Set();
+            devices.forEach(device => { Object.keys(device || {}).forEach(k => keys.add(k)); });
+            const cols = Array.from(keys);
+
+            // Create header row
+            const trh = document.createElement('tr');
+            cols.forEach(k => { const th = document.createElement('th'); th.textContent = k; trh.appendChild(th); });
+            thead.appendChild(trh);
+
+            // Create rows for each device
+            devices.forEach(device => {
+                const tr = document.createElement('tr');
+                cols.forEach(k => {
+                    const td = document.createElement('td');
+                    td.contentEditable = 'false';
+                    const v = device[k];
+                    td.textContent = (v === undefined ? '' : String(v));
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('btnHome').addEventListener('click', () => { window.location.href = '/'; });
+        document.getElementById('btnDevices').addEventListener('click', async () => { await fetchDevices(); });
+        document.getElementById('btnScan').addEventListener('click', () => postSimple('/api/v1/Scan'));
+        document.getElementById('btnScanFull').addEventListener('click', () => postSimple('/api/v1/ScanFull'));
+        document.getElementById('btnScanVendor').addEventListener('click', () => postSimple('/api/v1/ScanVendor'));
+
+        // Fetch devices on page load
+        fetchDevices();
+    </script>
+</body>
+
+</html>

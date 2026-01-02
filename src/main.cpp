@@ -665,6 +665,14 @@ const std::string getStatusJson() {
   Firmware["Clock_Speed"] = getCpuFrequencyMhz();
   Firmware["Apb_Speed"] = getApbFrequency();
 
+  // Chip
+  JsonObject Chip = doc["Chip"].to<JsonObject>();
+  Chip["Chip_Model"] = ESP.getChipModel();
+  Chip["Chip_Revision"] = ESP.getChipRevision();
+  Chip["Flash_Chip_Size"] = ESP.getFlashChipSize();
+  Chip["Flash_Chip_Speed"] = ESP.getFlashChipSpeed();
+  Chip["Flash_Chip_Mode"] = ESP.getFlashChipMode();
+
   // WIFI
   JsonObject WIFI = doc["WIFI"].to<JsonObject>();
   WIFI["Last_Connect"] = last_connect;

@@ -8,7 +8,10 @@
 
 WebServer configServer(80);
 
-void handleStatus() { configServer.send(200, "text/plain", status_string()); }
+void handleStatusPage() {
+  extern const char status_html_start[] asm("_binary_static_status_html_start");
+  configServer.send(200, "text/html", status_html_start);
+}
 
 void handleGetStatus() {
   configServer.send(200, "application/json;charset=utf-8",
@@ -119,9 +122,25 @@ void handleCommandsWipe() {
     configServer.send(200, "text/html", "No data wiped");
 }
 
+void handleValuesPage() {
+  extern const char values_html_start[] asm("_binary_static_values_html_start");
+  configServer.send(200, "text/html", values_html_start);
+}
+
 void handleValues() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getValuesJson().c_str());
+}
+
+void handleDevicesPage() {
+  extern const char devices_html_start[] asm(
+      "_binary_static_devices_html_start");
+  configServer.send(200, "text/html", devices_html_start);
+}
+
+void handleDevices() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    schedule.getDevicesJson().c_str());
 }
 
 void handleScan() {
@@ -139,9 +158,10 @@ void handleScanVendor() {
   configServer.send(200, "text/html", "Vendor scan initiated");
 }
 
-void handleDevices() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    schedule.getDevicesJson().c_str());
+void handleStatisticPage() {
+  extern const char statistic_html_start[] asm(
+      "_binary_static_statistic_html_start");
+  configServer.send(200, "text/html", statistic_html_start);
 }
 
 void handleGetCounter() {
@@ -160,6 +180,11 @@ void handleResetStatistic() {
   configServer.send(200, "text/html", "Statistic reset");
 }
 
+void handleLog() {
+  extern const char log_html_start[] asm("_binary_static_log_html_start");
+  configServer.send(200, "text/html", log_html_start);
+}
+
 void handleLogData() { configServer.send(200, "text/plain", getLog()); }
 #endif
 
@@ -174,35 +199,31 @@ void handleRoot() {
   configServer.send(200, "text/html", root_html_start);
 }
 
-#if defined(EBUS_INTERNAL)
-void handleLog() {
-  extern const char log_html_start[] asm("_binary_static_log_html_start");
-  configServer.send(200, "text/html", log_html_start);
-}
-#endif
-
 void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
   configServer.on("/", [] { handleRoot(); });
-  configServer.on("/status", [] { handleStatus(); });
+  configServer.on("/status", [] { handleStatusPage(); });
   configServer.on("/api/v1/GetStatus", [] { handleGetStatus(); });
 #if defined(EBUS_INTERNAL)
   configServer.on("/commands", [] { handleCommandsPage(); });
-  // configServer.on("/commands/list", [] { handleCommandsList(); });
-  configServer.on("/commands/download", [] { handleCommandsDownload(); });
-  configServer.on("/commands/evaluate", [] { handleCommandsEvaluate(); });
-  configServer.on("/commands/insert", [] { handleCommandsInsert(); });
-  configServer.on("/commands/load", [] { handleCommandsLoad(); });
-  configServer.on("/commands/save", [] { handleCommandsSave(); });
-  configServer.on("/commands/wipe", [] { handleCommandsWipe(); });
-  configServer.on("/values", [] { handleValues(); });
-  configServer.on("/scan", [] { handleScan(); });
-  configServer.on("/scanfull", [] { handleScanFull(); });
-  configServer.on("/scanvendor", [] { handleScanVendor(); });
-  configServer.on("/devices", [] { handleDevices(); });
+  // configServer.on("/api/v1/CommandsList", [] { handleCommandsList(); });
+  configServer.on("/api/v1/CommandsDownload", [] { handleCommandsDownload(); });
+  configServer.on("/api/v1/CommandsEvaluate", [] { handleCommandsEvaluate(); });
+  configServer.on("/api/v1/CommandsInsert", [] { handleCommandsInsert(); });
+  configServer.on("/api/v1/CommandsLoad", [] { handleCommandsLoad(); });
+  configServer.on("/api/v1/CommandsSave", [] { handleCommandsSave(); });
+  configServer.on("/api/v1/CommandsWipe", [] { handleCommandsWipe(); });
+  configServer.on("/values", [] { handleValuesPage(); });
+  configServer.on("/api/v1/GetValues", [] { handleValues(); });
+  configServer.on("/devices", [] { handleDevicesPage(); });
+  configServer.on("/api/v1/GetDevices", [] { handleDevices(); });
+  configServer.on("/api/v1/Scan", [] { handleScan(); });
+  configServer.on("/api/v1/ScanFull", [] { handleScanFull(); });
+  configServer.on("/api/v1/ScanVendor", [] { handleScanVendor(); });
+  configServer.on("/statistic", [] { handleStatisticPage(); });
   configServer.on("/api/v1/GetCounter", [] { handleGetCounter(); });
   configServer.on("/api/v1/GetTiming", [] { handleGetTiming(); });
-  configServer.on("/reset", [] { handleResetStatistic(); });
+  configServer.on("/api/v1/ResetStatistic", [] { handleResetStatistic(); });
   configServer.on("/log", [] { handleLog(); });
   configServer.on("/logdata", [] { handleLogData(); });
 #endif
