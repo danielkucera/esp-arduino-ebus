@@ -8,6 +8,16 @@
 
 WebServer configServer(80);
 
+void handleCommonCSS() {
+  extern const char common_css_start[] asm("_binary_static_common_css_start");
+  configServer.send(200, "text/css", common_css_start);
+};
+
+void handleCommonJS() {
+  extern const char common_js_start[] asm("_binary_static_common_js_start");
+  configServer.send(200, "application/javascript", common_js_start);
+};
+
 void handleStatusPage() {
   extern const char status_html_start[] asm("_binary_static_status_html_start");
   configServer.send(200, "text/html", status_html_start);
@@ -229,5 +239,7 @@ void SetupHttpHandlers() {
 #endif
   configServer.on("/restart", [] { restart(); });
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
+  configServer.on("/common.css", [] { handleCommonCSS(); });
+  configServer.on("/common.js", [] { handleCommonJS(); });
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
 }

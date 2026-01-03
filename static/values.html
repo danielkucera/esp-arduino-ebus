@@ -5,71 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>esp-eBus Values</title>
+    <link rel="stylesheet" href="common.css">
     <style>
-        body {
-            font-family: verdana;
-            padding: 10px;
-            background: #fafbfc;
-        }
-
-        button {
-            border: 0;
-            border-radius: 0.3rem;
-            background-color: #16A1E7;
-            color: #fff;
-            padding: 8px 12px;
-            font-size: 1rem;
-            cursor: pointer;
-            margin-right: 8px;
-            margin-bottom: 4px;
-            transition: opacity 0.2s;
-        }
-
-        button:hover {
-            opacity: 0.85;
-        }
-
-        .controls {
-            margin-bottom: 12px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        #status {
-            margin-left: 8px;
-            color: #666;
-            font-size: 0.9rem;
-            align-items: center;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 12px;
-            background: #fff;
-            box-shadow: 0 2px 8px #0001;
-            border-radius: 0.3rem;
-            overflow: hidden;
-        }
-
-        th,
-        td {
-            border: 1px solid #ddd;
-            padding: 7px 10px;
-            text-align: left;
-            font-size: 13px;
-        }
-
-        th {
-            background: #f7f7f7;
-            color: #222;
-        }
-
-        td {
-            background: #fcfcfc;
-        }
     </style>
 </head>
 
@@ -84,77 +21,25 @@
         <thead id="valueTableHeader"></thead>
         <tbody id="valueTableBody"></tbody>
     </table>
-
+    <script src="common.js"></script>
     <script>
-        function setStatus(message) {
-            document.getElementById('status').textContent = message;
-        }
-
-        async function fetchValues() {
-            setStatus('Fetching...');
-            try {
-                const res = await fetch('/api/v1/GetValues');
-                if (!res.ok) throw new Error('Fetch failed');
-                const js = await res.json();
-                renderTable(js.results || []);
-                setStatus('Fetched');
-            } catch (err) {
-                console.error(err);
-                setStatus('Error fetching');
-            }
-        }
-
-        function renderTable(values) {
-            const thead = document.getElementById('valueTableHeader');
-            const tbody = document.getElementById('valueTableBody');
-
-            thead.innerHTML = ''; // Clear previous header
-            tbody.innerHTML = ''; // Clear previous body
-
-            // Create header row
-            const headerRow = document.createElement('tr');
-            const headers = ['key', 'name', 'unit', 'value'];
-            headers.forEach(header => {
-                const th = document.createElement('th');
-                th.textContent = header;
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-
-            // Create rows for each value
-            values.forEach(value => {
-                const entry = Object.entries(value)[0]; // Get the first (and only) entry of the object
-                const key = entry[0]; // The key (e.g., "23", "22", etc.)
-                const details = entry[1]; // The array with the four values
-
-                // Create row and populate it
-                const tr = document.createElement('tr');
-                const tdKey = document.createElement('td');
-                tdKey.textContent = key; // key
-                tr.appendChild(tdKey);
-
-                const tdName = document.createElement('td');
-                tdName.textContent = details[2]; // name
-                tr.appendChild(tdName);
-
-                const tdUnit = document.createElement('td');
-                tdUnit.textContent = details[1]; // unit
-                tr.appendChild(tdUnit);
-
-                const tdValue = document.createElement('td');
-                tdValue.textContent = details[0]; // value
-                tr.appendChild(tdValue);
-
-                tbody.appendChild(tr); // Add row to the table body
+        function handleValues() {
+            fetchJson('/api/v1/GetValues', data => {
+                const rows = (data.results || []).map(value => {
+                    const entry = Object.entries(value)[0];
+                    const key = entry[0];
+                    const details = entry[1];
+                    return [key, details[2], details[1], details[0]];
+                });
+                renderSimpleTable('valueTableHeader', 'valueTableBody', ['key', 'name', 'unit', 'value'], rows);
             });
         }
 
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnValues').addEventListener('click', handleValues);
 
-        document.getElementById('btnHome').addEventListener('click', () => { window.location.href = '/'; });
-        document.getElementById('btnValues').addEventListener('click', async () => { await fetchValues(); });
-
-        // Fetch values on page load
-        fetchValues();
+        // Initial load
+        handleValues();
     </script>
 </body>
 

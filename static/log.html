@@ -5,45 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>esp-eBus Log</title>
+    <link rel="stylesheet" href="common.css">
     <style>
-        body {
-            font-family: verdana;
-            padding: 10px;
-            background: #fafbfc;
-        }
-
-        button {
-            border: 0;
-            border-radius: 0.3rem;
-            background-color: #16A1E7;
-            color: #fff;
-            padding: 8px 12px;
-            font-size: 1rem;
-            cursor: pointer;
-            margin-right: 8px;
-            margin-bottom: 4px;
-            transition: opacity 0.2s;
-        }
-
-        button:hover {
-            opacity: 0.85;
-        }
-
-        .controls {
-            margin-bottom: 12px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        #status {
-            margin-left: 8px;
-            color: #666;
-            font-size: 0.9rem;
-            align-items: center;
-        }
-
         pre {
             background-color: #f4f4f4;
             padding: 10px 14px;
@@ -70,67 +33,51 @@
         <span id="status">Connecting…</span>
     </div>
     <pre id="logContainer">Loading logs...</pre>
+    <script src="common.js"></script>
     <script>
-        const intervalMs = 500; // minimum interval between fetches (500ms per request)
+        const intervalMs = 500;
         let paused = false;
         let fetching = false;
         let lastSnapshot = null;
         let lastUpdateTime = '';
-        const lines = []; // newest-first array of lines
+        const lines = [];
         const seen = new Set();
         const maxLines = 2000;
 
         async function fetchLogs() {
             if (paused) return;
-            if (fetching) return; // don't overlap
+            if (fetching) return;
             fetching = true;
             const statusEl = document.getElementById('status');
             try {
-                // show last update time and append a progress char while fetching
                 statusEl.textContent = (lastUpdateTime || 'Connecting…') + ' ▉';
                 const response = await fetch('/logdata');
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.text();
                 const pre = document.getElementById('logContainer');
 
-                // If snapshot identical to last fetched snapshot, do nothing except update time
                 if (data === lastSnapshot) {
-                    // keep lastUpdateTime as-is (no blink); show time without removing
                     statusEl.textContent = lastUpdateTime || new Date().toLocaleTimeString();
                 } else {
-                    // Process server snapshot (assumed oldest->newest). We will add any unseen lines
                     const serverLines = data.split(/\r?\n/);
-                    let added = 0;
                     for (let i = 0; i < serverLines.length; i++) {
                         const line = serverLines[i];
-                        // skip empty trailing line
                         if (i === serverLines.length - 1 && line === '') continue;
                         if (!seen.has(line)) {
-                            // new line -> add to front (newest-first display)
                             lines.unshift(line);
                             seen.add(line);
-                            added++;
                         }
                     }
-
-                    // Trim oldest lines if too many
                     while (lines.length > maxLines) {
                         const removed = lines.pop();
                         seen.delete(removed);
                     }
-
-                    // Render lines newest-first
                     pre.innerText = lines.join('\n');
-
-                    // Update snapshot and time
                     lastSnapshot = data;
                     lastUpdateTime = new Date().toLocaleTimeString();
-
                     if (document.getElementById('autoScroll').checked) {
-                        // scroll to top so newest (at top) is visible
                         pre.scrollTop = pre.scrollHeight;
                     }
-                    // display last update time without blinking
                     statusEl.textContent = lastUpdateTime;
                 }
             } catch (err) {
@@ -138,47 +85,28 @@
                 statusEl.textContent = (lastUpdateTime || 'Error');
             } finally {
                 fetching = false;
-                // schedule next fetch
                 if (!paused) setTimeout(fetchLogs, intervalMs);
             }
         }
 
-        document.getElementById('btnHome').addEventListener('click', () => { window.location.href = '/'; });
-
-        document.getElementById('btnPause').addEventListener('click', function () {
+        function handlePause() {
             paused = !paused;
-            this.textContent = paused ? 'Resume' : 'Pause';
-            // keep last update time visible and indicate paused state without removing it
+            const btnPause = document.getElementById('btnPause');
+            btnPause.textContent = paused ? 'Resume' : 'Pause';
             const statusEl = document.getElementById('status');
             statusEl.textContent = (lastUpdateTime || 'Idle') + (paused ? ' (paused)' : '');
             if (!paused) fetchLogs();
+        }
+
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnPause').addEventListener('click', handlePause);
+        document.getElementById('btnDownload').addEventListener('click', () => {
+            let text = lines.length > 0
+                ? lines.slice().reverse().join('\n')
+                : document.getElementById('logContainer').innerText || '';
+            downloadTextFile(text, 'esp-ebus-log.txt', 'text/plain');
         });
 
-        document.getElementById('btnDownload').addEventListener('click', async function () {
-            try {
-                // Prefer client-side accumulated content (lines array). Download oldest-first for readability.
-                let text = '';
-                if (lines.length > 0) {
-                    text = lines.slice().reverse().join('\n');
-                } else {
-                    // Fallback: use current displayed content
-                    text = document.getElementById('logContainer').innerText || '';
-                }
-                const blob = new Blob([text], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'esp-ebus-log.txt';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(url);
-            } catch (err) {
-                console.error('Download error:', err);
-            }
-        });
-
-        // kick off
         fetchLogs();
     </script>
 </body>

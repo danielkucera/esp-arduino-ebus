@@ -4,97 +4,7 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <title>esp-eBus adapter</title>
-    <style>
-        .de {
-            background-color: #ffaaaa;
-        }
-
-        .em {
-            font-size: 0.8em;
-            color: #bb0000;
-            padding-bottom: 0px;
-        }
-
-        .c {
-            text-align: center;
-        }
-
-        div,
-        input,
-        select {
-            padding: 5px;
-            font-size: 1em;
-        }
-
-        input {
-            width: 95%;
-        }
-
-        select {
-            width: 100%
-        }
-
-        input[type=checkbox] {
-            width: auto;
-            scale: 1.5;
-            margin: 10px;
-        }
-
-        body {
-            text-align: center;
-            font-family: verdana;
-        }
-
-        td {
-            padding: 0px;
-        }
-
-        button {
-            border: 0;
-            border-radius: 0.3rem;
-            background-color: #16A1E7;
-            color: #fff;
-            line-height: 2.4rem;
-            font-size: 1.2rem;
-            width: 100%;
-        }
-
-        fieldset {
-            border-radius: 0.3rem;
-            margin: 0px;
-        }
-
-        a.link-button {
-            display: block;
-            padding: 5px 10px;
-            background-color: #16A1E7;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 0.3rem;
-            border: 0;
-            line-height: 2.4rem;
-            font-size: 1.2rem;
-            margin-bottom: 5px;
-            cursor: pointer;
-            text-align: center;
-        }
-
-        a.link-button.danger {
-            background-color: #E71616;
-        }
-
-        a.link-button:hover {
-            opacity: 0.8;
-        }
-
-        .info-box {
-            background-color: #f0f0f0;
-            border-left: 4px solid #16A1E7;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 0.3rem;
-        }
-    </style>
+    <link rel="stylesheet" href="common.css">
     <script type='text/javascript'>
         function confirmAction(action) {
             return confirm("Are you sure you want to " + action + "?");
@@ -102,7 +12,7 @@
     </script>
 </head>
 
-<body>
+<body class="centered">
     <div style='text-align:left;display:inline-block;min-width:260px;'>
         <h1>esp-eBus Adapter</h1>
 

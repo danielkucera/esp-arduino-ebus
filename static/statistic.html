@@ -5,57 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>esp-eBus Statistic</title>
-    <style>
-        body {
-            font-family: verdana;
-            padding: 10px;
-            background: #fafbfc;
-        }
-
-        button {
-            border: 0;
-            border-radius: 0.3rem;
-            background-color: #16A1E7;
-            color: #fff;
-            padding: 8px 12px;
-            font-size: 1rem;
-            cursor: pointer;
-            margin-right: 8px;
-            margin-bottom: 4px;
-            transition: opacity 0.2s;
-        }
-
-        button:hover {
-            opacity: 0.85;
-        }
-
-        h1 {
-            color: #333;
-        }
-
-        .container {
-            margin-bottom: 20px;
-        }
-
-        .section {
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #dddddd;
-            border-radius: 5px;
-        }
-
-        .title {
-            font-weight: bold;
-        }
-
-        .item {
-            margin: 5px 0;
-        }
-
-        .key {
-            font-weight: bold;
-        }
-    </style>
+    <link rel="stylesheet" href="common.css">
 </head>
 
 <body>
@@ -64,82 +14,25 @@
         <button id="btnHome">Home</button>
         <button id="btnCounter">Counter</button>
         <button id="btnTiming">Timing</button>
-        <button id="btnResetStatistic">Reset statstic</button>
+        <button id="btnResetStatistic">Reset statistic</button>
         <span id="status">...</span>
     </div>
     <div class="container" id="statisticContainer"></div>
-
+    <script src="common.js"></script>
     <script>
-        function setStatus(message) {
-            document.getElementById('status').textContent = message;
-        }
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnCounter').addEventListener('click', () =>
+            fetchJson('/api/v1/GetCounter', data => renderNestedSections(data, 'statisticContainer'))
+        );
+        document.getElementById('btnTiming').addEventListener('click', () =>
+            fetchJson('/api/v1/GetTiming', data => renderNestedSections(data, 'statisticContainer'))
+        );
+        document.getElementById('btnResetStatistic').addEventListener('click', () =>
+            postSimple('/api/v1/ResetStatistic')
+        );
 
-        async function fetchData(path) {
-            setStatus('Fetching...');
-            try {
-                const res = await fetch(path);
-                if (!res.ok) throw new Error('Fetch failed');
-                const jsonData = await res.json();
-                renderJsonData(jsonData);
-                setStatus('Fetched');
-            } catch (err) {
-                console.error(err);
-                setStatus('Error fetching');
-            }
-        }
-
-        async function postSimple(path) {
-            setStatus('Processing...');
-            try {
-                const res = await fetch(path);
-                const text = await res.text();
-                setStatus(text || (res.ok ? 'OK' : 'Error'));
-            } catch (err) { console.error(err); setStatus('Error'); }
-        }
-
-        function renderJsonData(data) {
-            const container = document.getElementById('statisticContainer');
-            container.innerHTML = ''; // Clear previous data
-
-            // Recursive function to render key-value pairs and nested objects
-            function createSection(sectionName, values) {
-                const sectionDiv = document.createElement('div');
-                sectionDiv.classList.add('section');
-                sectionDiv.innerHTML = `<div class="title">${sectionName}</div>`;
-
-                for (const [key, value] of Object.entries(values)) {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.classList.add('item');
-
-                    if (typeof value === 'object' && value !== null) {
-                        // If value is an object, create a sub-section
-                        const nestedSectionDiv = createSection(key, value);
-                        sectionDiv.appendChild(nestedSectionDiv);
-                    } else {
-                        // If value is not an object, display the value
-                        itemDiv.innerHTML = `<span class="key">${key}:</span> ${value}`;
-                        sectionDiv.appendChild(itemDiv);
-                    }
-                }
-
-                return sectionDiv;
-            }
-
-            // Start rendering from the top-level object
-            for (const [section, values] of Object.entries(data)) {
-                const sectionDiv = createSection(section, values);
-                container.appendChild(sectionDiv);
-            }
-        }
-
-        document.getElementById('btnHome').addEventListener('click', () => { window.location.href = '/'; });
-        document.getElementById('btnCounter').addEventListener('click', async () => { await fetchData('/api/v1/GetCounter'); });
-        document.getElementById('btnTiming').addEventListener('click', async () => { await fetchData('/api/v1/GetTiming'); });
-        document.getElementById('btnResetStatistic').addEventListener('click', () => postSimple('/api/v1/ResetStatistic'));
-
-
-        // Fetch the counter data on page load
-        fetchData('/api/v1/GetCounter');
+        // Initial load
+        fetchJson('/api/v1/GetCounter', data => renderNestedSections(data, 'statisticContainer'));
     </script>
 </body>
 
