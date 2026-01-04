@@ -32,7 +32,7 @@
         <label style="font-size:0.9rem;"><input type="checkbox" id="autoScroll" checked> Auto-scroll</label>
         <span id="status">Connecting…</span>
     </div>
-    <pre id="logContainer">Loading logs...</pre>
+    <pre id="logsContainer">Loading logs...</pre>
     <script src="common.js"></script>
     <script>
         const intervalMs = 500;
@@ -51,10 +51,10 @@
             const statusEl = document.getElementById('status');
             try {
                 statusEl.textContent = (lastUpdateTime || 'Connecting…') + ' ▉';
-                const response = await fetch('/logdata');
+                const response = await fetch('/api/v1/logs');
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.text();
-                const pre = document.getElementById('logContainer');
+                const pre = document.getElementById('logsContainer');
 
                 if (data === lastSnapshot) {
                     statusEl.textContent = lastUpdateTime || new Date().toLocaleTimeString();
@@ -103,7 +103,7 @@
         document.getElementById('btnDownload').addEventListener('click', () => {
             let text = lines.length > 0
                 ? lines.slice().reverse().join('\n')
-                : document.getElementById('logContainer').innerText || '';
+                : document.getElementById('logsContainer').innerText || '';
             downloadTextFile(text, 'esp-ebus-log.txt', 'text/plain');
         });
 

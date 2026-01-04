@@ -19,26 +19,26 @@
         <span id="status">...</span>
     </div>
     <table>
-        <thead id="deviceTableHeader"></thead>
-        <tbody id="deviceTableBody"></tbody>
+        <thead id="devicesTableHeader"></thead>
+        <tbody id="devicesTableBody"></tbody>
     </table>
     <script src="common.js"></script>
     <script>
         function handleDevices() {
-            fetchJson('/api/v1/GetDevices', data => {
+            fetchJson('/api/v1/devices', data => {
                 const keys = new Set();
                 data.forEach(device => Object.keys(device || {}).forEach(k => keys.add(k)));
                 const cols = Array.from(keys);
                 const rows = data.map(device => cols.map(k => device[k] === undefined ? '' : String(device[k])));
-                renderSimpleTable('deviceTableHeader', 'deviceTableBody', cols, rows);
+                renderSimpleTable('devicesTableHeader', 'devicesTableBody', cols, rows);
             });
         }
 
         document.getElementById('btnHome').addEventListener('click', handleHome);
         document.getElementById('btnDevices').addEventListener('click', handleDevices);
-        document.getElementById('btnScan').addEventListener('click', () => postSimple('/api/v1/Scan'));
-        document.getElementById('btnScanFull').addEventListener('click', () => postSimple('/api/v1/ScanFull'));
-        document.getElementById('btnScanVendor').addEventListener('click', () => postSimple('/api/v1/ScanVendor'));
+        document.getElementById('btnScan').addEventListener('click', () => postSimple('/api/v1/devices/scan'));
+        document.getElementById('btnScanFull').addEventListener('click', () => postSimple('/api/v1/devices/scan/full'));
+        document.getElementById('btnScanVendor').addEventListener('click', () => postSimple('/api/v1/devices/scan/vendor'));
 
         // Initial load
         handleDevices();

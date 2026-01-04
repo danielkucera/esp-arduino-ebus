@@ -552,12 +552,9 @@ const std::string Store::getValueFullJson(const Command* command) {
   JsonDocument doc;
 
   doc["key"] = command->key;
-  if (command->numeric)
-    doc["value"] = getDoubleFromVector(command);
-  else
-    doc["value"] = getStringFromVector(command);
-  doc["unit"] = command->unit;
   doc["name"] = command->name;
+  doc.add(getValueJson(command));
+  doc["unit"] = command->unit;
   doc["age"] = static_cast<uint32_t>((millis() - command->last) / 1000);
   doc.shrinkToFit();
   serializeJson(doc, payload);

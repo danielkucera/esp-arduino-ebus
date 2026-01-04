@@ -60,7 +60,7 @@
     }
 
     function fetchCommands() {
-      fetchJson('/api/v1/CommandsDownload', js => {
+      fetchJson('/api/v1/commands/download', js => {
         document.getElementById('commandsArea').value = JSON.stringify(js, null, 2);
         renderTable(js.commands || []);
         setStatus('Fetched');
@@ -110,7 +110,7 @@
         const obj = JSON.parse(txt);
         if (!obj.commands) throw new Error("JSON must include 'commands' array");
         setStatus('Uploading...');
-        fetch('/api/v1/CommandsInsert', {
+        fetch('/api/v1/commands/insert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
@@ -127,7 +127,7 @@
         const obj = JSON.parse(txt);
         if (!obj.commands) throw new Error("JSON must include 'commands' array");
         setStatus('Evaluating...');
-        fetch('/api/v1/CommandsInsert', {
+        fetch('/api/v1/commands/insert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
@@ -152,10 +152,10 @@
       const text = document.getElementById('commandsArea').value;
       downloadTextFile(text, 'commands.json', 'application/json');
     });
-    document.getElementById('btnLoad').addEventListener('click', () => postSimple('/api/v1/CommandsLoad'));
-    document.getElementById('btnSave').addEventListener('click', () => postSimple('/api/v1/CommandsSave'));
+    document.getElementById('btnLoad').addEventListener('click', () => postSimple('/api/v1/commands/load'));
+    document.getElementById('btnSave').addEventListener('click', () => postSimple('/api/v1/commands/save'));
     document.getElementById('btnWipe').addEventListener('click', () => {
-      if (confirm('Clear all commands?')) postSimple('/api/v1/CommandsWipe');
+      if (confirm('Clear all commands from NVS?')) postSimple('/api/v1/commands/wipe');
     });
     document.getElementById('btnEditorToTable').addEventListener('click', editorToTable);
 

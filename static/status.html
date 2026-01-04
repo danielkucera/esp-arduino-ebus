@@ -20,11 +20,11 @@
     <script>
         document.getElementById('btnHome').addEventListener('click', handleHome);
         document.getElementById('btnStatus').addEventListener('click', () =>
-            fetchJson('/api/v1/GetStatus', data => renderNestedSections(data, 'statusContainer'))
+            fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'))
         );
 
         // Initial load
-        fetchJson('/api/v1/GetStatus', data => renderNestedSections(data, 'statusContainer'));
+        fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'));
     </script>
 </body>
 

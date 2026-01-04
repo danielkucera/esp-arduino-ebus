@@ -4,35 +4,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>esp-eBus Statistic</title>
+    <title>esp-eBus Statistics</title>
     <link rel="stylesheet" href="common.css">
 </head>
 
 <body>
-    <h1>Statistic</h1>
+    <h1>Statistics</h1>
     <div class="controls">
         <button id="btnHome">Home</button>
         <button id="btnCounter">Counter</button>
         <button id="btnTiming">Timing</button>
-        <button id="btnResetStatistic">Reset statistic</button>
+        <button id="btnReset">Reset</button>
         <span id="status">...</span>
     </div>
-    <div class="container" id="statisticContainer"></div>
+    <div class="container" id="statisticsContainer"></div>
     <script src="common.js"></script>
     <script>
         document.getElementById('btnHome').addEventListener('click', handleHome);
         document.getElementById('btnCounter').addEventListener('click', () =>
-            fetchJson('/api/v1/GetCounter', data => renderNestedSections(data, 'statisticContainer'))
+            fetchJson('/api/v1/statistics/counter', data => renderNestedSections(data, 'statisticsContainer'))
         );
         document.getElementById('btnTiming').addEventListener('click', () =>
-            fetchJson('/api/v1/GetTiming', data => renderNestedSections(data, 'statisticContainer'))
+            fetchJson('/api/v1/statistics/timing', data => renderNestedSections(data, 'statisticsContainer'))
         );
-        document.getElementById('btnResetStatistic').addEventListener('click', () =>
-            postSimple('/api/v1/ResetStatistic')
+        document.getElementById('btnReset').addEventListener('click', () =>
+            postSimple('/api/v1/statistics/reset')
         );
 
         // Initial load
-        fetchJson('/api/v1/GetCounter', data => renderNestedSections(data, 'statisticContainer'));
+        fetchJson('/api/v1/statistics/counter', data => renderNestedSections(data, 'statisticsContainer'));
     </script>
 </body>
 

@@ -132,6 +132,7 @@ td {
 th {
     background: #f7f7f7;
     color: #222;
+    font-weight: bold;
 }
 
 td {

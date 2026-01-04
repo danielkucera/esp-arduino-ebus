@@ -33,7 +33,7 @@ void addLog(String entry) {
   if (logEntries < MAX_LOG_ENTRIES) logEntries++;
 }
 
-String getLog() {
+String getLogs() {
   String response = "";
   for (int i = 0; i < logEntries; i++) {
     int index = (logIndex - logEntries + i + MAX_LOG_ENTRIES) % MAX_LOG_ENTRIES;
