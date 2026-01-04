@@ -24,7 +24,7 @@
 </head>
 
 <body>
-    <h1>Log</h1>
+    <h1>Logs</h1>
     <div class="controls">
         <button id="btnHome">Home</button>
         <button id="btnPause">Pause</button>
@@ -36,13 +36,13 @@
     <script src="common.js"></script>
     <script>
         const intervalMs = 500;
+        const lines = [];
+        const seen = new Set();
+        const maxLines = 2000;
         let paused = false;
         let fetching = false;
         let lastSnapshot = null;
         let lastUpdateTime = '';
-        const lines = [];
-        const seen = new Set();
-        const maxLines = 2000;
 
         async function fetchLogs() {
             if (paused) return;
@@ -53,33 +53,32 @@
                 statusEl.textContent = (lastUpdateTime || 'Connecting…') + ' ▉';
                 const response = await fetch('/api/v1/logs');
                 if (!response.ok) throw new Error('Network response was not ok');
-                const data = await response.text();
-                const pre = document.getElementById('logsContainer');
+                const data = await response.json();
 
-                if (data === lastSnapshot) {
-                    statusEl.textContent = lastUpdateTime || new Date().toLocaleTimeString();
-                } else {
-                    const serverLines = data.split(/\r?\n/);
-                    for (let i = 0; i < serverLines.length; i++) {
-                        const line = serverLines[i];
-                        if (i === serverLines.length - 1 && line === '') continue;
-                        if (!seen.has(line)) {
-                            lines.unshift(line);
-                            seen.add(line);
-                        }
+                const pre = document.getElementById('logsContainer');
+                let newLines = [];
+
+                for (const logEntry of data) {
+                    const line = `${logEntry.timestamp} ${logEntry.level} ${logEntry.message}`;
+                    if (!seen.has(line)) {
+                        newLines.unshift(line);
+                        seen.add(line);
                     }
-                    while (lines.length > maxLines) {
-                        const removed = lines.pop();
-                        seen.delete(removed);
-                    }
-                    pre.innerText = lines.join('\n');
-                    lastSnapshot = data;
-                    lastUpdateTime = new Date().toLocaleTimeString();
-                    if (document.getElementById('autoScroll').checked) {
-                        pre.scrollTop = pre.scrollHeight;
-                    }
-                    statusEl.textContent = lastUpdateTime;
                 }
+
+                lines.unshift(...newLines);
+                while (lines.length > maxLines) {
+                    const removed = lines.pop();
+                    seen.delete(removed);
+                }
+
+                pre.innerText = lines.join('\n');
+                lastSnapshot = JSON.stringify(data);
+                lastUpdateTime = new Date().toLocaleTimeString();
+                if (document.getElementById('autoScroll').checked) {
+                    pre.scrollTop = pre.scrollHeight;
+                }
+                statusEl.textContent = lastUpdateTime;
             } catch (err) {
                 console.error('Fetch error:', err);
                 statusEl.textContent = (lastUpdateTime || 'Error');

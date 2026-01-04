@@ -43,14 +43,14 @@ Endpoint endpoints[] = {
     // logs
     {"/api/v1/logs", "get", "Raw data of logging data"},
 #endif
-    // docs
-    {"/api/v1/docs", "get", "This site"},
+    // api
+    {"/api/v1/api", "get", "This site"},
 };
 
 // Total number of endpoints
 const int endpointCount = sizeof(endpoints) / sizeof(endpoints[0]);
 
-String generateDocs() {
+String generateAPI() {
   String json = "{";
   json += "\"openapi\": \"3.0.0\",";
   json +=
@@ -73,8 +73,8 @@ String generateDocs() {
   return json;
 }
 
-void handleDocsPage() {
-  String openApiSpec = generateDocs();
+void handleAPIPage() {
+  String openApiSpec = generateAPI();
   configServer.send(200, "application/json", openApiSpec);
 }
 
@@ -369,8 +369,8 @@ void SetupHttpHandlers() {
   configServer.on("/logs", [] { handleLogsPage(); });
   configServer.on("/api/v1/logs", [] { handleLogs(); });
 
-  // docs
-  configServer.on("/docs", [] { handleDocsPage(); });
+  // api
+  configServer.on("/api", [] { handleAPIPage(); });
 #endif
 
   // restart

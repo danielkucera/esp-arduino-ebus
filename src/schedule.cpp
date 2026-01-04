@@ -767,7 +767,7 @@ void Schedule::handleEvents() {
           }
         } break;
       }
-      addLog(payload.c_str());
+      addLog(LogLevel::INFO, payload.c_str());
       delete event;
     }
   }
