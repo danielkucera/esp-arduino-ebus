@@ -17,11 +17,11 @@
 // commands, and if they match, the received data is also saved. Furthermore, it
 // is possible to send individual commands to the eBUS. The results are returned
 // along with the command as raw data. Defined messages (filter function) can be
-// forwarded. Scanning of eBUS participants is also available.
+// forwarded. Scanning of eBUS devices is also available.
 
 constexpr uint8_t VENDOR_VAILLANT = 0xb5;
 
-struct Participant {
+struct Device {
   uint8_t slave;
   std::vector<uint8_t> vec_070400;
   std::vector<uint8_t> vec_b5090124;
@@ -73,10 +73,10 @@ class Schedule {
   void fetchTiming();
   const std::string getTimingJson();
 
-  static JsonDocument getParticipantJson(const Participant* participant);
-  const std::string getParticipantsJson() const;
+  static JsonDocument getDeviceJson(const Device* device);
+  const std::string getDevicesJson() const;
 
-  const std::vector<Participant*> getParticipants();
+  const std::vector<Device*> getDevices();
 
  private:
   ebus::Request* ebusRequest = nullptr;
@@ -122,7 +122,7 @@ class Schedule {
   bool fullScan = false;
   uint8_t scanIndex = 0;
 
-  std::map<uint8_t, Participant> allParticipants;
+  std::map<uint8_t, Device> allDevices;
 
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;

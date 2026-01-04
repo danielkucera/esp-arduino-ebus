@@ -227,9 +227,9 @@ void Mqtt::handleScan(const JsonDocument& doc) {
   mqtt.publishResponse("scan", "initiated");
 }
 
-void Mqtt::handleParticipants(const JsonDocument& doc) {
-  for (const Participant* participant : schedule.getParticipants())
-    enqueueOutgoing(OutgoingAction(participant));
+void Mqtt::handleDevices(const JsonDocument& doc) {
+  for (const Device* device : schedule.getDevices())
+    enqueueOutgoing(OutgoingAction(device));
 }
 
 void Mqtt::handleSend(const JsonDocument& doc) {
@@ -325,8 +325,8 @@ void Mqtt::checkOutgoingQueue() {
       case OutgoingActionType::Command:
         publishCommand(action.command);
         break;
-      case OutgoingActionType::Participant:
-        publishParticipant(action.participant);
+      case OutgoingActionType::Device:
+        publishDevice(action.device);
         break;
       case OutgoingActionType::Component:
         mqttha.publishComponent(action.command, action.haRemove);
@@ -354,10 +354,10 @@ void Mqtt::publishCommand(const Command* command) {
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 
-void Mqtt::publishParticipant(const Participant* participant) {
-  std::string topic = "participants/" + ebus::to_string(participant->slave);
+void Mqtt::publishDevice(const Device* device) {
+  std::string topic = "devices/" + ebus::to_string(device->slave);
   std::string payload;
-  serializeJson(schedule.getParticipantJson(participant), payload);
+  serializeJson(schedule.getDeviceJson(device), payload);
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 

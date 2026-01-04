@@ -159,7 +159,7 @@ iotwebconf::CheckboxParameter inquiryOfExistenceParam =
                                   "inquiryOfExistenceParam",
                                   inquiryOfExistenceValue, STRING_LEN);
 iotwebconf::CheckboxParameter scanOnStartupParam =
-    iotwebconf::CheckboxParameter("Scan for eBUS participants on startup",
+    iotwebconf::CheckboxParameter("Scan for eBUS devices on startup",
                                   "scanOnStartupParam", scanOnStartupValue,
                                   STRING_LEN);
 iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(

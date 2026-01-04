@@ -139,9 +139,9 @@ void handleScanVendor() {
   configServer.send(200, "text/html", "Vendor scan initiated");
 }
 
-void handleParticipants() {
+void handleDevices() {
   configServer.send(200, "application/json;charset=utf-8",
-                    schedule.getParticipantsJson().c_str());
+                    schedule.getDevicesJson().c_str());
 }
 
 void handleGetCounter() {
@@ -199,7 +199,7 @@ void SetupHttpHandlers() {
   configServer.on("/scan", [] { handleScan(); });
   configServer.on("/scanfull", [] { handleScanFull(); });
   configServer.on("/scanvendor", [] { handleScanVendor(); });
-  configServer.on("/participants", [] { handleParticipants(); });
+  configServer.on("/devices", [] { handleDevices(); });
   configServer.on("/api/v1/GetCounter", [] { handleGetCounter(); });
   configServer.on("/api/v1/GetTiming", [] { handleGetTiming(); });
   configServer.on("/reset", [] { handleResetStatistic(); });
