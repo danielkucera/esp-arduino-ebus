@@ -10,10 +10,15 @@ String getTimestamp() {
   struct tm timeinfo;
   localtime_r(&now, &timeinfo);
 
-  char buffer[30];
-  snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%03d",
-           timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-           timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, millis() % 1000);
+  // char buffer[30];
+  // snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+  //          timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+  //          timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec, millis() %
+  //          1000);
+
+  char buffer[15];
+  snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d.%03d", timeinfo.tm_hour,
+           timeinfo.tm_min, timeinfo.tm_sec, millis() % 1000);
 
   return String(buffer);
 }
