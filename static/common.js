@@ -126,11 +126,15 @@ function renderNestedSections(data, containerId) {
  */
 function downloadTextFile(text, filename, mime = 'text/plain') {
     try {
+        const now = new Date();
+        const timestamp = now.toISOString().split('T')[0] + '-' + now.toTimeString().split(' ')[0].replace(/:/g, '-'); // Format: YYYY-MM-DD-HH-MM-SS
+        const newFilename = `${timestamp}-${filename}`; 
+
         const blob = new Blob([text], { type: mime });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = newFilename;
         document.body.appendChild(a);
         a.click();
         a.remove();
