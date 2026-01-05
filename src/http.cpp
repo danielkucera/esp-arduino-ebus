@@ -8,76 +8,6 @@
 
 WebServer configServer(80);
 
-// Structure to hold endpoint info
-struct Endpoint {
-  String path;
-  String method;
-  String summary;
-};
-
-// Array to store all registered endpoints
-Endpoint endpoints[] = {
-    // status
-    {"/api/v1/status", "get", "Get status information"},
-#if defined(EBUS_INTERNAL)
-    // commands
-    {"/api/v1/commands/list", "get", "List commands from store"},
-    {"/api/v1/commands/download", "get", "Download commands from store"},
-    {"/api/v1/commands/evaluate", "get", "Evaluate commands from editor"},
-    {"/api/v1/commands/insert", "get", "Insert commands to store"},
-    {"/api/v1/commands/remove", "get", "Remove commands from store"},
-    {"/api/v1/commands/load", "get", "Load commands from NVS"},
-    {"/api/v1/commands/save", "get", "Save commands save to NVS"},
-    {"/api/v1/commands/wipe", "get", "Wipe all commands from NVS"},
-    // values
-    {"/api/v1/values", "get", "List values of stored commands"},
-    // devices
-    {"/api/v1/devices", "get", "List scanned devices"},
-    {"/api/v1/devices/scan", "get", "Scan of seen devices"},
-    {"/api/v1/devices/scan/full", "get", "Scan of full bus"},
-    {"/api/v1/devices/scan/vendor", "get", "Scan vendor specific"},
-    // statistics
-    {"/api/v1/statistics/counter", "get", "List counter values"},
-    {"/api/v1/statistics/timing", "get", "List timing values"},
-    {"/api/v1/statistics/reset", "get", "Reset counter and timing values"},
-    // logs
-    {"/api/v1/logs", "get", "Raw data of logging data"},
-#endif
-    // api
-    {"/api/v1/api", "get", "This site"},
-};
-
-// Total number of endpoints
-const int endpointCount = sizeof(endpoints) / sizeof(endpoints[0]);
-
-String generateAPI() {
-  String json = "{";
-  json += "\"openapi\": \"3.0.0\",";
-  json +=
-      "\"info\": {\"title\": \"esp-ebus API Documentation\", \"version\": "
-      "\"1.0.0\"},";
-  json += "\"paths\": {";
-
-  for (int i = 0; i < endpointCount; i++) {
-    json += "\"" + endpoints[i].path + "\": {";
-    json += "\"" + endpoints[i].method + "\": {";
-    json += "\"summary\": \"" + endpoints[i].summary + "\",";
-    json += "\"responses\": {\"200\": {\"description\": \"Success\"}}";
-    json += "}},";  // Close method object
-  }
-
-  if (endpointCount > 0) json.remove(json.length() - 1);
-
-  json += "}}";
-
-  return json;
-}
-
-void handleAPIPage() {
-  String openApiSpec = generateAPI();
-  configServer.send(200, "application/json", openApiSpec);
-}
-
 // common
 void handleCommonCSS() {
   extern const char common_css_start[] asm("_binary_static_common_css_start");
@@ -368,9 +298,6 @@ void SetupHttpHandlers() {
   // logs
   configServer.on("/logs", [] { handleLogsPage(); });
   configServer.on("/api/v1/logs", [] { handleLogs(); });
-
-  // api
-  configServer.on("/api", [] { handleAPIPage(); });
 #endif
 
   // restart
