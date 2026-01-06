@@ -54,6 +54,24 @@ async function postSimple(path, processingMsg = 'Processing...') {
 }
 
 /**
+ * Fetches data from the specified API endpoint and renders it into an HTML table.
+ * This function dynamically constructs the table's headers and rows based on the
+ * structure of the retrieved data.
+ * @param {string} apiEndpoint - The API endpoint to retrieve the data.
+ * @param {string} theadId - ID of the <thead> element where table headers will be rendered.
+ * @param {string} tbodyId - ID of the <tbody> element where table rows will be rendered.
+ */
+function handleSimpleTable(apiEndpoint, theadId, tbodyId) {
+    fetchJson(apiEndpoint, data => {
+        const keys = new Set();
+        data.forEach(item => Object.keys(item || {}).forEach(k => keys.add(k)));
+        const cols = Array.from(keys);
+        const rows = data.map(item => cols.map(k => item[k] === undefined ? '' : String(item[k])));
+        renderSimpleTable(theadId, tbodyId, cols, rows);
+    });
+}
+
+/**
  * Renders a simple table given headers and rows.
  * @param {string} theadId - ID of the <thead> element.
  * @param {string} tbodyId - ID of the <tbody> element.
@@ -128,7 +146,7 @@ function downloadTextFile(text, filename, mime = 'text/plain') {
     try {
         const now = new Date();
         const timestamp = now.toISOString().split('T')[0] + '-' + now.toTimeString().split(' ')[0].replace(/:/g, '-'); // Format: YYYY-MM-DD-HH-MM-SS
-        const newFilename = `${timestamp}-${filename}`; 
+        const newFilename = `${timestamp}-${filename}`;
 
         const blob = new Blob([text], { type: mime });
         const url = URL.createObjectURL(blob);

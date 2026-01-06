@@ -50,9 +50,9 @@
     }
 
     function fetchCommands() {
-      fetchJson('/api/v1/commands/download', js => {
+      fetchJson('/api/v1/commands', js => {
         document.getElementById('commandsArea').value = JSON.stringify(js, null, 2);
-        renderTable(js.commands || []);
+        renderTable(js || []);
         setStatus('Fetched');
         updateSize();
       });
@@ -124,7 +124,6 @@
       try {
         const txt = document.getElementById('commandsArea').value;
         const obj = JSON.parse(txt);
-        if (!obj.commands) throw new Error("JSON must include 'commands' array");
         setStatus('Uploading...');
         fetch('/api/v1/commands/insert', {
           method: 'POST',
@@ -141,9 +140,8 @@
       try {
         const txt = document.getElementById('commandsArea').value;
         const obj = JSON.parse(txt);
-        if (!obj.commands) throw new Error("JSON must include 'commands' array");
         setStatus('Evaluating...');
-        fetch('/api/v1/commands/insert', {
+        fetch('/api/v1/commands/evaluate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)

@@ -22,18 +22,7 @@
     <script src="common.js"></script>
     <script>
         function handleValues() {
-            fetchJson('/api/v1/values', data => {
-                const keys = new Set();
-                const valuesArray = data.values || [];
-
-                const rows = valuesArray.map(value => {
-                    Object.keys(value || {}).forEach(k => keys.add(k));
-                    return Array.from(keys).map(k => value[k] === undefined ? '' : String(value[k]));
-                });
-
-                const cols = Array.from(keys);
-                renderSimpleTable('valuesTableHeader', 'valuesTableBody', cols, rows);
-            });
+            handleSimpleTable('/api/v1/values', 'valuesTableHeader', 'valuesTableBody');
         }
 
         document.getElementById('btnHome').addEventListener('click', handleHome);

@@ -40,16 +40,9 @@ void handleStatus() {
 
 #if defined(EBUS_INTERNAL)
 // commands
-void handleCommandsList() {
+void handleCommands() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getCommandsJson().c_str());
-}
-
-void handleCommandsDownload() {
-  String s = "{\"id\":\"insert\",\"commands\":";
-  s += store.getCommandsJson().c_str();
-  s += "}";
-  configServer.send(200, "application/json", s);
 }
 
 void handleCommandsEvaluate() {
@@ -61,7 +54,7 @@ void handleCommandsEvaluate() {
   if (error) {
     configServer.send(403, "text/html", "Json invalid");
   } else {
-    JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
+    JsonArrayConst commands = doc.as<JsonArrayConst>();
     if (!commands.isNull()) {
       for (JsonVariantConst command : commands) {
         std::string evalError = store.evaluateCommand(command);
@@ -86,7 +79,7 @@ void handleCommandsInsert() {
   if (error) {
     configServer.send(403, "text/html", "Json invalid");
   } else {
-    JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
+    JsonArrayConst commands = doc.as<JsonArrayConst>();
     if (!commands.isNull()) {
       for (JsonVariantConst command : commands) {
         std::string evalError = store.evaluateCommand(command);
@@ -168,10 +161,8 @@ void handleCommandsWipe() {
 
 // values
 void handleValues() {
-  String s = "{\"values\":";
-  s += store.getValuesJson().c_str();
-  s += "}";
-  configServer.send(200, "application/json;charset=utf-8", s);
+  configServer.send(200, "application/json;charset=utf-8",
+                    store.getValuesJson().c_str());
 }
 
 // devices
@@ -242,9 +233,7 @@ void SetupHttpHandlers() {
   // commands
   configServer.on("/commands",
                   []() { handleStatic("text/html", commands_html_start); });
-  configServer.on("/api/v1/commands/list", [] { handleCommandsList(); });
-  configServer.on("/api/v1/commands/download",
-                  [] { handleCommandsDownload(); });
+  configServer.on("/api/v1/commands", [] { handleCommands(); });
   configServer.on("/api/v1/commands/evaluate",
                   [] { handleCommandsEvaluate(); });
   configServer.on("/api/v1/commands/insert", [] { handleCommandsInsert(); });

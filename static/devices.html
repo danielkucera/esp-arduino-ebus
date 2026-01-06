@@ -25,13 +25,7 @@
     <script src="common.js"></script>
     <script>
         function handleDevices() {
-            fetchJson('/api/v1/devices', data => {
-                const keys = new Set();
-                data.forEach(device => Object.keys(device || {}).forEach(k => keys.add(k)));
-                const cols = Array.from(keys);
-                const rows = data.map(device => cols.map(k => device[k] === undefined ? '' : String(device[k])));
-                renderSimpleTable('devicesTableHeader', 'devicesTableBody', cols, rows);
-            });
+            handleSimpleTable('/api/v1/devices', 'devicesTableHeader', 'devicesTableBody');
         }
 
         document.getElementById('btnHome').addEventListener('click', handleHome);
