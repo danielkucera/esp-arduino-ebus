@@ -115,15 +115,20 @@ void handleCommandsRemove() {
     configServer.send(403, "text/html", "Json invalid");
   } else {
     JsonArrayConst keys = doc["keys"].as<JsonArrayConst>();
-    if (!keys.isNull()) {
+    if (keys.size() > 0) {
       for (JsonVariantConst key : keys) {
         const Command* cmd = store.findCommand(key.as<std::string>());
-        if (cmd) store.removeCommand(key.as<std::string>());
+        if (cmd) {
+          if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
+          store.removeCommand(key.as<std::string>());
+        }
       }
       configServer.send(200, "text/html", "Ok");
     } else if (store.getActiveCommands() + store.getPassiveCommands() > 0) {
-      for (const Command* command : store.getCommands())
-        store.removeCommand(command->key);
+      for (const Command* cmd : store.getCommands()) {
+        if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
+        store.removeCommand(cmd->key);
+      }
       configServer.send(200, "text/html", "Ok");
     } else {
       configServer.send(403, "text/html", "No commands");

@@ -14,6 +14,7 @@
     <button id="btnHome">Home</button>
     <button id="btnFetch">Load from adapter</button>
     <button id="btnOpenFile" class="secondary">Load from file...</button>
+    <input id="fileUpload" type="file" style="display:none" accept="application/json">
     <button id="btnClear">Clear</button>
     <button id="btnFormat">Format</button>
     <button id="btnEvaluate">Evaluate</button>
@@ -22,7 +23,6 @@
     <button id="btnLoad" class="apply">Apply from storage</button>
     <button id="btnSave" class="danger">Save to storage</button>
     <button id="btnWipe" class="danger">Wipe all from storage</button>
-    <input type="file" id="fileUpload" style="display:none" accept="application/json">
     <span class="status" id="status"> </span>
     <span id="size">0 bytes</span>
   </div>
@@ -30,6 +30,9 @@
   <div>
     <div class="table-actions">
       <button id="btnEditorToTable">Refresh table from editor</button>
+      <button id="btnRemoveSelected" class="danger">Remove Selected</button>
+      <button id="btnRemoveAll" class="danger">Remove All</button>
+      <span id="commandCount" style="margin-left: 10px;">0 commands</span>
       <label style="margin-left:auto;color:#666;font-size:0.9rem">Table view (read-only)</label>
     </div>
     <table id="commandsTable">
@@ -61,22 +64,48 @@
       thead.innerHTML = '';
       tbody.innerHTML = '';
       const keys = new Set();
+
       commands.forEach(cmd => { Object.keys(cmd || {}).forEach(k => keys.add(k)); });
       const cols = Array.from(keys);
+
+      // Add header row with a checkbox for selecting all
       const trh = document.createElement('tr');
+      const th = document.createElement('th');
+      th.innerHTML = '<input type="checkbox" id="selectAll" />';
+      trh.appendChild(th);
       cols.forEach(k => { const th = document.createElement('th'); th.textContent = k; trh.appendChild(th); });
       thead.appendChild(trh);
+
+      // Add data rows with checkboxes
       commands.forEach(cmd => {
         const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        td.appendChild(checkbox);
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+
         cols.forEach(k => {
           const td = document.createElement('td');
-          td.contentEditable = 'false';
           const v = cmd[k];
-          if (typeof v === 'object' && v !== null) td.textContent = JSON.stringify(v);
-          else td.textContent = (v === undefined ? '' : String(v));
+          if (typeof v === 'object' && v !== null)
+            td.textContent = Object.entries(v).map(([key, value]) => `${key}: ${value}`).join(', ');
+          else
+            td.textContent = (v === undefined ? '' : String(v));
           tr.appendChild(td);
         });
-        tbody.appendChild(tr);
+
+        tr.dataset.key = cmd.key;
+      });
+
+      // Update the command count label
+      document.getElementById('commandCount').textContent = commands.length + ' commands';
+
+      // All selection functionality
+      document.getElementById('selectAll').addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        tbody.querySelectorAll('input[type="checkbox"]').forEach(el => { el.checked = checked; });
       });
     }
 
@@ -127,26 +156,75 @@
       }
     }
 
+    function handleRemoveSelected() {
+      const selectedKeys = Array.from(document.querySelectorAll('#commandsTable tbody input[type="checkbox"]:checked'))
+        .map(checkbox => checkbox.closest('tr').dataset.key);
+
+      if (selectedKeys.length > 0) {
+        fetch('/api/v1/commands/remove', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keys: selectedKeys })
+        }).then(res => {
+          if (res.ok) {
+            setStatus('Removed selected');
+            clearTextarea('commandsArea', 'size');
+            fetchCommands();
+          } else {
+            setStatus('Removal failed');
+          }
+        }).catch(() => setStatus('Removal failed'));
+      } else {
+        setStatus('No commands selected');
+      }
+    }
+
+    function handleRemoveAll() {
+      fetch('/api/v1/commands/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keys: [] })
+      }).then(res => {
+        if (res.ok) {
+          setStatus('All commands removed');
+          clearTextarea('commandsArea', 'size');
+          fetchCommands();
+        } else {
+          setStatus('Removal failed');
+        }
+      }).catch(() => setStatus('Removal failed'));
+    }
+
     document.getElementById('btnHome').addEventListener('click', handleHome);
-    document.getElementById('btnClear').addEventListener('click', () => clearTextarea('commandsArea', 'size'));
     document.getElementById('btnFetch').addEventListener('click', fetchCommands);
-    document.getElementById('btnInsert').addEventListener('click', handleInsert);
-    document.getElementById('btnFormat').addEventListener('click', () => formatTextareaJson('commandsArea'));
-    document.getElementById('btnEvaluate').addEventListener('click', handleEvaluate);
     document.getElementById('btnOpenFile').addEventListener('click', () => document.getElementById('fileUpload').click());
     document.getElementById('fileUpload').addEventListener('change', ev => handleJsonFileUpload(ev, 'commandsArea', updateSize));
+    document.getElementById('btnClear').addEventListener('click', () => clearTextarea('commandsArea', 'size'));
+    document.getElementById('btnFormat').addEventListener('click', () => formatTextareaJson('commandsArea'));
+    document.getElementById('btnEvaluate').addEventListener('click', handleEvaluate);
+    document.getElementById('btnInsert').addEventListener('click', handleInsert);
     document.getElementById('btnDownload').addEventListener('click', () => {
       const text = document.getElementById('commandsArea').value;
       downloadTextFile(text, 'commands.json', 'application/json');
     });
-    document.getElementById('btnLoad').addEventListener('click', () => postSimple('/api/v1/commands/load'));
+    document.getElementById('btnLoad').addEventListener('click', async () => {
+      await postSimple('/api/v1/commands/load');
+      clearTextarea('commandsArea', 'size');
+      fetchCommands();
+    });
     document.getElementById('btnSave').addEventListener('click', () => postSimple('/api/v1/commands/save'));
     document.getElementById('btnWipe').addEventListener('click', () => {
       if (confirm('Clear all commands from NVS?')) postSimple('/api/v1/commands/wipe');
     });
-    document.getElementById('btnEditorToTable').addEventListener('click', editorToTable);
 
     document.getElementById('commandsArea').addEventListener('input', updateSize);
+    document.getElementById('btnEditorToTable').addEventListener('click', editorToTable);
+    document.getElementById('btnRemoveSelected').addEventListener('click', handleRemoveSelected);
+    document.getElementById('btnRemoveAll').addEventListener('click', handleRemoveAll);
+
+    document.querySelectorAll('#commandsTable tbody tr').forEach(row => {
+      row.addEventListener('click', () => { row.classList.toggle('selected'); });
+    });
 
     // Initial load
     fetchCommands();
