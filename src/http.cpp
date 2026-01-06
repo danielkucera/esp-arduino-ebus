@@ -8,33 +8,29 @@
 
 WebServer configServer(80);
 
-// common
-void handleCommonCSS() {
-  extern const char common_css_start[] asm("_binary_static_common_css_start");
-  configServer.send(200, "text/css", common_css_start);
-};
+extern const char common_css_start[] asm("_binary_static_common_css_start");
+extern const char common_js_start[] asm("_binary_static_common_js_start");
 
-void handleCommonJS() {
-  extern const char common_js_start[] asm("_binary_static_common_js_start");
-  configServer.send(200, "application/javascript", common_js_start);
-};
+extern const char root_html_start[] asm("_binary_static_root_html_start");
+extern const char status_html_start[] asm("_binary_static_status_html_start");
+extern const char commands_html_start[] asm(
+    "_binary_static_commands_html_start");
+extern const char values_html_start[] asm("_binary_static_values_html_start");
+extern const char devices_html_start[] asm("_binary_static_devices_html_start");
+extern const char statistics_html_start[] asm(
+    "_binary_static_statistics_html_start");
+extern const char logs_html_start[] asm("_binary_static_logs_html_start");
+
+// static
+void handleStatic(const char* contentType, const char* data) {
+  configServer.send(200, contentType, data);
+}
 
 // root
 void handleRoot() {
   // -- Let IotWebConf test and handle captive portal requests.
-  if (iotWebConf.handleCaptivePortal()) {
-    // -- Captive portal request were already served.
-    return;
-  }
-
-  extern const char root_html_start[] asm("_binary_static_root_html_start");
-  configServer.send(200, "text/html", root_html_start);
-}
-
-// status
-void handleStatusPage() {
-  extern const char status_html_start[] asm("_binary_static_status_html_start");
-  configServer.send(200, "text/html", status_html_start);
+  if (iotWebConf.handleCaptivePortal()) return;  // already served
+  handleStatic("text/html", root_html_start);
 }
 
 void handleStatus() {
@@ -44,12 +40,6 @@ void handleStatus() {
 
 #if defined(EBUS_INTERNAL)
 // commands
-void handleCommandsPage() {
-  extern const char commands_html_start[] asm(
-      "_binary_static_commands_html_start");
-  configServer.send(200, "text/html", commands_html_start);
-}
-
 void handleCommandsList() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getCommandsJson().c_str());
@@ -174,23 +164,12 @@ void handleCommandsWipe() {
 }
 
 // values
-void handleValuesPage() {
-  extern const char values_html_start[] asm("_binary_static_values_html_start");
-  configServer.send(200, "text/html", values_html_start);
-}
-
 void handleValues() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getValuesJson().c_str());
 }
 
 // devices
-void handleDevicesPage() {
-  extern const char devices_html_start[] asm(
-      "_binary_static_devices_html_start");
-  configServer.send(200, "text/html", devices_html_start);
-}
-
 void handleDevices() {
   configServer.send(200, "application/json;charset=utf-8",
                     schedule.getDevicesJson().c_str());
@@ -212,12 +191,6 @@ void handleDevicesScanVendor() {
 }
 
 // statistics
-void handleStatisticsPage() {
-  extern const char statistics_html_start[] asm(
-      "_binary_static_statistics_html_start");
-  configServer.send(200, "text/html", statistics_html_start);
-}
-
 void handleStatisticsCounter() {
   configServer.send(200, "application/json;charset=utf-8",
                     schedule.getCounterJson().c_str());
@@ -235,11 +208,6 @@ void handleStatisticsReset() {
 }
 
 // logs
-void handleLogsPage() {
-  extern const char logs_html_start[] asm("_binary_static_logs_html_start");
-  configServer.send(200, "text/html", logs_html_start);
-}
-
 void handleLogs() { configServer.send(200, "text/plain", getLogs()); }
 #endif
 
@@ -248,8 +216,11 @@ void SetupHttpHandlers() {
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
 
   // common
-  configServer.on("/common.css", [] { handleCommonCSS(); });
-  configServer.on("/common.js", [] { handleCommonJS(); });
+  configServer.on("/common.css",
+                  []() { handleStatic("text/css", common_css_start); });
+  configServer.on("/common.js", []() {
+    handleStatic("application/javascript", common_js_start);
+  });
 
   // root
   configServer.on("/", [] { handleRoot(); });
@@ -258,12 +229,14 @@ void SetupHttpHandlers() {
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
 
   // status
-  configServer.on("/status", [] { handleStatusPage(); });
+  configServer.on("/status",
+                  []() { handleStatic("text/html", status_html_start); });
   configServer.on("/api/v1/status", [] { handleStatus(); });
 
 #if defined(EBUS_INTERNAL)
   // commands
-  configServer.on("/commands", [] { handleCommandsPage(); });
+  configServer.on("/commands",
+                  []() { handleStatic("text/html", commands_html_start); });
   configServer.on("/api/v1/commands/list", [] { handleCommandsList(); });
   configServer.on("/api/v1/commands/download",
                   [] { handleCommandsDownload(); });
@@ -276,11 +249,13 @@ void SetupHttpHandlers() {
   configServer.on("/api/v1/commands/wipe", [] { handleCommandsWipe(); });
 
   // values
-  configServer.on("/values", [] { handleValuesPage(); });
+  configServer.on("/values",
+                  []() { handleStatic("text/html", values_html_start); });
   configServer.on("/api/v1/values", [] { handleValues(); });
 
   // devices
-  configServer.on("/devices", [] { handleDevicesPage(); });
+  configServer.on("/devices",
+                  []() { handleStatic("text/html", devices_html_start); });
   configServer.on("/api/v1/devices", [] { handleDevices(); });
   configServer.on("/api/v1/devices/scan", [] { handleDevicesScan(); });
   configServer.on("/api/v1/devices/scan/full", [] { handleDevicesScanFull(); });
@@ -288,7 +263,8 @@ void SetupHttpHandlers() {
                   [] { handleDevicesScanVendor(); });
 
   // statistics
-  configServer.on("/statistics", [] { handleStatisticsPage(); });
+  configServer.on("/statistics",
+                  []() { handleStatic("text/html", statistics_html_start); });
   configServer.on("/api/v1/statistics/counter",
                   [] { handleStatisticsCounter(); });
   configServer.on("/api/v1/statistics/timing",
@@ -296,7 +272,8 @@ void SetupHttpHandlers() {
   configServer.on("/api/v1/statistics/reset", [] { handleStatisticsReset(); });
 
   // logs
-  configServer.on("/logs", [] { handleLogsPage(); });
+  configServer.on("/logs",
+                  []() { handleStatic("text/html", logs_html_start); });
   configServer.on("/api/v1/logs", [] { handleLogs(); });
 #endif
 
