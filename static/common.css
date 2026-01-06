@@ -1,0 +1,234 @@
+/* common.css - Shared styles for esp-arduino-ebus web UI */
+
+/* ========== Base Elements ========== */
+body {
+    font-family: verdana;
+    padding: 10px;
+    background: #fafbfc;
+}
+
+h1 {
+    color: #333;
+}
+
+h2 {
+    color: #333;
+    margin-top: 0.5em;
+}
+
+/* ========== Layout Utilities ========== */
+body.centered {
+    text-align: center;
+}
+
+.container {
+    margin-bottom: 20px;
+}
+
+.row,
+.table-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.table-actions {
+    margin-top: 8px;
+}
+
+/* ========== Controls and Status ========== */
+.controls {
+    margin-bottom: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#status,
+.status,
+#size {
+    margin-left: 8px;
+    color: #666;
+    font-size: 0.9rem;
+    align-self: center;
+}
+
+/* ========== Buttons ========== */
+button {
+    border: 0;
+    border-radius: 0.3rem;
+    background-color: #16A1E7;
+    color: #fff;
+    padding: 8px 12px;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-right: 8px;
+    margin-bottom: 4px;
+    transition: opacity 0.2s;
+}
+
+.link-button.disabled {
+    background-color: gray;
+    cursor: not-allowed;
+}
+
+button:hover,
+a.link-button:hover:not(.disabled) {
+    opacity: 0.85;
+}
+
+button.fullwidth {
+    line-height: 2.4rem;
+    font-size: 1.2rem;
+    width: 100%;
+}
+
+button.apply {
+    background: #039505de;
+}
+
+button.danger,
+a.link-button.danger {
+    background: #E71616;
+}
+
+button.secondary {
+    background: #6c6c6c;
+}
+
+/* ========== Links as Buttons ========== */
+a.link-button {
+    display: block;
+    padding: 5px 10px;
+    background-color: #16A1E7;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 0.3rem;
+    border: 0;
+    line-height: 2.4rem;
+    font-size: 1.2rem;
+    margin-bottom: 5px;
+    cursor: pointer;
+    text-align: center;
+}
+
+/* ========== Tables ========== */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    background: #fff;
+    box-shadow: 0 2px 8px #0001;
+    border-radius: 0.3rem;
+    overflow: hidden;
+}
+
+th,
+td {
+    border: 1px solid #ddd;
+    padding: 7px 10px;
+    text-align: left;
+    font-size: 13px;
+    font-family: monospace;
+}
+
+th {
+    background: #f7f7f7;
+    color: #222;
+    font-weight: bold;
+}
+
+td {
+    background: #fcfcfc;
+    padding: 0px;
+}
+
+/* ========== Textarea and Box Sizing ========== */
+textarea {
+    width: 100%;
+    height: 320px;
+    padding: 8px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.boxsizingBorder {
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+/* ========== Sections, Titles, and Items ========== */
+.section {
+    margin: 10px 0;
+    padding: 10px;
+    border: 1px solid #dddddd;
+    border-radius: 5px;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.title {
+    font-weight: bold;
+}
+
+.item {
+    margin: 5px 0;
+}
+
+.key {
+    font-weight: bold;
+}
+
+/* ========== Info Box ========== */
+.info-box {
+    background-color: #f0f0f0;
+    border-left: 4px solid #16A1E7;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 0.3rem;
+}
+
+/* ========== Forms and Inputs ========== */
+div,
+input,
+select {
+    padding: 5px;
+    font-size: 1em;
+}
+
+input {
+    width: 95%;
+}
+
+select {
+    width: 100%;
+}
+
+input[type=checkbox] {
+    width: auto;
+    scale: 1.5;
+    margin: 10px;
+}
+
+/* ========== Miscellaneous ========== */
+.de {
+    background-color: #ffaaaa;
+}
+
+.em {
+    font-size: 0.8em;
+    color: #bb0000;
+    padding-bottom: 0px;
+}
+
+.c {
+    text-align: center;
+}
+
+fieldset {
+    border-radius: 0.3rem;
+    margin: 0px;
+}

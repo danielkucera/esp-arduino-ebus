@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>esp-eBus Logs</title>
+    <link rel="stylesheet" href="common.css">
+    <style>
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px 14px;
+            border-radius: 0.3rem;
+            font-size: 13px;
+            font-family: monospace;
+            margin-top: 12px;
+            width: 100%;
+            box-sizing: border-box;
+            color: #222;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 8px #0001;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Logs</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnPause">Pause</button>
+        <button id="btnDownload">Download</button>
+        <label style="font-size:0.9rem;"><input type="checkbox" id="chkDate" unchecked> Show Date</label>
+        <label style="font-size:0.9rem;"><input type="checkbox" id="chkLevel" checked> Show Level</label>
+        <span id="status">Connecting…</span>
+    </div>
+    <pre id="logsContainer">Loading logs...</pre>
+    <script src="common.js"></script>
+    <script>
+        const intervalMs = 500;
+        const lines = [];
+        const seen = new Set();
+        const maxLines = 2000;
+        let paused = false;
+        let fetching = false;
+        let lastSnapshot = null;
+        let lastUpdateTime = '';
+        let showDate = false;
+        let showLevel = true;
+
+        async function fetchLogs() {
+            if (paused) return;
+            if (fetching) return;
+            fetching = true;
+            const statusEl = document.getElementById('status');
+            try {
+                statusEl.textContent = (lastUpdateTime || 'Connecting…');
+                const response = await fetch('/api/v1/logs');
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+
+                const pre = document.getElementById('logsContainer');
+                let newLines = [];
+
+                for (const logEntry of data) {
+                    const timestamp = showDate ? logEntry.timestamp.replace(/T|Z/g, ' ') : logEntry.timestamp.split('T')[1].replace(/Z/g, ' ');
+                    const logLevel = showLevel ? `${logEntry.level} ` : '';
+                    const line = `${timestamp}${logLevel}${logEntry.message}`;
+                    if (!seen.has(line)) {
+                        newLines.unshift(line);
+                        seen.add(line);
+                    }
+                }
+
+                lines.unshift(...newLines);
+                while (lines.length > maxLines) {
+                    const removed = lines.pop();
+                    seen.delete(removed);
+                }
+
+                pre.innerText = lines.join('\n');
+                lastSnapshot = JSON.stringify(data);
+                lastUpdateTime = new Date().toLocaleTimeString();
+                statusEl.textContent = lastUpdateTime;
+            } catch (err) {
+                console.error('Fetch error:', err);
+                statusEl.textContent = (lastUpdateTime || 'Error');
+            } finally {
+                fetching = false;
+                if (!paused) setTimeout(fetchLogs, intervalMs);
+            }
+        }
+
+        function handlePause() {
+            paused = !paused;
+            const btnPause = document.getElementById('btnPause');
+            btnPause.textContent = paused ? 'Resume' : 'Pause';
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = (lastUpdateTime || 'Idle') + (paused ? ' (paused)' : '');
+            if (!paused) fetchLogs();
+        }
+
+        function clearStoredData() {
+            lines.length = 0;
+            seen.clear();
+
+            const pre = document.getElementById('logsContainer');
+            pre.innerText = 'No logs available.';
+            setStatus('Stored data cleared');
+        }
+
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnPause').addEventListener('click', handlePause);
+        document.getElementById('btnDownload').addEventListener('click', () => {
+            let text = lines.length > 0
+                ? lines.slice().reverse().join('\n')
+                : document.getElementById('logsContainer').innerText || '';
+            downloadTextFile(text, 'esp-ebus-log.txt', 'text/plain');
+        });
+        document.getElementById('chkDate').addEventListener('change', function () { showDate = this.checked; clearStoredData(); });
+        document.getElementById('chkLevel').addEventListener('change', function () { showLevel = this.checked; clearStoredData(); });
+
+        // Initial load
+        fetchLogs();
+    </script>
+</body>
+
+</html>

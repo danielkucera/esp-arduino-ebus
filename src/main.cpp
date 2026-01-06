@@ -390,7 +390,7 @@ void data_loop(void* pvParameters) {
 
 #if defined(EBUS_INTERNAL)
 void time_sync_notification_cb(struct timeval* tv) {
-  addLog("SNTP synchronized to " + String(sntpServer));
+  addLog(LogLevel::INFO, "SNTP synchronized to " + String(sntpServer));
 }
 
 void initSNTP(const char* server) {
@@ -405,7 +405,7 @@ void initSNTP(const char* server) {
 
 void setTimezone(const char* timezone) {
   if (strlen(timezone) > 0) {
-    addLog("Timezone set to " + String(timezone));
+    addLog(LogLevel::INFO, "Timezone set to " + String(timezone));
     setenv("TZ", timezone, 1);
     tzset();
   }
@@ -664,6 +664,14 @@ const std::string getStatusJson() {
   Firmware["Unique_ID"] = unique_id;
   Firmware["Clock_Speed"] = getCpuFrequencyMhz();
   Firmware["Apb_Speed"] = getApbFrequency();
+
+  // Chip
+  JsonObject Chip = doc["Chip"].to<JsonObject>();
+  Chip["Chip_Model"] = ESP.getChipModel();
+  Chip["Chip_Revision"] = ESP.getChipRevision();
+  Chip["Flash_Chip_Size"] = ESP.getFlashChipSize();
+  Chip["Flash_Chip_Speed"] = ESP.getFlashChipSpeed();
+  Chip["Flash_Chip_Mode"] = ESP.getFlashChipMode();
 
   // WIFI
   JsonObject WIFI = doc["WIFI"].to<JsonObject>();

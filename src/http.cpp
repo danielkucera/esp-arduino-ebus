@@ -8,24 +8,42 @@
 
 WebServer configServer(80);
 
-void handleStatus() { configServer.send(200, "text/plain", status_string()); }
+extern const char common_css_start[] asm("_binary_static_common_css_start");
+extern const char common_js_start[] asm("_binary_static_common_js_start");
 
-void handleGetStatus() {
+extern const char root_html_start[] asm("_binary_static_root_html_start");
+extern const char status_html_start[] asm("_binary_static_status_html_start");
+extern const char commands_html_start[] asm(
+    "_binary_static_commands_html_start");
+extern const char values_html_start[] asm("_binary_static_values_html_start");
+extern const char devices_html_start[] asm("_binary_static_devices_html_start");
+extern const char statistics_html_start[] asm(
+    "_binary_static_statistics_html_start");
+extern const char logs_html_start[] asm("_binary_static_logs_html_start");
+
+// static
+void handleStatic(const char* contentType, const char* data) {
+  configServer.send(200, contentType, data);
+}
+
+// root
+void handleRoot() {
+  // -- Let IotWebConf test and handle captive portal requests.
+  if (iotWebConf.handleCaptivePortal()) return;  // already served
+  handleStatic("text/html", root_html_start);
+}
+
+void handleStatus() {
   configServer.send(200, "application/json;charset=utf-8",
                     getStatusJson().c_str());
 }
 
 #if defined(EBUS_INTERNAL)
-void handleCommandsPage() {
-  extern const char commands_html_start[] asm(
-      "_binary_static_commands_html_start");
-  configServer.send(200, "text/html", commands_html_start);
+// commands
+void handleCommandsList() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    store.getCommandsJson().c_str());
 }
-
-// void handleCommandsList() {
-//   configServer.send(200, "application/json;charset=utf-8",
-//                     store.getCommandsJson().c_str());
-// }
 
 void handleCommandsDownload() {
   String s = "{\"id\":\"insert\",\"commands\":";
@@ -87,6 +105,37 @@ void handleCommandsInsert() {
   }
 }
 
+void handleCommandsRemove() {
+  JsonDocument doc;
+  String body = configServer.arg("plain");
+
+  DeserializationError error = deserializeJson(doc, body);
+
+  if (error) {
+    configServer.send(403, "text/html", "Json invalid");
+  } else {
+    JsonArrayConst keys = doc["keys"].as<JsonArrayConst>();
+    if (keys.size() > 0) {
+      for (JsonVariantConst key : keys) {
+        const Command* cmd = store.findCommand(key.as<std::string>());
+        if (cmd) {
+          if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
+          store.removeCommand(key.as<std::string>());
+        }
+      }
+      configServer.send(200, "text/html", "Ok");
+    } else if (store.getActiveCommands() + store.getPassiveCommands() > 0) {
+      for (const Command* cmd : store.getCommands()) {
+        if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
+        store.removeCommand(cmd->key);
+      }
+      configServer.send(200, "text/html", "Ok");
+    } else {
+      configServer.send(403, "text/html", "No commands");
+    }
+  }
+}
+
 void handleCommandsLoad() {
   int64_t bytes = store.loadCommands();
   if (bytes > 0)
@@ -119,94 +168,120 @@ void handleCommandsWipe() {
     configServer.send(200, "text/html", "No data wiped");
 }
 
+// values
 void handleValues() {
   configServer.send(200, "application/json;charset=utf-8",
                     store.getValuesJson().c_str());
 }
 
-void handleScan() {
-  schedule.handleScan();
-  configServer.send(200, "text/html", "Scan initiated");
-}
-
-void handleScanFull() {
-  schedule.handleScanFull();
-  configServer.send(200, "text/html", "Full scan initiated");
-}
-
-void handleScanVendor() {
-  schedule.handleScanVendor();
-  configServer.send(200, "text/html", "Vendor scan initiated");
-}
-
+// devices
 void handleDevices() {
   configServer.send(200, "application/json;charset=utf-8",
                     schedule.getDevicesJson().c_str());
 }
 
-void handleGetCounter() {
+void handleDevicesScan() {
+  schedule.handleScan();
+  configServer.send(200, "text/html", "Scan initiated");
+}
+
+void handleDevicesScanFull() {
+  schedule.handleScanFull();
+  configServer.send(200, "text/html", "Full scan initiated");
+}
+
+void handleDevicesScanVendor() {
+  schedule.handleScanVendor();
+  configServer.send(200, "text/html", "Vendor scan initiated");
+}
+
+// statistics
+void handleStatisticsCounter() {
   configServer.send(200, "application/json;charset=utf-8",
                     schedule.getCounterJson().c_str());
 }
 
-void handleGetTiming() {
+void handleStatisticsTiming() {
   configServer.send(200, "application/json;charset=utf-8",
                     schedule.getTimingJson().c_str());
 }
 
-void handleResetStatistic() {
+void handleStatisticsReset() {
   schedule.resetCounter();
   schedule.resetTiming();
-  configServer.send(200, "text/html", "Statistic reset");
+  configServer.send(200, "text/html", "Statistics reset");
 }
 
-void handleLogData() { configServer.send(200, "text/plain", getLog()); }
-#endif
-
-void handleRoot() {
-  // -- Let IotWebConf test and handle captive portal requests.
-  if (iotWebConf.handleCaptivePortal()) {
-    // -- Captive portal request were already served.
-    return;
-  }
-
-  extern const char root_html_start[] asm("_binary_static_root_html_start");
-  configServer.send(200, "text/html", root_html_start);
-}
-
-#if defined(EBUS_INTERNAL)
-void handleLog() {
-  extern const char log_html_start[] asm("_binary_static_log_html_start");
-  configServer.send(200, "text/html", log_html_start);
-}
+// logs
+void handleLogs() { configServer.send(200, "text/plain", getLogs()); }
 #endif
 
 void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
-  configServer.on("/", [] { handleRoot(); });
-  configServer.on("/status", [] { handleStatus(); });
-  configServer.on("/api/v1/GetStatus", [] { handleGetStatus(); });
-#if defined(EBUS_INTERNAL)
-  configServer.on("/commands", [] { handleCommandsPage(); });
-  // configServer.on("/commands/list", [] { handleCommandsList(); });
-  configServer.on("/commands/download", [] { handleCommandsDownload(); });
-  configServer.on("/commands/evaluate", [] { handleCommandsEvaluate(); });
-  configServer.on("/commands/insert", [] { handleCommandsInsert(); });
-  configServer.on("/commands/load", [] { handleCommandsLoad(); });
-  configServer.on("/commands/save", [] { handleCommandsSave(); });
-  configServer.on("/commands/wipe", [] { handleCommandsWipe(); });
-  configServer.on("/values", [] { handleValues(); });
-  configServer.on("/scan", [] { handleScan(); });
-  configServer.on("/scanfull", [] { handleScanFull(); });
-  configServer.on("/scanvendor", [] { handleScanVendor(); });
-  configServer.on("/devices", [] { handleDevices(); });
-  configServer.on("/api/v1/GetCounter", [] { handleGetCounter(); });
-  configServer.on("/api/v1/GetTiming", [] { handleGetTiming(); });
-  configServer.on("/reset", [] { handleResetStatistic(); });
-  configServer.on("/log", [] { handleLog(); });
-  configServer.on("/logdata", [] { handleLogData(); });
-#endif
-  configServer.on("/restart", [] { restart(); });
-  configServer.on("/config", [] { iotWebConf.handleConfig(); });
   configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
+
+  // common
+  configServer.on("/common.css",
+                  []() { handleStatic("text/css", common_css_start); });
+  configServer.on("/common.js", []() {
+    handleStatic("application/javascript", common_js_start);
+  });
+
+  // root
+  configServer.on("/", [] { handleRoot(); });
+
+  // config
+  configServer.on("/config", [] { iotWebConf.handleConfig(); });
+
+  // status
+  configServer.on("/status",
+                  []() { handleStatic("text/html", status_html_start); });
+  configServer.on("/api/v1/status", [] { handleStatus(); });
+
+#if defined(EBUS_INTERNAL)
+  // commands
+  configServer.on("/commands",
+                  []() { handleStatic("text/html", commands_html_start); });
+  configServer.on("/api/v1/commands/list", [] { handleCommandsList(); });
+  configServer.on("/api/v1/commands/download",
+                  [] { handleCommandsDownload(); });
+  configServer.on("/api/v1/commands/evaluate",
+                  [] { handleCommandsEvaluate(); });
+  configServer.on("/api/v1/commands/insert", [] { handleCommandsInsert(); });
+  configServer.on("/api/v1/commands/remove", [] { handleCommandsRemove(); });
+  configServer.on("/api/v1/commands/load", [] { handleCommandsLoad(); });
+  configServer.on("/api/v1/commands/save", [] { handleCommandsSave(); });
+  configServer.on("/api/v1/commands/wipe", [] { handleCommandsWipe(); });
+
+  // values
+  configServer.on("/values",
+                  []() { handleStatic("text/html", values_html_start); });
+  configServer.on("/api/v1/values", [] { handleValues(); });
+
+  // devices
+  configServer.on("/devices",
+                  []() { handleStatic("text/html", devices_html_start); });
+  configServer.on("/api/v1/devices", [] { handleDevices(); });
+  configServer.on("/api/v1/devices/scan", [] { handleDevicesScan(); });
+  configServer.on("/api/v1/devices/scan/full", [] { handleDevicesScanFull(); });
+  configServer.on("/api/v1/devices/scan/vendor",
+                  [] { handleDevicesScanVendor(); });
+
+  // statistics
+  configServer.on("/statistics",
+                  []() { handleStatic("text/html", statistics_html_start); });
+  configServer.on("/api/v1/statistics/counter",
+                  [] { handleStatisticsCounter(); });
+  configServer.on("/api/v1/statistics/timing",
+                  [] { handleStatisticsTiming(); });
+  configServer.on("/api/v1/statistics/reset", [] { handleStatisticsReset(); });
+
+  // logs
+  configServer.on("/logs",
+                  []() { handleStatic("text/html", logs_html_start); });
+  configServer.on("/api/v1/logs", [] { handleLogs(); });
+#endif
+
+  // restart
+  configServer.on("/restart", [] { restart(); });
 }

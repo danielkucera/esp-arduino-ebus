@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>esp-eBus Status</title>
+    <link rel="stylesheet" href="common.css">
+</head>
+
+<body>
+    <h1>Status</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnStatus">Status</button>
+        <span id="status">...</span>
+    </div>
+    <div class="container" id="statusContainer"></div>
+    <script src="common.js"></script>
+    <script>
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnStatus').addEventListener('click', () =>
+            fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'))
+        );
+
+        // Initial load
+        fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'));
+    </script>
+</body>
+
+</html>

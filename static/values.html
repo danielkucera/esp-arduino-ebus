@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>esp-eBus Values</title>
+    <link rel="stylesheet" href="common.css">
+</head>
+
+<body>
+    <h1>Values</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnValues">Values</button>
+        <span id="status">...</span>
+    </div>
+    <table>
+        <thead id="valuesTableHeader"></thead>
+        <tbody id="valuesTableBody"></tbody>
+    </table>
+    <script src="common.js"></script>
+    <script>
+        function handleValues() {
+            fetchJson('/api/v1/values', data => {
+                const rows = (data.results || []).map(value => {
+                    const entry = Object.entries(value)[0];
+                    const key = entry[0];
+                    const details = entry[1];
+                    return [key, details[2], details[0], details[1], details[3]];
+                });
+                renderSimpleTable('valuesTableHeader', 'valuesTableBody', ['key', 'name', 'value', 'unit', 'age'], rows);
+            });
+        }
+
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnValues').addEventListener('click', handleValues);
+
+        // Initial load
+        handleValues();
+    </script>
+</body>
+
+</html>

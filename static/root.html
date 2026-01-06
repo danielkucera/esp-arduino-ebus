@@ -1,55 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>esp-eBus adapter</title>
-    <style>
-        .de{background-color:#ffaaaa;} 
-        .em{font-size:0.8em;color:#bb0000;padding-bottom:0px;} 
-        .c{text-align: center;} 
-        div,input,select{padding:5px;font-size:1em;} 
-        input{width:95%;} 
-        select{width:100%} 
-        input[type=checkbox]{width:auto;scale:1.5;margin:10px;} 
-        body{text-align: center;font-family:verdana;}
-        td{padding:0px;}
-        button{border:0;border-radius:0.3rem;background-color:#16A1E7;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;}
-        fieldset{border-radius:0.3rem;margin: 0px;}
-        a.link-button {
-            display: block;
-            padding: 5px 10px;
-            background-color:#16A1E7;
-            color:#fff;
-            text-decoration:none;
-            border-radius:0.3rem;
-            border:0;
-            line-height:2.4rem;
-            font-size:1.2rem;
-            margin-bottom:5px;
-            cursor:pointer;
-            text-align:center;
-        }
-        a.link-button.danger {
-            background-color:#E71616;
-        }
-        a.link-button:hover {
-            opacity:0.8;
-        }
-        .info-box {
-            background-color:#f0f0f0;
-            border-left:4px solid #16A1E7;
-            padding:10px;
-            margin:10px 0;
-            border-radius:0.3rem;
-        }
-    </style>
-    <script type='text/javascript'>
-        function confirmAction(action) {
-            return confirm("Are you sure you want to " + action + "?");
-        }
-    </script>
+    <title>esp-eBus Adapter</title>
+    <link rel="stylesheet" href="common.css">
 </head>
-<body>
+
+<body class="centered">
     <div style='text-align:left;display:inline-block;min-width:260px;'>
         <h1>esp-eBus Adapter</h1>
 
@@ -59,9 +17,12 @@
                 <a href='/config' class="link-button">Configuration</a>
                 <a href='/firmware' class="link-button">Firmware Update</a>
                 <a href='/status' class="link-button">Status</a>
-                <a href='/commands' class="link-button">Commands</a>
-                <a href='/log' class="link-button">Log</a>
-                <a href='/restart' onclick="return confirmAction('restart');" class="link-button danger">Restart</a>
+                <a href="/commands" class="link-button" id="Commands">Commands</a>
+                <a href="/values" class="link-button" id="Values">Values</a>
+                <a href="/devices" class="link-button" id="Devices">Devices</a>
+                <a href="/statistics" class="link-button" id="Statistics">Statistics</a>
+                <a href="/logs" class="link-button" id="Logs">Logs</a>
+                <a href='/restart' class="link-button danger" onclick="return confirmAction('restart');">Restart</a>
             </div>
             <div class="info-box">
                 <strong>Login:</strong><br>
@@ -70,21 +31,35 @@
             </div>
         </fieldset>
 
-        <fieldset>
-            <legend>Commands</legend>
-            <div>
-                <a href='/values' class="link-button">Values</a>
-                <a href='/scan' onclick="return confirmAction('scan');" class="link-button">Scan</a>
-                <a href='/scanfull' onclick="return confirmAction('scan full');" class="link-button">Scan Full</a>
-                <a href='/scanvendor' onclick="return confirmAction('scan vendor');" class="link-button">Scan Vendor</a>
-                <a href='/devices' class="link-button">Scan result</a>
-                <a href='/reset' onclick="return confirmAction('reset');" class="link-button danger">Reset stats</a>
-            </div>
-        </fieldset>
-
         <div style='font-size:.6em;margin-top:20px;'>
-            Project: <a href='https://github.com/danielkucera/esp-arduino-ebus' target='_blank'>esp-arduino-ebus on GitHub</a>
+            Project: <a href='https://github.com/danielkucera/esp-arduino-ebus' target='_blank'>esp-arduino-ebus on
+                GitHub</a>
         </div>
     </div>
+
+    <script type='text/javascript'>
+        function confirmAction(action) {
+            return confirm("Are you sure you want to " + action + "?");
+        }
+
+        function checkEndpoint() {
+            const url = '/commands';
+            const links = document.querySelectorAll('.link-button');
+
+            // Enable all links initially
+            links.forEach(link => { link.classList.remove('disabled'); link.style.pointerEvents = 'auto'; });
+
+            fetch(url, { method: 'HEAD' }).then(response => { if (!response.ok) { disableLinks(); } }).catch(error => { disableLinks(); });
+        }
+
+        function disableLinks() {
+            const links = document.querySelectorAll('.link-button');
+            links.forEach(link => { link.classList.add('disabled'); link.style.pointerEvents = 'none'; });
+        }
+
+        // Call checkEndpoint on page load
+        window.onload = checkEndpoint;
+    </script>
 </body>
+
 </html>

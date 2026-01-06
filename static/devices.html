@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>esp-eBus Devices</title>
+    <link rel="stylesheet" href="common.css">
+</head>
+
+<body>
+    <h1>Devices</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnDevices">Devices</button>
+        <button id="btnScan">Scan</button>
+        <button id="btnScanFull">Scan Full</button>
+        <button id="btnScanVendor">Scan Vendor</button>
+        <span id="status">...</span>
+    </div>
+    <table>
+        <thead id="devicesTableHeader"></thead>
+        <tbody id="devicesTableBody"></tbody>
+    </table>
+    <script src="common.js"></script>
+    <script>
+        function handleDevices() {
+            fetchJson('/api/v1/devices', data => {
+                const keys = new Set();
+                data.forEach(device => Object.keys(device || {}).forEach(k => keys.add(k)));
+                const cols = Array.from(keys);
+                const rows = data.map(device => cols.map(k => device[k] === undefined ? '' : String(device[k])));
+                renderSimpleTable('devicesTableHeader', 'devicesTableBody', cols, rows);
+            });
+        }
+
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnDevices').addEventListener('click', handleDevices);
+        document.getElementById('btnScan').addEventListener('click', () => postSimple('/api/v1/devices/scan'));
+        document.getElementById('btnScanFull').addEventListener('click', () => postSimple('/api/v1/devices/scan/full'));
+        document.getElementById('btnScanVendor').addEventListener('click', () => postSimple('/api/v1/devices/scan/vendor'));
+
+        // Initial load
+        handleDevices();
+    </script>
+</body>
+
+</html>
