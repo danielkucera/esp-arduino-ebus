@@ -145,19 +145,6 @@ td {
     padding: 0px;
 }
 
-/* Vertical headers only for the commands table (avoid affecting other pages like values.html) */
-#commandsTable th {
-    /* vertical header text for compact table headers (left-to-right vertical) */
-    writing-mode: vertical-lr;
-    -webkit-writing-mode: vertical-lr;
-    text-orientation: mixed;
-    white-space: nowrap;
-    vertical-align: bottom;
-    padding: 10px 6px;
-    font-size: 12px;
-    min-width: 36px;
-}
-
 /* ========== Textarea and Box Sizing ========== */
 textarea {
     width: 100%;
