@@ -397,7 +397,7 @@ int64_t Store::wipeCommands() {
   return bytes;
 }
 
-JsonDocument Store::getCommandJson(const Command* command) {
+JsonDocument Store::getCommandJsonDoc(const Command* command) {
   JsonDocument doc;
 
   // Command Fields
@@ -439,11 +439,19 @@ JsonDocument Store::getCommandJson(const Command* command) {
   return doc;
 }
 
-const JsonDocument Store::getCommandsJsonDocument() const {
+const JsonDocument Store::getCommandsJsonDoc() const {
   JsonDocument doc;
 
-  if (!allCommandsByKey.empty())
-    for (const auto kv : allCommandsByKey) doc.add(getCommandJson(&kv.second));
+  std::vector<std::pair<std::string, Command>> orderedCommands(
+      allCommandsByKey.begin(), allCommandsByKey.end());
+
+  std::sort(orderedCommands.begin(), orderedCommands.end(),
+            [](const std::pair<std::string, Command>& a,
+               const std::pair<std::string, Command>& b) {
+              return a.first < b.first;  // Compare based on keys
+            });
+
+  for (const auto& kv : orderedCommands) doc.add(getCommandJsonDoc(&kv.second));
 
   if (doc.isNull()) doc.to<JsonArray>();
 
@@ -453,7 +461,7 @@ const JsonDocument Store::getCommandsJsonDocument() const {
 
 const std::string Store::getCommandsJson() const {
   std::string payload;
-  JsonDocument doc = getCommandsJsonDocument();
+  JsonDocument doc = getCommandsJsonDoc();
   serializeJson(doc, payload);
   return payload;
 }
@@ -535,7 +543,7 @@ std::vector<Command*> Store::updateData(Command* command,
   return commands;
 }
 
-JsonDocument Store::getValueJson(const Command* command) {
+const JsonDocument Store::getValueJsonDoc(const Command* command) {
   JsonDocument doc;
 
   if (command->numeric)
@@ -547,51 +555,50 @@ JsonDocument Store::getValueJson(const Command* command) {
   return doc;
 }
 
-const std::string Store::getValueFullJson(const Command* command) {
-  std::string payload;
+const JsonDocument Store::getValueFullJsonDoc(const Command* command) {
   JsonDocument doc;
 
   doc["key"] = command->key;
   doc["name"] = command->name;
-  doc.add(getValueJson(command));
+  doc["value"] = getValueJsonDoc(command)["value"];
   doc["unit"] = command->unit;
   doc["age"] = static_cast<uint32_t>((millis() - command->last) / 1000);
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
 
+  doc.shrinkToFit();
+  return doc;
+}
+
+const std::string Store::getValueFullJson(const Command* command) {
+  std::string payload;
+  serializeJson(getValueFullJsonDoc(command), payload);
   return payload;
 }
 
-const std::string Store::getValuesJson() const {
-  std::string payload;
+const JsonDocument Store::getValuesJsonDoc() const {
   JsonDocument doc;
 
-  JsonArray results = doc["results"].to<JsonArray>();
+  std::vector<std::pair<std::string, Command>> orderedCommands(
+      allCommandsByKey.begin(), allCommandsByKey.end());
 
-  if (!allCommandsByKey.empty()) {
-    size_t index = 0;
-    uint32_t now = millis();
+  std::sort(orderedCommands.begin(), orderedCommands.end(),
+            [](const std::pair<std::string, Command>& a,
+               const std::pair<std::string, Command>& b) {
+              return a.first < b.first;  // Compare based on keys
+            });
 
-    for (const auto& kv : allCommandsByKey) {
-      const Command& command = kv.second;
-      JsonArray array = results[index][command.key].to<JsonArray>();
-      if (command.numeric)
-        array.add(getDoubleFromVector(&command));
-      else
-        array.add(getStringFromVector(&command));
-
-      array.add(command.unit);
-      array.add(command.name);
-      array.add(static_cast<uint32_t>((now - command.last) / 1000));
-      index++;
-    }
-  }
+  for (const auto& kv : orderedCommands)
+    doc.add(getValueFullJsonDoc(&kv.second));
 
   if (doc.isNull()) doc.to<JsonArray>();
 
   doc.shrinkToFit();
-  serializeJson(doc, payload);
+  return doc;
+}
 
+const std::string Store::getValuesJson() const {
+  std::string payload;
+  JsonDocument doc = getValuesJsonDoc();
+  serializeJson(doc, payload);
   return payload;
 }
 
@@ -658,7 +665,7 @@ const std::string Store::isFieldValid(const JsonDocument& doc,
     case FT_KeyValueMap: {
       if (!v.is<JsonObjectConst>()) return "Invalid type for field: " + field;
       return isKeyValueMapValid(v.as<JsonObjectConst>());
-    } break;
+    };
   }
 
   return "";

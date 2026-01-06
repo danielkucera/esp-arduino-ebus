@@ -49,8 +49,6 @@ void handleCommandsDownload() {
   String s = "{\"id\":\"insert\",\"commands\":";
   s += store.getCommandsJson().c_str();
   s += "}";
-  configServer.sendHeader("Content-Disposition",
-                          "attachment; filename=esp-ebus-commands.json");
   configServer.send(200, "application/json", s);
 }
 
@@ -170,8 +168,10 @@ void handleCommandsWipe() {
 
 // values
 void handleValues() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    store.getValuesJson().c_str());
+  String s = "{\"values\":";
+  s += store.getValuesJson().c_str();
+  s += "}";
+  configServer.send(200, "application/json;charset=utf-8", s);
 }
 
 // devices

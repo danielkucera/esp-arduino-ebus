@@ -73,7 +73,7 @@ class Schedule {
   void fetchTiming();
   const std::string getTimingJson();
 
-  static JsonDocument getDeviceJson(const Device* device);
+  static JsonDocument getDeviceJsonDoc(const Device* device);
   const std::string getDevicesJson() const;
 
   const std::vector<Device*> getDevices();

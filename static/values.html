@@ -23,13 +23,16 @@
     <script>
         function handleValues() {
             fetchJson('/api/v1/values', data => {
-                const rows = (data.results || []).map(value => {
-                    const entry = Object.entries(value)[0];
-                    const key = entry[0];
-                    const details = entry[1];
-                    return [key, details[2], details[0], details[1], details[3]];
+                const keys = new Set();
+                const valuesArray = data.values || [];
+
+                const rows = valuesArray.map(value => {
+                    Object.keys(value || {}).forEach(k => keys.add(k));
+                    return Array.from(keys).map(k => value[k] === undefined ? '' : String(value[k]));
                 });
-                renderSimpleTable('valuesTableHeader', 'valuesTableBody', ['key', 'name', 'value', 'unit', 'age'], rows);
+
+                const cols = Array.from(keys);
+                renderSimpleTable('valuesTableHeader', 'valuesTableBody', cols, rows);
             });
         }
 
