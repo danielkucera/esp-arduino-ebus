@@ -69,8 +69,13 @@ button {
     transition: opacity 0.2s;
 }
 
+.link-button.disabled {
+    background-color: gray;
+    cursor: not-allowed;
+}
+
 button:hover,
-a.link-button:hover {
+a.link-button:hover:not(.disabled) {
     opacity: 0.85;
 }
 

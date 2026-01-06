@@ -3,13 +3,8 @@
 
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>esp-eBus adapter</title>
+    <title>esp-eBus Adapter</title>
     <link rel="stylesheet" href="common.css">
-    <script type='text/javascript'>
-        function confirmAction(action) {
-            return confirm("Are you sure you want to " + action + "?");
-        }
-    </script>
 </head>
 
 <body class="centered">
@@ -22,12 +17,12 @@
                 <a href='/config' class="link-button">Configuration</a>
                 <a href='/firmware' class="link-button">Firmware Update</a>
                 <a href='/status' class="link-button">Status</a>
-                <a href='/commands' class="link-button">Commands</a>
-                <a href='/values' class="link-button">Values</a>
-                <a href='/devices' class="link-button">Devices</a>
-                <a href='/statistics' class="link-button">Statistics</a>
-                <a href='/logs' class="link-button">Logs</a>
-                <a href='/restart' onclick="return confirmAction('restart');" class="link-button danger">Restart</a>
+                <a href="/commands" class="link-button disabled" id="Commands">Commands</a>
+                <a href="/values" class="link-button disabled" id="Values">Values</a>
+                <a href="/devices" class="link-button disabled" id="Devices">Devices</a>
+                <a href="/statistics" class="link-button disabled" id="Statistics">Statistics</a>
+                <a href="/logs" class="link-button disabled" id="Logs">Logs</a>
+                <a href='/restart' class="link-button danger" onclick="return confirmAction('restart');">Restart</a>
             </div>
             <div class="info-box">
                 <strong>Login:</strong><br>
@@ -41,6 +36,41 @@
                 GitHub</a>
         </div>
     </div>
+
+    <script type='text/javascript'>
+        function confirmAction(action) {
+            return confirm("Are you sure you want to " + action + "?");
+        }
+
+        function checkEndpoint() {
+            const url = '/devices';
+            const links = document.querySelectorAll('.link-button');
+
+            fetch(url, { method: 'HEAD' })
+                .then(response => {
+                    if (response.ok) {
+                        links.forEach(link => {
+                            link.classList.remove('disabled');
+                            link.style.pointerEvents = 'auto';
+                        });
+                    } else {
+                        links.forEach(link => {
+                            link.classList.add('disabled');
+                            link.style.pointerEvents = 'none';
+                        });
+                    }
+                })
+                .catch(error => {
+                    links.forEach(link => {
+                        link.classList.add('disabled');
+                        link.style.pointerEvents = 'none';
+                    });
+                });
+        }
+
+        // Call checkEndpoint on page load
+        window.onload = checkEndpoint;
+    </script>
 </body>
 
 </html>
