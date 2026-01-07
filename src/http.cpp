@@ -165,6 +165,41 @@ void handleValues() {
                     store.getValuesJson().c_str());
 }
 
+void handleValuesWrite() {
+  JsonDocument doc;
+  String body = configServer.arg("plain");
+
+  DeserializationError error = deserializeJson(doc, body);
+
+  if (error) {
+    configServer.send(403, "text/html", error.c_str());
+  } else {
+    std::string key = doc["key"].as<std::string>();
+    Command* command = store.findCommand(key);
+    if (command != nullptr) {
+      std::vector<uint8_t> valueBytes;
+      if (command->numeric) {
+        double value = doc["value"].as<double>();
+        valueBytes = getVectorFromDouble(command, value);
+      } else {
+        std::string value = doc["value"].as<std::string>();
+        valueBytes = getVectorFromString(command, value);
+      }
+      if (valueBytes.size() > 0) {
+        std::vector<uint8_t> writeCmd = command->write_cmd;
+        writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
+        schedule.handleWrite(writeCmd);
+        command->last = 0;  // force immediate update
+        configServer.send(200, "text/html", "Ok");
+      } else {
+        configServer.send(403, "text/html", String("Invalid value for key '") + key.c_str());
+      }
+    } else {
+      configServer.send(403, "text/html", String("Key '") + key.c_str() + "' not found");
+    }
+  }
+}
+
 // devices
 void handleDevices() {
   configServer.send(200, "application/json;charset=utf-8",
@@ -246,6 +281,7 @@ void SetupHttpHandlers() {
   configServer.on("/values",
                   []() { handleStatic("text/html", values_html_start); });
   configServer.on("/api/v1/values", [] { handleValues(); });
+  configServer.on("/api/v1/values/write", [] { handleValuesWrite(); });
 
   // devices
   configServer.on("/devices",
