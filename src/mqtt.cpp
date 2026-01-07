@@ -280,6 +280,7 @@ void Mqtt::handleWrite(const JsonDocument& doc) {
       std::vector<uint8_t> writeCmd = command->write_cmd;
       writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
       schedule.handleWrite(writeCmd);
+      mqtt.publishResponse("write", "scheduled for key '" + key + "' name '" + command->name + "'");
       command->last = 0;  // force immediate update
     } else {
       mqtt.publishResponse("write", "invalid value for key '" + key + "'");
