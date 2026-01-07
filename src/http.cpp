@@ -159,7 +159,13 @@ void handleCommandsWipe() {
     configServer.send(200, "text/html", "No data wiped");
 }
 
-void handleCommandsWrite() {
+// values
+void handleValues() {
+  configServer.send(200, "application/json;charset=utf-8",
+                    store.getValuesJson().c_str());
+}
+
+void handleValuesWrite() {
   JsonDocument doc;
   String body = configServer.arg("plain");
 
@@ -192,12 +198,6 @@ void handleCommandsWrite() {
       configServer.send(403, "text/html", String("Key '") + key.c_str() + "' not found");
     }
   }
-}
-
-// values
-void handleValues() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    store.getValuesJson().c_str());
 }
 
 // devices
@@ -276,12 +276,12 @@ void SetupHttpHandlers() {
   configServer.on("/api/v1/commands/load", [] { handleCommandsLoad(); });
   configServer.on("/api/v1/commands/save", [] { handleCommandsSave(); });
   configServer.on("/api/v1/commands/wipe", [] { handleCommandsWipe(); });
-  configServer.on("/api/v1/commands/write", [] { handleCommandsWrite(); });
 
   // values
   configServer.on("/values",
                   []() { handleStatic("text/html", values_html_start); });
   configServer.on("/api/v1/values", [] { handleValues(); });
+  configServer.on("/api/v1/values/write", [] { handleValuesWrite(); });
 
   // devices
   configServer.on("/devices",
