@@ -350,14 +350,14 @@ void Mqtt::publishResponse(const std::string& id, const std::string& status,
 void Mqtt::publishCommand(const Command* command) {
   std::string topic = "commands/" + command->key;
   std::string payload;
-  serializeJson(store.getCommandJson(command), payload);
+  serializeJson(store.getCommandJsonDoc(command), payload);
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 
 void Mqtt::publishDevice(const Device* device) {
   std::string topic = "devices/" + ebus::to_string(device->slave);
   std::string payload;
-  serializeJson(schedule.getDeviceJson(device), payload);
+  serializeJson(schedule.getDeviceJsonDoc(device), payload);
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 

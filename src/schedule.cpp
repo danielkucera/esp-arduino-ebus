@@ -663,7 +663,7 @@ const std::string Schedule::getTimingJson() {
   return payload;
 }
 
-JsonDocument Schedule::getDeviceJson(const Device* device) {
+JsonDocument Schedule::getDeviceJsonDoc(const Device* device) {
   JsonDocument doc;
 
   doc["address"] = ebus::to_string(device->slave);
@@ -698,7 +698,7 @@ const std::string Schedule::getDevicesJson() const {
 
   if (allDevices.size() > 0) {
     for (const std::pair<uint8_t, Device>& device : allDevices)
-      doc.add(getDeviceJson(&device.second));
+      doc.add(getDeviceJsonDoc(&device.second));
   }
 
   if (doc.isNull()) doc.to<JsonArray>();
@@ -890,7 +890,8 @@ void Schedule::processActive(const Mode& mode,
     case Mode::schedule:
       if (scheduleCommand != nullptr) {
         store.updateData(scheduleCommand, master, slave);
-        mqtt.publishValue(scheduleCommand, store.getValueJson(scheduleCommand));
+        mqtt.publishValue(scheduleCommand,
+                          store.getValueJsonDoc(scheduleCommand));
         scheduleCommand = nullptr;
         scheduleCommandSetTime = 0;  // clear after success
       }
@@ -929,7 +930,7 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
   std::vector<Command*> pasCommands = store.updateData(nullptr, master, slave);
 
   for (const Command* command : pasCommands)
-    mqtt.publishValue(command, store.getValueJson(command));
+    mqtt.publishValue(command, store.getValueJsonDoc(command));
 
   processScan(master, slave);
 

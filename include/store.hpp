@@ -101,8 +101,9 @@ class Store {
   int64_t saveCommands() const;
   static int64_t wipeCommands();
 
-  static JsonDocument getCommandJson(const Command* command);
-  const JsonDocument getCommandsJsonDocument() const;
+  static JsonDocument getCommandJsonDoc(const Command* command);
+  
+  const JsonDocument getCommandsJsonDoc() const;
   const std::string getCommandsJson() const;
 
   const std::vector<Command*> getCommands();
@@ -119,8 +120,12 @@ class Store {
                                    const std::vector<uint8_t>& master,
                                    const std::vector<uint8_t>& slave);
 
-  static JsonDocument getValueJson(const Command* command);
+  static const JsonDocument getValueJsonDoc(const Command* command);
+
+  static const JsonDocument getValueFullJsonDoc(const Command* command);
   static const std::string getValueFullJson(const Command* command);
+
+  const JsonDocument getValuesJsonDoc() const;
   const std::string getValuesJson() const;
 
  private:
