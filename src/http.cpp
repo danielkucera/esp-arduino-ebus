@@ -189,7 +189,6 @@ void handleValuesWrite() {
         std::vector<uint8_t> writeCmd = command->write_cmd;
         writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
         schedule.handleWrite(writeCmd);
-        //command->last = command->interval - 3;  // force immediate update
         configServer.send(200, "text/html", "Ok");
       } else {
         configServer.send(403, "text/html", String("Invalid value for key '") + key.c_str());
