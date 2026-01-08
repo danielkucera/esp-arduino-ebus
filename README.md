@@ -14,7 +14,7 @@ It turns the adapter into a **network-connected eBUS interface** with TCP, MQTT,
 
 ---
 
-## ✨ What This Project Does
+## What This Project Does
 
 - 🔌 Connects to **eBUS heating systems** (Vaillant and other eBUS-compatible HVAC equipment)
 - 📡 Bridges the physical eBUS line to **Wi-Fi / Ethernet**
@@ -25,7 +25,7 @@ It turns the adapter into a **network-connected eBUS interface** with TCP, MQTT,
 
 ---
 
-## 🧩 Required Hardware
+## Required Hardware
 
 This firmware **requires a compatible eBUS adapter board**, which provides:
 
@@ -64,7 +64,7 @@ This mode enables **standalone operation** without requiring external software s
 
 ---
 
-## 🏠 Smart Home Integration
+## Smart Home Integration
 
 - Native **MQTT support**
 - **Home Assistant autodiscovery**
@@ -73,7 +73,7 @@ This mode enables **standalone operation** without requiring external software s
 
 ---
 
-## 🚀 Why Choose esp-arduino-ebus?
+## Why Choose esp-arduino-ebus?
 
 - ✅ Designed for **real eBUS adapter hardware**
 - 🔓 Fully **open source**
