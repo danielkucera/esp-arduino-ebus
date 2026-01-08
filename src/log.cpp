@@ -8,7 +8,7 @@ int logIndex = 0;
 int logEntries = 0;
 
 static const char* getLogLevelText(LogLevel logLevel) {
-  const char* values[] = {"INFO", "WARN", "ERROR"};
+  const char* values[] = {"DEBUG", "INFO", "WARN", "ERROR"};
   return values[static_cast<int>(logLevel)];
 }
 

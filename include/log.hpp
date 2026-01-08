@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-enum class LogLevel { INFO, WARN, ERROR };
+enum class LogLevel { DEBUG, INFO, WARN, ERROR };
 
 void addLog(LogLevel level, String message);
 String getLogs();
