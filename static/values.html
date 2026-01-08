@@ -21,8 +21,103 @@
     </table>
     <script src="common.js"></script>
     <script>
+        async function writeValue(key, inputEl, btnEl) {
+            if (!inputEl || !btnEl) return;
+            btnEl.disabled = true;
+            setStatus('Setting...');
+            try {
+                const raw = inputEl.value;
+                const num = Number(raw);
+                const payload = (raw !== '' && isFinite(num)) ? { key: key, value: num } : { key: key, value: raw };
+                const res = await fetch('/api/v1/values/write', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const text = await res.text();
+                setStatus(text || (res.ok ? 'OK' : 'Error'));
+            } catch (err) {
+                console.error(err);
+                setStatus('Error');
+            } finally {
+                btnEl.disabled = false;
+            }
+        }
+
+        async function readValue(key, btnEl) {
+            if (!btnEl) return;
+            btnEl.disabled = true;
+            setStatus('Requested, waiting...');
+            try {
+                const payload = { key: key };
+                const res = await fetch('/api/v1/values/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!res.ok) {
+                    const text = await res.text();
+                    setStatus(text || 'Error');
+                } else {
+                    // wait 3 seconds then refresh the whole table to reflect latest value
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    await handleValues();
+                    setStatus('Fetched');
+                }
+            } catch (err) {
+                console.error(err);
+                setStatus('Error');
+            } finally {
+                btnEl.disabled = false;
+            }
+        }
+
+        function renderValuesTable(data) {
+            const thead = document.getElementById('valuesTableHeader');
+            const tbody = document.getElementById('valuesTableBody');
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+
+            // gather keys to display
+            const keys = new Set();
+            data.forEach(item => Object.keys(item || {}).forEach(k => keys.add(k)));
+            const cols = Array.from(keys);
+
+            // header row, add an extra 'Set' column
+            const trh = document.createElement('tr');
+            cols.forEach(k => { const th = document.createElement('th'); th.textContent = k; trh.appendChild(th); });
+            const thSet = document.createElement('th'); thSet.textContent = 'Actions'; trh.appendChild(thSet);
+            thead.appendChild(trh);
+
+            // rows
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                cols.forEach(k => {
+                    const td = document.createElement('td');
+                    td.textContent = (item[k] === undefined ? '' : String(item[k]));
+                    tr.appendChild(td);
+                });
+
+                // create actions cell: input + Set + Read
+                const tdSet = document.createElement('td');
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = 'new value';
+                input.style.width = '6rem';
+                input.value = '';
+                const btnSet = document.createElement('button');
+                btnSet.textContent = 'Set';
+                const btnRead = document.createElement('button');
+                btnRead.textContent = 'Read';
+                const targetKey = item.key || item.name || '';
+                btnSet.addEventListener('click', () => writeValue(targetKey, input, btnSet));
+                btnRead.addEventListener('click', () => readValue(targetKey, btnRead));
+                if (!targetKey) { btnSet.disabled = true; btnRead.disabled = true; }
+                // allow Enter to trigger Set
+                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnSet.click(); });
+                tdSet.appendChild(input);
+                tdSet.appendChild(btnSet);
+                tdSet.appendChild(btnRead);
+                tr.appendChild(tdSet);
+
+                tbody.appendChild(tr);
+            });
+        }
+
         function handleValues() {
-            handleSimpleTable('/api/v1/values', 'valuesTableHeader', 'valuesTableBody');
+            fetchJson('/api/v1/values', data => renderValuesTable(data), 'Fetching values...');
         }
 
         document.getElementById('btnHome').addEventListener('click', handleHome);

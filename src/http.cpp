@@ -189,13 +189,50 @@ void handleValuesWrite() {
         std::vector<uint8_t> writeCmd = command->write_cmd;
         writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
         schedule.handleWrite(writeCmd);
-        command->last = 0;  // force immediate update
         configServer.send(200, "text/html", "Ok");
       } else {
         configServer.send(403, "text/html", String("Invalid value for key '") + key.c_str());
       }
     } else {
       configServer.send(403, "text/html", String("Key '") + key.c_str() + "' not found");
+    }
+  }
+}
+
+void handleValuesRead() {
+  JsonDocument doc;
+  String body = configServer.arg("plain");
+
+  DeserializationError error = deserializeJson(doc, body);
+
+  if (error) {
+    // Return MQTT-equivalent error payload: {"id":"read","status": "..."}
+    JsonDocument errDoc;
+    errDoc["id"] = "read";
+    errDoc["status"] = error.c_str();
+    std::string payload;
+    serializeJson(errDoc, payload);
+    configServer.send(200, "application/json;charset=utf-8", payload.c_str());
+  } else {
+    std::string key = doc["key"].as<std::string>();
+    Command* command = store.findCommand(key);
+    if (command != nullptr) {
+      // Force immediate refresh by resetting last seen timestamp
+      command->last = 0;
+      // Do not return the old value immediately; confirm the read request
+      JsonDocument resp;
+      resp["id"] = "read";
+      resp["status"] = "requested";
+      std::string payload;
+      serializeJson(resp, payload);
+      configServer.send(200, "application/json;charset=utf-8", payload.c_str());
+    } else {
+      JsonDocument errDoc;
+      errDoc["id"] = "read";
+      errDoc["status"] = std::string("Key '") + key + "' not found";
+      std::string payload;
+      serializeJson(errDoc, payload);
+      configServer.send(200, "application/json;charset=utf-8", payload.c_str());
     }
   }
 }
@@ -282,6 +319,7 @@ void SetupHttpHandlers() {
                   []() { handleStatic("text/html", values_html_start); });
   configServer.on("/api/v1/values", [] { handleValues(); });
   configServer.on("/api/v1/values/write", [] { handleValuesWrite(); });
+  configServer.on("/api/v1/values/read", [] { handleValuesRead(); });
 
   // devices
   configServer.on("/devices",
