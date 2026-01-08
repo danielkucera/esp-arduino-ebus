@@ -808,7 +808,15 @@ void Schedule::handleCommands() {
     if (fullScan && mode == Mode::fullscan) enqueueFullScanCommand();
 
     // send command
-    if (cmd.command.size() > 0) ebusHandler->enqueueActiveMessage(cmd.command);
+    if (cmd.command.size() > 0) {
+      bool res = ebusHandler->enqueueActiveMessage(cmd.command);
+      {
+        std::string msg = std::string("Enqueued command ") +
+          std::string(res ? "success: " : " failed: ") +
+          ebus::to_string(cmd.command);
+        addLog(LogLevel::DEBUG, msg.c_str());
+      }
+    }
   }
 }
 
