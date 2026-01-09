@@ -69,6 +69,7 @@ button {
     transition: opacity 0.2s;
 }
 
+button:disabled,
 .link-button.disabled {
     background-color: gray;
     cursor: not-allowed;

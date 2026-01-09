@@ -213,3 +213,60 @@ function handleJsonFileUpload(ev, textareaId, updateSizeCb) {
     };
     r.readAsText(f);
 }
+
+/**
+ * Updates the text content of the specified label element to display the poll interval.
+ * @param {string} labelId - The ID of the label element to update.
+ * @param {number} interval - The current poll interval to display.
+ */
+function updatePollLabel(labelId, interval) {
+    document.getElementById(labelId).textContent = `Poll Interval: ${interval} seconds`;
+}
+
+/**
+ * Sets a timeout for polling the data.
+ * This function clears any existing timeout and sets a new one that calls the specified function 
+ * after the designated interval.
+ * @param {number} interval - The time in seconds after which to poll.
+ * @param {function} handleFunction - The function to call when the timeout expires.
+ */
+function setPollingTimeout(interval, handleFunction) {
+    if (isPaused) return;
+    clearTimeout(pollingTimeout);
+    pollingTimeout = setTimeout(() => {
+        handleFunction();
+        setPollingTimeout(interval, handleFunction);
+    }, interval * 1000);
+}
+
+/**
+ * Changes the poll interval and updates the label.
+ * This function increases or decreases the interval based on the delta value 
+ * and ensures it remains within defined min and max limits.
+ * @param {number} delta - The amount to change the poll interval by (positive or negative).
+ * @param {number} min - The minimum allowed value for the poll interval.
+ * @param {number} max - The maximum allowed value for the poll interval.
+ * @param {string} labelId - The ID of the label element to update.
+ * @param {function} handleFunction - The function to call when the interval changes.
+ */
+function changePollInterval(delta, min, max, labelId, handleFunction) {
+    if ((delta > 0 && pollInterval < max) || (delta < 0 && pollInterval > min)) {
+        pollInterval += delta;
+        updatePollLabel(labelId, pollInterval);
+        setPollingTimeout(pollInterval, handleFunction);
+    }
+}
+
+/**
+ * Toggles the pause state for the poll updates.
+ * @param {string} labelId - The ID of the button element to update.
+ */
+function togglePause(labelId) {
+    isPaused = !isPaused;
+    document.getElementById(labelId).textContent = isPaused ? 'Resume' : 'Pause';
+
+    if (isPaused)
+        clearTimeout(pollTimeout);
+    else
+        setPollingTimeout(pollInterval, handleValues);
+}

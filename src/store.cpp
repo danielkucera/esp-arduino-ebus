@@ -563,6 +563,8 @@ const JsonDocument Store::getValueFullJsonDoc(const Command* command) {
   doc["value"] = getValueJsonDoc(command)["value"];
   doc["unit"] = command->unit;
   doc["age"] = static_cast<uint32_t>((millis() - command->last) / 1000);
+  doc["write"] = !command->write_cmd.empty();
+  doc["active"] = command->active;
 
   doc.shrinkToFit();
   return doc;
