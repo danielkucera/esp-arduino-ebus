@@ -6,7 +6,6 @@
 #include "http.hpp"
 #include "log.hpp"
 #include "mqtt.hpp"
-#include "track.hpp"
 
 // Identification (Service 07h 04h)
 const std::vector<uint8_t> VEC_070400 = {0x07, 0x04, 0x00};

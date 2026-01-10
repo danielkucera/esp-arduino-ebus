@@ -12,7 +12,6 @@
 #include "mqtt.hpp"
 #include "mqttha.hpp"
 #include "schedule.hpp"
-#include "track.hpp"
 #else
 #include "bus.hpp"
 #endif
@@ -214,15 +213,9 @@ volatile uint32_t last_comms = 0;
 
 // status
 uint32_t reset_code = 0;
-#if defined(EBUS_INTERNAL)
-Track<uint32_t> uptime("state/uptime", 10);
-Track<uint32_t> free_heap("state/free_heap", 10);
-Track<uint32_t> loopDuration("state/loop_duration", 10);
-#else
 uint32_t uptime = 0;
 uint32_t free_heap = 0;
 uint32_t loopDuration = 0;
-#endif
 uint32_t maxLoopDuration;
 
 // wifi
@@ -332,15 +325,9 @@ void loop_duration() {
 
   lastTime = now;
 
-#if defined(EBUS_INTERNAL)
-  loopDuration = ((1 - alpha) * loopDuration.value() + (alpha * delta));
-#else
   loopDuration = ((1 - alpha) * loopDuration + (alpha * delta));
-#endif
 
-  if (delta > maxLoopDuration) {
-    maxLoopDuration = delta;
-  }
+  if (delta > maxLoopDuration) maxLoopDuration = delta;
 }
 
 #if !defined(EBUS_INTERNAL)
@@ -544,8 +531,8 @@ char* status_string() {
   pos +=
       snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
 #if defined(EBUS_INTERNAL)
-  pos += snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n",
-                  free_heap.value());
+  pos +=
+      snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n", free_heap);
 #else
   pos +=
       snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n", free_heap);
@@ -555,7 +542,7 @@ char* status_string() {
 
 #if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
-                  loopDuration.value());
+                  loopDuration);
 #else
   pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
                   loopDuration);
@@ -628,15 +615,9 @@ const std::string getStatusJson() {
 
   JsonObject Status = doc["Status"].to<JsonObject>();
   Status["Reset_Code"] = reset_code;
-#if defined(EBUS_INTERNAL)
-  Status["Uptime"] = uptime.value();
-  Status["Free_Heap"] = free_heap.value();
-  Status["Loop_Duration"] = loopDuration.value();
-#else
   Status["Uptime"] = uptime;
   Status["Free_Heap"] = free_heap;
   Status["Loop_Duration"] = loopDuration;
-#endif
   Status["Loop_Duration_Max"] = maxLoopDuration;
 
 #if !defined(EBUS_INTERNAL)
@@ -962,8 +943,13 @@ void loop() {
 
     if (mqtt.connected()) {
       uint32_t currentMillis = millis();
-      if (currentMillis > lastMqttUpdate + 5 * 1000) {
+      if (currentMillis > lastMqttUpdate + 10 * 1000) {
         lastMqttUpdate = currentMillis;
+
+        mqtt.publish("state/uptime", 0, false, String(uptime).c_str());
+        mqtt.publish("state/free_heap", 0, false, String(free_heap).c_str());
+        mqtt.publish("state/loop_duration", 0, false,
+                     String(loopDuration).c_str());
 
         schedule.publishCounter();
         schedule.publishTiming();
