@@ -30,7 +30,12 @@
         <button id="btnPause">Pause</button>
         <button id="btnDownload">Download</button>
         <label style="font-size:0.9rem;"><input type="checkbox" id="chkDate" unchecked> Show Date</label>
-        <label style="font-size:0.9rem;"><input type="checkbox" id="chkLevel" checked> Show Level</label>
+        <div id="filterContainer">
+            <label style="font-size:0.9rem;"><input type="checkbox" value="DEBUG" checked /> DEBUG</label>
+            <label style="font-size:0.9rem;"><input type="checkbox" value="INFO" checked /> INFO</label>
+            <label style="font-size:0.9rem;"><input type="checkbox" value="WARN" checked /> WARN</label>
+            <label style="font-size:0.9rem;"><input type="checkbox" value="ERROR" checked /> ERROR</label>
+        </div>
         <span id="status">Connecting…</span>
     </div>
     <pre id="logsContainer">Loading logs...</pre>
@@ -45,7 +50,6 @@
         let lastSnapshot = null;
         let lastUpdateTime = '';
         let showDate = false;
-        let showLevel = true;
 
         async function fetchLogs() {
             if (paused) return;
@@ -61,9 +65,15 @@
                 const pre = document.getElementById('logsContainer');
                 let newLines = [];
 
+                const checkedLevels = Array.from(document.querySelectorAll('#filterContainer input[type="checkbox"]:checked'))
+                    .map(cb => cb.value);
+
                 for (const logEntry of data) {
                     const timestamp = showDate ? logEntry.timestamp.replace(/T|Z/g, ' ') : logEntry.timestamp.split('T')[1].replace(/Z/g, ' ');
-                    const logLevel = showLevel ? `${logEntry.level} ` : '';
+                    const logLevel = `${logEntry.level.padEnd(5, ' ')} `;
+
+                    if (!checkedLevels.includes(logEntry.level)) continue;
+
                     const line = `${timestamp}${logLevel}${logEntry.message}`;
                     if (!seen.has(line)) {
                         newLines.unshift(line);
@@ -89,6 +99,7 @@
                 if (!paused) setTimeout(fetchLogs, intervalMs);
             }
         }
+
 
         function handlePause() {
             paused = !paused;
@@ -117,7 +128,9 @@
             downloadTextFile(text, 'esp-ebus-log.txt', 'text/plain');
         });
         document.getElementById('chkDate').addEventListener('change', function () { showDate = this.checked; clearStoredData(); });
-        document.getElementById('chkLevel').addEventListener('change', function () { showLevel = this.checked; clearStoredData(); });
+        document.querySelectorAll('#filterContainer input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', fetchLogs);
+        });
 
         // Initial load
         fetchLogs();
