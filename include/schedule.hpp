@@ -65,12 +65,12 @@ class Schedule {
 
   void setPublishCounter(const bool enable);
   void resetCounter();
-  void fetchCounter();
+  void publishCounter();
   const std::string getCounterJson();
 
   void setPublishTiming(const bool enable);
   void resetTiming();
-  void fetchTiming();
+  void publishTiming();
   const std::string getTimingJson();
 
   static JsonDocument getDeviceJsonDoc(const Device* device);
@@ -127,8 +127,8 @@ class Schedule {
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;
 
-  bool publishCounter = false;
-  bool publishTiming = false;
+  bool counterEnabled = false;
+  bool timingEnabled = false;
 
   enum class CallbackType { telegram, error };
 

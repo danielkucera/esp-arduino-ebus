@@ -965,8 +965,8 @@ void loop() {
       if (currentMillis > lastMqttUpdate + 5 * 1000) {
         lastMqttUpdate = currentMillis;
 
-        schedule.fetchCounter();
-        schedule.fetchTiming();
+        schedule.publishCounter();
+        schedule.publishTiming();
       }
       mqtt.doLoop();
     }

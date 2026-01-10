@@ -33,126 +33,9 @@ static constexpr uint8_t PRIO_SCHEDULE = 3;  // schedule commands
 static constexpr uint8_t PRIO_SCAN = 2;      // manual scan
 static constexpr uint8_t PRIO_FULLSCAN = 1;  // manual full scan
 
-// ebus/<unique_id>/state/addresses
+// collected addresses
 std::map<uint8_t, uint32_t> seenMasters;
 std::map<uint8_t, uint32_t> seenSlaves;
-
-#define TRACK_U32(NAME, PATH) Track<uint32_t> NAME("state/" PATH, 10);
-
-#define ASSIGN_REQUEST_COUNTER(NAME) NAME = requestCounter.NAME;
-#define ASSIGN_HANDLER_COUNTER(NAME) NAME = handlerCounter.NAME;
-
-// Messages
-TRACK_U32(messagesTotal, "messages")
-TRACK_U32(messagesPassiveMasterSlave, "messages/passiveMasterSlave")
-TRACK_U32(messagesPassiveMasterMaster, "messages/passiveMasterMaster")
-TRACK_U32(messagesPassiveBroadcast, "messages/passiveBroadcast")
-TRACK_U32(messagesReactiveMasterSlave, "messages/reactiveMasterSlave")
-TRACK_U32(messagesReactiveMasterMaster, "messages/reactiveMasterMaster")
-TRACK_U32(messagesActiveMasterSlave, "messages/activeMasterSlave")
-TRACK_U32(messagesActiveMasterMaster, "messages/activeMasterMaster")
-TRACK_U32(messagesActiveBroadcast, "messages/activeBroadcast")
-
-// Requests
-TRACK_U32(requestsStartBit, "requests/startBit")
-TRACK_U32(requestsFirstSyn, "requests/firstSyn")
-TRACK_U32(requestsFirstWon, "requests/firstWon")
-TRACK_U32(requestsFirstRetry, "requests/firstRetry")
-TRACK_U32(requestsFirstLost, "requests/firstLost")
-TRACK_U32(requestsFirstError, "requests/firstError")
-TRACK_U32(requestsRetrySyn, "requests/retrySyn")
-TRACK_U32(requestsRetryError, "requests/retryError")
-TRACK_U32(requestsSecondWon, "requests/secondWon")
-TRACK_U32(requestsSecondLost, "requests/secondLost")
-TRACK_U32(requestsSecondError, "requests/secondError")
-
-// Reset
-TRACK_U32(resetTotal, "reset")
-TRACK_U32(resetPassive00, "reset/passive00")
-TRACK_U32(resetPassive0704, "reset/passive0704")
-TRACK_U32(resetPassive, "reset/passive")
-TRACK_U32(resetActive, "reset/active")
-
-// Error
-TRACK_U32(errorTotal, "error")
-TRACK_U32(errorPassive, "error/passive")
-TRACK_U32(errorPassiveMaster, "error/passive/master")
-TRACK_U32(errorPassiveMasterACK, "error/passive/masterACK")
-TRACK_U32(errorPassiveSlave, "error/passive/slave")
-TRACK_U32(errorPassiveSlaveACK, "error/passive/slaveACK")
-TRACK_U32(errorReactive, "error/reactive")
-TRACK_U32(errorReactiveMaster, "error/reactive/master")
-TRACK_U32(errorReactiveMasterACK, "error/reactive/masterACK")
-TRACK_U32(errorReactiveSlave, "error/reactive/slave")
-TRACK_U32(errorReactiveSlaveACK, "error/reactive/slaveACK")
-TRACK_U32(errorActive, "error/active")
-TRACK_U32(errorActiveMaster, "error/active/master")
-TRACK_U32(errorActiveMasterACK, "error/active/masterACK")
-TRACK_U32(errorActiveSlave, "error/active/slave")
-TRACK_U32(errorActiveSlaveACK, "error/active/slaveACK")
-
-#define TRACK_TIMING(NAME, PATH)                                   \
-  Track<int64_t> NAME##Last("state/timing/" PATH "/last", 10);     \
-  Track<int64_t> NAME##Mean("state/timing/" PATH "/mean", 10);     \
-  Track<int64_t> NAME##StdDev("state/timing/" PATH "/stddev", 10); \
-  Track<uint64_t> NAME##Count("state/timing/" PATH "/count", 10);
-
-#define ASSIGN_REQUEST_TIMING(NAME)          \
-  NAME##Last = requestTiming.NAME##Last;     \
-  NAME##Mean = requestTiming.NAME##Mean;     \
-  NAME##StdDev = requestTiming.NAME##StdDev; \
-  NAME##Count = requestTiming.NAME##Count;
-
-#define ASSIGN_HANDLER_TIMING(NAME)          \
-  NAME##Last = handlerTiming.NAME##Last;     \
-  NAME##Mean = handlerTiming.NAME##Mean;     \
-  NAME##StdDev = handlerTiming.NAME##StdDev; \
-  NAME##Count = handlerTiming.NAME##Count;
-
-#define ASSIGN_HANDLER_STATE_TIMING(NAME, STATE_ENUM)                          \
-  NAME##Last = handlerStateTiming.timing[ebus::HandlerState::STATE_ENUM].last; \
-  NAME##Mean = handlerStateTiming.timing[ebus::HandlerState::STATE_ENUM].mean; \
-  NAME##StdDev =                                                               \
-      handlerStateTiming.timing[ebus::HandlerState::STATE_ENUM].stddev;        \
-  NAME##Count = handlerStateTiming.timing[ebus::HandlerState::STATE_ENUM].count;
-
-// General timing
-TRACK_TIMING(sync, "sync")
-TRACK_TIMING(write, "write")
-TRACK_TIMING(busIsrDelay, "busIsr/delay")
-TRACK_TIMING(busIsrWindow, "busIsr/window")
-TRACK_TIMING(passiveFirst, "passive/first")
-TRACK_TIMING(passiveData, "passive/data")
-TRACK_TIMING(activeFirst, "active/first")
-TRACK_TIMING(activeData, "active/data")
-TRACK_TIMING(callbackReactive, "callback/reactive")
-TRACK_TIMING(callbackTelegram, "callback/telegram")
-TRACK_TIMING(callbackError, "callback/error")
-
-// Handler state timing
-TRACK_TIMING(passiveReceiveMaster, "handlerState/passiveReceiveMaster")
-TRACK_TIMING(passiveReceiveMasterAcknowledge,
-             "handlerState/passiveReceiveMasterAcknowledge")
-TRACK_TIMING(passiveReceiveSlave, "handlerState/passiveReceiveSlave")
-TRACK_TIMING(passiveReceiveSlaveAcknowledge,
-             "handlerState/passiveReceiveSlaveAcknowledge")
-TRACK_TIMING(reactiveSendMasterPositiveAcknowledge,
-             "handlerState/reactiveSendMasterPositiveAcknowledge")
-TRACK_TIMING(reactiveSendMasterNegativeAcknowledge,
-             "handlerState/reactiveSendMasterNegativeAcknowledge")
-TRACK_TIMING(reactiveSendSlave, "handlerState/reactiveSendSlave")
-TRACK_TIMING(reactiveReceiveSlaveAcknowledge,
-             "handlerState/reactiveReceiveSlaveAcknowledge")
-TRACK_TIMING(requestBus, "handlerState/requestBus")
-TRACK_TIMING(activeSendMaster, "handlerState/activeSendMaster")
-TRACK_TIMING(activeReceiveMasterAcknowledge,
-             "handlerState/activeReceiveMasterAcknowledge")
-TRACK_TIMING(activeReceiveSlave, "handlerState/activeReceiveSlave")
-TRACK_TIMING(activeSendSlavePositiveAcknowledge,
-             "handlerState/activeSendSlavePositiveAcknowledge")
-TRACK_TIMING(activeSendSlaveNegativeAcknowledge,
-             "handlerState/activeSendSlaveNegativeAcknowledge")
-TRACK_TIMING(releaseBus, "handlerState/releaseBus");
 
 Schedule schedule;
 
@@ -305,7 +188,7 @@ void Schedule::handleForwardFilter(const JsonArrayConst& filters) {
     forwardfilters.push_back(ebus::to_vector(filter));
 }
 
-void Schedule::setPublishCounter(const bool enable) { publishCounter = enable; }
+void Schedule::setPublishCounter(const bool enable) { counterEnabled = enable; }
 
 void Schedule::resetCounter() {
   seenMasters.clear();
@@ -315,74 +198,11 @@ void Schedule::resetCounter() {
   if (ebusHandler) ebusHandler->resetCounter();
 }
 
-void Schedule::fetchCounter() {
-  if (!publishCounter) return;
+void Schedule::publishCounter() {
+  if (!counterEnabled) return;
 
-  // Addresses Master
-  for (std::pair<const uint8_t, uint32_t>& master : seenMasters) {
-    std::string topic =
-        "state/addresses/master/" + ebus::to_string(master.first);
-    mqtt.publish(topic.c_str(), 0, false, String(master.second).c_str());
-  }
-
-  // Addresses Slave
-  for (std::pair<const uint8_t, uint32_t>& slave : seenSlaves) {
-    std::string topic = "state/addresses/slave/" + ebus::to_string(slave.first);
-    mqtt.publish(topic.c_str(), 0, false, String(slave.second).c_str());
-  }
-
-  // Counter
-  ebus::Request::Counter requestCounter = ebusRequest->getCounter();
-  ebus::Handler::Counter handlerCounter = ebusHandler->getCounter();
-
-  // Messages
-  ASSIGN_HANDLER_COUNTER(messagesTotal)
-  ASSIGN_HANDLER_COUNTER(messagesPassiveMasterSlave)
-  ASSIGN_HANDLER_COUNTER(messagesPassiveMasterMaster)
-  ASSIGN_HANDLER_COUNTER(messagesPassiveBroadcast)
-  ASSIGN_HANDLER_COUNTER(messagesReactiveMasterSlave)
-  ASSIGN_HANDLER_COUNTER(messagesReactiveMasterMaster)
-  ASSIGN_HANDLER_COUNTER(messagesActiveMasterSlave)
-  ASSIGN_HANDLER_COUNTER(messagesActiveMasterMaster)
-  ASSIGN_HANDLER_COUNTER(messagesActiveBroadcast)
-
-  // Requests
-  ASSIGN_REQUEST_COUNTER(requestsStartBit)
-  ASSIGN_REQUEST_COUNTER(requestsFirstSyn)
-  ASSIGN_REQUEST_COUNTER(requestsFirstWon)
-  ASSIGN_REQUEST_COUNTER(requestsFirstRetry)
-  ASSIGN_REQUEST_COUNTER(requestsFirstLost)
-  ASSIGN_REQUEST_COUNTER(requestsFirstError)
-  ASSIGN_REQUEST_COUNTER(requestsRetrySyn)
-  ASSIGN_REQUEST_COUNTER(requestsRetryError)
-  ASSIGN_REQUEST_COUNTER(requestsSecondWon)
-  ASSIGN_REQUEST_COUNTER(requestsSecondLost)
-  ASSIGN_REQUEST_COUNTER(requestsSecondError)
-
-  // Reset
-  ASSIGN_HANDLER_COUNTER(resetTotal)
-  ASSIGN_HANDLER_COUNTER(resetPassive00)
-  ASSIGN_HANDLER_COUNTER(resetPassive0704)
-  ASSIGN_HANDLER_COUNTER(resetPassive)
-  ASSIGN_HANDLER_COUNTER(resetActive)
-
-  // Error
-  ASSIGN_HANDLER_COUNTER(errorTotal)
-  ASSIGN_HANDLER_COUNTER(errorPassive)
-  ASSIGN_HANDLER_COUNTER(errorPassiveMaster)
-  ASSIGN_HANDLER_COUNTER(errorPassiveMasterACK)
-  ASSIGN_HANDLER_COUNTER(errorPassiveSlave)
-  ASSIGN_HANDLER_COUNTER(errorPassiveSlaveACK)
-  ASSIGN_HANDLER_COUNTER(errorReactive)
-  ASSIGN_HANDLER_COUNTER(errorReactiveMaster)
-  ASSIGN_HANDLER_COUNTER(errorReactiveMasterACK)
-  ASSIGN_HANDLER_COUNTER(errorReactiveSlave)
-  ASSIGN_HANDLER_COUNTER(errorReactiveSlaveACK)
-  ASSIGN_HANDLER_COUNTER(errorActive)
-  ASSIGN_HANDLER_COUNTER(errorActiveMaster)
-  ASSIGN_HANDLER_COUNTER(errorActiveMasterACK)
-  ASSIGN_HANDLER_COUNTER(errorActiveSlave)
-  ASSIGN_HANDLER_COUNTER(errorActiveSlaveACK)
+  std::string payload = getCounterJson();
+  mqtt.publish("state/counter", 0, false, payload.c_str());
 }
 
 const std::string Schedule::getCounterJson() {
@@ -476,57 +296,18 @@ const std::string Schedule::getCounterJson() {
   return payload;
 }
 
-void Schedule::setPublishTiming(const bool enable) { publishTiming = enable; }
+void Schedule::setPublishTiming(const bool enable) { timingEnabled = enable; }
 
 void Schedule::resetTiming() {
   if (ebusRequest) ebusRequest->resetTiming();
   if (ebusHandler) ebusHandler->resetTiming();
 }
 
-void Schedule::fetchTiming() {
-  if (!publishTiming) return;
+void Schedule::publishTiming() {
+  if (!timingEnabled) return;
 
-  // Timing
-  ebus::Request::Timing requestTiming = ebusRequest->getTiming();
-  ebus::Handler::Timing handlerTiming = ebusHandler->getTiming();
-
-  ASSIGN_HANDLER_TIMING(sync)
-  ASSIGN_HANDLER_TIMING(write)
-  ASSIGN_REQUEST_TIMING(busIsrDelay)
-  ASSIGN_REQUEST_TIMING(busIsrWindow)
-  ASSIGN_HANDLER_TIMING(passiveFirst)
-  ASSIGN_HANDLER_TIMING(passiveData)
-  ASSIGN_HANDLER_TIMING(activeFirst)
-  ASSIGN_HANDLER_TIMING(activeData)
-  ASSIGN_HANDLER_TIMING(callbackReactive)
-  ASSIGN_HANDLER_TIMING(callbackTelegram)
-  ASSIGN_HANDLER_TIMING(callbackError)
-
-  ebus::Handler::StateTiming handlerStateTiming = ebusHandler->getStateTiming();
-
-  ASSIGN_HANDLER_STATE_TIMING(passiveReceiveMaster, passiveReceiveMaster)
-  ASSIGN_HANDLER_STATE_TIMING(passiveReceiveMasterAcknowledge,
-                              passiveReceiveMasterAcknowledge)
-  ASSIGN_HANDLER_STATE_TIMING(passiveReceiveSlave, passiveReceiveSlave)
-  ASSIGN_HANDLER_STATE_TIMING(passiveReceiveSlaveAcknowledge,
-                              passiveReceiveSlaveAcknowledge)
-  ASSIGN_HANDLER_STATE_TIMING(reactiveSendMasterPositiveAcknowledge,
-                              reactiveSendMasterPositiveAcknowledge)
-  ASSIGN_HANDLER_STATE_TIMING(reactiveSendMasterNegativeAcknowledge,
-                              reactiveSendMasterNegativeAcknowledge)
-  ASSIGN_HANDLER_STATE_TIMING(reactiveSendSlave, reactiveSendSlave)
-  ASSIGN_HANDLER_STATE_TIMING(reactiveReceiveSlaveAcknowledge,
-                              reactiveReceiveSlaveAcknowledge)
-  ASSIGN_HANDLER_STATE_TIMING(requestBus, requestBus)
-  ASSIGN_HANDLER_STATE_TIMING(activeSendMaster, activeSendMaster)
-  ASSIGN_HANDLER_STATE_TIMING(activeReceiveMasterAcknowledge,
-                              activeReceiveMasterAcknowledge)
-  ASSIGN_HANDLER_STATE_TIMING(activeReceiveSlave, activeReceiveSlave)
-  ASSIGN_HANDLER_STATE_TIMING(activeSendSlavePositiveAcknowledge,
-                              activeSendSlavePositiveAcknowledge)
-  ASSIGN_HANDLER_STATE_TIMING(activeSendSlaveNegativeAcknowledge,
-                              activeSendSlaveNegativeAcknowledge)
-  ASSIGN_HANDLER_STATE_TIMING(releaseBus, releaseBus)
+  std::string payload = getTimingJson();
+  mqtt.publish("state/timing", 0, false, payload.c_str());
 }
 
 const std::string Schedule::getTimingJson() {
@@ -737,10 +518,7 @@ void Schedule::handleEvents() {
                     ebus::to_string(event->data.master) + "' slave '" +
                     ebus::to_string(event->data.slave) + "'";
 
-          if (schedule.publishCounter) {
-            std::string topic = "state/reset/last";
-            mqtt.publish(topic.c_str(), 0, false, payload.c_str());
-          }
+          addLog(LogLevel::WARN, payload.c_str());
         } break;
         case CallbackType::telegram: {
           payload = ebus::to_string(event->data.master);
@@ -765,9 +543,9 @@ void Schedule::handleEvents() {
                                       std::vector<uint8_t>(event->data.slave));
               break;
           }
+          addLog(LogLevel::INFO, payload.c_str());
         } break;
       }
-      addLog(LogLevel::INFO, payload.c_str());
       delete event;
     }
   }
@@ -812,8 +590,8 @@ void Schedule::handleCommands() {
       bool res = ebusHandler->enqueueActiveMessage(cmd.command);
       {
         std::string msg = std::string("Enqueued command ") +
-          std::string(res ? "success: " : " failed: ") +
-          ebus::to_string(cmd.command);
+                          std::string(res ? "success: " : " failed: ") +
+                          ebus::to_string(cmd.command);
         addLog(LogLevel::DEBUG, msg.c_str());
       }
     }
