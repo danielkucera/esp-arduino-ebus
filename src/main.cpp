@@ -530,23 +530,12 @@ char* status_string() {
                   reconnect_count);
   pos +=
       snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
-#if defined(EBUS_INTERNAL)
   pos +=
       snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n", free_heap);
-#else
-  pos +=
-      snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n", free_heap);
-#endif
   pos +=
       snprintf(status + pos, bufferSize - pos, "reset_code: %u\n", reset_code);
-
-#if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
                   loopDuration);
-#else
-  pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
-                  loopDuration);
-#endif
   pos += snprintf(status + pos, bufferSize - pos,
                   "max_loop_duration: %u us\r\n", maxLoopDuration);
   pos +=
