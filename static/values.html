@@ -14,6 +14,10 @@
         <button id="btnHome">Home</button>
         <button id="btnValues">Values</button>
         <span id="status">...</span>
+        <span id="pollIntervalLabel" style="margin-left:auto">Poll Interval: 10 seconds</span>
+        <button id="btnDecreaseInterval">-</button>
+        <button id="btnIncreaseInterval">+</button>
+        <button id="btnPause">Pause</button>
     </div>
     <table>
         <thead id="valuesTableHeader"></thead>
@@ -21,6 +25,78 @@
     </table>
     <script src="common.js"></script>
     <script>
+        let pollInterval = 10;
+        let pollingTimeout;
+        let isPaused = false;
+
+        function handleValues() {
+            fetchJson('/api/v1/values', data => renderValuesTable(data), 'Fetching values...');
+        }
+
+        function renderValuesTable(data) {
+            const thead = document.getElementById('valuesTableHeader');
+            const tbody = document.getElementById('valuesTableBody');
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+
+            // Original keys we want to display
+            const cols = ['key', 'name', 'value', 'unit', 'age'];
+
+            // Header row, add an extra 'actions' column
+            const trh = document.createElement('tr');
+            cols.forEach(k => {
+                const th = document.createElement('th');
+                th.textContent = k;
+                trh.appendChild(th);
+            });
+
+            const thActions = document.createElement('th');
+            thActions.textContent = 'actions';
+            trh.appendChild(thActions);
+            thead.appendChild(trh);
+
+            // Rows
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                cols.forEach(k => {
+                    const td = document.createElement('td');
+                    td.textContent = (item[k] === undefined ? '' : String(item[k]));
+                    tr.appendChild(td);
+                });
+
+                // Create actions cell: input + Write + Read
+                const tdActions = document.createElement('td');
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = 'new value';
+                input.style.width = '6rem';
+                input.value = '';
+                input.disabled = !item.write;
+
+                // Always add Write button, but disable if write is not true
+                const btnWrite = document.createElement('button');
+                btnWrite.textContent = 'Write';
+                const targetKey = item.key || item.name || '';
+                btnWrite.disabled = !item.write;
+                btnWrite.addEventListener('click', () => writeValue(targetKey, input, btnWrite));
+
+                // Allow Enter to trigger Write
+                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnWrite.click(); });
+                tdActions.appendChild(input);
+                tdActions.appendChild(btnWrite);
+
+                // Always add Read button, but disable if active is not true
+                const btnRead = document.createElement('button');
+                btnRead.textContent = 'Read';
+                btnRead.disabled = !item.active;
+                btnRead.addEventListener('click', () => readValue(targetKey, btnRead));
+                tdActions.appendChild(btnRead);
+
+                tr.appendChild(tdActions);
+                tbody.appendChild(tr);
+            });
+        }
+
         async function writeValue(key, inputEl, btnEl) {
             if (!inputEl || !btnEl) return;
             btnEl.disabled = true;
@@ -29,7 +105,11 @@
                 const raw = inputEl.value;
                 const num = Number(raw);
                 const payload = (raw !== '' && isFinite(num)) ? { key: key, value: num } : { key: key, value: raw };
-                const res = await fetch('/api/v1/values/write', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const res = await fetch('/api/v1/values/write', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
                 const text = await res.text();
                 setStatus(text || (res.ok ? 'OK' : 'Error'));
             } catch (err) {
@@ -46,7 +126,11 @@
             setStatus('Requested, waiting...');
             try {
                 const payload = { key: key };
-                const res = await fetch('/api/v1/values/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const res = await fetch('/api/v1/values/read', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
                 if (!res.ok) {
                     const text = await res.text();
                     setStatus(text || 'Error');
@@ -64,67 +148,25 @@
             }
         }
 
-        function renderValuesTable(data) {
-            const thead = document.getElementById('valuesTableHeader');
-            const tbody = document.getElementById('valuesTableBody');
-            thead.innerHTML = '';
-            tbody.innerHTML = '';
-
-            // gather keys to display
-            const keys = new Set();
-            data.forEach(item => Object.keys(item || {}).forEach(k => keys.add(k)));
-            const cols = Array.from(keys);
-
-            // header row, add an extra 'Set' column
-            const trh = document.createElement('tr');
-            cols.forEach(k => { const th = document.createElement('th'); th.textContent = k; trh.appendChild(th); });
-            const thSet = document.createElement('th'); thSet.textContent = 'Actions'; trh.appendChild(thSet);
-            thead.appendChild(trh);
-
-            // rows
-            data.forEach(item => {
-                const tr = document.createElement('tr');
-                cols.forEach(k => {
-                    const td = document.createElement('td');
-                    td.textContent = (item[k] === undefined ? '' : String(item[k]));
-                    tr.appendChild(td);
-                });
-
-                // create actions cell: input + Set + Read
-                const tdSet = document.createElement('td');
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.placeholder = 'new value';
-                input.style.width = '6rem';
-                input.value = '';
-                const btnSet = document.createElement('button');
-                btnSet.textContent = 'Set';
-                const btnRead = document.createElement('button');
-                btnRead.textContent = 'Read';
-                const targetKey = item.key || item.name || '';
-                btnSet.addEventListener('click', () => writeValue(targetKey, input, btnSet));
-                btnRead.addEventListener('click', () => readValue(targetKey, btnRead));
-                if (!targetKey) { btnSet.disabled = true; btnRead.disabled = true; }
-                // allow Enter to trigger Set
-                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnSet.click(); });
-                tdSet.appendChild(input);
-                tdSet.appendChild(btnSet);
-                tdSet.appendChild(btnRead);
-                tr.appendChild(tdSet);
-
-                tbody.appendChild(tr);
-            });
-        }
-
-        function handleValues() {
-            fetchJson('/api/v1/values', data => renderValuesTable(data), 'Fetching values...');
-        }
-
         document.getElementById('btnHome').addEventListener('click', handleHome);
         document.getElementById('btnValues').addEventListener('click', handleValues);
 
+        document.getElementById('btnIncreaseInterval').addEventListener('click', () => {
+            changePollInterval(1, 5, 60, 'pollIntervalLabel', handleValues);
+        });
+
+        document.getElementById('btnDecreaseInterval').addEventListener('click', () => {
+            changePollInterval(-1, 5, 60, 'pollIntervalLabel', handleValues);
+        });
+
+        document.getElementById('btnPause').addEventListener('click', () => togglePause('btnPause'));
+
         // Initial load
         handleValues();
+
+        // Setup poll
+        updatePollLabel('pollIntervalLabel', pollInterval);
+        setPollingTimeout(pollInterval, handleValues);
     </script>
 </body>
 
