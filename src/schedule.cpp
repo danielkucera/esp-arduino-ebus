@@ -88,8 +88,8 @@ void Schedule::setSendInquiryOfExistence(const bool enable) {
 
 void Schedule::setScanOnStartup(const bool enable) { scanOnStartup = enable; }
 
-void Schedule::setDistance(const uint8_t distance) {
-  distanceCommands = distance * 1000;
+void Schedule::setFirstCommandAfterStart(const uint8_t delay) {
+  firstCommandAfterStart = delay * 1000;
 }
 
 void Schedule::handleScanFull() {
@@ -569,9 +569,7 @@ void Schedule::handleCommands() {
   if (store.active()) enqueueScheduleCommand();
 
   // process queue
-  if (!queuedCommands.empty() &&
-      currentMillis > lastCommand + distanceCommands) {
-    lastCommand = currentMillis;
+  if (!queuedCommands.empty() && currentMillis > firstCommandAfterStart) {
     QueuedCommand cmd = queuedCommands.front();
     queuedCommands.erase(queuedCommands.begin());
 

@@ -48,7 +48,7 @@ class Schedule {
 
   void setSendInquiryOfExistence(const bool enable);
   void setScanOnStartup(const bool enable);
-  void setDistance(const uint8_t distance);
+  void setFirstCommandAfterStart(const uint8_t delay);
 
   void handleScanFull();
   void handleScan();
@@ -111,8 +111,7 @@ class Schedule {
   uint32_t scheduleCommandSetTime = 0;  // time when command was scheduled
   uint32_t scheduleCommandTimeout = 2 * 1000;  // 2 seconds after schedule
 
-  uint32_t distanceCommands = 0;     // in milliseconds
-  uint32_t lastCommand = 10 * 1000;  // 10 seconds after start
+  uint32_t firstCommandAfterStart = 10 * 1000;  // 10 seconds after start
 
   uint32_t distanceScans = 10 * 1000;  // 10 seconds after start
   uint32_t lastScan = 0;               // in milliseconds
