@@ -17,6 +17,10 @@
         <button id="btnScanFull">Scan Full</button>
         <button id="btnScanVendor">Scan Vendor</button>
         <span id="status">...</span>
+        <span id="pollIntervalLabel" style="margin-left:auto">Poll Interval: 10 seconds</span>
+        <button id="btnDecreaseInterval">-</button>
+        <button id="btnIncreaseInterval">+</button>
+        <button id="btnPause">Pause</button>
     </div>
     <table>
         <thead id="devicesTableHeader"></thead>
@@ -24,6 +28,10 @@
     </table>
     <script src="common.js"></script>
     <script>
+        let pollInterval = 10;
+        let pollingTimeout;
+        let isPaused = false;
+
         function handleDevices() {
             handleSimpleTable('/api/v1/devices', 'devicesTableHeader', 'devicesTableBody');
         }
@@ -34,8 +42,22 @@
         document.getElementById('btnScanFull').addEventListener('click', () => postSimple('/api/v1/devices/scan/full'));
         document.getElementById('btnScanVendor').addEventListener('click', () => postSimple('/api/v1/devices/scan/vendor'));
 
+        document.getElementById('btnIncreaseInterval').addEventListener('click', () => {
+            changePollInterval(1, 5, 60, 'pollIntervalLabel', handleDevices);
+        });
+
+        document.getElementById('btnDecreaseInterval').addEventListener('click', () => {
+            changePollInterval(-1, 5, 60, 'pollIntervalLabel', handleDevices);
+        });
+
+        document.getElementById('btnPause').addEventListener('click', () => togglePause('btnPause'));
+
         // Initial load
         handleDevices();
+
+        // Setup poll
+        updatePollLabel('pollIntervalLabel', pollInterval);
+        setPollingTimeout(pollInterval, handleDevices);
     </script>
 </body>
 
