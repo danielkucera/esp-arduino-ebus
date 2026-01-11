@@ -179,10 +179,10 @@ iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
     "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", DUMMY_MQTT_PASS);
 
 iotwebconf::CheckboxParameter mqttPublishCounterParam =
-    iotwebconf::CheckboxParameter("Publish Counter", "mqttPublishCounterParam",
+    iotwebconf::CheckboxParameter("Publish counter", "mqttPublishCounterParam",
                                   mqttPublishCounterValue, STRING_LEN);
 iotwebconf::CheckboxParameter mqttPublishTimingParam =
-    iotwebconf::CheckboxParameter("Publish Timing", "mqttPublishTimingParam",
+    iotwebconf::CheckboxParameter("Publish timing", "mqttPublishTimingParam",
                                   mqttPublishTimingValue, STRING_LEN);
 
 iotwebconf::ParameterGroup haGroup =
