@@ -1,6 +1,9 @@
 #if defined(EBUS_INTERNAL)
 #include "schedule.hpp"
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+
 #include <set>
 
 #include "http.hpp"
@@ -35,6 +38,8 @@ static constexpr uint8_t PRIO_FULLSCAN = 1;  // manual full scan
 // collected addresses
 std::map<uint8_t, uint32_t> seenMasters;
 std::map<uint8_t, uint32_t> seenSlaves;
+
+portMUX_TYPE commandMux = portMUX_INITIALIZER_UNLOCKED;
 
 Schedule schedule;
 
@@ -500,13 +505,13 @@ void Schedule::taskFunc(void* arg) {
   Schedule* self = static_cast<Schedule*>(arg);
   for (;;) {
     if (self->stopRunner) vTaskDelete(NULL);
-    self->handleEvents();
-    self->handleCommands();
+    self->handleEventQueue();
+    self->handleCommandQueue();
     vTaskDelay(pdMS_TO_TICKS(10));  // adjust delay as needed
   }
 }
 
-void Schedule::handleEvents() {
+void Schedule::handleEventQueue() {
   CallbackEvent* event = nullptr;
   while (eventQueue.try_pop(event)) {
     if (event) {
@@ -550,67 +555,78 @@ void Schedule::handleEvents() {
   }
 }
 
-void Schedule::handleCommands() {
+void Schedule::handleCommandQueue() {
   uint32_t currentMillis = millis();
 
-  // check if scheduleCommand is stuck
+  // Check if scheduleCommand is stuck
   if (scheduleCommand != nullptr && scheduleCommandSetTime > 0) {
     if (currentMillis - scheduleCommandSetTime > scheduleCommandTimeout) {
-      // command is stuck, clear it so next can be enqueued
-      scheduleCommand = nullptr;
-      scheduleCommandSetTime = 0;  // clear after success
+      scheduleCommand = nullptr;  // Clear the stuck command
+      scheduleCommandSetTime = 0;
     }
   }
 
-  // enqueue startup scan commands if needed
-  if (scanOnStartup) enqueueStartupScanCommands();
-
-  // enqueue next schedule command if needed
+  // Enqueue next schedule command if needed
   if (store.active()) enqueueScheduleCommand();
 
-  // process queue
-  if (!queuedCommands.empty() && currentMillis > firstCommandAfterStart) {
-    QueuedCommand cmd = queuedCommands.front();
-    queuedCommands.erase(queuedCommands.begin());
+  // Enqueue startup scan commands if needed
+  if (scanOnStartup) enqueueStartupScanCommands();
 
-    mode = cmd.mode;
-    scheduleCommand = cmd.scheduleCommand;
+  // Process queue
+  if (!ebusHandler->isActiveMessagePending() && !commandQueue.empty() &&
+      currentMillis > firstCommandAfterStart) {
+    portENTER_CRITICAL(&commandMux);
+    QueuedCommand nextCmd = commandQueue.top();
+    commandQueue.pop();
+    portEXIT_CRITICAL(&commandMux);
 
-    // time when command was scheduled
-    if (cmd.mode == Mode::schedule) scheduleCommandSetTime = millis();
+    mode = nextCmd.mode;
 
-    // enqueue next full scan command if needed
+    // Track schedule command
+    if (mode == Mode::schedule) {
+      scheduleCommand = nextCmd.scheduleCommand;
+      scheduleCommandSetTime = currentMillis;
+    }
+
+    // Enqueue next full scan command if needed
     if (fullScan && mode == Mode::fullscan) enqueueFullScanCommand();
 
-    // send command
-    if (cmd.command.size() > 0) {
-      bool res = ebusHandler->enqueueActiveMessage(cmd.command);
-      {
-        std::string msg = std::string("Enqueued command ") +
-                          std::string(res ? "success: " : " failed: ") +
-                          ebus::to_string(cmd.command);
-        addLog(LogLevel::DEBUG, msg.c_str());
-      }
+    // Send command
+    if (!nextCmd.command.empty()) {
+      bool res = ebusHandler->sendActiveMessage(nextCmd.command);
+      std::string msg = "Start sending " +
+                        std::string(res ? "success: " : " failed: ") +
+                        ebus::to_string(nextCmd.command);
+      addLog(LogLevel::DEBUG, msg.c_str());
     }
   }
 }
 
 void Schedule::enqueueCommand(const QueuedCommand& cmd) {
+  portENTER_CRITICAL(&commandMux);
+
+  // Ensure only one schedule command is allowed
   if (cmd.mode == Mode::schedule) {
-    // only allow one schedule command in the queue
-    for (const struct QueuedCommand& queued : queuedCommands) {
-      if (queued.mode == Mode::schedule) return;
+    auto tmpQueue = commandQueue;  // Create a copy to check
+    while (!tmpQueue.empty()) {
+      if (tmpQueue.top().mode == Mode::schedule) {
+        portEXIT_CRITICAL(&commandMux);
+        return;  // A schedule command already exists
+      }
+      tmpQueue.pop();
     }
   }
-  // insert sorted: higher priority first, then older timestamp first
-  auto it = std::find_if(queuedCommands.begin(), queuedCommands.end(),
-                         [&](const QueuedCommand& other) {
-                           if (cmd.priority > other.priority) return true;
-                           if (cmd.priority == other.priority)
-                             return cmd.timestamp < other.timestamp;
-                           return false;
-                         });
-  queuedCommands.insert(it, cmd);
+
+  commandQueue.push(cmd);  // Add the command to the priority queue
+  portEXIT_CRITICAL(&commandMux);
+}
+
+void Schedule::enqueueScheduleCommand() {
+  Command* cmd = store.nextActiveCommand();
+  if (cmd && cmd->read_cmd.size() > 0) {
+    if (scheduleCommand == cmd) return;  // command is already pending
+    enqueueCommand({Mode::schedule, PRIO_SCHEDULE, cmd->read_cmd, cmd});
+  }
 }
 
 void Schedule::enqueueStartupScanCommands() {
@@ -624,30 +640,25 @@ void Schedule::enqueueStartupScanCommands() {
   }
 }
 
-void Schedule::enqueueScheduleCommand() {
-  Command* cmd = store.nextActiveCommand();
-  if (cmd && cmd->read_cmd.size() > 0) {
-    if (scheduleCommand == cmd) return;  // already enqueued
-    enqueueCommand({Mode::schedule, PRIO_SCHEDULE, cmd->read_cmd, cmd});
-  }
-}
-
 void Schedule::enqueueFullScanCommand() {
-  while (scanIndex <= 0xff) {
-    scanIndex++;
-    if (scanIndex == 0xff) {
-      fullScan = false;
-      scanIndex = 0;
-      break;
-    }
+  // Only enqueue the next full scan command if scanIndex is valid
+  if (scanIndex <= 0xff) {
     if (ebus::isSlave(scanIndex) &&
         scanIndex != ebusHandler->getTargetAddress()) {
       std::vector<uint8_t> command;
       command = {scanIndex};
       command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
       enqueueCommand({Mode::fullscan, PRIO_FULLSCAN, command, nullptr});
-      break;
+      scanIndex++;  // Move to the next index for the next call
+    } else {
+      scanIndex++;  // Invalid index, just increment it
     }
+  }
+
+  // If no valid slave found, reset scanIndex to start scanning again next time
+  if (scanIndex > 0xff) {
+    fullScan = false;
+    scanIndex = 0;  // Reset for future use
   }
 }
 

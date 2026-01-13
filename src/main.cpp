@@ -145,10 +145,10 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter busIsrWindowParam = iotwebconf::NumberParameter(
-    "Bus ISR window (micro seconds)", "busisr_window", busisr_window,
+    "Bus ISR window (microseconds)", "busisr_window", busisr_window,
     NUMBER_LEN, "4300", "4250..4500", "min='4250' max='4500' step='1'");
 iotwebconf::NumberParameter busIsrOffsetParam = iotwebconf::NumberParameter(
-    "Bus ISR offset (micro seconds)", "busisr_offset", busisr_offset,
+    "Bus ISR offset (microseconds)", "busisr_offset", busisr_offset,
     NUMBER_LEN, "80", "0..200", "min='0' max='200' step='1'");
 
 iotwebconf::ParameterGroup scheduleGroup =
@@ -161,10 +161,11 @@ iotwebconf::CheckboxParameter scanOnStartupParam =
     iotwebconf::CheckboxParameter("Scan for eBUS devices on startup",
                                   "scanOnStartupParam", scanOnStartupValue,
                                   STRING_LEN);
-iotwebconf::NumberParameter firstCommandAfterStartParam = iotwebconf::NumberParameter(
-    "First command after start (seconds)", "firstCommandAfterStartParam",
-    firstCommandAfterStartValue, NUMBER_LEN, "10", "5..60",
-    "min='5' max='60' step='1'");
+iotwebconf::NumberParameter firstCommandAfterStartParam =
+    iotwebconf::NumberParameter("First command after start (seconds)",
+                                "firstCommandAfterStartParam",
+                                firstCommandAfterStartValue, NUMBER_LEN, "10",
+                                "5..60", "min='5' max='60' step='1'");
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");

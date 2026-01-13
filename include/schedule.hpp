@@ -5,8 +5,8 @@
 #include <Ebus.h>
 #include <WiFiClient.h>
 
-#include <deque>
 #include <map>
+#include <queue>
 #include <string>
 #include <vector>
 
@@ -87,31 +87,35 @@ class Schedule {
   bool sendInquiryOfExistence = false;
   bool scanOnStartup = false;
 
+  uint32_t firstCommandAfterStart = 10 * 1000;  // 10 seconds after start
+
   enum class Mode { schedule, internal, scan, fullscan, send, read, write };
   Mode mode = Mode::schedule;
 
   struct QueuedCommand {
     Mode mode;
-    uint8_t priority;    // higher = higher priority
-    uint32_t timestamp;  // millis() when enqueued older = higher priority
+    uint8_t priority;  // higher = higher priority
     std::vector<uint8_t> command;
     Command* scheduleCommand = nullptr;
 
-    QueuedCommand(Mode m, uint8_t p, std::vector<uint8_t> cmd, Command* active)
-        : mode(m),
-          priority(p),
-          timestamp(millis()),
-          command(cmd),
-          scheduleCommand(active) {}
+    QueuedCommand(Mode m, uint8_t p, std::vector<uint8_t> cmd,
+                  Command* scheduleCmd)
+        : mode(m), priority(p), command(cmd), scheduleCommand(scheduleCmd) {}
   };
 
-  std::vector<QueuedCommand> queuedCommands;
+  struct CommandComparator {
+    bool operator()(const QueuedCommand& lhs, const QueuedCommand& rhs) const {
+      return lhs.priority < rhs.priority;
+    }
+  };
+
+  std::priority_queue<QueuedCommand, std::vector<QueuedCommand>,
+                      CommandComparator>
+      commandQueue;
 
   Command* scheduleCommand = nullptr;
   uint32_t scheduleCommandSetTime = 0;  // time when command was scheduled
-  uint32_t scheduleCommandTimeout = 2 * 1000;  // 2 seconds after schedule
-
-  uint32_t firstCommandAfterStart = 10 * 1000;  // 10 seconds after start
+  uint32_t scheduleCommandTimeout = 1 * 1000;  // 1 second after schedule
 
   uint32_t distanceScans = 10 * 1000;  // 10 seconds after start
   uint32_t lastScan = 0;               // in milliseconds
@@ -149,15 +153,15 @@ class Schedule {
 
   static void taskFunc(void* arg);
 
-  void handleEvents();
+  void handleEventQueue();
 
-  void handleCommands();
+  void handleCommandQueue();
 
   void enqueueCommand(const QueuedCommand& cmd);
 
-  void enqueueStartupScanCommands();
-
   void enqueueScheduleCommand();
+
+  void enqueueStartupScanCommands();
 
   void enqueueFullScanCommand();
 
