@@ -124,6 +124,8 @@ class Schedule {
 
   bool fullScan = false;
   uint8_t scanIndex = 0;
+  uint32_t distanceFullScans = 500;  // 500 milliseconds between 2 scans
+  uint32_t lastFullScan = 0;         // in milliseconds
 
   std::map<uint8_t, Device> allDevices;
 

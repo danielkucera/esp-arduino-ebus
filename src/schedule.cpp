@@ -115,8 +115,7 @@ void Schedule::handleScan() {
       slaves.insert(slave.first);
 
   for (const uint8_t slave : slaves) {
-    std::vector<uint8_t> command;
-    command = {slave};
+    std::vector<uint8_t> command = {slave};
     command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
     enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
   }
@@ -133,8 +132,7 @@ void Schedule::handleScanAddresses(const JsonArrayConst& addresses) {
   }
 
   for (const uint8_t slave : slaves) {
-    std::vector<uint8_t> command;
-    command = {slave};
+    std::vector<uint8_t> command = {slave};
     command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
     enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
   }
@@ -144,26 +142,22 @@ void Schedule::handleScanVendor() {
   for (const std::pair<uint8_t, Device>& device : allDevices) {
     if (device.second.isVaillant()) {
       if (device.second.vec_b5090124.size() == 0) {
-        std::vector<uint8_t> command;
-        command = {device.first};
+        std::vector<uint8_t> command = {device.first};
         command.insert(command.end(), VEC_b5090124.begin(), VEC_b5090124.end());
         enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
       }
       if (device.second.vec_b5090125.size() == 0) {
-        std::vector<uint8_t> command;
-        command = {device.first};
+        std::vector<uint8_t> command = {device.first};
         command.insert(command.end(), VEC_b5090125.begin(), VEC_b5090125.end());
         enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
       }
       if (device.second.vec_b5090126.size() == 0) {
-        std::vector<uint8_t> command;
-        command = {device.first};
+        std::vector<uint8_t> command = {device.first};
         command.insert(command.end(), VEC_b5090126.begin(), VEC_b5090126.end());
         enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
       }
       if (device.second.vec_b5090127.size() == 0) {
-        std::vector<uint8_t> command;
-        command = {device.first};
+        std::vector<uint8_t> command = {device.first};
         command.insert(command.end(), VEC_b5090127.begin(), VEC_b5090127.end());
         enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
       }
@@ -560,7 +554,7 @@ void Schedule::handleCommandQueue() {
 
   // Check if scheduleCommand is stuck
   if (scheduleCommand != nullptr && scheduleCommandSetTime > 0) {
-    if (currentMillis - scheduleCommandSetTime > scheduleCommandTimeout) {
+    if (currentMillis > scheduleCommandSetTime + scheduleCommandTimeout) {
       scheduleCommand = nullptr;  // Clear the stuck command
       scheduleCommandSetTime = 0;
     }
@@ -571,6 +565,9 @@ void Schedule::handleCommandQueue() {
 
   // Enqueue startup scan commands if needed
   if (scanOnStartup) enqueueStartupScanCommands();
+
+  // Enqueue next full scan command if needed
+  if (fullScan) enqueueFullScanCommand();
 
   // Process queue
   if (!ebusHandler->isActiveMessagePending() && !commandQueue.empty() &&
@@ -588,13 +585,10 @@ void Schedule::handleCommandQueue() {
       scheduleCommandSetTime = currentMillis;
     }
 
-    // Enqueue next full scan command if needed
-    if (fullScan && mode == Mode::fullscan) enqueueFullScanCommand();
-
     // Send command
     if (!nextCmd.command.empty()) {
       bool res = ebusHandler->sendActiveMessage(nextCmd.command);
-      std::string msg = "Start sending " +
+      std::string msg = "Start " +
                         std::string(res ? "success: " : " failed: ") +
                         ebus::to_string(nextCmd.command);
       addLog(LogLevel::DEBUG, msg.c_str());
@@ -612,6 +606,18 @@ void Schedule::enqueueCommand(const QueuedCommand& cmd) {
       if (tmpQueue.top().mode == Mode::schedule) {
         portEXIT_CRITICAL(&commandMux);
         return;  // A schedule command already exists
+      }
+      tmpQueue.pop();
+    }
+  }
+
+  // Ensure only one full scan command is allowed
+  if (cmd.mode == Mode::fullscan) {
+    auto tmpQueue = commandQueue;  // Create a copy to check
+    while (!tmpQueue.empty()) {
+      if (tmpQueue.top().mode == Mode::fullscan) {
+        portEXIT_CRITICAL(&commandMux);
+        return;  // A full scan command already exists
       }
       tmpQueue.pop();
     }
@@ -641,24 +647,20 @@ void Schedule::enqueueStartupScanCommands() {
 }
 
 void Schedule::enqueueFullScanCommand() {
-  // Only enqueue the next full scan command if scanIndex is valid
-  if (scanIndex <= 0xff) {
-    if (ebus::isSlave(scanIndex) &&
-        scanIndex != ebusHandler->getTargetAddress()) {
-      std::vector<uint8_t> command;
-      command = {scanIndex};
-      command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
-      enqueueCommand({Mode::fullscan, PRIO_FULLSCAN, command, nullptr});
-      scanIndex++;  // Move to the next index for the next call
-    } else {
-      scanIndex++;  // Invalid index, just increment it
+  if (millis() > lastFullScan + distanceFullScans) {
+    lastFullScan = millis();
+    while (scanIndex < 0xff) {
+      scanIndex++;
+      if (ebus::isSlave(scanIndex) &&
+          scanIndex != ebusHandler->getTargetAddress()) {
+        std::vector<uint8_t> command = {scanIndex};
+        command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
+        enqueueCommand({Mode::fullscan, PRIO_FULLSCAN, command, nullptr});
+        return;
+      }
     }
-  }
-
-  // If no valid slave found, reset scanIndex to start scanning again next time
-  if (scanIndex > 0xff) {
-    fullScan = false;
-    scanIndex = 0;  // Reset for future use
+    fullScan = false;  // reset fullScan to avoid repeated calls
+    scanIndex = 0;     // reset scanIndex for next full scan
   }
 }
 
