@@ -94,7 +94,7 @@ char busisr_offset[NUMBER_LEN];
 
 char inquiryOfExistenceValue[STRING_LEN];
 char scanOnStartupValue[STRING_LEN];
-char command_distance[NUMBER_LEN];
+char firstCommandAfterStartValue[NUMBER_LEN];
 
 char mqtt_enabled[STRING_LEN];
 char mqtt_server[STRING_LEN];
@@ -145,10 +145,10 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter busIsrWindowParam = iotwebconf::NumberParameter(
-    "Bus ISR window (micro seconds)", "busisr_window", busisr_window,
+    "Bus ISR window (microseconds)", "busisr_window", busisr_window,
     NUMBER_LEN, "4300", "4250..4500", "min='4250' max='4500' step='1'");
 iotwebconf::NumberParameter busIsrOffsetParam = iotwebconf::NumberParameter(
-    "Bus ISR offset (micro seconds)", "busisr_offset", busisr_offset,
+    "Bus ISR offset (microseconds)", "busisr_offset", busisr_offset,
     NUMBER_LEN, "80", "0..200", "min='0' max='200' step='1'");
 
 iotwebconf::ParameterGroup scheduleGroup =
@@ -161,9 +161,11 @@ iotwebconf::CheckboxParameter scanOnStartupParam =
     iotwebconf::CheckboxParameter("Scan for eBUS devices on startup",
                                   "scanOnStartupParam", scanOnStartupValue,
                                   STRING_LEN);
-iotwebconf::NumberParameter commandDistanceParam = iotwebconf::NumberParameter(
-    "Command distance (seconds)", "command_distance", command_distance,
-    NUMBER_LEN, "1", "1..60", "min='1' max='60' step='1'");
+iotwebconf::NumberParameter firstCommandAfterStartParam =
+    iotwebconf::NumberParameter("First command after start (seconds)",
+                                "firstCommandAfterStartParam",
+                                firstCommandAfterStartValue, NUMBER_LEN, "10",
+                                "5..60", "min='5' max='60' step='1'");
 
 iotwebconf::ParameterGroup mqttGroup =
     iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
@@ -178,12 +180,10 @@ iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
     "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", DUMMY_MQTT_PASS);
 
 iotwebconf::CheckboxParameter mqttPublishCounterParam =
-    iotwebconf::CheckboxParameter("Publish Counter to MQTT",
-                                  "mqttPublishCounterParam",
+    iotwebconf::CheckboxParameter("Publish counter", "mqttPublishCounterParam",
                                   mqttPublishCounterValue, STRING_LEN);
 iotwebconf::CheckboxParameter mqttPublishTimingParam =
-    iotwebconf::CheckboxParameter("Publish Timing to MQTT",
-                                  "mqttPublishTimingParam",
+    iotwebconf::CheckboxParameter("Publish timing", "mqttPublishTimingParam",
                                   mqttPublishTimingValue, STRING_LEN);
 
 iotwebconf::ParameterGroup haGroup =
@@ -467,7 +467,7 @@ void saveParamsCallback() {
 
   schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
   schedule.setScanOnStartup(scanOnStartupParam.isChecked());
-  schedule.setDistance(atoi(command_distance));
+  schedule.setFirstCommandAfterStart(atoi(firstCommandAfterStartValue));
 
   mqtt.setEnabled(mqttEnabledParam.isChecked());
   if (!mqtt.isEnabled() && mqtt.connected()) mqtt.disconnect();
@@ -566,8 +566,9 @@ char* status_string() {
                inquiryOfExistenceParam.isChecked() ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "scan_on_startup: %s\r\n",
                   scanOnStartupParam.isChecked() ? "true" : "false");
-  pos += snprintf(status + pos, bufferSize - pos, "command_distance: %i\r\n",
-                  atoi(command_distance));
+  pos += snprintf(status + pos, bufferSize - pos,
+                  "first_command_after_start: %i\r\n",
+                  atoi(firstCommandAfterStartValue));
   pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
@@ -686,7 +687,7 @@ const std::string getStatusJson() {
   JsonObject Schedule = doc["Schedule"].to<JsonObject>();
   Schedule["Inquiry_Of_Existence"] = inquiryOfExistenceParam.isChecked();
   Schedule["Scan_On_Startup"] = scanOnStartupParam.isChecked();
-  Schedule["Command_Distance"] = atoi(command_distance);
+  Schedule["First_Command_After_Start"] = atoi(firstCommandAfterStartValue);
   Schedule["Active_Commands"] = store.getActiveCommands();
   Schedule["Passive_Commands"] = store.getPassiveCommands();
 
@@ -770,7 +771,7 @@ void setup() {
 
   scheduleGroup.addItem(&inquiryOfExistenceParam);
   scheduleGroup.addItem(&scanOnStartupParam);
-  scheduleGroup.addItem(&commandDistanceParam);
+  scheduleGroup.addItem(&firstCommandAfterStartParam);
 
   mqttGroup.addItem(&mqttEnabledParam);
   mqttGroup.addItem(&mqttServerParam);
@@ -884,7 +885,7 @@ void setup() {
 
   schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
   schedule.setScanOnStartup(scanOnStartupParam.isChecked());
-  schedule.setDistance(atoi(command_distance));
+  schedule.setFirstCommandAfterStart(atoi(firstCommandAfterStartValue));
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
   schedule.start(ebus::request, ebus::handler);
