@@ -129,13 +129,8 @@ class Store {
   const std::string getValuesJson() const;
 
  private:
-  // Use unordered_map for fast key lookup
-  std::unordered_map<std::string, Command> allCommandsByKey;
-  // For passive commands, use command.read_cmd as key for fast lookup
-  std::unordered_map<std::vector<uint8_t>, std::vector<Command*>, VectorHash>
-      passiveCommands;
-  // For active commands, just keep a vector of pointers
-  std::vector<Command*> activeCommands;
+  // Single unified map for all commands, indexed by key
+  std::unordered_map<std::string, Command> commands;
 
   static const std::string isFieldValid(const JsonDocument& doc,
                                         const std::string& field, bool required,
