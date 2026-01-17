@@ -1,6 +1,6 @@
 #pragma once
 
-#include "busstate.hpp"
+#include "BusState.hpp"
 
 // Implements the arbitration algorithm. Uses the state of the bus to decide
 // what to do. Typical usage:

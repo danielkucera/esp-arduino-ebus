@@ -8,19 +8,20 @@
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
 
-#include "log.hpp"
-#include "mqtt.hpp"
-#include "mqttha.hpp"
-#include "schedule.hpp"
+#include "ClientManager.hpp"
+#include "Logger.hpp"
+#include "Mqtt.hpp"
+#include "MqttHA.hpp"
+#include "Schedule.hpp"
 #else
-#include "bus.hpp"
+#include "BusType.hpp"
+#include "client.hpp"
 #endif
 
 #include <ESPmDNS.h>
 #include <IotWebConfESP32HTTPUpdateServer.h>
 #include <esp_task_wdt.h>
 
-#include "client.hpp"
 #include "esp32c3/rom/rtc.h"
 #include "esp_sntp.h"
 #include "http.hpp"
@@ -145,11 +146,11 @@ iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     reinterpret_cast<char*>(ebus_address_values),
     sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
 iotwebconf::NumberParameter busIsrWindowParam = iotwebconf::NumberParameter(
-    "Bus ISR window (microseconds)", "busisr_window", busisr_window,
-    NUMBER_LEN, "4300", "4250..4500", "min='4250' max='4500' step='1'");
+    "Bus ISR window (microseconds)", "busisr_window", busisr_window, NUMBER_LEN,
+    "4300", "4250..4500", "min='4250' max='4500' step='1'");
 iotwebconf::NumberParameter busIsrOffsetParam = iotwebconf::NumberParameter(
-    "Bus ISR offset (microseconds)", "busisr_offset", busisr_offset,
-    NUMBER_LEN, "80", "0..200", "min='0' max='200' step='1'");
+    "Bus ISR offset (microseconds)", "busisr_offset", busisr_offset, NUMBER_LEN,
+    "80", "0..200", "min='0' max='200' step='1'");
 
 iotwebconf::ParameterGroup scheduleGroup =
     iotwebconf::ParameterGroup("schedule", "Schedule configuration");
@@ -377,7 +378,7 @@ void data_loop(void* pvParameters) {
 
 #if defined(EBUS_INTERNAL)
 void time_sync_notification_cb(struct timeval* tv) {
-  addLog(LogLevel::INFO, "SNTP synchronized to " + String(sntpServer));
+  logger.add(LogLevel::INFO, "SNTP synchronized to " + String(sntpServer));
 }
 
 void initSNTP(const char* server) {
@@ -392,7 +393,7 @@ void initSNTP(const char* server) {
 
 void setTimezone(const char* timezone) {
   if (strlen(timezone) > 0) {
-    addLog(LogLevel::INFO, "Timezone set to " + String(timezone));
+    logger.add(LogLevel::INFO, "Timezone set to " + String(timezone));
     setenv("TZ", timezone, 1);
     tzset();
   }
@@ -895,6 +896,7 @@ void setup() {
 
   ebus::serviceRunner->start();
 
+  clientManager.setLastCommsCallback(updateLastComms);
   clientManager.start(ebus::bus, ebus::request, ebus::serviceRunner);
 
   ArduinoOTA.onStart([]() {

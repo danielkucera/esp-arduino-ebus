@@ -1,10 +1,10 @@
 #include "http.hpp"
 
-#include "log.hpp"
+#include "Logger.hpp"
+#include "MqttHA.hpp"
+#include "Schedule.hpp"
+#include "Store.hpp"
 #include "main.hpp"
-#include "mqttha.hpp"
-#include "schedule.hpp"
-#include "store.hpp"
 
 WebServer configServer(80);
 
@@ -191,10 +191,12 @@ void handleValuesWrite() {
         schedule.handleWrite(writeCmd);
         configServer.send(200, "text/html", "Ok");
       } else {
-        configServer.send(403, "text/html", String("Invalid value for key '") + key.c_str());
+        configServer.send(403, "text/html",
+                          String("Invalid value for key '") + key.c_str());
       }
     } else {
-      configServer.send(403, "text/html", String("Key '") + key.c_str() + "' not found");
+      configServer.send(403, "text/html",
+                        String("Key '") + key.c_str() + "' not found");
     }
   }
 }
@@ -276,7 +278,7 @@ void handleStatisticsReset() {
 }
 
 // logs
-void handleLogs() { configServer.send(200, "text/plain", getLogs()); }
+void handleLogs() { configServer.send(200, "text/plain", logger.get()); }
 #endif
 
 void SetupHttpHandlers() {

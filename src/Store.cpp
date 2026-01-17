@@ -1,5 +1,5 @@
 #if defined(EBUS_INTERNAL)
-#include "store.hpp"
+#include "Store.hpp"
 
 #include <Preferences.h>
 

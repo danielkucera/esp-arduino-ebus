@@ -1,10 +1,10 @@
 #if defined(EBUS_INTERNAL)
-#include "mqtt.hpp"
+#include "Mqtt.hpp"
 
 #include <functional>
 
+#include "MqttHA.hpp"
 #include "main.hpp"
-#include "mqttha.hpp"
 
 Mqtt mqtt;
 
