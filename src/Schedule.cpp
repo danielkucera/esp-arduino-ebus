@@ -325,14 +325,6 @@ const std::string Schedule::getTimingJson() {
     obj["Count"] = count;
   };
 
-  addTiming(doc["Sync"].to<JsonObject>(), handlerTiming.syncLast,
-            handlerTiming.syncMean, handlerTiming.syncStdDev,
-            handlerTiming.syncCount);
-
-  addTiming(doc["Write"].to<JsonObject>(), handlerTiming.writeLast,
-            handlerTiming.writeMean, handlerTiming.writeStdDev,
-            handlerTiming.writeCount);
-
   addTiming(doc["BusIsr"]["Delay"].to<JsonObject>(),
             requestTiming.busIsrDelayLast, requestTiming.busIsrDelayMean,
             requestTiming.busIsrDelayStdDev, requestTiming.busIsrDelayCount);
@@ -340,6 +332,18 @@ const std::string Schedule::getTimingJson() {
   addTiming(doc["BusIsr"]["Window"].to<JsonObject>(),
             requestTiming.busIsrWindowLast, requestTiming.busIsrWindowMean,
             requestTiming.busIsrWindowStdDev, requestTiming.busIsrWindowCount);
+
+  addTiming(doc["Write"].to<JsonObject>(), handlerTiming.writeLast,
+            handlerTiming.writeMean, handlerTiming.writeStdDev,
+            handlerTiming.writeCount);
+
+  addTiming(doc["Active"]["First"].to<JsonObject>(),
+            handlerTiming.activeFirstLast, handlerTiming.activeFirstMean,
+            handlerTiming.activeFirstStdDev, handlerTiming.activeFirstCount);
+
+  addTiming(doc["Active"]["Data"].to<JsonObject>(),
+            handlerTiming.activeDataLast, handlerTiming.activeDataMean,
+            handlerTiming.activeDataStdDev, handlerTiming.activeDataCount);
 
   addTiming(doc["Passive"]["First"].to<JsonObject>(),
             handlerTiming.passiveFirstLast, handlerTiming.passiveFirstMean,
@@ -349,13 +353,9 @@ const std::string Schedule::getTimingJson() {
             handlerTiming.passiveDataLast, handlerTiming.passiveDataMean,
             handlerTiming.passiveDataStdDev, handlerTiming.passiveDataCount);
 
-  addTiming(doc["Active"]["First"].to<JsonObject>(),
-            handlerTiming.activeFirstLast, handlerTiming.activeFirstMean,
-            handlerTiming.activeFirstStdDev, handlerTiming.activeFirstCount);
-
-  addTiming(doc["Active"]["Data"].to<JsonObject>(),
-            handlerTiming.activeDataLast, handlerTiming.activeDataMean,
-            handlerTiming.activeDataStdDev, handlerTiming.activeDataCount);
+  addTiming(doc["Sync"].to<JsonObject>(), handlerTiming.syncLast,
+            handlerTiming.syncMean, handlerTiming.syncStdDev,
+            handlerTiming.syncCount);
 
   addTiming(doc["Callback"]["Reactive"].to<JsonObject>(),
             handlerTiming.callbackReactiveLast,
