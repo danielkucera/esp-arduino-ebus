@@ -11,24 +11,15 @@ Logger::Logger(size_t maxEntries)
 
 Logger::~Logger() { delete[] buffer; }
 
-void Logger::add(LogLevel level, String message) {
-  String payload;
-  JsonDocument doc;
+void Logger::error(String message) { log(LogLevel::ERROR, message); }
 
-  doc["timestamp"] = timestamp();
-  doc["level"] = getLogLevelText(level);
-  doc["message"] = message;
+void Logger::warn(String message) { log(LogLevel::WARN, message); }
 
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
+void Logger::info(String message) { log(LogLevel::INFO, message); }
 
-  buffer[index] = payload;
+void Logger::debug(String message) { log(LogLevel::DEBUG, message); }
 
-  index = (index + 1) % maxEntries;
-  if (entries < maxEntries) entries++;
-}
-
-String Logger::get() {
+String Logger::getLogs() {
   String response = "[";
   for (size_t i = 0; i < entries; i++) {
     size_t index = (index - entries + i + maxEntries) % maxEntries;
@@ -37,6 +28,11 @@ String Logger::get() {
   }
   response += "]";
   return response;
+}
+
+const char* Logger::logLevelText(LogLevel logLevel) {
+  const char* values[] = {"DEBUG", "INFO", "WARN", "ERROR"};
+  return values[static_cast<int>(logLevel)];
 }
 
 String Logger::timestamp() {
@@ -50,4 +46,21 @@ String Logger::timestamp() {
            ".%03uZ", millis() % 1000);
 
   return String(timestamp);
+}
+
+void Logger::log(LogLevel level, String message) {
+  String payload;
+  JsonDocument doc;
+
+  doc["timestamp"] = timestamp();
+  doc["level"] = logLevelText(level);
+  doc["message"] = message;
+
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  buffer[index] = payload;
+
+  index = (index + 1) % maxEntries;
+  if (entries < maxEntries) entries++;
 }

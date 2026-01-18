@@ -378,7 +378,7 @@ void data_loop(void* pvParameters) {
 
 #if defined(EBUS_INTERNAL)
 void time_sync_notification_cb(struct timeval* tv) {
-  logger.add(LogLevel::INFO, "SNTP synchronized to " + String(sntpServer));
+  logger.info("SNTP synchronized to " + String(sntpServer));
 }
 
 void initSNTP(const char* server) {
@@ -393,7 +393,7 @@ void initSNTP(const char* server) {
 
 void setTimezone(const char* timezone) {
   if (strlen(timezone) > 0) {
-    logger.add(LogLevel::INFO, "Timezone set to " + String(timezone));
+    logger.info("Timezone set to " + String(timezone));
     setenv("TZ", timezone, 1);
     tzset();
   }

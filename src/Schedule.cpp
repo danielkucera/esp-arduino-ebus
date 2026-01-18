@@ -516,7 +516,7 @@ void Schedule::handleEventQueue() {
                     ebus::to_string(event->data.master) + "' slave '" +
                     ebus::to_string(event->data.slave) + "'";
 
-          logger.add(LogLevel::WARN, payload.c_str());
+          logger.warn(payload.c_str());
         } break;
         case CallbackType::telegram: {
           payload = ebus::to_string(event->data.master);
@@ -541,7 +541,7 @@ void Schedule::handleEventQueue() {
                                       std::vector<uint8_t>(event->data.slave));
               break;
           }
-          logger.add(LogLevel::INFO, payload.c_str());
+          logger.info(payload.c_str());
         } break;
       }
       delete event;
@@ -591,7 +591,7 @@ void Schedule::handleCommandQueue() {
       std::string msg = "Start " +
                         std::string(res ? "success: " : " failed: ") +
                         ebus::to_string(nextCmd.command);
-      logger.add(LogLevel::DEBUG, msg.c_str());
+      logger.debug(msg.c_str());
     }
   }
 }

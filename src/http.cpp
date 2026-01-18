@@ -278,7 +278,7 @@ void handleStatisticsReset() {
 }
 
 // logs
-void handleLogs() { configServer.send(200, "text/plain", logger.get()); }
+void handleLogs() { configServer.send(200, "text/plain", logger.getLogs()); }
 #endif
 
 void SetupHttpHandlers() {
