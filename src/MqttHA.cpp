@@ -1,6 +1,6 @@
 #if defined(EBUS_INTERNAL)
-#include <mqtt.hpp>
-#include <mqttha.hpp>
+#include <Mqtt.hpp>
+#include <MqttHA.hpp>
 
 MqttHA mqttha;
 

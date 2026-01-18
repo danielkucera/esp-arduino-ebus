@@ -4,8 +4,7 @@
 
 #include <queue>
 
-#include "arbitration.hpp"
-#include "busstate.hpp"
+#include "Arbitration.hpp"
 
 enum responses {
   RESETTED = 0x0,

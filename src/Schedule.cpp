@@ -1,14 +1,14 @@
 #if defined(EBUS_INTERNAL)
-#include "schedule.hpp"
+#include "Schedule.hpp"
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
 #include <set>
 
+#include "Logger.hpp"
+#include "Mqtt.hpp"
 #include "http.hpp"
-#include "log.hpp"
-#include "mqtt.hpp"
 
 // Identification (Service 07h 04h)
 const std::vector<uint8_t> VEC_070400 = {0x07, 0x04, 0x00};
@@ -516,7 +516,7 @@ void Schedule::handleEventQueue() {
                     ebus::to_string(event->data.master) + "' slave '" +
                     ebus::to_string(event->data.slave) + "'";
 
-          addLog(LogLevel::WARN, payload.c_str());
+          logger.warn(payload.c_str());
         } break;
         case CallbackType::telegram: {
           payload = ebus::to_string(event->data.master);
@@ -541,7 +541,7 @@ void Schedule::handleEventQueue() {
                                       std::vector<uint8_t>(event->data.slave));
               break;
           }
-          addLog(LogLevel::INFO, payload.c_str());
+          logger.info(payload.c_str());
         } break;
       }
       delete event;
@@ -591,7 +591,7 @@ void Schedule::handleCommandQueue() {
       std::string msg = "Start " +
                         std::string(res ? "success: " : " failed: ") +
                         ebus::to_string(nextCmd.command);
-      addLog(LogLevel::DEBUG, msg.c_str());
+      logger.debug(msg.c_str());
     }
   }
 }

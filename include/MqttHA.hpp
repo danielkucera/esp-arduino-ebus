@@ -1,7 +1,7 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <store.hpp>
+#include <Store.hpp>
 #include <string>
 
 // Home Assistant MQTT class for auto discovery

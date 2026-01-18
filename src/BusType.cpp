@@ -1,4 +1,4 @@
-#include "bus.hpp"
+#include "BusType.hpp"
 
 #include <queue>
 

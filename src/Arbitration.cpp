@@ -1,6 +1,6 @@
-#include "arbitration.hpp"
+#include "Arbitration.hpp"
 
-#include "bus.hpp"
+#include "BusType.hpp"
 
 // arbitration is timing sensitive. avoid communicating with WifiClient during
 // arbitration according
