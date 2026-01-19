@@ -312,8 +312,8 @@ MqttHA::Component MqttHA::createDiagnostic(const std::string& component,
 MqttHA::Component MqttHA::createDiagnosticUptime() const {
   Component c = createDiagnostic("sensor", "uptime", "Uptime");
   c.fields["state_topic"] = createStateTopic("state", "uptime");
-  c.fields["unit_of_measurement"] = "h";
-  c.fields["value_template"] = "{{((value|float)/1000/60/60)|round(2)}}";
+  c.fields["unit_of_measurement"] = "min";
+  c.fields["value_template"] = "{{((value|float)/1000/60)|round(1)}}";
   c.fields["icon"] = "mdi:clock-outline";
 
   c.device["name"] = thingName;
