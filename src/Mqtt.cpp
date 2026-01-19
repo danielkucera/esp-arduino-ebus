@@ -318,16 +318,10 @@ void Mqtt::checkIncomingQueue() {
 }
 
 void Mqtt::checkOutgoingQueue() {
-  if (outgoingQueue.empty() || millis() <= lastOutgoing + outgoingInterval)
-    return;
-
-  lastOutgoing = millis();
-
-  int processed = 0;
-  while (!outgoingQueue.empty() && processed < 5) {
+  if (!outgoingQueue.empty() && millis() > lastOutgoing + outgoingInterval) {
+    lastOutgoing = millis();
     OutgoingAction action = outgoingQueue.front();
     outgoingQueue.pop();
-    processed++;
 
     switch (action.type) {
       case OutgoingActionType::Command:
