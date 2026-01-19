@@ -312,8 +312,9 @@ MqttHA::Component MqttHA::createDiagnostic(const std::string& component,
 MqttHA::Component MqttHA::createDiagnosticUptime() const {
   Component c = createDiagnostic("sensor", "uptime", "Uptime");
   c.fields["state_topic"] = createStateTopic("state", "uptime");
-  c.fields["value_template"] =
-      "{{timedelta(seconds=((value|float)/1000)|int)}}";
+  c.fields["unit_of_measurement"] = "h";
+  c.fields["value_template"] = "{{((value|float)/1000/60/60)|round(2)}}";
+  c.fields["icon"] = "mdi:clock-outline";
 
   c.device["name"] = thingName;
   c.device["manufacturer"] = thingManufacturer;
@@ -331,6 +332,7 @@ MqttHA::Component MqttHA::createDiagnosticFreeHeap() const {
   c.fields["state_topic"] = createStateTopic("state", "free_heap");
   c.fields["unit_of_measurement"] = "B";
   c.fields["value_template"] = "{{value|int}}";
+  c.fields["icon"] = "mdi:memory";
   return c;
 }
 
@@ -339,6 +341,7 @@ MqttHA::Component MqttHA::createDiagnosticLoopDuration() const {
   c.fields["state_topic"] = createStateTopic("state", "loop_duration");
   c.fields["unit_of_measurement"] = "µs";
   c.fields["value_template"] = "{{value|int}}";
+  c.fields["icon"] = "mdi:timelapse";
   return c;
 }
 
