@@ -233,3 +233,113 @@ fieldset {
     border-radius: 0.3rem;
     margin: 0px;
 }
+
+/* ========== Mobile Responsiveness ========== */
+@media (max-width: 600px) {
+    body {
+        padding: 5px;
+        overflow-x: hidden;
+    }
+
+    h1 {
+        margin: 0.5rem 0;
+        font-size: 1.5rem;
+    }
+
+    .controls {
+        gap: 0.25rem;
+    }
+
+    .controls button {
+        padding: 0.35rem 0.5rem;
+        font-size: 0.75rem;
+        min-width: auto;
+        margin-right: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .controls span {
+        font-size: 0.75rem;
+        margin: 0;
+        margin-left: auto;
+    }
+
+    table {
+        font-size: 0.75rem;
+        margin-top: 8px;
+    }
+
+    th,
+    td {
+        padding: 0.35rem 0.25rem;
+        font-size: 0.7rem;
+    }
+
+    td:nth-child(n+3) {
+        text-align: right;
+    }
+
+    td input {
+        width: 4rem !important;
+        font-size: 0.7rem;
+        padding: 0.2rem;
+    }
+
+    td button {
+        padding: 0.25rem 0.35rem;
+        font-size: 0.65rem;
+        margin: 0.05rem;
+        min-width: 40px;
+    }
+}
+
+@media (max-width: 400px) {
+    body {
+        padding: 3px;
+    }
+
+    h1 {
+        font-size: 1.2rem;
+        margin: 0.25rem 0;
+    }
+
+    .controls {
+        gap: 0.15rem;
+    }
+
+    .controls button {
+        padding: 0.25rem 0.4rem;
+        font-size: 0.65rem;
+        min-width: auto;
+        margin-right: 0.15rem;
+        margin-bottom: 0.15rem;
+    }
+
+    .controls span {
+        font-size: 0.65rem;
+    }
+
+    table {
+        font-size: 0.65rem;
+        margin-top: 6px;
+    }
+
+    th,
+    td {
+        padding: 0.25rem 0.15rem;
+        font-size: 0.6rem;
+    }
+
+    td input {
+        width: 3rem !important;
+        font-size: 0.6rem;
+        padding: 0.15rem;
+    }
+
+    td button {
+        padding: 0.2rem 0.25rem;
+        font-size: 0.55rem;
+        margin: 0.03rem;
+        min-width: 35px;
+    }
+}
