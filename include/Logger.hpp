@@ -6,7 +6,7 @@
 
 class Logger {
  public:
-  Logger(size_t maxEntries = 35);
+  explicit Logger(size_t maxEntries = 35);
   ~Logger();
 
   void error(String message);
