@@ -14,7 +14,9 @@
         <button id="btnHome">Home</button>
         <button id="btnValues">Values</button>
         <span id="status">...</span>
-        <span id="pollIntervalLabel" style="margin-left:auto">Poll Interval: 10 seconds</span>
+    </div>
+    <div class="controls">
+        <span id="pollIntervalLabel">Poll: 10s</span>
         <button id="btnDecreaseInterval">-</button>
         <button id="btnIncreaseInterval">+</button>
         <button id="btnPause">Pause</button>
@@ -36,64 +38,105 @@
         function renderValuesTable(data) {
             const thead = document.getElementById('valuesTableHeader');
             const tbody = document.getElementById('valuesTableBody');
-            thead.innerHTML = '';
-            tbody.innerHTML = '';
 
-            // Original keys we want to display
-            const cols = ['key', 'name', 'value', 'unit', 'age'];
+            // Initialize headers if empty
+            if (thead.children.length === 0) {
+                const cols = ['key', 'name', 'value', 'unit', 'age'];
+                const trh = document.createElement('tr');
+                cols.forEach(k => {
+                    const th = document.createElement('th');
+                    th.textContent = k;
+                    trh.appendChild(th);
+                });
+                const thActions = document.createElement('th');
+                thActions.textContent = 'actions';
+                trh.appendChild(thActions);
+                thead.appendChild(trh);
+            }
 
-            // Header row, add an extra 'actions' column
-            const trh = document.createElement('tr');
-            cols.forEach(k => {
-                const th = document.createElement('th');
-                th.textContent = k;
-                trh.appendChild(th);
+            // Create a map of existing rows by key
+            const existingRows = {};
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const input = tr.querySelector('input[type="text"]');
+                if (input) {
+                    const key = input.getAttribute('data-key');
+                    existingRows[key] = tr;
+                }
             });
 
-            const thActions = document.createElement('th');
-            thActions.textContent = 'actions';
-            trh.appendChild(thActions);
-            thead.appendChild(trh);
+            const cols = ['key', 'name', 'value', 'unit', 'age'];
 
-            // Rows
+            // Update or create rows
             data.forEach(item => {
-                const tr = document.createElement('tr');
-                cols.forEach(k => {
-                    const td = document.createElement('td');
-                    td.textContent = (item[k] === undefined ? '' : String(item[k]));
-                    tr.appendChild(td);
-                });
-
-                // Create actions cell: input + Write + Read
-                const tdActions = document.createElement('td');
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.placeholder = 'new value';
-                input.style.width = '6rem';
-                input.value = '';
-                input.disabled = !item.write;
-
-                // Always add Write button, but disable if write is not true
-                const btnWrite = document.createElement('button');
-                btnWrite.textContent = 'Write';
                 const targetKey = item.key || item.name || '';
-                btnWrite.disabled = !item.write;
-                btnWrite.addEventListener('click', () => writeValue(targetKey, input, btnWrite));
+                let tr = existingRows[targetKey];
 
-                // Allow Enter to trigger Write
-                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnWrite.click(); });
-                tdActions.appendChild(input);
-                tdActions.appendChild(btnWrite);
+                if (tr) {
+                    // Update existing row - only update display cells, not input
+                    const tds = tr.querySelectorAll('td');
+                    cols.forEach((col, idx) => {
+                        if (tds[idx]) {
+                            tds[idx].textContent = (item[col] === undefined ? '' : String(item[col]));
+                        }
+                    });
 
-                // Always add Read button, but disable if active is not true
-                const btnRead = document.createElement('button');
-                btnRead.textContent = 'Read';
-                btnRead.disabled = !item.active;
-                btnRead.addEventListener('click', () => readValue(targetKey, btnRead));
-                tdActions.appendChild(btnRead);
+                    // Update button states (write, active) but keep input focus and value
+                    const input = tr.querySelector('input[type="text"]');
+                    const btnWrite = tr.querySelector('button:nth-of-type(1)');
+                    const btnRead = tr.querySelector('button:nth-of-type(2)');
 
-                tr.appendChild(tdActions);
-                tbody.appendChild(tr);
+                    if (input) input.disabled = !item.write;
+                    if (btnWrite) btnWrite.disabled = !item.write;
+                    if (btnRead) btnRead.disabled = !item.active;
+                } else {
+                    // Create new row
+                    tr = document.createElement('tr');
+                    cols.forEach(k => {
+                        const td = document.createElement('td');
+                        td.textContent = (item[k] === undefined ? '' : String(item[k]));
+                        tr.appendChild(td);
+                    });
+
+                    // Create actions cell: input + Write + Read
+                    const tdActions = document.createElement('td');
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.placeholder = 'new value';
+                    input.style.width = '6rem';
+                    input.value = '';
+                    input.disabled = !item.write;
+                    input.setAttribute('data-key', targetKey);
+
+                    const btnWrite = document.createElement('button');
+                    btnWrite.textContent = 'Write';
+                    btnWrite.disabled = !item.write;
+                    btnWrite.addEventListener('click', () => writeValue(targetKey, input, btnWrite));
+
+                    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnWrite.click(); });
+                    tdActions.appendChild(input);
+                    tdActions.appendChild(btnWrite);
+
+                    const btnRead = document.createElement('button');
+                    btnRead.textContent = 'Read';
+                    btnRead.disabled = !item.active;
+                    btnRead.addEventListener('click', () => readValue(targetKey, btnRead));
+                    tdActions.appendChild(btnRead);
+
+                    tr.appendChild(tdActions);
+                    tbody.appendChild(tr);
+                }
+            });
+
+            // Remove rows that are no longer in data
+            const dataKeys = new Set(data.map(item => item.key || item.name || ''));
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const input = tr.querySelector('input[type="text"]');
+                if (input) {
+                    const key = input.getAttribute('data-key');
+                    if (!dataKeys.has(key)) {
+                        tr.remove();
+                    }
+                }
             });
         }
 
