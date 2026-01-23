@@ -19,7 +19,7 @@ void Logger::info(String message) { log(LogLevel::INFO, message); }
 
 void Logger::debug(String message) { log(LogLevel::DEBUG, message); }
 
-String Logger::getLogs() const {
+const String Logger::getLogs() const {
   String response = "[";
   for (size_t i = 0; i < entries; i++) {
     size_t logIndex = (index - entries + i + maxEntries) % maxEntries;
@@ -35,7 +35,7 @@ const char* Logger::logLevelText(LogLevel logLevel) {
   return values[static_cast<int>(logLevel)];
 }
 
-String Logger::timestamp() {
+const String Logger::timestamp() {
   time_t now = time(nullptr);
   struct tm timeinfo;
   localtime_r(&now, &timeinfo);

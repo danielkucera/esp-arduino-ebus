@@ -17,7 +17,7 @@ class Logger {
   void info(String message);
   void debug(String message);
 
-  String getLogs() const;
+  const String getLogs() const;
 
  private:
   String* buffer;
@@ -28,7 +28,7 @@ class Logger {
   enum class LogLevel { DEBUG, INFO, WARN, ERROR };
   static const char* logLevelText(LogLevel logLevel);
 
-  String timestamp();
+  static const String timestamp();
 
   void log(LogLevel level, String message);
 };
