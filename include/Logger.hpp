@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
+#include <WString.h>
 
 // Simple circular buffer logger
 
