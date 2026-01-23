@@ -19,11 +19,11 @@ void Logger::info(String message) { log(LogLevel::INFO, message); }
 
 void Logger::debug(String message) { log(LogLevel::DEBUG, message); }
 
-String Logger::getLogs() {
+String Logger::getLogs() const {
   String response = "[";
   for (size_t i = 0; i < entries; i++) {
-    size_t index = (index - entries + i + maxEntries) % maxEntries;
-    response += buffer[index];
+    size_t logIndex = (index - entries + i + maxEntries) % maxEntries;
+    response += buffer[logIndex];
     if (i < entries - 1) response += ",";
   }
   response += "]";

@@ -9,12 +9,15 @@ class Logger {
   explicit Logger(size_t maxEntries = 35);
   ~Logger();
 
+  Logger(const Logger& other) = delete;             // Prevent copying
+  Logger& operator=(const Logger& other) = delete;  // Prevent assignment
+
   void error(String message);
   void warn(String message);
   void info(String message);
   void debug(String message);
 
-  String getLogs();
+  String getLogs() const;
 
  private:
   String* buffer;
