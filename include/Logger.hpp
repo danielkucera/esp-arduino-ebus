@@ -1,20 +1,23 @@
 #pragma once
 
-#include <Arduino.h>
+#include <WString.h>
 
 // Simple circular buffer logger
 
 class Logger {
  public:
-  Logger(size_t maxEntries = 35);
+  explicit Logger(size_t maxEntries = 35);
   ~Logger();
+
+  Logger(const Logger& other) = delete;             // Prevent copying
+  Logger& operator=(const Logger& other) = delete;  // Prevent assignment
 
   void error(String message);
   void warn(String message);
   void info(String message);
   void debug(String message);
 
-  String getLogs();
+  const String getLogs() const;
 
  private:
   String* buffer;
@@ -25,7 +28,7 @@ class Logger {
   enum class LogLevel { DEBUG, INFO, WARN, ERROR };
   static const char* logLevelText(LogLevel logLevel);
 
-  String timestamp();
+  static const String timestamp();
 
   void log(LogLevel level, String message);
 };

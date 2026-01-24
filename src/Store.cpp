@@ -404,8 +404,8 @@ JsonDocument Store::getCommandJsonDoc(const Command* command) {
 const JsonDocument Store::getCommandsJsonDoc() const {
   JsonDocument doc;
 
-  std::vector<std::pair<std::string, Command>> orderedCommands(
-      commands.begin(), commands.end());
+  std::vector<std::pair<std::string, Command>> orderedCommands(commands.begin(),
+                                                               commands.end());
 
   std::sort(orderedCommands.begin(), orderedCommands.end(),
             [](const std::pair<std::string, Command>& a,
@@ -507,15 +507,15 @@ std::vector<Command*> Store::updateData(Command* command,
   }
 
   // Passive: potentially multiple matches
-  std::vector<Command*> commands = findPassiveCommands(master);
-  for (Command* cmd : commands) {
+  std::vector<Command*> passiveCommands = findPassiveCommands(master);
+  for (Command* cmd : passiveCommands) {
     cmd->last = millis();
     if (cmd->master)
       cmd->data = ebus::range(master, 4 + cmd->position, cmd->length);
     else
       cmd->data = ebus::range(slave, cmd->position, cmd->length);
   }
-  return commands;
+  return passiveCommands;
 }
 
 const JsonDocument Store::getValueJsonDoc(const Command* command) {
@@ -554,8 +554,8 @@ const std::string Store::getValueFullJson(const Command* command) {
 const JsonDocument Store::getValuesJsonDoc() const {
   JsonDocument doc;
 
-  std::vector<std::pair<std::string, Command>> orderedCommands(
-      commands.begin(), commands.end());
+  std::vector<std::pair<std::string, Command>> orderedCommands(commands.begin(),
+                                                               commands.end());
 
   std::sort(orderedCommands.begin(), orderedCommands.end(),
             [](const std::pair<std::string, Command>& a,
