@@ -135,7 +135,7 @@ class Schedule {
   bool counterEnabled = false;
   bool timingEnabled = false;
 
-  enum class CallbackType { telegram, error };
+  enum class CallbackType { won, lost, telegram, error };
 
   struct CallbackEvent {
     CallbackType type;
@@ -145,7 +145,7 @@ class Schedule {
       ebus::TelegramType telegramType;
       std::vector<uint8_t> master;
       std::vector<uint8_t> slave;
-      std::string error;
+      std::string message;
     } data;
   };
 
