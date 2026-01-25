@@ -94,9 +94,12 @@ class MqttHA {
                              const std::string& uniqueIdKey,
                              const std::string& name) const;
 
+  Component createDiagnosticResetCode() const;
   Component createDiagnosticUptime() const;
   Component createDiagnosticFreeHeap() const;
   Component createDiagnosticLoopDuration() const;
+  Component createDiagnosticRSSI() const;
+  Component createDiagnosticTxPower() const;
 };
 
 extern MqttHA mqttha;
