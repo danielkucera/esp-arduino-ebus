@@ -105,7 +105,7 @@ void Mqtt::onConnect(bool sessionPresent) {
   std::string topicRequest = mqtt.rootTopic + "request";
   mqtt.subscribe(topicRequest.c_str(), 0);
 
-  mqtt.publish(mqtt.willTopic.c_str(), 0, true, "online", false);
+  mqtt.publish(mqtt.willTopic.c_str(), 0, true, "{ \"value\": \"online\" }", false);
 
   if (mqttha.isEnabled()) mqttha.publishDeviceInfo();
 }

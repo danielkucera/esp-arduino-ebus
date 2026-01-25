@@ -938,10 +938,10 @@ void loop() {
       if (currentMillis > lastMqttUpdate + 10 * 1000) {
         lastMqttUpdate = currentMillis;
 
-        mqtt.publish("state/uptime", 0, false, String(uptime).c_str());
-        mqtt.publish("state/free_heap", 0, false, String(free_heap).c_str());
+        mqtt.publish("state", 0, false, ("{ \"value\": " + String(uptime) + " }").c_str());
+        mqtt.publish("state/free_heap", 0, false, ("{ \"value\": " + String(free_heap) + " }").c_str());
         mqtt.publish("state/loop_duration", 0, false,
-                     String(loopDuration).c_str());
+                     ("{ \"value\": " + String(loopDuration) + " }").c_str());
 
         schedule.publishCounter();
         schedule.publishTiming();
