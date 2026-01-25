@@ -20,7 +20,7 @@ Mqtt::Mqtt() {
 void Mqtt::setUniqueId(const char* id) {
   uniqueId = id;
   rootTopic = "ebus/" + uniqueId + "/";
-  willTopic = mqtt.rootTopic + "state/available";
+  willTopic = mqtt.rootTopic + "available";
   client.setWill(willTopic.c_str(), 0, true, "offline");
 }
 
