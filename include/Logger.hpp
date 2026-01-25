@@ -1,6 +1,8 @@
 #pragma once
 
 #include <WString.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 // Simple circular buffer logger
 
@@ -31,6 +33,8 @@ class Logger {
   static const String timestamp();
 
   void log(LogLevel level, String message);
+
+  mutable portMUX_TYPE mux;  // Mutex for thread safety
 };
 
 extern Logger logger;

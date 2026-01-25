@@ -47,6 +47,20 @@ void Schedule::start(ebus::Request* request, ebus::Handler* handler) {
   ebusRequest = request;
   ebusHandler = handler;
   if (ebusRequest && ebusHandler) {
+    ebusHandler->setBusRequestWonCallback([this]() {
+      CallbackEvent* event = new CallbackEvent();
+      event->type = CallbackType::won;
+      event->data.message = "Bus request won";
+      eventQueue.try_push(event);
+    });
+
+    ebusHandler->setBusRequestLostCallback([this]() {
+      CallbackEvent* event = new CallbackEvent();
+      event->type = CallbackType::lost;
+      event->data.message = "Bus request lost";
+      eventQueue.try_push(event);
+    });
+
     ebusHandler->setReactiveMasterSlaveCallback(reactiveMasterSlaveCallback);
 
     ebusHandler->setTelegramCallback(
@@ -69,7 +83,7 @@ void Schedule::start(ebus::Request* request, ebus::Handler* handler) {
                                          const std::vector<uint8_t>& slave) {
       CallbackEvent* event = new CallbackEvent();
       event->type = CallbackType::error;
-      event->data.error = error;
+      event->data.message = error;
       event->data.master = master;
       event->data.slave = slave;
       eventQueue.try_push(event);
@@ -357,6 +371,14 @@ const std::string Schedule::getTimingJson() {
             handlerTiming.syncMean, handlerTiming.syncStdDev,
             handlerTiming.syncCount);
 
+  addTiming(doc["Callback"]["Won"].to<JsonObject>(),
+            handlerTiming.callbackWonLast, handlerTiming.callbackWonMean,
+            handlerTiming.callbackWonStdDev, handlerTiming.callbackWonCount);
+
+  addTiming(doc["Callback"]["Lost"].to<JsonObject>(),
+            handlerTiming.callbackLostLast, handlerTiming.callbackLostMean,
+            handlerTiming.callbackLostStdDev, handlerTiming.callbackLostCount);
+
   addTiming(doc["Callback"]["Reactive"].to<JsonObject>(),
             handlerTiming.callbackReactiveLast,
             handlerTiming.callbackReactiveMean,
@@ -501,7 +523,7 @@ void Schedule::taskFunc(void* arg) {
     if (self->stopRunner) vTaskDelete(NULL);
     self->handleEventQueue();
     self->handleCommandQueue();
-    vTaskDelay(pdMS_TO_TICKS(10));  // adjust delay as needed
+    vTaskDelay(pdMS_TO_TICKS(1));  // short delay to yield CPU
   }
 }
 
@@ -511,11 +533,12 @@ void Schedule::handleEventQueue() {
     if (event) {
       std::string payload;
       switch (event->type) {
-        case CallbackType::error: {
-          payload = event->data.error + " : master '" +
-                    ebus::to_string(event->data.master) + "' slave '" +
-                    ebus::to_string(event->data.slave) + "'";
-
+        case CallbackType::won: {
+          payload = event->data.message;
+          logger.debug(payload.c_str());
+        } break;
+        case CallbackType::lost: {
+          payload = event->data.message;
           logger.warn(payload.c_str());
         } break;
         case CallbackType::telegram: {
@@ -542,6 +565,13 @@ void Schedule::handleEventQueue() {
               break;
           }
           logger.info(payload.c_str());
+        } break;
+        case CallbackType::error: {
+          payload = event->data.message + " : master '" +
+                    ebus::to_string(event->data.master) + "' slave '" +
+                    ebus::to_string(event->data.slave) + "'";
+
+          logger.warn(payload.c_str());
         } break;
       }
       delete event;
