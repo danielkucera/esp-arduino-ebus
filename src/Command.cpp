@@ -1,10 +1,10 @@
+#if defined(EBUS_INTERNAL)
+#include "Command.hpp"
+
 #include <ArduinoJson.h>
 #include <Ebus.h>
 
-#if defined(EBUS_INTERNAL)
 #include <regex>
-
-#include "Command.hpp"
 
 const uint32_t& Command::getLast() const { return last; }
 
