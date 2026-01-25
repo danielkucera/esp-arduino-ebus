@@ -220,7 +220,7 @@ function handleJsonFileUpload(ev, textareaId, updateSizeCb) {
  * @param {number} interval - The current poll interval to display.
  */
 function updatePollLabel(labelId, interval) {
-    document.getElementById(labelId).textContent = `Refresh ${interval}s`;
+    document.getElementById(labelId).textContent = `${interval}s`;
 }
 
 /**
