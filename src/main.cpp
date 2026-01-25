@@ -398,6 +398,23 @@ void setTimezone(const char* timezone) {
     tzset();
   }
 }
+
+const std::string getMqttStatusJson() {
+  std::string payload;
+  JsonDocument doc;
+
+  doc["reset_code"] = reset_code;
+  doc["uptime"] = uptime;
+  doc["free_heap"] = free_heap;
+  doc["loop_duration"] = loopDuration;
+  doc["rssi"] = WiFi.RSSI();
+  doc["tx_power"] = WiFi.getTxPower();
+
+  doc.shrinkToFit();
+  serializeJson(doc, payload);
+
+  return payload;
+}
 #endif
 
 bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
@@ -938,7 +955,7 @@ void loop() {
       if (currentMillis > lastMqttUpdate + 10 * 1000) {
         lastMqttUpdate = currentMillis;
 
-        mqtt.publish("state", 0, false, getStatusJson().c_str());
+        mqtt.publish("state", 0, false, getMqttStatusJson().c_str());
 
         schedule.publishCounter();
         schedule.publishTiming();

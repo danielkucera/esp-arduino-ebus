@@ -47,9 +47,12 @@ void MqttHA::setThingConfigurationUrl(const std::string& configurationUrl) {
 void MqttHA::publishDeviceInfo() const {
   mqttha.publishComponent(createButtonRestart(), !enabled);
 
+  mqttha.publishComponent(createDiagnosticResetCode(), !enabled);
   mqttha.publishComponent(createDiagnosticUptime(), !enabled);
   mqttha.publishComponent(createDiagnosticFreeHeap(), !enabled);
   mqttha.publishComponent(createDiagnosticLoopDuration(), !enabled);
+  mqttha.publishComponent(createDiagnosticRSSI(), !enabled);
+  mqttha.publishComponent(createDiagnosticTxPower(), !enabled);
 }
 
 void MqttHA::publishComponents() const {
@@ -148,6 +151,7 @@ MqttHA::Component MqttHA::createComponent(const std::string& component,
   c.name = prettyName;
   c.deviceIdentifiers = deviceIdentifiers;
   c.fields["availability_topic"] = willTopic;
+  c.fields["availability_template"] = "{{value_json.value}}";
   return c;
 }
 
@@ -309,11 +313,19 @@ MqttHA::Component MqttHA::createDiagnostic(const std::string& component,
   return c;
 }
 
+MqttHA::Component MqttHA::createDiagnosticResetCode() const {
+  Component c = createDiagnostic("sensor", "reset_code", "Reset Code");
+  c.fields["state_topic"] = createStateTopic("", "state");
+  c.fields["value_template"] = "{{value_json.reset_code}}";
+  c.fields["icon"] = "mdi:restart";
+  return c;
+}
+
 MqttHA::Component MqttHA::createDiagnosticUptime() const {
   Component c = createDiagnostic("sensor", "uptime", "Uptime");
-  c.fields["state_topic"] = createStateTopic("state", "uptime");
+  c.fields["state_topic"] = createStateTopic("", "state");
   c.fields["unit_of_measurement"] = "s";
-  c.fields["value_template"] = "{{((value|float)/1000)|int}}";
+  c.fields["value_template"] = "{{((value_json.uptime|float)/1000)|int}}";
   c.fields["icon"] = "mdi:clock-outline";
 
   c.device["name"] = thingName;
@@ -329,19 +341,37 @@ MqttHA::Component MqttHA::createDiagnosticUptime() const {
 
 MqttHA::Component MqttHA::createDiagnosticFreeHeap() const {
   Component c = createDiagnostic("sensor", "free_heap", "Free Heap");
-  c.fields["state_topic"] = createStateTopic("state", "free_heap");
+  c.fields["state_topic"] = createStateTopic("", "state");
   c.fields["unit_of_measurement"] = "B";
-  c.fields["value_template"] = "{{value|int}}";
+  c.fields["value_template"] = "{{value_json.free_heap}}";
   c.fields["icon"] = "mdi:memory";
   return c;
 }
 
 MqttHA::Component MqttHA::createDiagnosticLoopDuration() const {
   Component c = createDiagnostic("sensor", "loop_duration", "Loop Duration");
-  c.fields["state_topic"] = createStateTopic("state", "loop_duration");
+  c.fields["state_topic"] = createStateTopic("", "state");
   c.fields["unit_of_measurement"] = "µs";
-  c.fields["value_template"] = "{{value|int}}";
+  c.fields["value_template"] = "{{value_json.loop_duration}}";
   c.fields["icon"] = "mdi:timelapse";
+  return c;
+}
+
+MqttHA::Component MqttHA::createDiagnosticRSSI() const {
+  Component c = createDiagnostic("sensor", "rssi", "WiFi RSSI");
+  c.fields["state_topic"] = createStateTopic("", "state");
+  c.fields["unit_of_measurement"] = "dBm";
+  c.fields["value_template"] = "{{value_json.rssi}}";
+  c.fields["icon"] = "mdi:wifi-strength-4";
+  return c;
+}
+
+MqttHA::Component MqttHA::createDiagnosticTxPower() const {
+  Component c = createDiagnostic("sensor", "tx_power", "WiFi TX Power");
+  c.fields["state_topic"] = createStateTopic("", "state");
+  c.fields["unit_of_measurement"] = "dBm";
+  c.fields["value_template"] = "{{value_json.tx_power}}";
+  c.fields["icon"] = "mdi:wifi-strength-4";
   return c;
 }
 
