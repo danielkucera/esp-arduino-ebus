@@ -5,7 +5,10 @@
 Logger logger;
 
 Logger::Logger(size_t maxEntries)
-    : maxEntries(maxEntries), index(0), entries(0) {
+    : maxEntries(maxEntries),
+      index(0),
+      entries(0),
+      mux(portMUX_INITIALIZER_UNLOCKED) {
   buffer = new String[maxEntries];
 }
 
@@ -21,11 +24,15 @@ void Logger::debug(String message) { log(LogLevel::DEBUG, message); }
 
 const String Logger::getLogs() const {
   String response = "[";
+
+  portENTER_CRITICAL(&mux);
   for (size_t i = 0; i < entries; i++) {
     size_t logIndex = (index - entries + i + maxEntries) % maxEntries;
     response += buffer[logIndex];
     if (i < entries - 1) response += ",";
   }
+  portEXIT_CRITICAL(&mux);
+
   response += "]";
   return response;
 }
@@ -59,8 +66,9 @@ void Logger::log(LogLevel level, String message) {
   doc.shrinkToFit();
   serializeJson(doc, payload);
 
+  portENTER_CRITICAL(&mux);
   buffer[index] = payload;
-
   index = (index + 1) % maxEntries;
   if (entries < maxEntries) entries++;
+  portEXIT_CRITICAL(&mux);
 }
