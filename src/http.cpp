@@ -57,7 +57,7 @@ void handleCommandsEvaluate() {
     JsonArrayConst commands = doc.as<JsonArrayConst>();
     if (!commands.isNull()) {
       for (JsonVariantConst command : commands) {
-        std::string evalError = store.evaluateCommand(command);
+        std::string evalError = Command::evaluate(command);
         if (!evalError.empty()) {
           configServer.send(403, "text/html", evalError.c_str());
           return;
@@ -82,9 +82,9 @@ void handleCommandsInsert() {
     JsonArrayConst commands = doc.as<JsonArrayConst>();
     if (!commands.isNull()) {
       for (JsonVariantConst command : commands) {
-        std::string evalError = store.evaluateCommand(command);
+        std::string evalError = Command::evaluate(command);
         if (evalError.empty())
-          store.insertCommand(store.createCommand(command));
+          store.insertCommand(Command::fromJson(command));
         else
           configServer.send(403, "text/html", evalError.c_str());
       }
@@ -118,7 +118,7 @@ void handleCommandsRemove() {
     } else if (store.getActiveCommands() + store.getPassiveCommands() > 0) {
       for (const Command* cmd : store.getCommands()) {
         if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
-        store.removeCommand(cmd->key);
+        store.removeCommand(cmd->getKey());
       }
       configServer.send(200, "text/html", "Ok");
     } else {
@@ -177,16 +177,9 @@ void handleValuesWrite() {
     std::string key = doc["key"].as<std::string>();
     Command* command = store.findCommand(key);
     if (command != nullptr) {
-      std::vector<uint8_t> valueBytes;
-      if (command->numeric) {
-        double value = doc["value"].as<double>();
-        valueBytes = getVectorFromDouble(command, value);
-      } else {
-        std::string value = doc["value"].as<std::string>();
-        valueBytes = getVectorFromString(command, value);
-      }
+      std::vector<uint8_t> valueBytes = command->getVector(doc);
       if (valueBytes.size() > 0) {
-        std::vector<uint8_t> writeCmd = command->write_cmd;
+        std::vector<uint8_t> writeCmd = command->getWriteCmd();
         writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
         schedule.handleWrite(writeCmd);
         configServer.send(200, "text/html", "Ok");
@@ -220,7 +213,7 @@ void handleValuesRead() {
     Command* command = store.findCommand(key);
     if (command != nullptr) {
       // Force immediate refresh by resetting last seen timestamp
-      command->last = 0;
+      command->setLast(0);
       // Do not return the old value immediately; confirm the read request
       JsonDocument resp;
       resp["id"] = "read";

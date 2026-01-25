@@ -88,7 +88,7 @@ class Mqtt {
                           const std::vector<uint8_t>& master,
                           const std::vector<uint8_t>& slave);
 
-  static void publishValue(const Command* command, const JsonDocument& doc);
+  static void publishValue(const Command* command);
 
   void doLoop();
 
