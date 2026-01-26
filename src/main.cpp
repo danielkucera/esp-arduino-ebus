@@ -254,7 +254,10 @@ void wifiConnected() {
 #endif
 }
 
-void wdt_start() { esp_task_wdt_init(6, true); }
+void wdt_start() {
+  esp_task_wdt_init(6, true);
+  esp_task_wdt_add(NULL);
+}
 
 void wdt_feed() { esp_task_wdt_reset(); }
 
