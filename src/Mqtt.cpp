@@ -77,13 +77,13 @@ void Mqtt::publishData(const std::string& id,
   mqtt.publish("response", 0, false, payload.c_str());
 }
 
-void Mqtt::publishValue(const Command* command, const JsonDocument& doc) {
+void Mqtt::publishValue(const Command* command) {
   if (!mqtt.enabled) return;
 
   std::string payload;
-  serializeJson(doc, payload);
+  serializeJson(command->getValueJsonDoc(), payload);
 
-  std::string name = command->name;
+  std::string name = command->getName();
   std::transform(name.begin(), name.end(), name.begin(),
                  [](unsigned char c) { return std::tolower(c); });
 
@@ -148,9 +148,9 @@ void Mqtt::handleInsert(const JsonDocument& doc) {
   JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
   if (!commands.isNull()) {
     for (JsonVariantConst command : commands) {
-      std::string evalError = store.evaluateCommand(command);
+      std::string evalError = Command::evaluate(command);
       if (evalError.empty()) {
-        incomingQueue.push(IncomingAction(store.createCommand(command)));
+        incomingQueue.push(IncomingAction(Command::fromJson(command)));
       } else {
         std::string errorPayload;
         JsonDocument errorDoc;
@@ -170,7 +170,7 @@ void Mqtt::handleRemove(const JsonDocument& doc) {
       incomingQueue.push(IncomingAction(key.as<std::string>()));
   } else {
     for (const Command* command : store.getCommands())
-      incomingQueue.push(IncomingAction(command->key));
+      incomingQueue.push(IncomingAction(command->getKey()));
   }
 }
 
@@ -269,21 +269,14 @@ void Mqtt::handleWrite(const JsonDocument& doc) {
   std::string key = doc["key"].as<std::string>();
   Command* command = store.findCommand(key);
   if (command != nullptr) {
-    std::vector<uint8_t> valueBytes;
-    if (command->numeric) {
-      double value = doc["value"].as<double>();
-      valueBytes = getVectorFromDouble(command, value);
-    } else {
-      std::string value = doc["value"].as<std::string>();
-      valueBytes = getVectorFromString(command, value);
-    }
+    std::vector<uint8_t> valueBytes = command->getVector(doc);
     if (valueBytes.size() > 0) {
-      std::vector<uint8_t> writeCmd = command->write_cmd;
+      std::vector<uint8_t> writeCmd = command->getWriteCmd();
       writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
       schedule.handleWrite(writeCmd);
       mqtt.publishResponse("write", "scheduled for key '" + key + "' name '" +
-                                        command->name + "'");
-      command->last = 0;  // force immediate update
+                                        command->getName() + "'");
+      command->setLast(0);  // force immediate update
     } else {
       mqtt.publishResponse("write", "invalid value for key '" + key + "'");
     }
@@ -302,7 +295,8 @@ void Mqtt::checkIncomingQueue() {
       case IncomingActionType::Insert:
         store.insertCommand(action.command);
         if (mqttha.isEnabled()) mqttha.publishComponent(&action.command, false);
-        publishResponse("insert", "key '" + action.command.key + "' inserted");
+        publishResponse("insert",
+                        "key '" + action.command.getKey() + "' inserted");
         break;
       case IncomingActionType::Remove:
         const Command* cmd = store.findCommand(action.key);
@@ -351,9 +345,9 @@ void Mqtt::publishResponse(const std::string& id, const std::string& status,
 }
 
 void Mqtt::publishCommand(const Command* command) {
-  std::string topic = "commands/" + command->key;
+  std::string topic = "commands/" + command->getKey();
   std::string payload;
-  serializeJson(store.getCommandJsonDoc(command), payload);
+  serializeJson(command->toJson(), payload);
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 

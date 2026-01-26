@@ -659,9 +659,9 @@ void Schedule::enqueueCommand(const QueuedCommand& cmd) {
 
 void Schedule::enqueueScheduleCommand() {
   Command* cmd = store.nextActiveCommand();
-  if (cmd && cmd->read_cmd.size() > 0) {
+  if (cmd && cmd->getReadCmd().size() > 0) {
     if (scheduleCommand == cmd) return;  // command is already pending
-    enqueueCommand({Mode::schedule, PRIO_SCHEDULE, cmd->read_cmd, cmd});
+    enqueueCommand({Mode::schedule, PRIO_SCHEDULE, cmd->getReadCmd(), cmd});
   }
 }
 
@@ -716,8 +716,7 @@ void Schedule::processActive(const Mode& mode,
     case Mode::schedule:
       if (scheduleCommand != nullptr) {
         store.updateData(scheduleCommand, master, slave);
-        mqtt.publishValue(scheduleCommand,
-                          store.getValueJsonDoc(scheduleCommand));
+        mqtt.publishValue(scheduleCommand);
         scheduleCommand = nullptr;
         scheduleCommandSetTime = 0;  // clear after success
       }
@@ -755,8 +754,7 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
 
   std::vector<Command*> pasCommands = store.updateData(nullptr, master, slave);
 
-  for (const Command* command : pasCommands)
-    mqtt.publishValue(command, store.getValueJsonDoc(command));
+  for (const Command* command : pasCommands) mqtt.publishValue(command);
 
   processScan(master, slave);
 

@@ -57,20 +57,21 @@ void MqttHA::publishDeviceInfo() const {
 
 void MqttHA::publishComponents() const {
   for (const Command* command : store.getCommands()) {
-    if (command->ha) mqtt.enqueueOutgoing(OutgoingAction(command, !enabled));
+    if (command->getHA())
+      mqtt.enqueueOutgoing(OutgoingAction(command, !enabled));
   }
 }
 
 void MqttHA::publishComponent(const Command* command, const bool remove) const {
-  if (command->ha_component == "binary_sensor") {
+  if (command->getHAComponent() == "binary_sensor") {
     publishComponent(createBinarySensor(command), remove);
-  } else if (command->ha_component == "sensor") {
+  } else if (command->getHAComponent() == "sensor") {
     publishComponent(createSensor(command), remove);
-  } else if (command->ha_component == "number") {
+  } else if (command->getHAComponent() == "number") {
     publishComponent(createNumber(command), remove);
-  } else if (command->ha_component == "select") {
+  } else if (command->getHAComponent() == "select") {
     publishComponent(createSelect(command), remove);
-  } else if (command->ha_component == "switch") {
+  } else if (command->getHAComponent() == "switch") {
     publishComponent(createSwitch(command), remove);
   }
 }
@@ -208,33 +209,35 @@ MqttHA::KeyValueMapping MqttHA::createOptions(
 }
 
 MqttHA::Component MqttHA::createBinarySensor(const Command* command) const {
-  Component c = createComponent("binary_sensor", command->key, command->name);
-  c.fields["state_topic"] = createStateTopic("values", command->name);
-  if (!command->ha_device_class.empty())
-    c.fields["device_class"] = command->ha_device_class;
-  if (!command->ha_entity_category.empty())
-    c.fields["entity_category"] = command->ha_entity_category;
-  c.fields["payload_on"] = std::to_string(command->ha_payload_on);
-  c.fields["payload_off"] = std::to_string(command->ha_payload_off);
+  Component c =
+      createComponent("binary_sensor", command->getKey(), command->getName());
+  c.fields["state_topic"] = createStateTopic("values", command->getName());
+  if (!command->getHADeviceClass().empty())
+    c.fields["device_class"] = command->getHADeviceClass();
+  if (!command->getHAEntityCategory().empty())
+    c.fields["entity_category"] = command->getHAEntityCategory();
+  c.fields["payload_on"] = std::to_string(command->getHAPayloadOn());
+  c.fields["payload_off"] = std::to_string(command->getHAPayloadOff());
   c.fields["value_template"] = "{{value_json.value}}";
   return c;
 }
 
 MqttHA::Component MqttHA::createSensor(const Command* command) const {
-  Component c = createComponent("sensor", command->key, command->name);
-  c.fields["state_topic"] = createStateTopic("values", command->name);
-  if (!command->ha_device_class.empty())
-    c.fields["device_class"] = command->ha_device_class;
-  if (!command->ha_entity_category.empty())
-    c.fields["entity_category"] = command->ha_entity_category;
-  if (!command->ha_state_class.empty())
-    c.fields["state_class"] = command->ha_state_class;
-  if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
+  Component c =
+      createComponent("sensor", command->getKey(), command->getName());
+  c.fields["state_topic"] = createStateTopic("values", command->getName());
+  if (!command->getHADeviceClass().empty())
+    c.fields["device_class"] = command->getHADeviceClass();
+  if (!command->getHAEntityCategory().empty())
+    c.fields["entity_category"] = command->getHAEntityCategory();
+  if (!command->getHAStateClass().empty())
+    c.fields["state_class"] = command->getHAStateClass();
+  if (!command->getUnit().empty())
+    c.fields["unit_of_measurement"] = command->getUnit();
 
-  if (!command->ha_key_value_map.empty()) {
+  if (!command->getHAKeyValueMap().empty()) {
     KeyValueMapping optionsResult =
-        createOptions(command->ha_key_value_map, command->ha_default_key);
-
+        createOptions(command->getHAKeyValueMap(), command->getHADefaultKey());
     c.fields["value_template"] = optionsResult.valueMap;
   } else {
     c.fields["value_template"] = "{{value_json.value}}";
@@ -243,57 +246,61 @@ MqttHA::Component MqttHA::createSensor(const Command* command) const {
 }
 
 MqttHA::Component MqttHA::createNumber(const Command* command) const {
-  Component c = createComponent("number", command->key, command->name);
-  c.fields["state_topic"] = createStateTopic("values", command->name);
-  if (!command->ha_device_class.empty())
-    c.fields["device_class"] = command->ha_device_class;
-  if (!command->ha_entity_category.empty())
-    c.fields["entity_category"] = command->ha_entity_category;
-  if (!command->unit.empty()) c.fields["unit_of_measurement"] = command->unit;
+  Component c =
+      createComponent("number", command->getKey(), command->getName());
+  c.fields["state_topic"] = createStateTopic("values", command->getName());
+  if (!command->getHADeviceClass().empty())
+    c.fields["device_class"] = command->getHADeviceClass();
+  if (!command->getHAEntityCategory().empty())
+    c.fields["entity_category"] = command->getHAEntityCategory();
+  if (!command->getUnit().empty())
+    c.fields["unit_of_measurement"] = command->getUnit();
   c.fields["value_template"] = "{{value_json.value}}";
   c.fields["command_topic"] = commandTopic;
-  c.fields["command_template"] =
-      "{\"id\":\"write\",\"key\":\"" + command->key + "\",\"value\":{{value}}}";
-  c.fields["min"] = std::to_string(command->min);
-  c.fields["max"] = std::to_string(command->max);
-  c.fields["step"] = std::to_string(command->ha_step);
-  c.fields["mode"] = command->ha_mode;
+  c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" +
+                                 command->getKey() + "\",\"value\":{{value}}}";
+  c.fields["min"] = std::to_string(command->getMin());
+  c.fields["max"] = std::to_string(command->getMax());
+  c.fields["step"] = std::to_string(command->getHAStep());
+  c.fields["mode"] = command->getHAMode();
   return c;
 }
 
 MqttHA::Component MqttHA::createSelect(const Command* command) const {
-  Component c = createComponent("select", command->key, command->name);
-  c.fields["state_topic"] = createStateTopic("values", command->name);
-  if (!command->ha_device_class.empty())
-    c.fields["device_class"] = command->ha_device_class;
-  if (!command->ha_entity_category.empty())
-    c.fields["entity_category"] = command->ha_entity_category;
+  Component c =
+      createComponent("select", command->getKey(), command->getName());
+  c.fields["state_topic"] = createStateTopic("values", command->getName());
+  if (!command->getHADeviceClass().empty())
+    c.fields["device_class"] = command->getHADeviceClass();
+  if (!command->getHAEntityCategory().empty())
+    c.fields["entity_category"] = command->getHAEntityCategory();
   c.fields["command_topic"] = commandTopic;
 
   KeyValueMapping optionsResult =
-      createOptions(command->ha_key_value_map, command->ha_default_key);
-
+      createOptions(command->getHAKeyValueMap(), command->getHADefaultKey());
   c.options = optionsResult.options;
   c.fields["value_template"] = optionsResult.valueMap;
-  c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" + command->key +
+  c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" +
+                                 command->getKey() +
                                  "\",\"value\":" + optionsResult.cmdMap + "}";
 
   return c;
 }
 
 MqttHA::Component MqttHA::createSwitch(const Command* command) const {
-  Component c = createComponent("switch", command->key, command->name);
-  c.fields["state_topic"] = createStateTopic("values", command->name);
-  if (!command->ha_device_class.empty())
-    c.fields["device_class"] = command->ha_device_class;
-  if (!command->ha_entity_category.empty())
-    c.fields["entity_category"] = command->ha_entity_category;
-  c.fields["payload_on"] = std::to_string(command->ha_payload_on);
-  c.fields["payload_off"] = std::to_string(command->ha_payload_off);
+  Component c =
+      createComponent("switch", command->getKey(), command->getName());
+  c.fields["state_topic"] = createStateTopic("values", command->getName());
+  if (!command->getHADeviceClass().empty())
+    c.fields["device_class"] = command->getHADeviceClass();
+  if (!command->getHAEntityCategory().empty())
+    c.fields["entity_category"] = command->getHAEntityCategory();
+  c.fields["payload_on"] = std::to_string(command->getHAPayloadOn());
+  c.fields["payload_off"] = std::to_string(command->getHAPayloadOff());
   c.fields["value_template"] = "{{value_json.value}}";
   c.fields["command_topic"] = commandTopic;
-  c.fields["command_template"] =
-      "{\"id\":\"write\",\"key\":\"" + command->key + "\",\"value\":{{value}}}";
+  c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" +
+                                 command->getKey() + "\",\"value\":{{value}}}";
   return c;
 }
 
