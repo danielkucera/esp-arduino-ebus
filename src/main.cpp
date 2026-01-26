@@ -931,6 +931,10 @@ void setup() {
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
   ArduinoOTA.onStart([]() { vTaskDelete(Task1); });
 #endif
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    printf("Progress: %u%%\r", (progress / (total / 100)));
+    wdt_feed();
+  });
 }
 
 void loop() {
