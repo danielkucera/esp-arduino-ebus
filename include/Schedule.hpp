@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "Store.hpp"
+#include "Command.hpp"
 
 // Active commands are sent on the eBUS at scheduled intervals, and the received
 // data is saved. Passive received messages are compared against defined
