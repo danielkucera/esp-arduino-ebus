@@ -865,10 +865,11 @@ void setup() {
     setTimezone(sntpTimezone);
   }
 
-  mqtt.setEnabled(mqttEnabledParam.isChecked());
   mqtt.setUniqueId(unique_id);
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
+  mqtt.setEnabled(mqttEnabledParam.isChecked());
+  mqtt.start();
 
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
