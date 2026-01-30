@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "Command.hpp"
+#include "Device.hpp"
 
 // Active commands are sent on the eBUS at scheduled intervals, and the received
 // data is saved. Passive received messages are compared against defined
@@ -18,26 +19,6 @@
 // is possible to send individual commands to the eBUS. The results are returned
 // along with the command as raw data. Defined messages (filter function) can be
 // forwarded. Scanning of eBUS devices is also available.
-
-constexpr uint8_t VENDOR_VAILLANT = 0xb5;
-
-struct Device {
-  uint8_t slave;
-  std::vector<uint8_t> vec_070400;
-  std::vector<uint8_t> vec_b5090124;
-  std::vector<uint8_t> vec_b5090125;
-  std::vector<uint8_t> vec_b5090126;
-  std::vector<uint8_t> vec_b5090127;
-
-  bool isVaillant() const {
-    return (vec_070400.size() > 1 && vec_070400[1] == VENDOR_VAILLANT);
-  }
-
-  bool isVaillantValid() const {
-    return (vec_b5090124.size() > 0 && vec_b5090125.size() > 0 &&
-            vec_b5090126.size() > 0 && vec_b5090127.size() > 0);
-  }
-};
 
 class Schedule {
  public:
@@ -73,9 +54,7 @@ class Schedule {
   void publishTiming();
   const std::string getTimingJson();
 
-  static JsonDocument getDeviceJsonDoc(const Device* device);
   const std::string getDevicesJson() const;
-
   const std::vector<Device*> getDevices();
 
  private:
@@ -127,7 +106,7 @@ class Schedule {
   uint32_t distanceFullScans = 500;  // 500 milliseconds between 2 scans
   uint32_t lastFullScan = 0;         // in milliseconds
 
-  std::map<uint8_t, Device> allDevices;
+  std::map<uint8_t, Device> devices;
 
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;
