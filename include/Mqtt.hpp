@@ -106,15 +106,17 @@ class Mqtt {
   std::string willTopic;
   std::string requestTopic;
 
+  std::string uri;
+
   bool enabled = false;
 
   std::queue<IncomingAction> incomingQueue;
   uint32_t lastIncoming = 0;
-  uint32_t incomingInterval = 50;  // ms
+  uint32_t incomingInterval = 25;  // ms
 
   std::queue<OutgoingAction> outgoingQueue;
   uint32_t lastOutgoing = 0;
-  uint32_t outgoingInterval = 50;  // ms
+  uint32_t outgoingInterval = 25;  // ms
 
   // Command handlers map
   std::unordered_map<std::string, CommandHandler> commandHandlers = {

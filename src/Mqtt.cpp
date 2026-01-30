@@ -42,15 +42,19 @@ const std::string& Mqtt::getRootTopic() const { return rootTopic; }
 const std::string& Mqtt::getWillTopic() const { return willTopic; }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
-  // std::string uri = "mqtt://" + std::string(host) + ":" +
-  // std::to_string(port);
-  // mqtt_cfg.uri = uri.c_str();
-  mqtt_cfg.uri = "mqtt://HOSTNAME_OR_IP:1883";
+  std::string hostname;
+  for (size_t i = 0; host[i] != '\0'; ++i)
+    if (!std::isspace(host[i])) hostname += host[i];
+
+  uri = "mqtt://" + hostname;
+  if (port > 0) uri += ":" + std::to_string(port);
+
+  mqtt_cfg.uri = uri.c_str();
 }
 
 void Mqtt::setCredentials(const char* username, const char* password) {
-  // mqtt_cfg.username = username;
-  // mqtt_cfg.password = password;
+  mqtt_cfg.username = username;
+  mqtt_cfg.password = password;
 }
 
 void Mqtt::setEnabled(const bool enable) { enabled = enable; }
@@ -68,8 +72,7 @@ void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
   if (!enabled) return;
 
   std::string mqttTopic = prefix ? rootTopic + topic : topic;
-  esp_mqtt_client_enqueue(client, mqttTopic.c_str(), payload, 0, qos, retain,
-                          true);
+  esp_mqtt_client_publish(client, mqttTopic.c_str(), payload, 0, qos, retain);
 }
 
 void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
