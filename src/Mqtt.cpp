@@ -10,11 +10,11 @@ Mqtt mqtt;
 
 Mqtt::Mqtt() {
   client.onConnect(onConnect);
-  client.onDisconnect(onDisconnect);
-  client.onSubscribe(onSubscribe);
-  client.onUnsubscribe(onUnsubscribe);
+  // client.onDisconnect(onDisconnect);
+  // client.onSubscribe(onSubscribe);
+  // client.onUnsubscribe(onUnsubscribe);
   client.onMessage(onMessage);
-  client.onPublish(onPublish);
+  // client.onPublish(onPublish);
 }
 
 void Mqtt::setUniqueId(const char* id) {
@@ -31,7 +31,8 @@ const std::string& Mqtt::getRootTopic() const { return rootTopic; }
 const std::string& Mqtt::getWillTopic() const { return willTopic; }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
-  client.setServer(host, port);
+  // client.setServer(host, port);
+  client.setServer("mqtt://HOSTNAME_OR_IP:1883");
 }
 
 void Mqtt::setCredentials(const char* username, const char* password) {
@@ -44,7 +45,7 @@ const bool Mqtt::isEnabled() const { return enabled; }
 
 void Mqtt::connect() { client.connect(); }
 
-const bool Mqtt::connected() const { return client.connected(); }
+const bool Mqtt::connected() { return client.connected(); }
 
 void Mqtt::disconnect() { client.disconnect(); }
 
@@ -53,7 +54,7 @@ uint16_t Mqtt::publish(const char* topic, uint8_t qos, bool retain,
   if (!enabled) return 0;
 
   std::string mqttTopic = prefix ? rootTopic + topic : topic;
-  return client.publish(mqttTopic.c_str(), qos, retain, payload);
+  return client.publish(mqttTopic.c_str(), qos, retain, payload, 0, false);
 }
 
 void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
@@ -111,9 +112,8 @@ void Mqtt::onConnect(bool sessionPresent) {
   if (mqttha.isEnabled()) mqttha.publishDeviceInfo();
 }
 
-void Mqtt::onMessage(const char* topic, const char* payload,
-                     AsyncMqttClientMessageProperties properties, size_t len,
-                     size_t index, size_t total) {
+void Mqtt::onMessage(char* topic, char* payload, int retain, int qos,
+                     bool dup) {
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload);
 

@@ -2,7 +2,7 @@
 
 #if defined(EBUS_INTERNAL)
 #include <ArduinoJson.h>
-#include <AsyncMqttClient.h>
+#include <PsychicMqttClient.h>
 
 #include <queue>
 #include <string>
@@ -75,7 +75,7 @@ class Mqtt {
   const bool isEnabled() const;
 
   void connect();
-  const bool connected() const;
+  const bool connected();
 
   void disconnect();
 
@@ -93,7 +93,7 @@ class Mqtt {
   void doLoop();
 
  private:
-  AsyncMqttClient client;
+  PsychicMqttClient client;
   std::string uniqueId;
   std::string rootTopic;
   std::string willTopic;
@@ -134,16 +134,19 @@ class Mqtt {
   uint16_t subscribe(const char* topic, uint8_t qos);
 
   static void onConnect(bool sessionPresent);
-  static void onDisconnect(AsyncMqttClientDisconnectReason reason) {}
+  // static void onDisconnect(AsyncMqttClientDisconnectReason reason) {}
 
-  static void onSubscribe(uint16_t packetId, uint8_t qos) {}
-  static void onUnsubscribe(uint16_t packetId) {}
+  // static void onSubscribe(uint16_t packetId, uint8_t qos) {}
+  // static void onUnsubscribe(uint16_t packetId) {}
 
-  static void onMessage(const char* topic, const char* payload,
-                        AsyncMqttClientMessageProperties properties, size_t len,
-                        size_t index, size_t total);
+  // static void onMessage(const char* topic, const char* payload,
+  //                       AsyncMqttClientMessageProperties properties, size_t
+  //                       len, size_t index, size_t total);
 
-  static void onPublish(uint16_t packetId) {}
+  static void onMessage(char* topic, char* payload, int retain, int qos,
+                        bool dup);
+
+  // static void onPublish(uint16_t packetId) {}
 
   // Command handlers
   static void handleRestart(const JsonDocument& doc);
