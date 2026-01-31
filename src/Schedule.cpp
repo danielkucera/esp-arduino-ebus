@@ -10,16 +10,6 @@
 #include "Mqtt.hpp"
 #include "http.hpp"
 
-// Identification (Service 07h 04h)
-const std::vector<uint8_t> VEC_070400 = {0x07, 0x04, 0x00};
-
-// Vaillant identification (Service B5h 09h 01h + 24h-27h)
-const std::vector<uint8_t> VEC_b50901 = {0xb5, 0x09, 0x01};
-const std::vector<uint8_t> VEC_b5090124 = {0xb5, 0x09, 0x01, 0x24};
-const std::vector<uint8_t> VEC_b5090125 = {0xb5, 0x09, 0x01, 0x25};
-const std::vector<uint8_t> VEC_b5090126 = {0xb5, 0x09, 0x01, 0x26};
-const std::vector<uint8_t> VEC_b5090127 = {0xb5, 0x09, 0x01, 0x27};
-
 // search Inquiry of Existence (Service 07h FEh)
 const std::vector<uint8_t> VEC_07fe00 = {0x07, 0xfe, 0x00};
 
@@ -120,18 +110,17 @@ void Schedule::handleScanFull() {
 void Schedule::handleScan() {
   std::set<uint8_t> slaves;
 
-  for (const std::pair<uint8_t, uint32_t> master : seenMasters)
+  for (const auto& master : seenMasters)
     if (master.first != ebusHandler->getSourceAddress())
       slaves.insert(ebus::slaveOf(master.first));
 
-  for (const std::pair<uint8_t, uint32_t> slave : seenSlaves)
+  for (const auto& slave : seenSlaves)
     if (slave.first != ebusHandler->getTargetAddress())
       slaves.insert(slave.first);
 
   for (const uint8_t slave : slaves) {
-    std::vector<uint8_t> command = {slave};
-    command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
-    enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
+    enqueueCommand(
+        {Mode::scan, PRIO_SCAN, Device::scanCommand(slave), nullptr});
   }
 }
 
@@ -146,35 +135,17 @@ void Schedule::handleScanAddresses(const JsonArrayConst& addresses) {
   }
 
   for (const uint8_t slave : slaves) {
-    std::vector<uint8_t> command = {slave};
-    command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
-    enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
+    enqueueCommand(
+        {Mode::scan, PRIO_SCAN, Device::scanCommand(slave), nullptr});
   }
 }
 
 void Schedule::handleScanVendor() {
-  for (const std::pair<uint8_t, Device>& device : allDevices) {
-    if (device.second.isVaillant()) {
-      if (device.second.vec_b5090124.size() == 0) {
-        std::vector<uint8_t> command = {device.first};
-        command.insert(command.end(), VEC_b5090124.begin(), VEC_b5090124.end());
-        enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
-      }
-      if (device.second.vec_b5090125.size() == 0) {
-        std::vector<uint8_t> command = {device.first};
-        command.insert(command.end(), VEC_b5090125.begin(), VEC_b5090125.end());
-        enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
-      }
-      if (device.second.vec_b5090126.size() == 0) {
-        std::vector<uint8_t> command = {device.first};
-        command.insert(command.end(), VEC_b5090126.begin(), VEC_b5090126.end());
-        enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
-      }
-      if (device.second.vec_b5090127.size() == 0) {
-        std::vector<uint8_t> command = {device.first};
-        command.insert(command.end(), VEC_b5090127.begin(), VEC_b5090127.end());
-        enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
-      }
+  for (const auto& device : devices) {
+    const std::vector<std::vector<uint8_t>> commands =
+        device.second.scanCommandsVendor();
+    for (const std::vector<uint8_t>& command : commands) {
+      enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
     }
   }
 }
@@ -224,13 +195,13 @@ const std::string Schedule::getCounterJson() {
   // Addresses Master
   JsonObject Addresses_Master = doc["Addresses"]["Master"].to<JsonObject>();
 
-  for (const std::pair<uint8_t, uint32_t> master : seenMasters)
+  for (const auto& master : seenMasters)
     Addresses_Master[ebus::to_string(master.first)] = master.second;
 
   // Addresses Slave
   JsonObject Addresses_Slave = doc["Addresses"]["Slave"].to<JsonObject>();
 
-  for (const std::pair<uint8_t, uint32_t> slave : seenSlaves)
+  for (const auto& slave : seenSlaves)
     Addresses_Slave[ebus::to_string(slave.first)] = slave.second;
 
   // Counter
@@ -464,43 +435,11 @@ const std::string Schedule::getTimingJson() {
   return payload;
 }
 
-JsonDocument Schedule::getDeviceJsonDoc(const Device* device) {
-  JsonDocument doc;
-
-  doc["address"] = ebus::to_string(device->slave);
-  doc["manufacturer"] = ebus::to_string(ebus::range(device->vec_070400, 1, 1));
-  doc["unitid"] = ebus::byte_2_char(ebus::range(device->vec_070400, 2, 5));
-  doc["software"] = ebus::to_string(ebus::range(device->vec_070400, 7, 2));
-  doc["hardware"] = ebus::to_string(ebus::range(device->vec_070400, 9, 2));
-
-  if (device->isVaillant() && device->isVaillantValid()) {
-    std::string serial =
-        ebus::byte_2_char(ebus::range(device->vec_b5090124, 2, 8));
-    serial += ebus::byte_2_char(ebus::range(device->vec_b5090125, 1, 9));
-    serial += ebus::byte_2_char(ebus::range(device->vec_b5090126, 1, 9));
-    serial += ebus::byte_2_char(ebus::range(device->vec_b5090127, 1, 2));
-
-    doc["prefix"] = serial.substr(0, 2);
-    doc["year"] = serial.substr(2, 2);
-    doc["week"] = serial.substr(4, 2);
-    doc["product"] = serial.substr(6, 10);
-    doc["supplier"] = serial.substr(16, 4);
-    doc["counter"] = serial.substr(20, 6);
-    doc["suffix"] = serial.substr(26, 2);
-  }
-
-  doc.shrinkToFit();
-  return doc;
-}
-
 const std::string Schedule::getDevicesJson() const {
   std::string payload;
   JsonDocument doc;
 
-  if (allDevices.size() > 0) {
-    for (const std::pair<uint8_t, Device>& device : allDevices)
-      doc.add(getDeviceJsonDoc(&device.second));
-  }
+  for (const auto& device : devices) doc.add(device.second.toJson());
 
   if (doc.isNull()) doc.to<JsonArray>();
 
@@ -511,10 +450,9 @@ const std::string Schedule::getDevicesJson() const {
 }
 
 const std::vector<Device*> Schedule::getDevices() {
-  std::vector<Device*> devices;
-  for (std::pair<const uint8_t, Device>& device : allDevices)
-    devices.push_back(&(device.second));
-  return devices;
+  std::vector<Device*> result;
+  for (auto& device : devices) result.push_back(&(device.second));
+  return result;
 }
 
 void Schedule::taskFunc(void* arg) {
@@ -683,9 +621,8 @@ void Schedule::enqueueFullScanCommand() {
       scanIndex++;
       if (ebus::isSlave(scanIndex) &&
           scanIndex != ebusHandler->getTargetAddress()) {
-        std::vector<uint8_t> command = {scanIndex};
-        command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
-        enqueueCommand({Mode::fullscan, PRIO_FULLSCAN, command, nullptr});
+        enqueueCommand({Mode::fullscan, PRIO_FULLSCAN,
+                        Device::scanCommand(scanIndex), nullptr});
         return;
       }
     }
@@ -765,18 +702,8 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
 
 void Schedule::processScan(const std::vector<uint8_t>& master,
                            const std::vector<uint8_t>& slave) {
-  if (ebus::contains(master, VEC_070400, 2)) {
-    allDevices[master[1]].slave = master[1];
-    allDevices[master[1]].vec_070400 = slave;
-  }
-
-  if (ebus::contains(master, VEC_b5090124, 2))
-    allDevices[master[1]].vec_b5090124 = slave;
-  if (ebus::contains(master, VEC_b5090125, 2))
-    allDevices[master[1]].vec_b5090125 = slave;
-  if (ebus::contains(master, VEC_b5090126, 2))
-    allDevices[master[1]].vec_b5090126 = slave;
-  if (ebus::contains(master, VEC_b5090127, 2))
-    allDevices[master[1]].vec_b5090127 = slave;
+  if (master[1] == ebusHandler->getTargetAddress()) return;
+  if (ebus::isSlave(master[1])) devices[master[1]].update(master, slave);
 }
+
 #endif

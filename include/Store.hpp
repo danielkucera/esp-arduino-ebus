@@ -53,8 +53,6 @@ class Store {
   // Single unified map for all commands, indexed by key
   std::unordered_map<std::string, Command> commands;
 
-
-
   // Flexible serialization/deserialization
   const std::string serializeCommands() const;
   void deserializeCommands(const char* payload);

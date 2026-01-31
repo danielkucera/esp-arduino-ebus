@@ -395,9 +395,9 @@ void Mqtt::publishCommand(const Command* command) {
 }
 
 void Mqtt::publishDevice(const Device* device) {
-  std::string topic = "devices/" + ebus::to_string(device->slave);
+  std::string topic = "devices/" + ebus::to_string(device->getSlave());
   std::string payload;
-  serializeJson(schedule.getDeviceJsonDoc(device), payload);
+  serializeJson(device->toJson(), payload);
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 
