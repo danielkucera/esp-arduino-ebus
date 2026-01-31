@@ -41,6 +41,8 @@ class Device {
 
   bool isVaillant() const;
   bool isVaillantValid() const;
+
+  std::string ebusdConfiguration() const;
 };
 
 #endif

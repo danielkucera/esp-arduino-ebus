@@ -58,6 +58,7 @@ JsonDocument Device::toJson() const {
   doc["unitid"] = ebus::byte_2_char(ebus::range(vec_070400, 2, 5));
   doc["software"] = ebus::to_string(ebus::range(vec_070400, 7, 2));
   doc["hardware"] = ebus::to_string(ebus::range(vec_070400, 9, 2));
+  doc["ebusd"] = ebusdConfiguration();
 
   if (isVaillant() && isVaillantValid()) {
     std::string serial = ebus::byte_2_char(ebus::range(vec_b5090124, 2, 8));
@@ -118,6 +119,36 @@ bool Device::isVaillant() const {
 bool Device::isVaillantValid() const {
   return (vec_b5090124.size() > 0 && vec_b5090125.size() > 0 &&
           vec_b5090126.size() > 0 && vec_b5090127.size() > 0);
+}
+
+std::string Device::ebusdConfiguration() const {
+  // Format: ZZ.CCC[CC]*
+
+  // ZZ: slave address in hex, padded to 2 digits
+  std::string conf = ebus::to_string(slave);
+
+  // CCC[CC]: unitid from identification
+  std::string unitid = ebus::byte_2_char(ebus::range(vec_070400, 2, 5));
+
+  // remove non-alphanumeric characters
+  unitid.erase(std::remove_if(unitid.begin(), unitid.end(),
+                              [](char c) { return !std::isalnum(c); }),
+               unitid.end());
+  // If length > 3, remove up to 2 trailing '0' characters
+  while (unitid.length() > 3 && unitid.back() == '0') {
+    unitid.pop_back();
+  }
+  // transform to lowercase
+  std::transform(unitid.begin(), unitid.end(), unitid.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+
+  // add unitid to conf if not empty
+  if (unitid.length() > 0)
+    conf += "." + unitid + "*";
+  else
+    conf += ".*";
+
+  return conf;
 }
 
 #endif
