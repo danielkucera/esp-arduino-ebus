@@ -439,8 +439,7 @@ const std::string Schedule::getDevicesJson() const {
   std::string payload;
   JsonDocument doc;
 
-  if (devices.size() > 0)
-    for (const auto& device : devices) doc.add(device.second.toJson());
+  for (const auto& device : devices) doc.add(device.second.toJson());
 
   if (doc.isNull()) doc.to<JsonArray>();
 
