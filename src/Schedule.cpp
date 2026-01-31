@@ -36,18 +36,17 @@ Schedule schedule;
 void Schedule::start(ebus::Request* request, ebus::Handler* handler) {
   ebusRequest = request;
   ebusHandler = handler;
+
   if (ebusRequest && ebusHandler) {
     ebusHandler->setBusRequestWonCallback([this]() {
       CallbackEvent* event = new CallbackEvent();
       event->type = CallbackType::won;
-      event->data.message = "Bus request won";
       eventQueue.try_push(event);
     });
 
     ebusHandler->setBusRequestLostCallback([this]() {
       CallbackEvent* event = new CallbackEvent();
       event->type = CallbackType::lost;
-      event->data.message = "Bus request lost";
       eventQueue.try_push(event);
     });
 
@@ -471,18 +470,26 @@ void Schedule::handleEventQueue() {
   CallbackEvent* event = nullptr;
   while (eventQueue.try_pop(event)) {
     if (event) {
-      std::string payload;
       switch (event->type) {
         case CallbackType::won: {
-          payload = event->data.message;
-          logger.debug(payload.c_str());
+          logger.debug("Bus request won");
+          if (activeCommand) activeCommand->sendAttempts = 1;
         } break;
         case CallbackType::lost: {
-          payload = event->data.message;
-          logger.warn(payload.c_str());
+          if (activeCommand && activeCommand->busAttempts < 3) {
+            activeCommand->busAttempts++;
+            activeCommand->queuedCommand.priority = PRIO_INTERNAL;
+            enqueueCommand(activeCommand->queuedCommand);
+            logger.info("Bus request retry");
+          }
+          if (activeCommand && activeCommand->busAttempts >= 3) {
+            delete activeCommand;
+            activeCommand = nullptr;
+            logger.warn("Bus request lost");
+          }
         } break;
         case CallbackType::telegram: {
-          payload = ebus::to_string(event->data.master);
+          std::string payload = ebus::to_string(event->data.master);
           if (event->data.telegramType != ebus::TelegramType::broadcast)
             payload += " / " + ebus::to_string(event->data.slave);
 
@@ -498,6 +505,7 @@ void Schedule::handleEventQueue() {
               schedule.processActive(event->mode,
                                      std::vector<uint8_t>(event->data.master),
                                      std::vector<uint8_t>(event->data.slave));
+              // break; when combined commands are implemented
             case ebus::MessageType::passive:
             case ebus::MessageType::reactive:
               schedule.processPassive(std::vector<uint8_t>(event->data.master),
@@ -507,11 +515,28 @@ void Schedule::handleEventQueue() {
           logger.info(payload.c_str());
         } break;
         case CallbackType::error: {
-          payload = event->data.message + " : master '" +
-                    ebus::to_string(event->data.master) + "' slave '" +
-                    ebus::to_string(event->data.slave) + "'";
+          std::string payload = event->data.message + " : master '" +
+                                ebus::to_string(event->data.master) +
+                                "' slave '" +
+                                ebus::to_string(event->data.slave) + "'";
 
           logger.warn(payload.c_str());
+          // Do not retry fullscan commands on send error
+          if (activeCommand &&
+              activeCommand->queuedCommand.mode != Mode::fullscan &&
+              activeCommand->sendAttempts < 3) {
+            activeCommand->sendAttempts++;
+            activeCommand->queuedCommand.priority = PRIO_INTERNAL;
+            enqueueCommand(activeCommand->queuedCommand);
+            logger.info("Sending retry");
+          }
+          if (activeCommand &&
+              (activeCommand->queuedCommand.mode == Mode::fullscan ||
+               activeCommand->sendAttempts >= 3)) {
+            delete activeCommand;
+            activeCommand = nullptr;
+            logger.warn("Sending failed");
+          }
         } break;
       }
       delete event;
@@ -522,11 +547,11 @@ void Schedule::handleEventQueue() {
 void Schedule::handleCommandQueue() {
   uint32_t currentMillis = millis();
 
-  // Check if scheduleCommand is stuck
-  if (scheduleCommand != nullptr && scheduleCommandSetTime > 0) {
-    if (currentMillis > scheduleCommandSetTime + scheduleCommandTimeout) {
-      scheduleCommand = nullptr;  // Clear the stuck command
-      scheduleCommandSetTime = 0;
+  // Check if activeCommand is stuck
+  if (activeCommand && activeCommand->setTime > 0) {
+    if (currentMillis > activeCommand->setTime + activeCommandTimeout) {
+      delete activeCommand;
+      activeCommand = nullptr;
     }
   }
 
@@ -541,7 +566,7 @@ void Schedule::handleCommandQueue() {
 
   // Process queue
   if (!ebusHandler->isActiveMessagePending() && !commandQueue.empty() &&
-      currentMillis > firstCommandAfterStart) {
+      currentMillis > firstCommandAfterStart && !activeCommand) {
     portENTER_CRITICAL(&commandMux);
     QueuedCommand nextCmd = commandQueue.top();
     commandQueue.pop();
@@ -549,11 +574,8 @@ void Schedule::handleCommandQueue() {
 
     mode = nextCmd.mode;
 
-    // Track schedule command
-    if (mode == Mode::schedule) {
-      scheduleCommand = nextCmd.scheduleCommand;
-      scheduleCommandSetTime = currentMillis;
-    }
+    // Track all commands as active
+    activeCommand = new ActiveCommand(nextCmd, 1, 1, currentMillis);
 
     // Send command
     if (!nextCmd.command.empty()) {
@@ -599,10 +621,16 @@ void Schedule::enqueueCommand(const QueuedCommand& cmd) {
 
 void Schedule::enqueueScheduleCommand() {
   Command* cmd = store.nextActiveCommand();
-  if (cmd && cmd->getReadCmd().size() > 0) {
-    if (scheduleCommand == cmd) return;  // command is already pending
-    enqueueCommand({Mode::schedule, PRIO_SCHEDULE, cmd->getReadCmd(), cmd});
+  if (!cmd || cmd->getReadCmd().empty()) return;
+
+  // Check if this command is already being processed
+  if (activeCommand && activeCommand->queuedCommand.mode == Mode::schedule &&
+      activeCommand->queuedCommand.scheduleCommand == cmd) {
+    return;
   }
+
+  // enqueueCommand will check for duplicates in the queue
+  enqueueCommand({Mode::schedule, PRIO_SCHEDULE, cmd->getReadCmd(), cmd});
 }
 
 void Schedule::enqueueStartupScanCommands() {
@@ -653,27 +681,53 @@ void Schedule::processActive(const Mode& mode,
                              const std::vector<uint8_t>& slave) {
   switch (mode) {
     case Mode::schedule:
-      if (scheduleCommand != nullptr) {
-        store.updateData(scheduleCommand, master, slave);
-        mqtt.publishValue(scheduleCommand);
-        scheduleCommand = nullptr;
-        scheduleCommandSetTime = 0;  // clear after success
+      if (activeCommand &&
+          activeCommand->queuedCommand.mode == Mode::schedule &&
+          activeCommand->queuedCommand.scheduleCommand != nullptr) {
+        store.updateData(activeCommand->queuedCommand.scheduleCommand, master,
+                         slave);
+        mqtt.publishValue(activeCommand->queuedCommand.scheduleCommand);
+        delete activeCommand;
+        activeCommand = nullptr;
       }
       break;
     case Mode::internal:
+      if (activeCommand &&
+          activeCommand->queuedCommand.mode == Mode::internal) {
+        delete activeCommand;
+        activeCommand = nullptr;
+      }
       break;
     case Mode::scan:
     case Mode::fullscan:
       processScan(master, slave);
+      if (activeCommand &&
+          (activeCommand->queuedCommand.mode == Mode::scan ||
+           activeCommand->queuedCommand.mode == Mode::fullscan)) {
+        delete activeCommand;
+        activeCommand = nullptr;
+      }
       break;
     case Mode::send:
       mqtt.publishData("send", master, slave);
+      if (activeCommand && activeCommand->queuedCommand.mode == Mode::send) {
+        delete activeCommand;
+        activeCommand = nullptr;
+      }
       break;
     case Mode::read:  // not used yet
       mqtt.publishData("read", master, slave);
+      if (activeCommand && activeCommand->queuedCommand.mode == Mode::read) {
+        delete activeCommand;
+        activeCommand = nullptr;
+      }
       break;
     case Mode::write:
       mqtt.publishData("write", master, slave);
+      if (activeCommand && activeCommand->queuedCommand.mode == Mode::write) {
+        delete activeCommand;
+        activeCommand = nullptr;
+      }
       break;
     default:
       break;

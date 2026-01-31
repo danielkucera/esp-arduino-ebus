@@ -92,9 +92,21 @@ class Schedule {
                       CommandComparator>
       commandQueue;
 
-  Command* scheduleCommand = nullptr;
-  uint32_t scheduleCommandSetTime = 0;  // time when command was scheduled
-  uint32_t scheduleCommandTimeout = 1 * 1000;  // 1 second after schedule
+  struct ActiveCommand {
+    QueuedCommand queuedCommand;
+    uint8_t busAttempts;   // number of bus attempts
+    uint8_t sendAttempts;  // number of send attempts
+    uint32_t setTime;      // time when the command was set
+    ActiveCommand(const QueuedCommand& qc, uint8_t busAtt, uint8_t sendAtt,
+                  uint32_t st)
+        : queuedCommand(qc),
+          busAttempts(busAtt),
+          sendAttempts(sendAtt),
+          setTime(st) {}
+  };
+
+  ActiveCommand* activeCommand = nullptr;
+  uint32_t activeCommandTimeout = 1 * 1000;  // 1 second after schedule
 
   uint32_t distanceScans = 10 * 1000;  // 10 seconds after start
   uint32_t lastScan = 0;               // in milliseconds
