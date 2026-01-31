@@ -58,7 +58,6 @@ JsonDocument Device::toJson() const {
   doc["unitid"] = ebus::byte_2_char(ebus::range(vec_070400, 2, 5));
   doc["software"] = ebus::to_string(ebus::range(vec_070400, 7, 2));
   doc["hardware"] = ebus::to_string(ebus::range(vec_070400, 9, 2));
-  doc["ebusd"] = ebusdConfiguration();
 
   if (isVaillant() && isVaillantValid()) {
     std::string serial = ebus::byte_2_char(ebus::range(vec_b5090124, 2, 8));
@@ -74,6 +73,8 @@ JsonDocument Device::toJson() const {
     // doc["counter"] = serial.substr(20, 6);
     // doc["suffix"] = serial.substr(26, 2);
   }
+
+  doc["ebusd"] = ebusdConfiguration();
 
   doc.shrinkToFit();
   return doc;
