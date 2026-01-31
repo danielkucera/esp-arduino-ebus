@@ -243,6 +243,8 @@ const std::string Schedule::getCounterJson() {
   Reset["Passive_00"] = handlerCounter.resetPassive00;
   Reset["Passive_0704"] = handlerCounter.resetPassive0704;
   Reset["Passive"] = handlerCounter.resetPassive;
+  Reset["Active_00"] = handlerCounter.resetActive00;
+  Reset["Active_0704"] = handlerCounter.resetActive0704;
   Reset["Active"] = handlerCounter.resetActive;
 
   // Error
