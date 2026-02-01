@@ -2,7 +2,7 @@
 
 #if defined(EBUS_INTERNAL)
 #include <ArduinoJson.h>
-#include <AsyncMqttClient.h>
+#include <mqtt_client.h>
 
 #include <queue>
 #include <string>
@@ -60,7 +60,9 @@ using CommandHandler = std::function<void(const JsonDocument&)>;
 
 class Mqtt {
  public:
-  Mqtt();
+  Mqtt() = default;
+
+  void start();
 
   void setUniqueId(const char* id);
 
@@ -79,8 +81,8 @@ class Mqtt {
 
   void disconnect();
 
-  uint16_t publish(const char* topic, uint8_t qos, bool retain,
-                   const char* payload = nullptr, bool prefix = true);
+  void publish(const char* topic, uint8_t qos, bool retain,
+               const char* payload = nullptr, bool prefix = true);
 
   static void enqueueOutgoing(const OutgoingAction& action);
 
@@ -93,20 +95,28 @@ class Mqtt {
   void doLoop();
 
  private:
-  AsyncMqttClient client;
+  esp_mqtt_client_handle_t client = nullptr;
+  esp_mqtt_client_config_t mqtt_cfg = {};
+
+  bool online = false;
+
   std::string uniqueId;
+  std::string clientId;
   std::string rootTopic;
   std::string willTopic;
+  std::string requestTopic;
+
+  std::string uri;
 
   bool enabled = false;
 
   std::queue<IncomingAction> incomingQueue;
   uint32_t lastIncoming = 0;
-  uint32_t incomingInterval = 50;  // ms
+  uint32_t incomingInterval = 25;  // ms
 
   std::queue<OutgoingAction> outgoingQueue;
   uint32_t lastOutgoing = 0;
-  uint32_t outgoingInterval = 50;  // ms
+  uint32_t outgoingInterval = 25;  // ms
 
   // Command handlers map
   std::unordered_map<std::string, CommandHandler> commandHandlers = {
@@ -131,19 +141,8 @@ class Mqtt {
       {"write", [this](const JsonDocument& doc) { handleWrite(doc); }},
   };
 
-  uint16_t subscribe(const char* topic, uint8_t qos);
-
-  static void onConnect(bool sessionPresent);
-  static void onDisconnect(AsyncMqttClientDisconnectReason reason) {}
-
-  static void onSubscribe(uint16_t packetId, uint8_t qos) {}
-  static void onUnsubscribe(uint16_t packetId) {}
-
-  static void onMessage(const char* topic, const char* payload,
-                        AsyncMqttClientMessageProperties properties, size_t len,
-                        size_t index, size_t total);
-
-  static void onPublish(uint16_t packetId) {}
+  static void eventHandler(void* handler_args, esp_event_base_t base,
+                           int32_t event_id, void* event_data);
 
   // Command handlers
   static void handleRestart(const JsonDocument& doc);
