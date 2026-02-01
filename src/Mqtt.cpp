@@ -3,25 +3,36 @@
 
 #include <functional>
 
+#include "Logger.hpp"
 #include "MqttHA.hpp"
 #include "main.hpp"
 
 Mqtt mqtt;
 
-Mqtt::Mqtt() {
-  client.onConnect(onConnect);
-  client.onDisconnect(onDisconnect);
-  client.onSubscribe(onSubscribe);
-  client.onUnsubscribe(onUnsubscribe);
-  client.onMessage(onMessage);
-  client.onPublish(onPublish);
+void Mqtt::start() {
+  mqtt_cfg.client_id = clientId.c_str();
+  // Last Will
+  mqtt_cfg.lwt_topic = willTopic.c_str();
+  mqtt_cfg.lwt_msg = "{ \"value\": \"offline\" }";
+  mqtt_cfg.lwt_qos = 1;
+  mqtt_cfg.lwt_retain = 1;
+  // Keep-alive interval in seconds
+  mqtt_cfg.keepalive = 60;
+
+  client = esp_mqtt_client_init(&mqtt_cfg);
+
+  esp_mqtt_client_register_event(client, (esp_mqtt_event_id_t)ESP_EVENT_ANY_ID,
+                                 &Mqtt::eventHandler, this);
+
+  esp_mqtt_client_start(client);
 }
 
 void Mqtt::setUniqueId(const char* id) {
   uniqueId = id;
+  clientId = "ebus-" + uniqueId;
   rootTopic = "ebus/" + uniqueId + "/";
   willTopic = mqtt.rootTopic + "available";
-  client.setWill(willTopic.c_str(), 0, true, "{ \"value\": \"offline\" }");
+  requestTopic = mqtt.rootTopic + "request";
 }
 
 const std::string& Mqtt::getUniqueId() const { return uniqueId; }
@@ -31,29 +42,37 @@ const std::string& Mqtt::getRootTopic() const { return rootTopic; }
 const std::string& Mqtt::getWillTopic() const { return willTopic; }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
-  client.setServer(host, port);
+  std::string hostname;
+  for (size_t i = 0; host[i] != '\0'; ++i)
+    if (!std::isspace(host[i])) hostname += host[i];
+
+  uri = "mqtt://" + hostname;
+  if (port > 0) uri += ":" + std::to_string(port);
+
+  mqtt_cfg.uri = uri.c_str();
 }
 
 void Mqtt::setCredentials(const char* username, const char* password) {
-  client.setCredentials(username, password);
+  mqtt_cfg.username = username;
+  mqtt_cfg.password = password;
 }
 
 void Mqtt::setEnabled(const bool enable) { enabled = enable; }
 
 const bool Mqtt::isEnabled() const { return enabled; }
 
-void Mqtt::connect() { client.connect(); }
+void Mqtt::connect() { esp_mqtt_client_reconnect(client); }
 
-const bool Mqtt::connected() const { return client.connected(); }
+const bool Mqtt::connected() const { return online; }
 
-void Mqtt::disconnect() { client.disconnect(); }
+void Mqtt::disconnect() { esp_mqtt_client_disconnect(client); }
 
-uint16_t Mqtt::publish(const char* topic, uint8_t qos, bool retain,
-                       const char* payload, bool prefix) {
-  if (!enabled) return 0;
+void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
+                   const char* payload, bool prefix) {
+  if (!enabled) return;
 
   std::string mqttTopic = prefix ? rootTopic + topic : topic;
-  return client.publish(mqttTopic.c_str(), qos, retain, payload);
+  esp_mqtt_client_publish(client, mqttTopic.c_str(), payload, 0, qos, retain);
 }
 
 void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
@@ -97,48 +116,72 @@ void Mqtt::doLoop() {
   checkOutgoingQueue();
 }
 
-uint16_t Mqtt::subscribe(const char* topic, uint8_t qos) {
-  return client.subscribe(topic, qos);
-}
+void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
+                        int32_t event_id, void* event_data) {
+  Mqtt* self = static_cast<Mqtt*>(handler_args);
+  esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
+  switch ((esp_mqtt_event_id_t)event_id) {
+    case MQTT_EVENT_BEFORE_CONNECT: {
+      logger.debug("MQTT before connect");
+    } break;
+    case MQTT_EVENT_CONNECTED: {
+      logger.debug("MQTT connected");
+      self->online = true;
+      esp_mqtt_client_subscribe(self->client, self->requestTopic.c_str(), 0);
 
-void Mqtt::onConnect(bool sessionPresent) {
-  std::string topicRequest = mqtt.rootTopic + "request";
-  mqtt.subscribe(topicRequest.c_str(), 0);
+      mqtt.publish(mqtt.willTopic.c_str(), 0, true, "{ \"value\": \"online\" }",
+                   false);
 
-  mqtt.publish(mqtt.willTopic.c_str(), 0, true, "{ \"value\": \"online\" }",
-               false);
+      if (mqttha.isEnabled()) mqttha.publishDeviceInfo();
+    } break;
+    case MQTT_EVENT_DISCONNECTED: {
+      logger.debug("MQTT disconnected");
+      self->online = false;
+    } break;
+    case MQTT_EVENT_SUBSCRIBED: {
+      logger.debug(String(self->requestTopic.c_str()) + " subscribed");
+    } break;
+    case MQTT_EVENT_UNSUBSCRIBED: {
+    } break;
+    case MQTT_EVENT_PUBLISHED: {
+    } break;
+    case MQTT_EVENT_DATA: {
+      logger.debug("MQTT data received");
+      JsonDocument doc;
+      DeserializationError error = deserializeJson(doc, event->data);
 
-  if (mqttha.isEnabled()) mqttha.publishDeviceInfo();
-}
+      if (error) {
+        std::string errorPayload;
+        JsonDocument errorDoc;
+        errorDoc["error"] = error.c_str();
+        errorDoc.shrinkToFit();
+        serializeJson(errorDoc, errorPayload);
+        mqtt.publish("response", 0, false, errorPayload.c_str());
+        return;
+      }
 
-void Mqtt::onMessage(const char* topic, const char* payload,
-                     AsyncMqttClientMessageProperties properties, size_t len,
-                     size_t index, size_t total) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    std::string errorPayload;
-    JsonDocument errorDoc;
-    errorDoc["error"] = error.c_str();
-    errorDoc.shrinkToFit();
-    serializeJson(errorDoc, errorPayload);
-    mqtt.publish("response", 0, false, errorPayload.c_str());
-    return;
-  }
-
-  std::string id = doc["id"].as<std::string>();
-  auto it = mqtt.commandHandlers.find(id);
-  if (it != mqtt.commandHandlers.end()) {
-    it->second(doc);  // Call the handler
-  } else {
-    // Unknown command error handling
-    std::string errorPayload;
-    JsonDocument errorDoc;
-    errorDoc["error"] = "command '" + id + "' not found";
-    errorDoc.shrinkToFit();
-    serializeJson(errorDoc, errorPayload);
-    mqtt.publish("response", 0, false, errorPayload.c_str());
+      std::string id = doc["id"].as<std::string>();
+      auto it = mqtt.commandHandlers.find(id);
+      if (it != mqtt.commandHandlers.end()) {
+        it->second(doc);  // Call the handler
+      } else {
+        // Unknown command error handling
+        std::string errorPayload;
+        JsonDocument errorDoc;
+        errorDoc["error"] = "command '" + id + "' not found";
+        errorDoc.shrinkToFit();
+        serializeJson(errorDoc, errorPayload);
+        mqtt.publish("response", 0, false, errorPayload.c_str());
+      }
+    } break;
+    case MQTT_EVENT_DELETED: {
+    } break;
+    case MQTT_EVENT_ERROR: {
+      logger.error("MQTT Error occured");
+    } break;
+    default: {
+      logger.warn("Unhandled event id:" + event->event_id);
+    } break;
   }
 }
 

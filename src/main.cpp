@@ -225,33 +225,12 @@ int reconnect_count = 0;
 
 #if defined(EBUS_INTERNAL)
 // mqtt
-bool needMqttConnect = false;
-int mqtt_reconnect_count = 0;
-uint32_t lastMqttConnectionAttempt = 0;
 uint32_t lastMqttUpdate = 0;
-
-bool connectMqtt() {
-  if (mqtt.connected()) return true;
-
-  if (1000 > millis() - lastMqttConnectionAttempt) return false;
-
-  mqtt.connect();
-
-  if (!mqtt.connected()) {
-    lastMqttConnectionAttempt = millis();
-    return false;
-  }
-
-  return true;
-}
 #endif
 
 void wifiConnected() {
   last_connect = millis();
   ++reconnect_count;
-#if defined(EBUS_INTERNAL)
-  needMqttConnect = true;
-#endif
 }
 
 void wdt_start() {
@@ -599,8 +578,7 @@ char* status_string() {
                   mqttEnabledParam.isChecked() ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.connected() ? "true" : "false");
-  pos += snprintf(status + pos, bufferSize - pos, "mqtt_reconnect_count: %d \n",
-                  mqtt_reconnect_count);
+
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_server: %s\r\n",
                   mqtt_server);
   pos +=
@@ -718,7 +696,6 @@ const std::string getStatusJson() {
   MQTT["Server"] = mqtt_server;
   MQTT["User"] = mqtt_user;
   MQTT["Connected"] = mqtt.connected();
-  MQTT["Reconnect_Count"] = mqtt_reconnect_count;
   MQTT["Publish_Counter"] = mqttPublishCounterParam.isChecked();
   MQTT["Publish_Timing"] = mqttPublishTimingParam.isChecked();
 
@@ -865,10 +842,11 @@ void setup() {
     setTimezone(sntpTimezone);
   }
 
-  mqtt.setEnabled(mqttEnabledParam.isChecked());
   mqtt.setUniqueId(unique_id);
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
+  mqtt.setEnabled(mqttEnabledParam.isChecked());
+  mqtt.start();
 
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
@@ -946,17 +924,6 @@ void loop() {
 
 #if defined(EBUS_INTERNAL)
   if (mqtt.isEnabled()) {
-    if (needMqttConnect) {
-      if (connectMqtt()) {
-        needMqttConnect = false;
-        ++mqtt_reconnect_count;
-      }
-
-    } else if ((iotWebConf.getState() == iotwebconf::OnLine) &&
-               (!mqtt.connected())) {
-      needMqttConnect = true;
-    }
-
     if (mqtt.connected()) {
       uint32_t currentMillis = millis();
       if (currentMillis > lastMqttUpdate + 10 * 1000) {
