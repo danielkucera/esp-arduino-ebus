@@ -151,7 +151,6 @@ function renderNestedSections(data, containerId, sortNumbers = false, radix = 10
     }
 }
 
-
 /**
  * Downloads a text content as a file with the given filename and MIME type.
  * @param {string} text - The content to download.
