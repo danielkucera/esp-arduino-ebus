@@ -470,9 +470,9 @@ void saveParamsCallback() {
   schedule.setFirstCommandAfterStart(atoi(firstCommandAfterStartValue));
 
   mqtt.setEnabled(mqttEnabledParam.isChecked());
-  if (!mqtt.isEnabled() && mqtt.connected()) mqtt.disconnect();
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
+  mqtt.change();
 
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
@@ -575,9 +575,9 @@ char* status_string() {
                   store.getPassiveCommands());
 
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_enabled: %s\r\n",
-                  mqttEnabledParam.isChecked() ? "true" : "false");
+                  mqtt.isEnabled() ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
-                  mqtt.connected() ? "true" : "false");
+                  mqtt.isConnected() ? "true" : "false");
 
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_server: %s\r\n",
                   mqtt_server);
@@ -585,12 +585,12 @@ char* status_string() {
       snprintf(status + pos, bufferSize - pos, "mqtt_user: %s\r\n", mqtt_user);
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_publish_counter: %s\r\n",
-               mqttPublishCounterParam.isChecked() ? "true" : "false");
+               schedule.getPublishCounter() ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_publish_timing: %s\r\n",
-                  mqttPublishTimingParam.isChecked() ? "true" : "false");
+                  schedule.getPublishTiming() ? "true" : "false");
 
   pos += snprintf(status + pos, bufferSize - pos, "ha_enabled: %s\r\n",
-                  haEnabledParam.isChecked() ? "true" : "false");
+                  mqttha.isEnabled() ? "true" : "false");
 #endif
 
   if (pos >= bufferSize) status[bufferSize - 1] = '\0';
@@ -692,16 +692,16 @@ const std::string getStatusJson() {
 
   // MQTT
   JsonObject MQTT = doc["MQTT"].to<JsonObject>();
-  MQTT["Enabled"] = mqttEnabledParam.isChecked();
+  MQTT["Enabled"] = mqtt.isEnabled();
   MQTT["Server"] = mqtt_server;
   MQTT["User"] = mqtt_user;
-  MQTT["Connected"] = mqtt.connected();
-  MQTT["Publish_Counter"] = mqttPublishCounterParam.isChecked();
-  MQTT["Publish_Timing"] = mqttPublishTimingParam.isChecked();
+  MQTT["Connected"] = mqtt.isConnected();
+  MQTT["Publish_Counter"] = schedule.getPublishCounter();
+  MQTT["Publish_Timing"] = schedule.getPublishTiming();
 
   // HomeAssistant
   JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
-  HomeAssistant["Enabled"] = haEnabledParam.isChecked();
+  HomeAssistant["Enabled"] = mqttha.isEnabled();
 #endif
 
   doc.shrinkToFit();
@@ -842,10 +842,10 @@ void setup() {
     setTimezone(sntpTimezone);
   }
 
-  mqtt.setUniqueId(unique_id);
+  mqtt.setEnabled(mqttEnabledParam.isChecked());
+  mqtt.setup(unique_id);
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCredentials(mqtt_user, mqtt_pass);
-  mqtt.setEnabled(mqttEnabledParam.isChecked());
   mqtt.start();
 
   mqttha.setUniqueId(mqtt.getUniqueId());
@@ -924,7 +924,7 @@ void loop() {
 
 #if defined(EBUS_INTERNAL)
   if (mqtt.isEnabled()) {
-    if (mqtt.connected()) {
+    if (mqtt.isConnected()) {
       uint32_t currentMillis = millis();
       if (currentMillis > lastMqttUpdate + 10 * 1000) {
         lastMqttUpdate = currentMillis;
@@ -936,11 +936,8 @@ void loop() {
       }
       mqtt.doLoop();
     }
-  } else {
-    if (mqtt.connected()) {
-      mqtt.disconnect();
-    }
   }
+
 #endif
 
   uptime = millis();

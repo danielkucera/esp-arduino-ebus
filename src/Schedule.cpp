@@ -172,6 +172,8 @@ void Schedule::handleForwardFilter(const JsonArrayConst& filters) {
 
 void Schedule::setPublishCounter(const bool enable) { counterEnabled = enable; }
 
+const bool Schedule::getPublishCounter() const { return counterEnabled; }
+
 void Schedule::resetCounter() {
   seenMasters.clear();
   seenSlaves.clear();
@@ -289,6 +291,8 @@ const std::string Schedule::getCounterJson() {
 }
 
 void Schedule::setPublishTiming(const bool enable) { timingEnabled = enable; }
+
+const bool Schedule::getPublishTiming() const { return timingEnabled; }
 
 void Schedule::resetTiming() {
   if (ebusRequest) ebusRequest->resetTiming();
