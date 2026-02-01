@@ -52,7 +52,6 @@ void MqttHA::publishDeviceInfo() const {
   mqttha.publishComponent(createDiagnosticFreeHeap(), !enabled);
   mqttha.publishComponent(createDiagnosticLoopDuration(), !enabled);
   mqttha.publishComponent(createDiagnosticRSSI(), !enabled);
-  mqttha.publishComponent(createDiagnosticTxPower(), !enabled);
 }
 
 void MqttHA::publishComponents() const {
@@ -369,15 +368,6 @@ MqttHA::Component MqttHA::createDiagnosticRSSI() const {
   c.fields["state_topic"] = createStateTopic("", "state");
   c.fields["unit_of_measurement"] = "dBm";
   c.fields["value_template"] = "{{value_json.rssi}}";
-  c.fields["icon"] = "mdi:wifi-strength-4";
-  return c;
-}
-
-MqttHA::Component MqttHA::createDiagnosticTxPower() const {
-  Component c = createDiagnostic("sensor", "tx_power", "WiFi TX Power");
-  c.fields["state_topic"] = createStateTopic("", "state");
-  c.fields["unit_of_measurement"] = "dBm";
-  c.fields["value_template"] = "{{value_json.tx_power}}";
   c.fields["icon"] = "mdi:wifi-strength-4";
   return c;
 }

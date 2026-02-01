@@ -390,7 +390,6 @@ const std::string getMqttStatusJson() {
   doc["free_heap"] = free_heap;
   doc["loop_duration"] = loopDuration;
   doc["rssi"] = WiFi.RSSI();
-  doc["tx_power"] = WiFi.getTxPower();
 
   doc.shrinkToFit();
   serializeJson(doc, payload);
