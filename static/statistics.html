@@ -22,7 +22,7 @@
     <script>
         document.getElementById('btnHome').addEventListener('click', handleHome);
         document.getElementById('btnCounter').addEventListener('click', () =>
-            fetchJson('/api/v1/statistics/counter', data => renderNestedSections(data, 'statisticsContainer'))
+            fetchJson('/api/v1/statistics/counter', data => renderNestedSections(data, 'statisticsContainer', true, 16))
         );
         document.getElementById('btnTiming').addEventListener('click', () =>
             fetchJson('/api/v1/statistics/timing', data => renderNestedSections(data, 'statisticsContainer'))
@@ -32,7 +32,7 @@
         );
 
         // Initial load
-        fetchJson('/api/v1/statistics/counter', data => renderNestedSections(data, 'statisticsContainer'));
+        fetchJson('/api/v1/statistics/counter', data => renderNestedSections(data, 'statisticsContainer', true, 16));
     </script>
 </body>
 
