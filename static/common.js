@@ -109,15 +109,30 @@ function renderSimpleTable(theadId, tbodyId, headers, rows) {
  * Renders nested JSON data as expandable sections in a container.
  * @param {object} data - The JSON object to render.
  * @param {string} containerId - The ID of the container element.
+ * @param {boolean} sortNumbers - Whether to sort the number fields or not.
+ * @param {number} radix - The radix (base) to use for parsing keys.
  */
-function renderNestedSections(data, containerId) {
+function renderNestedSections(data, containerId, sortNumbers = false, radix = 10) {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
+
     function createSection(sectionName, values) {
         const sectionDiv = document.createElement('div');
         sectionDiv.classList.add('section');
         sectionDiv.innerHTML = `<div class="title">${sectionName}</div>`;
-        for (const [key, value] of Object.entries(values)) {
+
+        const entries = Object.entries(values);
+
+        if (sortNumbers) {
+            entries.sort(([keyA, valueA], [keyB, valueB]) => {
+                if (typeof valueA === 'number' && typeof valueB === 'number') {
+                    return parseInt(keyA, radix) - parseInt(keyB, radix);
+                }
+                return 0;
+            });
+        }
+
+        for (const [key, value] of entries) {
             const itemDiv = document.createElement('div');
             itemDiv.classList.add('item');
             if (typeof value === 'object' && value !== null) {
@@ -135,6 +150,7 @@ function renderNestedSections(data, containerId) {
         container.appendChild(sectionDiv);
     }
 }
+
 
 /**
  * Downloads a text content as a file with the given filename and MIME type.
