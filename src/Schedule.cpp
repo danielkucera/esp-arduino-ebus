@@ -176,6 +176,9 @@ void Schedule::resetCounter() {
   seenMasters.clear();
   seenSlaves.clear();
 
+  busRequestFailed = 0;
+  sendingFailed = 0;
+
   if (ebusRequest) ebusRequest->resetCounter();
   if (ebusHandler) ebusHandler->resetCounter();
 }
@@ -202,6 +205,11 @@ const std::string Schedule::getCounterJson() {
 
   for (const auto& slave : seenSlaves)
     Addresses_Slave[ebus::to_string(slave.first)] = slave.second;
+
+  // Failed
+  JsonObject Failed = doc["Failed"].to<JsonObject>();
+  Failed["BusRequest"] = busRequestFailed;
+  Failed["Sending"] = sendingFailed;
 
   // Counter
   ebus::Handler::Counter handlerCounter = ebusHandler->getCounter();
@@ -483,9 +491,10 @@ void Schedule::handleEventQueue() {
             logger.info("Bus request retry");
           }
           if (activeCommand && activeCommand->busAttempts >= 3) {
+            busRequestFailed++;
             delete activeCommand;
             activeCommand = nullptr;
-            logger.warn("Bus request lost");
+            logger.warn("Bus request failed");
           }
         } break;
         case CallbackType::telegram: {
@@ -533,6 +542,7 @@ void Schedule::handleEventQueue() {
           if (activeCommand &&
               (activeCommand->queuedCommand.mode == Mode::fullscan ||
                activeCommand->sendAttempts >= 3)) {
+            sendingFailed++;
             delete activeCommand;
             activeCommand = nullptr;
             logger.warn("Sending failed");
@@ -549,7 +559,7 @@ void Schedule::handleCommandQueue() {
 
   // Check if activeCommand is stuck
   if (activeCommand && activeCommand->setTime > 0) {
-    if (currentMillis > activeCommand->setTime + activeCommandTimeout) {
+    if ((currentMillis - activeCommand->setTime) >= activeCommandTimeout) {
       delete activeCommand;
       activeCommand = nullptr;
     }

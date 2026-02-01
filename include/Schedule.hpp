@@ -120,6 +120,9 @@ class Schedule {
 
   std::map<uint8_t, Device> devices;
 
+  uint32_t busRequestFailed = 0;
+  uint32_t sendingFailed = 0;
+
   bool forward = false;
   std::vector<std::vector<uint8_t>> forwardfilters;
 
