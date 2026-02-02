@@ -677,17 +677,7 @@ void Schedule::enqueueFullScanCommand() {
 
 void Schedule::reactiveMasterSlaveCallback(const std::vector<uint8_t>& master,
                                            std::vector<uint8_t>* const slave) {
-  // TODO(yuhu-): Implement handling of Identification (Service 07h 04h)
-  // Expected data format:
-  // hh...Manufacturer (BYTE)
-  // gg...Unit_ID_0-5 (ASCII)
-  // ss...Software version (BCD)
-  // rr...Revision (BCD)
-  // vv...Hardware version (BCD)
-  // hh...Revision (BCD)
-  // Example:
-  // if (ebus::contains(master, VEC_070400, 2))
-  //   *slave = ebus::to_vector("0ahhggggggggggssrrhhrr");
+  Device::getIdentification(master, slave);
 }
 
 void Schedule::processActive(const Mode& mode,
