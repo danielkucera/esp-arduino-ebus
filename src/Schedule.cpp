@@ -172,6 +172,8 @@ void Schedule::handleForwardFilter(const JsonArrayConst& filters) {
 
 void Schedule::setPublishCounter(const bool enable) { counterEnabled = enable; }
 
+const bool Schedule::getPublishCounter() const { return counterEnabled; }
+
 void Schedule::resetCounter() {
   seenMasters.clear();
   seenSlaves.clear();
@@ -289,6 +291,8 @@ const std::string Schedule::getCounterJson() {
 }
 
 void Schedule::setPublishTiming(const bool enable) { timingEnabled = enable; }
+
+const bool Schedule::getPublishTiming() const { return timingEnabled; }
 
 void Schedule::resetTiming() {
   if (ebusRequest) ebusRequest->resetTiming();
@@ -673,17 +677,7 @@ void Schedule::enqueueFullScanCommand() {
 
 void Schedule::reactiveMasterSlaveCallback(const std::vector<uint8_t>& master,
                                            std::vector<uint8_t>* const slave) {
-  // TODO(yuhu-): Implement handling of Identification (Service 07h 04h)
-  // Expected data format:
-  // hh...Manufacturer (BYTE)
-  // gg...Unit_ID_0-5 (ASCII)
-  // ss...Software version (BCD)
-  // rr...Revision (BCD)
-  // vv...Hardware version (BCD)
-  // hh...Revision (BCD)
-  // Example:
-  // if (ebus::contains(master, VEC_070400, 2))
-  //   *slave = ebus::to_vector("0ahhggggggggggssrrhhrr");
+  Device::getIdentification(master, slave);
 }
 
 void Schedule::processActive(const Mode& mode,

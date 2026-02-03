@@ -29,6 +29,10 @@ class Device {
   static const std::vector<uint8_t> scanCommand(const uint8_t& slave);
   const std::vector<std::vector<uint8_t>> scanCommandsVendor() const;
 
+  // Identification
+  static const bool getIdentification(const std::vector<uint8_t>& master,
+                                      std::vector<uint8_t>* const slave);
+
  private:
   uint8_t slave = 0;
 

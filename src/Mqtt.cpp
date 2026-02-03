@@ -10,6 +10,27 @@
 Mqtt mqtt;
 
 void Mqtt::start() {
+  if (enabled) {
+    client = esp_mqtt_client_init(&mqtt_cfg);
+    esp_mqtt_client_register_event(client,
+                                   (esp_mqtt_event_id_t)ESP_EVENT_ANY_ID,
+                                   &Mqtt::eventHandler, this);
+    esp_mqtt_client_start(client);
+  }
+}
+
+void Mqtt::change() {
+  if (connected) esp_mqtt_client_stop(client);
+  start();
+}
+
+void Mqtt::setup(const char* id) {
+  uniqueId = id;
+  clientId = "ebus-" + uniqueId;
+  rootTopic = "ebus/" + uniqueId + "/";
+  willTopic = mqtt.rootTopic + "available";
+  requestTopic = mqtt.rootTopic + "request";
+
   mqtt_cfg.client_id = clientId.c_str();
   // Last Will
   mqtt_cfg.lwt_topic = willTopic.c_str();
@@ -18,28 +39,7 @@ void Mqtt::start() {
   mqtt_cfg.lwt_retain = 1;
   // Keep-alive interval in seconds
   mqtt_cfg.keepalive = 60;
-
-  client = esp_mqtt_client_init(&mqtt_cfg);
-
-  esp_mqtt_client_register_event(client, (esp_mqtt_event_id_t)ESP_EVENT_ANY_ID,
-                                 &Mqtt::eventHandler, this);
-
-  esp_mqtt_client_start(client);
 }
-
-void Mqtt::setUniqueId(const char* id) {
-  uniqueId = id;
-  clientId = "ebus-" + uniqueId;
-  rootTopic = "ebus/" + uniqueId + "/";
-  willTopic = mqtt.rootTopic + "available";
-  requestTopic = mqtt.rootTopic + "request";
-}
-
-const std::string& Mqtt::getUniqueId() const { return uniqueId; }
-
-const std::string& Mqtt::getRootTopic() const { return rootTopic; }
-
-const std::string& Mqtt::getWillTopic() const { return willTopic; }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
   std::string hostname;
@@ -61,11 +61,13 @@ void Mqtt::setEnabled(const bool enable) { enabled = enable; }
 
 const bool Mqtt::isEnabled() const { return enabled; }
 
-void Mqtt::connect() { esp_mqtt_client_reconnect(client); }
+const bool Mqtt::isConnected() const { return connected; }
 
-const bool Mqtt::connected() const { return online; }
+const std::string& Mqtt::getUniqueId() const { return uniqueId; }
 
-void Mqtt::disconnect() { esp_mqtt_client_disconnect(client); }
+const std::string& Mqtt::getRootTopic() const { return rootTopic; }
+
+const std::string& Mqtt::getWillTopic() const { return willTopic; }
 
 void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
                    const char* payload, bool prefix) {
@@ -126,7 +128,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
     } break;
     case MQTT_EVENT_CONNECTED: {
       logger.debug("MQTT connected");
-      self->online = true;
+      self->connected = true;
       esp_mqtt_client_subscribe(self->client, self->requestTopic.c_str(), 0);
 
       mqtt.publish(mqtt.willTopic.c_str(), 0, true, "{ \"value\": \"online\" }",
@@ -136,7 +138,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
     } break;
     case MQTT_EVENT_DISCONNECTED: {
       logger.debug("MQTT disconnected");
-      self->online = false;
+      self->connected = false;
     } break;
     case MQTT_EVENT_SUBSCRIBED: {
       logger.debug(String(self->requestTopic.c_str()) + " subscribed");

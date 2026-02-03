@@ -63,12 +63,9 @@ class Mqtt {
   Mqtt() = default;
 
   void start();
+  void change();
 
-  void setUniqueId(const char* id);
-
-  const std::string& getUniqueId() const;
-  const std::string& getRootTopic() const;
-  const std::string& getWillTopic() const;
+  void setup(const char* id);
 
   void setServer(const char* host, uint16_t port);
   void setCredentials(const char* username, const char* password = nullptr);
@@ -76,10 +73,11 @@ class Mqtt {
   void setEnabled(const bool enable);
   const bool isEnabled() const;
 
-  void connect();
-  const bool connected() const;
+  const bool isConnected() const;
 
-  void disconnect();
+  const std::string& getUniqueId() const;
+  const std::string& getRootTopic() const;
+  const std::string& getWillTopic() const;
 
   void publish(const char* topic, uint8_t qos, bool retain,
                const char* payload = nullptr, bool prefix = true);
@@ -98,8 +96,6 @@ class Mqtt {
   esp_mqtt_client_handle_t client = nullptr;
   esp_mqtt_client_config_t mqtt_cfg = {};
 
-  bool online = false;
-
   std::string uniqueId;
   std::string clientId;
   std::string rootTopic;
@@ -109,6 +105,7 @@ class Mqtt {
   std::string uri;
 
   bool enabled = false;
+  bool connected = false;
 
   std::queue<IncomingAction> incomingQueue;
   uint32_t lastIncoming = 0;

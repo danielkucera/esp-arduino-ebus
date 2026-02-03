@@ -99,7 +99,6 @@ class MqttHA {
   Component createDiagnosticFreeHeap() const;
   Component createDiagnosticLoopDuration() const;
   Component createDiagnosticRSSI() const;
-  Component createDiagnosticTxPower() const;
 };
 
 extern MqttHA mqttha;
