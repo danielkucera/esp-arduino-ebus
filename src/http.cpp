@@ -1,5 +1,6 @@
 #include "http.hpp"
 
+#include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "MqttHA.hpp"
 #include "Schedule.hpp"
@@ -235,7 +236,7 @@ void handleValuesRead() {
 // devices
 void handleDevices() {
   configServer.send(200, "application/json;charset=utf-8",
-                    schedule.getDevicesJson().c_str());
+                    deviceManager.getDevicesJson().c_str());
 }
 
 void handleDevicesScan() {
@@ -265,6 +266,7 @@ void handleStatisticsTiming() {
 }
 
 void handleStatisticsReset() {
+  deviceManager.resetAddresses();
   schedule.resetCounter();
   schedule.resetTiming();
   configServer.send(200, "text/html", "Statistics reset");

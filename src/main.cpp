@@ -9,6 +9,7 @@
 #include <Ebus.h>
 
 #include "ClientManager.hpp"
+#include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
@@ -464,8 +465,9 @@ void saveParamsCallback() {
     esp_sntp_stop();
   }
 
+  deviceManager.setScanOnStartup(scanOnStartupParam.isChecked());
+
   schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
-  schedule.setScanOnStartup(scanOnStartupParam.isChecked());
   schedule.setFirstCommandAfterStart(atoi(firstCommandAfterStartValue));
 
   mqtt.setEnabled(mqttEnabledParam.isChecked());
@@ -880,16 +882,17 @@ void setup() {
 #if defined(EBUS_INTERNAL)
   ebus::handler->setSourceAddress(
       uint8_t(std::strtoul(ebus_address, nullptr, 16)));
+  ebus::setBusIsrWindow(atoi(busisr_window));
+  ebus::setBusIsrOffset(atoi(busisr_offset));
+
+  deviceManager.setEbusHandler(ebus::handler);
+  deviceManager.setScanOnStartup(scanOnStartupParam.isChecked());
 
   schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
-  schedule.setScanOnStartup(scanOnStartupParam.isChecked());
   schedule.setFirstCommandAfterStart(atoi(firstCommandAfterStartValue));
   schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
   schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
   schedule.start(ebus::request, ebus::handler);
-
-  ebus::setBusIsrWindow(atoi(busisr_window));
-  ebus::setBusIsrOffset(atoi(busisr_offset));
 
   ebus::serviceRunner->start();
 

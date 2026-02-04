@@ -3,6 +3,7 @@
 
 #include <functional>
 
+#include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "MqttHA.hpp"
 #include "main.hpp"
@@ -274,7 +275,7 @@ void Mqtt::handleScan(const JsonDocument& doc) {
 }
 
 void Mqtt::handleDevices(const JsonDocument& doc) {
-  for (const Device* device : schedule.getDevices())
+  for (const Device* device : deviceManager.getDevices())
     enqueueOutgoing(OutgoingAction(device));
 }
 
@@ -294,6 +295,7 @@ void Mqtt::handleForward(const JsonDocument& doc) {
 }
 
 void Mqtt::handleReset(const JsonDocument& doc) {
+  deviceManager.resetAddresses();
   schedule.resetCounter();
   schedule.resetTiming();
 }

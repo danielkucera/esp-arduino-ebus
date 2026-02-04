@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Device.hpp"
 #include "Schedule.hpp"
 #include "Store.hpp"
 

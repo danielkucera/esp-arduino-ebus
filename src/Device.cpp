@@ -52,14 +52,24 @@ JsonDocument Device::toJson() const {
   uint8_t master = ebus::masterOf(slave);
   doc["master"] = master != slave ? ebus::to_string(master) : "";
   doc["slave"] = ebus::to_string(slave);
-  doc["manufacturer"] = ebus::range(vec_070400, 1, 1).size() > 0
-                            ? manufacturers.at(vec_070400[1])
-                            : "";
-  doc["unitid"] = ebus::byte_2_char(ebus::range(vec_070400, 2, 5));
-  doc["software"] = ebus::to_string(ebus::range(vec_070400, 7, 2));
-  doc["hardware"] = ebus::to_string(ebus::range(vec_070400, 9, 2));
+  
+  if (vec_070400.size() > 1) {
+    doc["manufacturer"] = (manufacturers.count(vec_070400[1]) > 0)
+                              ? manufacturers.at(vec_070400[1])
+                              : "";
+    doc["unitid"] = ebus::byte_2_char(ebus::range(vec_070400, 2, 5));
+    doc["software"] = ebus::to_string(ebus::range(vec_070400, 7, 2));
+    doc["hardware"] = ebus::to_string(ebus::range(vec_070400, 9, 2));
 
-  doc["ebusd"] = ebusdConfiguration();
+    doc["ebusd"] = ebusdConfiguration();
+  } else {
+    doc["manufacturer"] = "";
+    doc["unitid"] = "";
+    doc["software"] = "";
+    doc["hardware"] = "";
+
+    doc["ebusd"] = "";
+  }
 
   if (isVaillant() && isVaillantValid()) {
     std::string serial = ebus::byte_2_char(ebus::range(vec_b5090124, 2, 8));
@@ -80,13 +90,14 @@ JsonDocument Device::toJson() const {
   return doc;
 }
 
-const std::vector<uint8_t> Device::scanCommand(const uint8_t& slave) {
+const std::vector<uint8_t> Device::createScanCommand(const uint8_t& slave) {
   std::vector<uint8_t> command = {slave};
   command.insert(command.end(), VEC_070400.begin(), VEC_070400.end());
   return command;
 }
 
-const std::vector<std::vector<uint8_t>> Device::scanCommandsVendor() const {
+const std::vector<std::vector<uint8_t>> Device::createVendorScanCommands()
+    const {
   std::vector<std::vector<uint8_t>> commands;
   if (isVaillant()) {
     if (vec_b5090124.size() == 0) {

@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "Command.hpp"
-#include "Device.hpp"
 
 // Active commands are sent on the eBUS at scheduled intervals, and the received
 // data is saved. Passive received messages are compared against defined
@@ -28,7 +27,6 @@ class Schedule {
   void stop();
 
   void setSendInquiryOfExistence(const bool enable);
-  void setScanOnStartup(const bool enable);
   void setFirstCommandAfterStart(const uint8_t delay);
 
   void handleScanFull();
@@ -41,23 +39,20 @@ class Schedule {
 
   void handleWrite(const std::vector<uint8_t>& command);
 
-  void toggleForward(const bool enable);
+  void toggleForward(bool enable);
   void handleForwardFilter(const JsonArrayConst& filters);
 
-  void setPublishCounter(const bool enable);
+  void setPublishCounter(bool enable);
   const bool getPublishCounter() const;
   void resetCounter();
   void publishCounter();
   const std::string getCounterJson();
 
-  void setPublishTiming(const bool enable);
+  void setPublishTiming(bool enable);
   const bool getPublishTiming() const;
   void resetTiming();
   void publishTiming();
   const std::string getTimingJson();
-
-  const std::string getDevicesJson() const;
-  const std::vector<Device*> getDevices();
 
  private:
   ebus::Request* ebusRequest = nullptr;
@@ -66,7 +61,6 @@ class Schedule {
   volatile bool stopRunner = false;
 
   bool sendInquiryOfExistence = false;
-  bool scanOnStartup = false;
 
   uint32_t firstCommandAfterStart = 10 * 1000;  // 10 seconds after start
 
@@ -112,15 +106,9 @@ class Schedule {
 
   uint32_t distanceScans = 10 * 1000;  // 10 seconds after start
   uint32_t lastScan = 0;               // in milliseconds
-  uint8_t maxScans = 5;                // maximum number of scans
-  uint8_t currentScan = 0;             // current scan count
 
-  bool fullScan = false;
-  uint8_t scanIndex = 0;
   uint32_t distanceFullScans = 500;  // 500 milliseconds between 2 scans
   uint32_t lastFullScan = 0;         // in milliseconds
-
-  std::map<uint8_t, Device> devices;
 
   uint32_t busRequestFailed = 0;
   uint32_t sendingFailed = 0;
@@ -171,9 +159,6 @@ class Schedule {
 
   void processPassive(const std::vector<uint8_t>& master,
                       const std::vector<uint8_t>& slave);
-
-  void processScan(const std::vector<uint8_t>& master,
-                   const std::vector<uint8_t>& slave);
 };
 
 extern Schedule schedule;
