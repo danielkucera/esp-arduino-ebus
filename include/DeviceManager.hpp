@@ -33,6 +33,8 @@ class DeviceManager {
 
   const std::vector<std::vector<uint8_t>> scanCommands() const;
   const std::vector<std::vector<uint8_t>> vendorScanCommands() const;
+  const std::vector<std::vector<uint8_t>> addressesScanCommands(
+      const JsonArrayConst& addresses) const;
 
   void setFullScan(bool enable);
   bool getFullScan() const;

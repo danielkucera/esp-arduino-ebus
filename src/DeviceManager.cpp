@@ -86,6 +86,21 @@ const std::vector<std::vector<uint8_t>> DeviceManager::vendorScanCommands()
   return result;
 }
 
+const std::vector<std::vector<uint8_t>> DeviceManager::addressesScanCommands(
+    const JsonArrayConst& addresses) const {
+  std::set<uint8_t> scanSlaves;
+  for (JsonVariantConst address : addresses) {
+    uint8_t firstByte = ebus::to_vector(address.as<std::string>())[0];
+    if (ebus::isSlave(firstByte) &&
+        firstByte != ebusHandler->getTargetAddress())
+      scanSlaves.insert(firstByte);
+  }
+  std::vector<std::vector<uint8_t>> result;
+  for (const uint8_t slave : scanSlaves)
+    result.push_back(Device::createScanCommand(slave));
+  return result;
+}
+
 void DeviceManager::setFullScan(bool enable) { fullScan = enable; }
 
 bool DeviceManager::getFullScan() const { return fullScan; }

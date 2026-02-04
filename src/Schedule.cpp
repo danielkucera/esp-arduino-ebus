@@ -4,8 +4,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
-#include <set>
-
 #include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "Mqtt.hpp"
@@ -107,18 +105,8 @@ void Schedule::handleScan() {
 }
 
 void Schedule::handleScanAddresses(const JsonArrayConst& addresses) {
-  std::set<uint8_t> slaves;
-
-  for (JsonVariantConst address : addresses) {
-    uint8_t firstByte = ebus::to_vector(address.as<std::string>())[0];
-    if (ebus::isSlave(firstByte) &&
-        firstByte != ebusHandler->getTargetAddress())
-      slaves.insert(firstByte);
-  }
-
-  for (const uint8_t slave : slaves)
-    enqueueCommand(
-        {Mode::scan, PRIO_SCAN, Device::createScanCommand(slave), nullptr});
+  for (const auto& command : deviceManager.addressesScanCommands(addresses))
+    enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
 }
 
 void Schedule::handleScanVendor() {
@@ -600,7 +588,7 @@ void Schedule::enqueueStartupScanCommands() {
       currentMillis > lastScan + distanceScans) {
     lastScan = currentMillis;
     distanceScans = 3 * 60 * 1000;
-    auto cmd = deviceManager.nextStartupScanCommand();
+    const auto cmd = deviceManager.nextStartupScanCommand();
     if (!cmd.empty()) enqueueCommand({Mode::scan, PRIO_SCAN, cmd, nullptr});
     handleScanVendor();
   }
