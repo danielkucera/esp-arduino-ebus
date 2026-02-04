@@ -133,9 +133,7 @@ bool DeviceManager::hasNextStartupScan() const {
 std::vector<uint8_t> DeviceManager::nextStartupScanCommand() {
   if (startupScanIndex < maxStartupScans) {
     startupScanIndex++;
-    // You can use scanCommands() or implement your own logic here
-    // For example, scan all known slaves:
-    auto cmds = scanCommands();
+    const auto cmds = scanCommands();
     if (startupScanIndex - 1 < cmds.size()) return cmds[startupScanIndex - 1];
   }
   return {};
