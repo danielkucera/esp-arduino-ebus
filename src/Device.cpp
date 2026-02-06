@@ -52,7 +52,7 @@ JsonDocument Device::toJson() const {
   uint8_t master = ebus::masterOf(slave);
   doc["master"] = master != slave ? ebus::to_string(master) : "";
   doc["slave"] = ebus::to_string(slave);
-  
+
   if (vec_070400.size() > 1) {
     doc["manufacturer"] = (manufacturers.count(vec_070400[1]) > 0)
                               ? manufacturers.at(vec_070400[1])
@@ -127,7 +127,22 @@ const std::vector<std::vector<uint8_t>> Device::createVendorScanCommands()
 const bool Device::getIdentification(const std::vector<uint8_t>& master,
                                      std::vector<uint8_t>* const slave) {
   if (ebus::contains(master, VEC_070400, 2)) {
-    *slave = ebus::to_vector("0ada455350444106030000");
+    // 10 data bytes = length (excluding slave and service bytes)
+    uint8_t length = 0x0a;
+    // "danman.eu" (Vendor ID 0xda) as default manufacturer
+    uint8_t manufacturer = 0xda;
+    //  "ESPDA" as default unit id (ASCII)
+    uint8_t uinitId[5] = {0x45, 0x53, 0x50, 0x44, 0x41};
+    // "07.02" as default software version and revision (BCD)
+    uint8_t softwareVersion = 0x07;
+    uint8_t softwareRevision = 0x02;
+    // "06.03" as default hardware version and revision (BCD)
+    uint8_t hardwareVersion = 0x06;
+    uint8_t hardwareRevision = 0x03;
+    *slave = {length,          manufacturer,    uinitId[0],
+              uinitId[1],      uinitId[2],      uinitId[3],
+              uinitId[4],      softwareVersion, softwareRevision,
+              hardwareVersion, hardwareRevision};
     return true;
   }
   return false;
