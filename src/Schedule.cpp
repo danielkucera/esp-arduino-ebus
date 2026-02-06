@@ -450,17 +450,17 @@ void Schedule::handleEventQueue() {
 
           switch (event->data.messageType) {
             case ebus::MessageType::active:
-              schedule.processActive(event->mode,
-                                     std::vector<uint8_t>(event->data.master),
-                                     std::vector<uint8_t>(event->data.slave));
-              // break; when combined commands are implemented
+              schedule.processActive(
+                  event->mode, std::vector<uint8_t>(event->data.master),
+                  std::vector<uint8_t>(event->data.slave), payload);
+              break;
             case ebus::MessageType::passive:
             case ebus::MessageType::reactive:
               schedule.processPassive(std::vector<uint8_t>(event->data.master),
-                                      std::vector<uint8_t>(event->data.slave));
+                                      std::vector<uint8_t>(event->data.slave),
+                                      payload);
               break;
           }
-          logger.info(payload.c_str());
         } break;
         case CallbackType::error: {
           std::string payload = event->data.message + " : master '" +
@@ -616,7 +616,8 @@ void Schedule::reactiveMasterSlaveCallback(const std::vector<uint8_t>& master,
 
 void Schedule::processActive(const Mode& mode,
                              const std::vector<uint8_t>& master,
-                             const std::vector<uint8_t>& slave) {
+                             const std::vector<uint8_t>& slave,
+                             const std::string& payload) {
   switch (mode) {
     case Mode::schedule:
       if (activeCommand &&
@@ -625,6 +626,7 @@ void Schedule::processActive(const Mode& mode,
         store.updateData(activeCommand->queuedCommand.scheduleCommand, master,
                          slave);
         mqtt.publishValue(activeCommand->queuedCommand.scheduleCommand);
+        logTelegram(payload, activeCommand->queuedCommand.scheduleCommand);
       }
       break;
     case Mode::internal:
@@ -651,7 +653,8 @@ void Schedule::processActive(const Mode& mode,
 }
 
 void Schedule::processPassive(const std::vector<uint8_t>& master,
-                              const std::vector<uint8_t>& slave) {
+                              const std::vector<uint8_t>& slave,
+                              const std::string& payload) {
   if (forward) {
     size_t count = std::count_if(forwardfilters.begin(), forwardfilters.end(),
                                  [&master](const std::vector<uint8_t>& vec) {
@@ -663,11 +666,28 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
 
   std::vector<Command*> pasCommands = store.updateData(nullptr, master, slave);
 
-  for (const Command* command : pasCommands) mqtt.publishValue(command);
+  if (pasCommands.empty()) {
+    logTelegram(payload);
+  } else {
+    for (const Command* command : pasCommands) {
+      mqtt.publishValue(command);
+      logTelegram(payload, command);
+    }
+  }
 
   // send Sign of Life in response to an Inquiry of Existence
   if (ebus::contains(master, VEC_07fe00, 2))
     enqueueCommand({Mode::internal, PRIO_INTERNAL, VEC_fe07ff00, nullptr});
+}
+
+void Schedule::logTelegram(const std::string& payload, const Command* cmd) {
+  std::string logMsg = payload;
+  if (cmd != nullptr) {
+    logMsg += " " + cmd->getName() +
+              " value: " + cmd->getValueJsonDoc()["value"].as<std::string>() +
+              " " + cmd->getUnit();
+  }
+  logger.info(logMsg.c_str());
 }
 
 #endif
