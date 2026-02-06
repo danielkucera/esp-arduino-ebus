@@ -432,7 +432,7 @@ void Schedule::handleEventQueue() {
             activeCommand->busAttempts++;
             activeCommand->queuedCommand.priority = PRIO_INTERNAL;
             enqueueCommand(activeCommand->queuedCommand);
-            logger.info("Bus request retry");
+            logger.debug("Bus request retry");
           }
           if (activeCommand && activeCommand->busAttempts >= 3) {
             busRequestFailed++;
