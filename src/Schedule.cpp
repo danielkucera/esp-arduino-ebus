@@ -683,9 +683,9 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
 void Schedule::logTelegram(const std::string& payload, const Command* cmd) {
   std::string logMsg = payload;
   if (cmd != nullptr) {
-    logMsg += " [" + cmd->getName() +
-              "] " + cmd->getValueJsonDoc()["value"].as<std::string>() +
-              " " + cmd->getUnit();
+    logMsg += " [" + cmd->getName() + "] " +
+              cmd->getValueJsonDoc()["value"].as<std::string>() + " " +
+              cmd->getUnit();
   }
   logger.info(logMsg.c_str());
 }
