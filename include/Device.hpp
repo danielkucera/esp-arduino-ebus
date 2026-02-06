@@ -13,9 +13,6 @@
 
 class Device {
  public:
-  Device() = default;
-  ~Device() = default;
-
   const uint8_t& getSlave() const;
 
   // Update stored identification vectors
@@ -26,8 +23,8 @@ class Device {
   JsonDocument toJson() const;
 
   // Scan commands
-  static const std::vector<uint8_t> scanCommand(const uint8_t& slave);
-  const std::vector<std::vector<uint8_t>> scanCommandsVendor() const;
+  static const std::vector<uint8_t> createScanCommand(const uint8_t& slave);
+  const std::vector<std::vector<uint8_t>> createVendorScanCommands() const;
 
   // Identification
   static const bool getIdentification(const std::vector<uint8_t>& master,

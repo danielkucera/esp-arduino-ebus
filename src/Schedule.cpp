@@ -4,8 +4,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
-#include <set>
-
+#include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "Mqtt.hpp"
 #include "http.hpp"
@@ -24,10 +23,6 @@ static constexpr uint8_t PRIO_SEND = 4;      // manual send
 static constexpr uint8_t PRIO_SCHEDULE = 3;  // schedule commands
 static constexpr uint8_t PRIO_SCAN = 2;      // manual scan
 static constexpr uint8_t PRIO_FULLSCAN = 1;  // manual full scan
-
-// collected addresses
-std::map<uint8_t, uint32_t> seenMasters;
-std::map<uint8_t, uint32_t> seenSlaves;
 
 portMUX_TYPE commandMux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -94,59 +89,29 @@ void Schedule::setSendInquiryOfExistence(const bool enable) {
   sendInquiryOfExistence = enable;
 }
 
-void Schedule::setScanOnStartup(const bool enable) { scanOnStartup = enable; }
-
 void Schedule::setFirstCommandAfterStart(const uint8_t delay) {
   firstCommandAfterStart = delay * 1000;
 }
 
 void Schedule::handleScanFull() {
-  fullScan = true;
-  scanIndex = 0;
+  deviceManager.setFullScan(true);
+  deviceManager.resetFullScan();
   enqueueFullScanCommand();
 }
 
 void Schedule::handleScan() {
-  std::set<uint8_t> slaves;
-
-  for (const auto& master : seenMasters)
-    if (master.first != ebusHandler->getSourceAddress())
-      slaves.insert(ebus::slaveOf(master.first));
-
-  for (const auto& slave : seenSlaves)
-    if (slave.first != ebusHandler->getTargetAddress())
-      slaves.insert(slave.first);
-
-  for (const uint8_t slave : slaves) {
-    enqueueCommand(
-        {Mode::scan, PRIO_SCAN, Device::scanCommand(slave), nullptr});
-  }
+  for (const std::vector<uint8_t>& command : deviceManager.scanCommands())
+    enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
 }
 
 void Schedule::handleScanAddresses(const JsonArrayConst& addresses) {
-  std::set<uint8_t> slaves;
-
-  for (JsonVariantConst address : addresses) {
-    uint8_t firstByte = ebus::to_vector(address.as<std::string>())[0];
-    if (ebus::isSlave(firstByte) &&
-        firstByte != ebusHandler->getTargetAddress())
-      slaves.insert(firstByte);
-  }
-
-  for (const uint8_t slave : slaves) {
-    enqueueCommand(
-        {Mode::scan, PRIO_SCAN, Device::scanCommand(slave), nullptr});
-  }
+  for (const auto& command : deviceManager.addressesScanCommands(addresses))
+    enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
 }
 
 void Schedule::handleScanVendor() {
-  for (const auto& device : devices) {
-    const std::vector<std::vector<uint8_t>> commands =
-        device.second.scanCommandsVendor();
-    for (const std::vector<uint8_t>& command : commands) {
-      enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
-    }
-  }
+  for (const std::vector<uint8_t>& command : deviceManager.vendorScanCommands())
+    enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
 }
 
 void Schedule::handleSend(const std::vector<uint8_t>& command) {
@@ -162,7 +127,7 @@ void Schedule::handleWrite(const std::vector<uint8_t>& command) {
   enqueueCommand({Mode::write, PRIO_SEND, command, nullptr});
 }
 
-void Schedule::toggleForward(const bool enable) { forward = enable; }
+void Schedule::toggleForward(bool enable) { forward = enable; }
 
 void Schedule::handleForwardFilter(const JsonArrayConst& filters) {
   forwardfilters.clear();
@@ -170,13 +135,12 @@ void Schedule::handleForwardFilter(const JsonArrayConst& filters) {
     forwardfilters.push_back(ebus::to_vector(filter));
 }
 
-void Schedule::setPublishCounter(const bool enable) { counterEnabled = enable; }
+void Schedule::setPublishCounter(bool enable) { counterEnabled = enable; }
 
 const bool Schedule::getPublishCounter() const { return counterEnabled; }
 
 void Schedule::resetCounter() {
-  seenMasters.clear();
-  seenSlaves.clear();
+  deviceManager.resetAddresses();
 
   busRequestFailed = 0;
   sendingFailed = 0;
@@ -198,15 +162,11 @@ const std::string Schedule::getCounterJson() {
 
   // Addresses Master
   JsonObject Addresses_Master = doc["Addresses"]["Master"].to<JsonObject>();
-
-  for (const auto& master : seenMasters)
-    Addresses_Master[ebus::to_string(master.first)] = master.second;
+  deviceManager.populateMasterAddresses(Addresses_Master);
 
   // Addresses Slave
   JsonObject Addresses_Slave = doc["Addresses"]["Slave"].to<JsonObject>();
-
-  for (const auto& slave : seenSlaves)
-    Addresses_Slave[ebus::to_string(slave.first)] = slave.second;
+  deviceManager.populateSlaveAddresses(Addresses_Slave);
 
   // Failed
   JsonObject Failed = doc["Failed"].to<JsonObject>();
@@ -290,7 +250,7 @@ const std::string Schedule::getCounterJson() {
   return payload;
 }
 
-void Schedule::setPublishTiming(const bool enable) { timingEnabled = enable; }
+void Schedule::setPublishTiming(bool enable) { timingEnabled = enable; }
 
 const bool Schedule::getPublishTiming() const { return timingEnabled; }
 
@@ -448,26 +408,6 @@ const std::string Schedule::getTimingJson() {
   return payload;
 }
 
-const std::string Schedule::getDevicesJson() const {
-  std::string payload;
-  JsonDocument doc;
-
-  for (const auto& device : devices) doc.add(device.second.toJson());
-
-  if (doc.isNull()) doc.to<JsonArray>();
-
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
-
-  return payload;
-}
-
-const std::vector<Device*> Schedule::getDevices() {
-  std::vector<Device*> result;
-  for (auto& device : devices) result.push_back(&(device.second));
-  return result;
-}
-
 void Schedule::taskFunc(void* arg) {
   Schedule* self = static_cast<Schedule*>(arg);
   for (;;) {
@@ -506,12 +446,7 @@ void Schedule::handleEventQueue() {
           if (event->data.telegramType != ebus::TelegramType::broadcast)
             payload += " / " + ebus::to_string(event->data.slave);
 
-          if (!event->data.master.empty()) {
-            seenMasters[event->data.master[0]] += 1;
-            if (event->data.master.size() > 1 &&
-                ebus::isSlave(event->data.master[1]))
-              seenSlaves[event->data.master[1]] += 1;
-          }
+          deviceManager.collectData(event->data.master, event->data.slave);
 
           switch (event->data.messageType) {
             case ebus::MessageType::active:
@@ -573,10 +508,10 @@ void Schedule::handleCommandQueue() {
   if (store.active()) enqueueScheduleCommand();
 
   // Enqueue startup scan commands if needed
-  if (scanOnStartup) enqueueStartupScanCommands();
+  if (deviceManager.getScanOnStartup()) enqueueStartupScanCommands();
 
   // Enqueue next full scan command if needed
-  if (fullScan) enqueueFullScanCommand();
+  if (deviceManager.getFullScan()) enqueueFullScanCommand();
 
   // Process queue
   if (!ebusHandler->isActiveMessagePending() && !commandQueue.empty() &&
@@ -649,11 +584,12 @@ void Schedule::enqueueScheduleCommand() {
 
 void Schedule::enqueueStartupScanCommands() {
   uint32_t currentMillis = millis();
-  if (currentScan < maxScans && currentMillis > lastScan + distanceScans) {
-    currentScan++;
+  if (deviceManager.hasNextStartupScan() &&
+      currentMillis > lastScan + distanceScans) {
     lastScan = currentMillis;
-    distanceScans = 3 * 60 * 1000;  // repeat scan in 3 minutes
-    handleScan();
+    distanceScans = 3 * 60 * 1000;
+    const auto cmd = deviceManager.nextStartupScanCommand();
+    if (!cmd.empty()) enqueueCommand({Mode::scan, PRIO_SCAN, cmd, nullptr});
     handleScanVendor();
   }
 }
@@ -661,17 +597,15 @@ void Schedule::enqueueStartupScanCommands() {
 void Schedule::enqueueFullScanCommand() {
   if (millis() > lastFullScan + distanceFullScans) {
     lastFullScan = millis();
-    while (scanIndex < 0xff) {
-      scanIndex++;
-      if (ebus::isSlave(scanIndex) &&
-          scanIndex != ebusHandler->getTargetAddress()) {
-        enqueueCommand({Mode::fullscan, PRIO_FULLSCAN,
-                        Device::scanCommand(scanIndex), nullptr});
+    if (deviceManager.hasNextFullScan()) {
+      const auto cmd = deviceManager.nextFullScanCommand();
+      if (!cmd.empty()) {
+        enqueueCommand({Mode::fullscan, PRIO_FULLSCAN, cmd, nullptr});
         return;
       }
     }
-    fullScan = false;  // reset fullScan to avoid repeated calls
-    scanIndex = 0;     // reset scanIndex for next full scan
+    deviceManager.setFullScan(false);
+    deviceManager.resetFullScan();
   }
 }
 
@@ -691,50 +625,28 @@ void Schedule::processActive(const Mode& mode,
         store.updateData(activeCommand->queuedCommand.scheduleCommand, master,
                          slave);
         mqtt.publishValue(activeCommand->queuedCommand.scheduleCommand);
-        delete activeCommand;
-        activeCommand = nullptr;
       }
       break;
     case Mode::internal:
-      if (activeCommand &&
-          activeCommand->queuedCommand.mode == Mode::internal) {
-        delete activeCommand;
-        activeCommand = nullptr;
-      }
-      break;
     case Mode::scan:
     case Mode::fullscan:
-      processScan(master, slave);
-      if (activeCommand &&
-          (activeCommand->queuedCommand.mode == Mode::scan ||
-           activeCommand->queuedCommand.mode == Mode::fullscan)) {
-        delete activeCommand;
-        activeCommand = nullptr;
-      }
+      // No additional actions needed, just cleanup below
       break;
     case Mode::send:
       mqtt.publishData("send", master, slave);
-      if (activeCommand && activeCommand->queuedCommand.mode == Mode::send) {
-        delete activeCommand;
-        activeCommand = nullptr;
-      }
       break;
     case Mode::read:  // not used yet
       mqtt.publishData("read", master, slave);
-      if (activeCommand && activeCommand->queuedCommand.mode == Mode::read) {
-        delete activeCommand;
-        activeCommand = nullptr;
-      }
       break;
     case Mode::write:
       mqtt.publishData("write", master, slave);
-      if (activeCommand && activeCommand->queuedCommand.mode == Mode::write) {
-        delete activeCommand;
-        activeCommand = nullptr;
-      }
       break;
     default:
       break;
+  }
+  if (activeCommand) {
+    delete activeCommand;
+    activeCommand = nullptr;
   }
 }
 
@@ -753,17 +665,9 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
 
   for (const Command* command : pasCommands) mqtt.publishValue(command);
 
-  processScan(master, slave);
-
   // send Sign of Life in response to an Inquiry of Existence
   if (ebus::contains(master, VEC_07fe00, 2))
     enqueueCommand({Mode::internal, PRIO_INTERNAL, VEC_fe07ff00, nullptr});
-}
-
-void Schedule::processScan(const std::vector<uint8_t>& master,
-                           const std::vector<uint8_t>& slave) {
-  if (master[1] == ebusHandler->getTargetAddress()) return;
-  if (ebus::isSlave(master[1])) devices[master[1]].update(master, slave);
 }
 
 #endif
