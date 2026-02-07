@@ -173,28 +173,26 @@ std::vector<Command*> Store::findPassiveCommands(
 std::vector<Command*> Store::updateData(Command* command,
                                         const std::vector<uint8_t>& master,
                                         const std::vector<uint8_t>& slave) {
-  if (command) {
-    command->setLast(millis());
-    if (command->getMaster())
-      command->setData(ebus::range(master, 4 + command->getPosition(),
-                                   command->getLength()));
-    else
-      command->setData(
-          ebus::range(slave, command->getPosition(), command->getLength()));
-    // Return a vector with just this command, but avoid heap allocation
-    return {command};
-  }
-
-  // Passive: potentially multiple matches
-  std::vector<Command*> passiveCommands = findPassiveCommands(master);
-  for (Command* cmd : passiveCommands) {
+  auto update = [](Command* cmd, const std::vector<uint8_t>& master,
+                   const std::vector<uint8_t>& slave) {
     cmd->setLast(millis());
     if (cmd->getMaster())
       cmd->setData(
           ebus::range(master, 4 + cmd->getPosition(), cmd->getLength()));
     else
       cmd->setData(ebus::range(slave, cmd->getPosition(), cmd->getLength()));
+  };
+
+  if (command) {
+    update(command, master, slave);
+    // Return a vector with just this command, but avoid heap allocation
+    return {command};
   }
+
+  // Passive: potentially multiple matches
+  std::vector<Command*> passiveCommands = findPassiveCommands(master);
+  for (Command* cmd : passiveCommands) update(cmd, master, slave);
+
   return passiveCommands;
 }
 

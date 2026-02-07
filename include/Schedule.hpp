@@ -159,6 +159,10 @@ class Schedule {
 
   void processPassive(const std::vector<uint8_t>& master,
                       const std::vector<uint8_t>& slave);
+
+  void logTelegram(const std::vector<uint8_t>& master,
+                   const std::vector<uint8_t>& slave,
+                   const Command* cmd = nullptr);
 };
 
 extern Schedule schedule;

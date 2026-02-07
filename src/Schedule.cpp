@@ -432,7 +432,7 @@ void Schedule::handleEventQueue() {
             activeCommand->busAttempts++;
             activeCommand->queuedCommand.priority = PRIO_INTERNAL;
             enqueueCommand(activeCommand->queuedCommand);
-            logger.info("Bus request retry");
+            logger.debug("Bus request retry");
           }
           if (activeCommand && activeCommand->busAttempts >= 3) {
             busRequestFailed++;
@@ -442,10 +442,6 @@ void Schedule::handleEventQueue() {
           }
         } break;
         case CallbackType::telegram: {
-          std::string payload = ebus::to_string(event->data.master);
-          if (event->data.telegramType != ebus::TelegramType::broadcast)
-            payload += " / " + ebus::to_string(event->data.slave);
-
           deviceManager.collectData(event->data.master, event->data.slave);
 
           switch (event->data.messageType) {
@@ -453,14 +449,13 @@ void Schedule::handleEventQueue() {
               schedule.processActive(event->mode,
                                      std::vector<uint8_t>(event->data.master),
                                      std::vector<uint8_t>(event->data.slave));
-              // break; when combined commands are implemented
+              break;
             case ebus::MessageType::passive:
             case ebus::MessageType::reactive:
               schedule.processPassive(std::vector<uint8_t>(event->data.master),
                                       std::vector<uint8_t>(event->data.slave));
               break;
           }
-          logger.info(payload.c_str());
         } break;
         case CallbackType::error: {
           std::string payload = event->data.message + " : master '" +
@@ -476,7 +471,7 @@ void Schedule::handleEventQueue() {
             activeCommand->sendAttempts++;
             activeCommand->queuedCommand.priority = PRIO_INTERNAL;
             enqueueCommand(activeCommand->queuedCommand);
-            logger.info("Sending retry");
+            logger.debug("Sending retry");
           }
           if (activeCommand &&
               (activeCommand->queuedCommand.mode == Mode::fullscan ||
@@ -625,6 +620,8 @@ void Schedule::processActive(const Mode& mode,
         store.updateData(activeCommand->queuedCommand.scheduleCommand, master,
                          slave);
         mqtt.publishValue(activeCommand->queuedCommand.scheduleCommand);
+        logTelegram(master, slave,
+                    activeCommand->queuedCommand.scheduleCommand);
       }
       break;
     case Mode::internal:
@@ -663,11 +660,32 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
 
   std::vector<Command*> pasCommands = store.updateData(nullptr, master, slave);
 
-  for (const Command* command : pasCommands) mqtt.publishValue(command);
+  if (pasCommands.empty()) {
+    logTelegram(master, slave);
+  } else {
+    for (const Command* command : pasCommands) {
+      mqtt.publishValue(command);
+      logTelegram(master, slave, command);
+    }
+  }
 
   // send Sign of Life in response to an Inquiry of Existence
   if (ebus::contains(master, VEC_07fe00, 2))
     enqueueCommand({Mode::internal, PRIO_INTERNAL, VEC_fe07ff00, nullptr});
+}
+
+void Schedule::logTelegram(const std::vector<uint8_t>& master,
+                           const std::vector<uint8_t>& slave,
+                           const Command* cmd) {
+  std::string payload = ebus::to_string(master);
+  if (slave.size() > 0) payload += " / " + ebus::to_string(slave);
+
+  if (cmd != nullptr) {
+    payload += " [" + cmd->getName() + "] " +
+               cmd->getValueJsonDoc()["value"].as<std::string>() + " " +
+               cmd->getUnit();
+  }
+  logger.info(payload.c_str());
 }
 
 #endif
