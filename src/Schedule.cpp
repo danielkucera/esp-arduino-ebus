@@ -476,7 +476,7 @@ void Schedule::handleEventQueue() {
             activeCommand->sendAttempts++;
             activeCommand->queuedCommand.priority = PRIO_INTERNAL;
             enqueueCommand(activeCommand->queuedCommand);
-            logger.info("Sending retry");
+            logger.debug("Sending retry");
           }
           if (activeCommand &&
               (activeCommand->queuedCommand.mode == Mode::fullscan ||
