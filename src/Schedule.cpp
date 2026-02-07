@@ -682,6 +682,7 @@ void Schedule::logTelegram(const std::vector<uint8_t>& master,
 
   if (cmd != nullptr) {
     payload += " [" + cmd->getName() + "] " +
+               ebus::to_string(cmd->getData()) + " -> " +
                cmd->getValueJsonDoc()["value"].as<std::string>() + " " +
                cmd->getUnit();
   }
