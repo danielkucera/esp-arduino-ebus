@@ -12,9 +12,6 @@
 
 class Command {
  public:
-  Command() = default;
-  ~Command() = default;
-
   // Internal fields accessors
   const uint32_t& getLast() const;
   void setLast(const uint32_t time);
@@ -59,7 +56,7 @@ class Command {
 
   // Data conversion
   const JsonDocument getValueJsonDoc() const;
-  const std::vector<uint8_t> getVector(const JsonDocument& doc);
+  const std::vector<uint8_t> getVectorFromJson(const JsonDocument& doc);
 
   // Serialization / Deserialization
   JsonDocument toJson() const;

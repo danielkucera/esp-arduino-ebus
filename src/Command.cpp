@@ -84,12 +84,12 @@ const JsonDocument Command::getValueJsonDoc() const {
   return doc;
 }
 
-const std::vector<uint8_t> Command::getVector(const JsonDocument& doc) {
+const std::vector<uint8_t> Command::getVectorFromJson(const JsonDocument& doc) {
   std::vector<uint8_t> result;
 
   if (numeric && doc["value"].is<double>()) {
     double value = doc["value"].as<double>();
-    result = getVectorFromDouble(value);
+    if ((value >= min) && (value <= max)) result = getVectorFromDouble(value);
   } else if (!numeric && doc["value"].is<const char*>()) {
     std::string value = doc["value"].as<const char*>();
     result = getVectorFromString(value);
