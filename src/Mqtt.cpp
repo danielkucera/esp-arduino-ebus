@@ -316,7 +316,7 @@ void Mqtt::handleWrite(const JsonDocument& doc) {
   std::string key = doc["key"].as<std::string>();
   Command* command = store.findCommand(key);
   if (command != nullptr) {
-    std::vector<uint8_t> valueBytes = command->getVector(doc);
+    std::vector<uint8_t> valueBytes = command->getVectorFromJson(doc);
     if (valueBytes.size() > 0) {
       std::vector<uint8_t> writeCmd = command->getWriteCmd();
       writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
