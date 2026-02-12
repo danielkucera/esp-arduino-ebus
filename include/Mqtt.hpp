@@ -10,9 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Command.hpp"
 #include "Device.hpp"
-#include "Schedule.hpp"
-#include "Store.hpp"
 
 enum class IncomingActionType { Insert, Remove };
 

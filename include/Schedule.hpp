@@ -3,7 +3,6 @@
 #if defined(EBUS_INTERNAL)
 #include <ArduinoJson.h>
 #include <Ebus.h>
-#include <WiFiClient.h>
 
 #include <map>
 #include <queue>

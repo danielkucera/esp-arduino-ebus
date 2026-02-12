@@ -14,6 +14,7 @@
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
 #include "Schedule.hpp"
+#include "Store.hpp"
 #else
 #include "BusType.hpp"
 #include "client.hpp"

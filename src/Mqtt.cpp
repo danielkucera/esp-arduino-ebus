@@ -6,6 +6,8 @@
 #include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "MqttHA.hpp"
+#include "Schedule.hpp"
+#include "Store.hpp"
 #include "main.hpp"
 
 Mqtt mqtt;

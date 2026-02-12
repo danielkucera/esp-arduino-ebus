@@ -7,7 +7,7 @@
 #include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "Mqtt.hpp"
-#include "http.hpp"
+#include "Store.hpp"
 
 // search Inquiry of Existence (Service 07h FEh)
 const std::vector<uint8_t> VEC_07fe00 = {0x07, 0xfe, 0x00};
@@ -449,7 +449,8 @@ void Schedule::handleEventQueue() {
               schedule.processActive(event->mode,
                                      std::vector<uint8_t>(event->data.master),
                                      std::vector<uint8_t>(event->data.slave));
-              break;
+              // break;
+              // To process fields of active messages with passive definitions.
             case ebus::MessageType::passive:
             case ebus::MessageType::reactive:
               schedule.processPassive(std::vector<uint8_t>(event->data.master),
@@ -681,10 +682,9 @@ void Schedule::logTelegram(const std::vector<uint8_t>& master,
   if (slave.size() > 0) payload += " / " + ebus::to_string(slave);
 
   if (cmd != nullptr) {
-    payload += " [" + cmd->getName() + "] " +
-               ebus::to_string(cmd->getData()) + " -> " +
-               cmd->getValueJsonDoc()["value"].as<std::string>() + " " +
-               cmd->getUnit();
+    payload += " [" + cmd->getName() + "] " + ebus::to_string(cmd->getData()) +
+               " -> " + cmd->getValueJsonDoc()["value"].as<std::string>() +
+               " " + cmd->getUnit();
   }
   logger.info(payload.c_str());
 }
