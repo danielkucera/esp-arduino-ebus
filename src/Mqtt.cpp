@@ -101,17 +101,17 @@ void Mqtt::publishData(const std::string& id,
   mqtt.publish("response", 0, false, payload.c_str());
 }
 
-void Mqtt::publishValue(const Command* command) {
+void Mqtt::publishValue(const std::string& name, const JsonDocument& value) {
   if (!mqtt.enabled) return;
 
   std::string payload;
-  serializeJson(command->getValueJsonDoc(), payload);
+  serializeJson(value, payload);
 
-  std::string name = command->getName();
-  std::transform(name.begin(), name.end(), name.begin(),
+  std::string subTopic = name;
+  std::transform(subTopic.begin(), subTopic.end(), subTopic.begin(),
                  [](unsigned char c) { return std::tolower(c); });
 
-  std::string topic = "values/" + name;
+  std::string topic = "values/" + subTopic;
 
   mqtt.publish(topic.c_str(), 0, false, payload.c_str());
 }

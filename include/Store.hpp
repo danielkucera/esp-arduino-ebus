@@ -16,8 +16,16 @@
 // available. Permanently stored commands are automatically loaded when the
 // device is restarted.
 
+using DataUpdatedCallback =
+    std::function<void(const std::string& name, const JsonDocument& value)>;
+
+using LogCallback = std::function<void(const String& message)>;
+
 class Store {
  public:
+  void setDataUpdatedCallback(DataUpdatedCallback callback);
+  void setLogCallback(LogCallback callback);
+
   void insertCommand(const Command& command);
   void removeCommand(const std::string& key);
   Command* findCommand(const std::string& key);
@@ -52,6 +60,9 @@ class Store {
  private:
   // Single unified map for all commands, indexed by key
   std::unordered_map<std::string, Command> commands;
+
+  DataUpdatedCallback dataUpdatedCallback = nullptr;
+  LogCallback logCallback = nullptr;
 
   // Flexible serialization/deserialization
   const std::string serializeCommands() const;

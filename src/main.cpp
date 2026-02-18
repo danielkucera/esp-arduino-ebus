@@ -906,6 +906,8 @@ void setup() {
     clientManager.stop();
   });
 
+  store.setDataUpdatedCallback(Mqtt::publishValue);
+  store.setLogCallback([](const String& message) { logger.debug(message); });
   store.loadCommands();  // install saved commands
   mqttha.publishComponents();
 #else

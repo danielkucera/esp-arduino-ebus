@@ -442,6 +442,12 @@ void Schedule::handleEventQueue() {
           }
         } break;
         case CallbackType::telegram: {
+          std::string payload = ebus::to_string(event->data.master);
+          if (event->data.slave.size() > 0)
+            payload += " / " + ebus::to_string(event->data.slave);
+
+          logger.info(payload.c_str());
+
           deviceManager.collectData(event->data.master, event->data.slave);
 
           switch (event->data.messageType) {
@@ -620,9 +626,6 @@ void Schedule::processActive(const Mode& mode,
           activeCommand->queuedCommand.scheduleCommand != nullptr) {
         store.updateData(activeCommand->queuedCommand.scheduleCommand, master,
                          slave);
-        mqtt.publishValue(activeCommand->queuedCommand.scheduleCommand);
-        logTelegram(master, slave,
-                    activeCommand->queuedCommand.scheduleCommand);
       }
       break;
     case Mode::internal:
@@ -659,34 +662,11 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
       mqtt.publishData("forward", master, slave);
   }
 
-  std::vector<Command*> pasCommands = store.updateData(nullptr, master, slave);
-
-  if (pasCommands.empty()) {
-    logTelegram(master, slave);
-  } else {
-    for (const Command* command : pasCommands) {
-      mqtt.publishValue(command);
-      logTelegram(master, slave, command);
-    }
-  }
+  store.updateData(nullptr, master, slave);
 
   // send Sign of Life in response to an Inquiry of Existence
   if (ebus::contains(master, VEC_07fe00, 2))
     enqueueCommand({Mode::internal, PRIO_INTERNAL, VEC_fe07ff00, nullptr});
-}
-
-void Schedule::logTelegram(const std::vector<uint8_t>& master,
-                           const std::vector<uint8_t>& slave,
-                           const Command* cmd) {
-  std::string payload = ebus::to_string(master);
-  if (slave.size() > 0) payload += " / " + ebus::to_string(slave);
-
-  if (cmd != nullptr) {
-    payload += " [" + cmd->getName() + "] " + ebus::to_string(cmd->getData()) +
-               " -> " + cmd->getValueJsonDoc()["value"].as<std::string>() +
-               " " + cmd->getUnit();
-  }
-  logger.info(payload.c_str());
 }
 
 #endif
