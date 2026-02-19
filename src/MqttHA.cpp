@@ -2,6 +2,8 @@
 #include <Mqtt.hpp>
 #include <MqttHA.hpp>
 
+#include "Store.hpp"
+
 MqttHA mqttha;
 
 void MqttHA::setUniqueId(const std::string& id) {

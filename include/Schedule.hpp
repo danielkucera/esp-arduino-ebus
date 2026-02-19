@@ -3,7 +3,6 @@
 #if defined(EBUS_INTERNAL)
 #include <ArduinoJson.h>
 #include <Ebus.h>
-#include <WiFiClient.h>
 
 #include <map>
 #include <queue>
@@ -159,10 +158,6 @@ class Schedule {
 
   void processPassive(const std::vector<uint8_t>& master,
                       const std::vector<uint8_t>& slave);
-
-  void logTelegram(const std::vector<uint8_t>& master,
-                   const std::vector<uint8_t>& slave,
-                   const Command* cmd = nullptr);
 };
 
 extern Schedule schedule;

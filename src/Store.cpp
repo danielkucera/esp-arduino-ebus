@@ -5,6 +5,14 @@
 
 Store store;
 
+void Store::setDataUpdatedCallback(DataUpdatedCallback callback) {
+  dataUpdatedCallback = std::move(callback);
+}
+
+void Store::setDataUpdatedLogCallback(DataUpdatedLogCallback callback) {
+  dataUpdatedLogCallback = std::move(callback);
+}
+
 void Store::insertCommand(const Command& command) {
   // Insert or update in commands map
   auto it = commands.find(command.getKey());
@@ -173,14 +181,24 @@ std::vector<Command*> Store::findPassiveCommands(
 std::vector<Command*> Store::updateData(Command* command,
                                         const std::vector<uint8_t>& master,
                                         const std::vector<uint8_t>& slave) {
-  auto update = [](Command* cmd, const std::vector<uint8_t>& master,
-                   const std::vector<uint8_t>& slave) {
+  auto update = [this](Command* cmd, const std::vector<uint8_t>& master,
+                       const std::vector<uint8_t>& slave) {
     cmd->setLast(millis());
     if (cmd->getMaster())
       cmd->setData(
           ebus::range(master, 4 + cmd->getPosition(), cmd->getLength()));
     else
       cmd->setData(ebus::range(slave, cmd->getPosition(), cmd->getLength()));
+
+    dataUpdatedCallback(cmd->getName(), cmd->getValueJsonDoc());
+
+    std::string payload = " '" + ebus::to_string(cmd->getReadCmd()) + "' [" +
+                          cmd->getName() + "] " +
+                          ebus::to_string(cmd->getData()) + " -> " +
+                          cmd->getValueJsonDoc()["value"].as<std::string>() +
+                          " " + cmd->getUnit();
+
+    dataUpdatedLogCallback(payload.c_str());
   };
 
   if (command) {

@@ -14,6 +14,7 @@
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
 #include "Schedule.hpp"
+#include "Store.hpp"
 #else
 #include "BusType.hpp"
 #include "client.hpp"
@@ -905,6 +906,9 @@ void setup() {
     clientManager.stop();
   });
 
+  store.setDataUpdatedCallback(Mqtt::publishValue);
+  store.setDataUpdatedLogCallback(
+      [](const String& message) { logger.debug(message); });
   store.loadCommands();  // install saved commands
   mqttha.publishComponents();
 #else

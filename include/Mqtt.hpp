@@ -10,9 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Command.hpp"
 #include "Device.hpp"
-#include "Schedule.hpp"
-#include "Store.hpp"
 
 enum class IncomingActionType { Insert, Remove };
 
@@ -89,7 +88,7 @@ class Mqtt {
                           const std::vector<uint8_t>& master,
                           const std::vector<uint8_t>& slave);
 
-  static void publishValue(const Command* command);
+  static void publishValue(const std::string& name, const JsonDocument& value);
 
   void doLoop();
 
