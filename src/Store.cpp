@@ -9,8 +9,8 @@ void Store::setDataUpdatedCallback(DataUpdatedCallback callback) {
   dataUpdatedCallback = std::move(callback);
 }
 
-void Store::setLogCallback(LogCallback callback) {
-  logCallback = std::move(callback);
+void Store::setDataUpdatedLogCallback(DataUpdatedLogCallback callback) {
+  dataUpdatedLogCallback = std::move(callback);
 }
 
 void Store::insertCommand(const Command& command) {
@@ -198,7 +198,7 @@ std::vector<Command*> Store::updateData(Command* command,
                           cmd->getValueJsonDoc()["value"].as<std::string>() +
                           " " + cmd->getUnit();
 
-    logCallback(payload.c_str());
+    dataUpdatedLogCallback(payload.c_str());
   };
 
   if (command) {

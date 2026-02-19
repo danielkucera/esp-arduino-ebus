@@ -19,12 +19,12 @@
 using DataUpdatedCallback =
     std::function<void(const std::string& name, const JsonDocument& value)>;
 
-using LogCallback = std::function<void(const String& message)>;
+using DataUpdatedLogCallback = std::function<void(const String& message)>;
 
 class Store {
  public:
   void setDataUpdatedCallback(DataUpdatedCallback callback);
-  void setLogCallback(LogCallback callback);
+  void setDataUpdatedLogCallback(DataUpdatedLogCallback callback);
 
   void insertCommand(const Command& command);
   void removeCommand(const std::string& key);
@@ -62,7 +62,7 @@ class Store {
   std::unordered_map<std::string, Command> commands;
 
   DataUpdatedCallback dataUpdatedCallback = nullptr;
-  LogCallback logCallback = nullptr;
+  DataUpdatedLogCallback dataUpdatedLogCallback = nullptr;
 
   // Flexible serialization/deserialization
   const std::string serializeCommands() const;
