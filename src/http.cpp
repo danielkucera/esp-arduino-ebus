@@ -343,5 +343,10 @@ void SetupHttpHandlers() {
 #endif
 
   // restart
-  configServer.on("/restart", [] { restart(); });
+  configServer.on("/restart", [] {
+    configServer.send(200, "text/html", "Restarting...");
+    configServer.client().flush(); // ensure response is sent before restarting
+    configServer.client().stop(); // close the connection
+    restart();
+  });
 }
