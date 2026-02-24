@@ -577,8 +577,6 @@ extern "C" void app_main(void) {
 
   set_pwm();
 
-  adc.begin();
-
 #if defined(EBUS_INTERNAL)
   if (configManager.readBool("sntpEnabled")) {
     std::string sntpServerValue =
