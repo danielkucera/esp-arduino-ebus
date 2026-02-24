@@ -23,6 +23,7 @@
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
 
+#include "Adc.hpp"
 #include "ClientManager.hpp"
 #include "Cron.hpp"
 #include "DeviceManager.hpp"
@@ -32,6 +33,7 @@
 #include "Store.hpp"
 #else
 #include "BusType.hpp"
+#include "Adc.hpp"
 #include "client.hpp"
 #endif
 
@@ -574,6 +576,8 @@ extern "C" void app_main(void) {
   espOtaManager.setPreUpgradeHook(prepareRuntimeForUpgrade);
 
   set_pwm();
+
+  adc.begin();
 
 #if defined(EBUS_INTERNAL)
   if (configManager.readBool("sntpEnabled")) {
