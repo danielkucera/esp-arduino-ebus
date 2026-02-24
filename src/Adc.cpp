@@ -1,15 +1,11 @@
 #include "Adc.hpp"
 
 #include <cstring>
-#include <vector>
 
 #include <Arduino.h>
+#include <WebServer.h>
 #include <driver/adc.h>
 #include <esp_err.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>
-#include <freertos/task.h>
-#include <WebServer.h>
 
 #include "Logger.hpp"
 
@@ -17,21 +13,23 @@ Adc adc;
 
 static constexpr uint32_t ADC_SAMPLE_FREQ_HZ = 30000;
 static constexpr uint8_t ADC_PATTERN_COUNT = 2;  // GPIO0 + GPIO1
+static constexpr uint32_t CAPTURE_WINDOW_MS = 80;
+static constexpr size_t MAX_FRAMES_PER_CAPTURE = 2400;
 
 bool Adc::begin() {
-  if (running) return true;
+  if (configured) return true;
 
   esp_err_t err = adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
   if (err != ESP_OK) {
     logError("adc1_config_channel_atten(GPIO0)", err);
-    running = false;
+    configured = false;
     return false;
   }
 
   err = adc1_config_channel_atten(ADC1_CHANNEL_1, ADC_ATTEN_DB_11);
   if (err != ESP_OK) {
-    logError("adc1_config_channel_atten", err);
-    running = false;
+    logError("adc1_config_channel_atten(GPIO1)", err);
+    configured = false;
     return false;
   }
 
@@ -44,7 +42,7 @@ bool Adc::begin() {
   err = adc_digi_initialize(&initConfig);
   if (err != ESP_OK) {
     logError("adc_digi_initialize", err);
-    running = false;
+    configured = false;
     return false;
   }
 
@@ -72,100 +70,95 @@ bool Adc::begin() {
   if (err != ESP_OK) {
     logError("adc_digi_controller_configure", err);
     adc_digi_deinitialize();
-    running = false;
+    configured = false;
     return false;
   }
 
-  err = adc_digi_start();
-  if (err != ESP_OK) {
-    logError("adc_digi_start", err);
-    adc_digi_deinitialize();
-    running = false;
-    return false;
-  }
-
-  if (bufferMutex == nullptr) {
-    bufferMutex = xSemaphoreCreateMutex();
-    if (bufferMutex == nullptr) {
-      logger.error("ADC: xSemaphoreCreateMutex failed");
-      adc_digi_stop();
-      adc_digi_deinitialize();
-      running = false;
-      return false;
-    }
-  }
-
-  if (captureTaskHandle == nullptr) {
-    BaseType_t created = xTaskCreate(captureTask, "adcCapture", 4096, this, 1,
-                                     reinterpret_cast<TaskHandle_t*>(&captureTaskHandle));
-    if (created != pdPASS) {
-      logger.error("ADC: xTaskCreate(adcCapture) failed");
-      adc_digi_stop();
-      adc_digi_deinitialize();
-      running = false;
-      return false;
-    }
-  }
-
-  running = true;
+  configured = true;
+  capturing = false;
   return true;
 }
 
 void Adc::stop() {
-  if (!running) return;
-  running = false;
-  adc_digi_stop();
+  if (!configured) return;
+  if (capturing) stopCapture();
   adc_digi_deinitialize();
+  configured = false;
 }
 
-void Adc::captureTask(void* param) {
-  Adc* self = static_cast<Adc*>(param);
+bool Adc::startCapture() const {
+  if (!configured) return false;
+  if (capturing) return true;
+
+  const esp_err_t err = adc_digi_start();
+  if (err != ESP_OK) {
+    logError("adc_digi_start", err);
+    capturing = false;
+    return false;
+  }
+  capturing = true;
+  return true;
+}
+
+void Adc::stopCapture() const {
+  if (!capturing) return;
+  adc_digi_stop();
+  capturing = false;
+}
+
+bool Adc::collectSamples(std::vector<uint16_t>& gpio1,
+                         std::vector<uint16_t>& gpio0) const {
+  if (!startCapture()) return false;
+
+  gpio1.clear();
+  gpio0.clear();
+  gpio1.reserve(MAX_FRAMES_PER_CAPTURE / 2);
+  gpio0.reserve(MAX_FRAMES_PER_CAPTURE / 2);
+
   uint8_t dmaChunk[256];
+  const uint32_t startedAt = millis();
+  size_t frameCount = 0;
 
-  while (true) {
-    if (!self->running) {
-      vTaskDelay(pdMS_TO_TICKS(50));
-      continue;
-    }
-
+  while (millis() - startedAt < CAPTURE_WINDOW_MS &&
+         frameCount < MAX_FRAMES_PER_CAPTURE) {
     uint32_t bytesRead = 0;
     esp_err_t err =
-        adc_digi_read_bytes(dmaChunk, sizeof(dmaChunk), &bytesRead, 1000);
+        adc_digi_read_bytes(dmaChunk, sizeof(dmaChunk), &bytesRead, 20);
 
-    if (err == ESP_OK && bytesRead > 0) {
-      self->pushRawBytes(dmaChunk, bytesRead);
-      continue;
-    }
-
-    if (err == ESP_ERR_TIMEOUT) continue;
+    if (err == ESP_ERR_TIMEOUT || bytesRead == 0) continue;
 
     if (err == ESP_ERR_INVALID_STATE) {
-      self->recoverFromInvalidState();
+      if (shouldLogNow()) {
+        logger.warn("ADC: overflow (ESP_ERR_INVALID_STATE), restarting ADC DMA");
+      }
+      stopCapture();
+      if (!startCapture()) break;
       continue;
     }
 
-    if (self->shouldLogNow()) self->logError("adc_digi_read_bytes", err);
-    vTaskDelay(pdMS_TO_TICKS(2));
-  }
-}
+    if (err != ESP_OK) {
+      if (shouldLogNow()) logError("adc_digi_read_bytes", err);
+      break;
+    }
 
-void Adc::pushRawBytes(const uint8_t* data, size_t len) {
-  const size_t frameBytes = (len / RESULT_BYTES) * RESULT_BYTES;
-  if (frameBytes == 0) return;
+    for (uint32_t i = 0; i + RESULT_BYTES <= bytesRead; i += RESULT_BYTES) {
+      adc_digi_output_data_t sample = {};
+      std::memcpy(&sample, &dmaChunk[i], RESULT_BYTES);
 
-  xSemaphoreTake(static_cast<SemaphoreHandle_t>(bufferMutex), portMAX_DELAY);
+      if (sample.type2.unit != 0) continue;
 
-  for (size_t i = 0; i < frameBytes; ++i) {
-    rawBuffer[rawWriteIndex] = data[i];
-    rawWriteIndex = (rawWriteIndex + 1) % SAMPLE_BUFFER_BYTES;
-    if (rawBytesFilled < SAMPLE_BUFFER_BYTES) {
-      ++rawBytesFilled;
+      if (sample.type2.channel == ADC_CHANNEL_1)
+        gpio1.push_back(sample.type2.data);
+      else if (sample.type2.channel == ADC_CHANNEL_0)
+        gpio0.push_back(sample.type2.data);
+
+      ++frameCount;
+      if (frameCount >= MAX_FRAMES_PER_CAPTURE) break;
     }
   }
 
-  totalFrames += static_cast<uint32_t>(frameBytes / RESULT_BYTES);
-
-  xSemaphoreGive(static_cast<SemaphoreHandle_t>(bufferMutex));
+  stopCapture();
+  return true;
 }
 
 void Adc::logError(const char* stage, int err) const {
@@ -181,144 +174,73 @@ bool Adc::shouldLogNow() const {
   return false;
 }
 
-void Adc::recoverFromInvalidState() {
-  if (!running) return;
-
-  if (shouldLogNow()) {
-    logger.warn("ADC: overflow (ESP_ERR_INVALID_STATE), restarting ADC DMA");
-  }
-
-  adc_digi_stop();
-  esp_err_t err = adc_digi_start();
-  if (err != ESP_OK && shouldLogNow()) {
-    logError("adc_digi_start(recover)", err);
-  }
-}
-
-const bool Adc::isRunning() const { return running; }
+const bool Adc::isRunning() const { return configured; }
 
 const std::string Adc::getJson() const {
-  std::vector<uint8_t> snapshot(SAMPLE_BUFFER_BYTES);
-  size_t snapshotBytes = 0;
-  size_t snapshotWriteIndex = 0;
-  uint32_t snapshotTotalFrames = 0;
+  std::vector<uint16_t> samples1;
+  std::vector<uint16_t> samples0;
 
-  xSemaphoreTake(static_cast<SemaphoreHandle_t>(bufferMutex), portMAX_DELAY);
-  std::memcpy(snapshot.data(), rawBuffer.data(), SAMPLE_BUFFER_BYTES);
-  snapshotBytes = rawBytesFilled;
-  snapshotWriteIndex = rawWriteIndex;
-  snapshotTotalFrames = totalFrames;
-  xSemaphoreGive(static_cast<SemaphoreHandle_t>(bufferMutex));
-
-  const size_t validBytes = (snapshotBytes / RESULT_BYTES) * RESULT_BYTES;
-  const size_t start =
-      (snapshotWriteIndex + SAMPLE_BUFFER_BYTES - validBytes) %
-      SAMPLE_BUFFER_BYTES;
+  if (!collectSamples(samples1, samples0)) return "{\"error\":\"capture failed\"}";
 
   std::string payload = "{\"gpio\":1,\"buffer_bytes\":";
   payload += std::to_string(SAMPLE_BUFFER_BYTES);
-  payload += ",\"raw_frame_count\":";
-  payload += std::to_string(validBytes / RESULT_BYTES);
-  payload += ",\"total_frames\":";
-  payload += std::to_string(snapshotTotalFrames);
   payload += ",\"samples\":[";
 
-  bool first = true;
-  bool firstGpio0 = true;
-  std::string gpio0Samples = "\"samples_gpio0\":[";
-
-  for (size_t i = 0; i + RESULT_BYTES <= validBytes; i += RESULT_BYTES) {
-    adc_digi_output_data_t sample = {};
-
-    uint8_t frame[RESULT_BYTES];
-    for (size_t b = 0; b < RESULT_BYTES; ++b) {
-      frame[b] = snapshot[(start + i + b) % SAMPLE_BUFFER_BYTES];
-    }
-    std::memcpy(&sample, frame, RESULT_BYTES);
-
-    if (sample.type2.unit == 0) {
-      if (sample.type2.channel == ADC_CHANNEL_1) {
-        if (!first) payload += ",";
-        payload += std::to_string(sample.type2.data);
-        first = false;
-      } else if (sample.type2.channel == ADC_CHANNEL_0) {
-        if (!firstGpio0) gpio0Samples += ",";
-        gpio0Samples += std::to_string(sample.type2.data);
-        firstGpio0 = false;
-      }
-    }
+  for (size_t i = 0; i < samples1.size(); ++i) {
+    if (i > 0) payload += ",";
+    payload += std::to_string(samples1[i]);
   }
 
-  gpio0Samples += "]";
-  payload += "],";
-  payload += gpio0Samples;
-  payload += "}";
+  payload += "],\"samples_gpio0\":[";
+
+  for (size_t i = 0; i < samples0.size(); ++i) {
+    if (i > 0) payload += ",";
+    payload += std::to_string(samples0[i]);
+  }
+
+  payload += "]}";
   return payload;
 }
 
 void Adc::streamJson(WebServer& server) const {
-  std::vector<uint8_t> snapshot(SAMPLE_BUFFER_BYTES);
-  size_t snapshotBytes = 0;
-  size_t snapshotWriteIndex = 0;
-  uint32_t snapshotTotalFrames = 0;
-
-  xSemaphoreTake(static_cast<SemaphoreHandle_t>(bufferMutex), portMAX_DELAY);
-  std::memcpy(snapshot.data(), rawBuffer.data(), SAMPLE_BUFFER_BYTES);
-  snapshotBytes = rawBytesFilled;
-  snapshotWriteIndex = rawWriteIndex;
-  snapshotTotalFrames = totalFrames;
-  xSemaphoreGive(static_cast<SemaphoreHandle_t>(bufferMutex));
-
-  const size_t validBytes = (snapshotBytes / RESULT_BYTES) * RESULT_BYTES;
-  const size_t start =
-      (snapshotWriteIndex + SAMPLE_BUFFER_BYTES - validBytes) %
-      SAMPLE_BUFFER_BYTES;
-
-  server.sendContent("{\"gpio\":1,\"buffer_bytes\":");
-  server.sendContent(std::to_string(SAMPLE_BUFFER_BYTES).c_str());
-  server.sendContent(",\"raw_frame_count\":");
-  server.sendContent(std::to_string(validBytes / RESULT_BYTES).c_str());
-  server.sendContent(",\"total_frames\":");
-  server.sendContent(std::to_string(snapshotTotalFrames).c_str());
-  server.sendContent(",\"samples\":[");
-
-  bool first = true;
-  bool firstGpio0 = true;
-  for (size_t i = 0; i + RESULT_BYTES <= validBytes; i += RESULT_BYTES) {
-    adc_digi_output_data_t sample = {};
-
-    uint8_t frame[RESULT_BYTES];
-    for (size_t b = 0; b < RESULT_BYTES; ++b) {
-      frame[b] = snapshot[(start + i + b) % SAMPLE_BUFFER_BYTES];
-    }
-    std::memcpy(&sample, frame, RESULT_BYTES);
-
-    if (sample.type2.unit == 0) {
-      if (sample.type2.channel == ADC_CHANNEL_1) {
-        if (!first) server.sendContent(",");
-        first = false;
-        server.sendContent(std::to_string(sample.type2.data).c_str());
-      }
-    }
+  std::vector<uint16_t> samples1;
+  std::vector<uint16_t> samples0;
+  if (!collectSamples(samples1, samples0)) {
+    server.sendContent("{\"error\":\"capture failed\"}");
+    return;
   }
 
-  server.sendContent("],\"samples_gpio0\":[");
+  String chunk;
+  chunk.reserve(1024);
 
-  for (size_t i = 0; i + RESULT_BYTES <= validBytes; i += RESULT_BYTES) {
-    adc_digi_output_data_t sample = {};
-
-    uint8_t frame[RESULT_BYTES];
-    for (size_t b = 0; b < RESULT_BYTES; ++b) {
-      frame[b] = snapshot[(start + i + b) % SAMPLE_BUFFER_BYTES];
+  auto flushChunk = [&]() {
+    if (!chunk.isEmpty()) {
+      server.sendContent(chunk);
+      chunk = "";
     }
-    std::memcpy(&sample, frame, RESULT_BYTES);
+  };
 
-    if (sample.type2.unit == 0 && sample.type2.channel == ADC_CHANNEL_0) {
-      if (!firstGpio0) server.sendContent(",");
-      firstGpio0 = false;
-      server.sendContent(std::to_string(sample.type2.data).c_str());
-    }
+  auto append = [&](const String& s) {
+    chunk += s;
+    if (chunk.length() > 900) flushChunk();
+  };
+
+  append("{\"gpio\":1,\"buffer_bytes\":");
+  append(String(SAMPLE_BUFFER_BYTES));
+  append(",\"samples\":[");
+
+  for (size_t i = 0; i < samples1.size(); ++i) {
+    if (i > 0) append(",");
+    append(String(samples1[i]));
   }
 
-  server.sendContent("]}");
+  append("],\"samples_gpio0\":[");
+
+  for (size_t i = 0; i < samples0.size(); ++i) {
+    if (i > 0) append(",");
+    append(String(samples0[i]));
+  }
+
+  append("]}");
+  flushChunk();
 }

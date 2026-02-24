@@ -1,8 +1,8 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class WebServer;
 
@@ -20,21 +20,15 @@ class Adc {
   void streamJson(WebServer& server) const;
 
  private:
-  static void captureTask(void* param);
-  void pushRawBytes(const uint8_t* data, size_t len);
+  bool startCapture() const;
+  void stopCapture() const;
+  bool collectSamples(std::vector<uint16_t>& gpio1,
+                      std::vector<uint16_t>& gpio0) const;
   void logError(const char* stage, int err) const;
-  void recoverFromInvalidState();
   bool shouldLogNow() const;
 
-  bool running = false;
-
-  std::array<uint8_t, SAMPLE_BUFFER_BYTES> rawBuffer = {};
-  size_t rawWriteIndex = 0;
-  size_t rawBytesFilled = 0;
-  uint32_t totalFrames = 0;
-
-  void* bufferMutex = nullptr;
-  void* captureTaskHandle = nullptr;
+  bool configured = false;
+  mutable bool capturing = false;
   mutable uint32_t lastErrorLogMs = 0;
 };
 
