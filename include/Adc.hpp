@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -16,17 +17,18 @@ class Adc {
   void stop();
 
   const bool isRunning() const;
-  const std::string getJson(uint32_t sampleRate, uint32_t sampleCount) const;
+  const std::string getJson(uint32_t sampleRate, uint32_t samplesPerChannel,
+                            uint32_t channelMask) const;
   void streamJson(WebServer& server, uint32_t sampleRate,
-                  uint32_t sampleCount) const;
+                  uint32_t samplesPerChannel, uint32_t channelMask) const;
 
  private:
   bool startCapture() const;
   void stopCapture() const;
-  bool configureController(uint32_t sampleRate) const;
-  bool collectSamples(std::vector<uint16_t>& gpio1,
-                      std::vector<uint16_t>& gpio0, uint32_t sampleRate,
-                      uint32_t sampleCount) const;
+  bool configureController(uint32_t sampleRate, uint32_t channelMask) const;
+  bool collectSamples(std::array<std::vector<uint16_t>, 5>& channels,
+                      uint32_t sampleRate, uint32_t samplesPerChannel,
+                      uint32_t channelMask) const;
   void logError(const char* stage, int err) const;
   bool shouldLogNow() const;
 

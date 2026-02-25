@@ -12,53 +12,39 @@
 Adc adc;
 
 static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_DEFAULT = 30000;
-static constexpr uint8_t ADC_PATTERN_COUNT = 2;  // GPIO0 + GPIO1
 static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MIN = 600;
-static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX = 83333;
-static constexpr uint32_t SAMPLE_COUNT_DEFAULT = 2400;
+static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX = 200000;
+static constexpr uint32_t SAMPLES_PER_CHANNEL_DEFAULT = 2400;
+static constexpr uint32_t ADC_CHANNEL_MASK_ALL = 0x1F;      // GPIO0..4
+static constexpr uint32_t ADC_CHANNEL_MASK_DEFAULT = 0x03;  // GPIO0,1
 
 bool Adc::begin() {
   if (configured) return true;
 
-  esp_err_t err = adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
-  if (err != ESP_OK) {
-    logError("adc1_config_channel_atten(GPIO0)", err);
-    configured = false;
-    return false;
-  }
-
-  err = adc1_config_channel_atten(ADC1_CHANNEL_1, ADC_ATTEN_DB_11);
-  if (err != ESP_OK) {
-    logError("adc1_config_channel_atten(GPIO1)", err);
-    configured = false;
-    return false;
+  for (uint8_t ch = 0; ch <= 4; ++ch) {
+    esp_err_t err =
+        adc1_config_channel_atten(static_cast<adc1_channel_t>(ch), ADC_ATTEN_DB_11);
+    if (err != ESP_OK) {
+      logError("adc1_config_channel_atten", err);
+      configured = false;
+      return false;
+    }
   }
 
   adc_digi_init_config_t initConfig = {};
   initConfig.max_store_buf_size = DMA_STORE_BUFFER_BYTES;
   initConfig.conv_num_each_intr = 256;
-  initConfig.adc1_chan_mask = (1U << ADC1_CHANNEL_0) | (1U << ADC1_CHANNEL_1);
+  initConfig.adc1_chan_mask = ADC_CHANNEL_MASK_ALL;
   initConfig.adc2_chan_mask = 0;
 
-  err = adc_digi_initialize(&initConfig);
+  esp_err_t err = adc_digi_initialize(&initConfig);
   if (err != ESP_OK) {
     logError("adc_digi_initialize", err);
     configured = false;
     return false;
   }
 
-  adc_digi_pattern_config_t adcPattern[ADC_PATTERN_COUNT] = {};
-  adcPattern[0].atten = ADC_ATTEN_DB_11;
-  adcPattern[0].channel = ADC_CHANNEL_0;  // GPIO0
-  adcPattern[0].unit = ADC_UNIT_1 - 1;
-  adcPattern[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
-
-  adcPattern[1].atten = ADC_ATTEN_DB_11;
-  adcPattern[1].channel = ADC_CHANNEL_1;  // GPIO1
-  adcPattern[1].unit = ADC_UNIT_1 - 1;
-  adcPattern[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
-
-  if (!configureController(ADC_SAMPLE_FREQ_HZ_DEFAULT)) {
+  if (!configureController(ADC_SAMPLE_FREQ_HZ_DEFAULT, ADC_CHANNEL_MASK_DEFAULT)) {
     adc_digi_deinitialize();
     configured = false;
     return false;
@@ -96,25 +82,28 @@ void Adc::stopCapture() const {
   capturing = false;
 }
 
-bool Adc::configureController(uint32_t sampleRate) const {
+bool Adc::configureController(uint32_t sampleRate, uint32_t channelMask) const {
   if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
   if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
+  channelMask &= ADC_CHANNEL_MASK_ALL;
+  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
 
-  adc_digi_pattern_config_t adcPattern[ADC_PATTERN_COUNT] = {};
-  adcPattern[0].atten = ADC_ATTEN_DB_11;
-  adcPattern[0].channel = ADC_CHANNEL_0;  // GPIO0
-  adcPattern[0].unit = ADC_UNIT_1 - 1;
-  adcPattern[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
-
-  adcPattern[1].atten = ADC_ATTEN_DB_11;
-  adcPattern[1].channel = ADC_CHANNEL_1;  // GPIO1
-  adcPattern[1].unit = ADC_UNIT_1 - 1;
-  adcPattern[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
+  adc_digi_pattern_config_t adcPattern[5] = {};
+  uint8_t patternCount = 0;
+  for (uint8_t ch = 0; ch <= 4; ++ch) {
+    if ((channelMask & (1U << ch)) == 0) continue;
+    adcPattern[patternCount].atten = ADC_ATTEN_DB_11;
+    adcPattern[patternCount].channel = ch;
+    adcPattern[patternCount].unit = ADC_UNIT_1 - 1;
+    adcPattern[patternCount].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
+    ++patternCount;
+  }
+  if (patternCount == 0) return false;
 
   adc_digi_configuration_t config = {};
   config.conv_limit_en = false;
   config.conv_limit_num = 0;
-  config.pattern_num = ADC_PATTERN_COUNT;
+  config.pattern_num = patternCount;
   config.adc_pattern = adcPattern;
   config.sample_freq_hz = sampleRate;
   config.conv_mode = ADC_CONV_SINGLE_UNIT_1;
@@ -128,23 +117,30 @@ bool Adc::configureController(uint32_t sampleRate) const {
   return true;
 }
 
-bool Adc::collectSamples(std::vector<uint16_t>& gpio1,
-                         std::vector<uint16_t>& gpio0, uint32_t sampleRate,
-                         uint32_t sampleCount) const {
+bool Adc::collectSamples(std::array<std::vector<uint16_t>, 5>& channels,
+                         uint32_t sampleRate, uint32_t samplesPerChannel,
+                         uint32_t channelMask) const {
   if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
   if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  if (sampleCount == 0) sampleCount = SAMPLE_COUNT_DEFAULT;
+  if (samplesPerChannel == 0) samplesPerChannel = SAMPLES_PER_CHANNEL_DEFAULT;
+  channelMask &= ADC_CHANNEL_MASK_ALL;
+  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
 
-  if (!configureController(sampleRate)) return false;
+  if (!configureController(sampleRate, channelMask)) return false;
   if (!startCapture()) return false;
 
-  gpio1.clear();
-  gpio0.clear();
+  for (uint8_t ch = 0; ch <= 4; ++ch) channels[ch].clear();
 
   uint8_t dmaChunk[256];
-  size_t frameCount = 0;
+  uint32_t selectedChannels = 0;
+  for (uint8_t ch = 0; ch <= 4; ++ch) {
+    if ((channelMask & (1U << ch)) != 0) ++selectedChannels;
+  }
+  const uint64_t targetTotalSamples =
+      static_cast<uint64_t>(samplesPerChannel) * selectedChannels;
+  uint64_t collectedSamples = 0;
 
-  while (frameCount < sampleCount) {
+  while (collectedSamples < targetTotalSamples) {
     uint32_t bytesRead = 0;
     esp_err_t err =
         adc_digi_read_bytes(dmaChunk, sizeof(dmaChunk), &bytesRead, 20);
@@ -171,13 +167,16 @@ bool Adc::collectSamples(std::vector<uint16_t>& gpio1,
 
       if (sample.type2.unit != 0) continue;
 
-      if (sample.type2.channel == ADC_CHANNEL_1)
-        gpio1.push_back(sample.type2.data);
-      else if (sample.type2.channel == ADC_CHANNEL_0)
-        gpio0.push_back(sample.type2.data);
+      const uint8_t channel = sample.type2.channel;
+      if (channel <= 4 && (channelMask & (1U << channel))) {
+        std::vector<uint16_t>& series = channels[channel];
+        if (series.size() < samplesPerChannel) {
+          series.push_back(sample.type2.data);
+          ++collectedSamples;
+        }
+      }
 
-      ++frameCount;
-      if (frameCount >= sampleCount) break;
+      if (collectedSamples >= targetTotalSamples) break;
     }
   }
 
@@ -200,35 +199,49 @@ bool Adc::shouldLogNow() const {
 
 const bool Adc::isRunning() const { return configured; }
 
-const std::string Adc::getJson(uint32_t sampleRate, uint32_t sampleCount) const {
+const std::string Adc::getJson(uint32_t sampleRate, uint32_t samplesPerChannel,
+                               uint32_t channelMask) const {
   if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
   if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  if (sampleCount == 0) sampleCount = SAMPLE_COUNT_DEFAULT;
+  if (samplesPerChannel == 0)
+    samplesPerChannel = SAMPLES_PER_CHANNEL_DEFAULT;
+  channelMask &= ADC_CHANNEL_MASK_ALL;
+  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
 
-  std::vector<uint16_t> samples1;
-  std::vector<uint16_t> samples0;
+  std::array<std::vector<uint16_t>, 5> channels;
 
-  if (!collectSamples(samples1, samples0, sampleRate, sampleCount))
+  if (!collectSamples(channels, sampleRate, samplesPerChannel, channelMask))
     return "{\"error\":\"capture failed\"}";
 
   std::string payload = "{\"gpio\":1,\"buffer_bytes\":";
   payload += std::to_string(SAMPLE_BUFFER_BYTES);
   payload += ",\"sample_rate\":";
   payload += std::to_string(sampleRate);
-  payload += ",\"sample_count\":";
-  payload += std::to_string(sampleCount);
-  payload += ",\"samples\":[";
+  payload += ",\"samples_per_channel\":";
+  payload += std::to_string(samplesPerChannel);
+  payload += ",\"channels\":[";
+  bool firstChannel = true;
+  for (uint8_t ch = 0; ch <= 4; ++ch) {
+    if ((channelMask & (1U << ch)) == 0) continue;
+    if (!firstChannel) payload += ",";
+    payload += std::to_string(ch);
+    firstChannel = false;
+  }
+  payload += "],\"samples\":[";
 
-  for (size_t i = 0; i < samples1.size(); ++i) {
+  for (size_t i = 0; i < channels[1].size(); ++i) {
     if (i > 0) payload += ",";
-    payload += std::to_string(samples1[i]);
+    payload += std::to_string(channels[1][i]);
   }
 
-  payload += "],\"samples_gpio0\":[";
-
-  for (size_t i = 0; i < samples0.size(); ++i) {
-    if (i > 0) payload += ",";
-    payload += std::to_string(samples0[i]);
+  for (uint8_t ch = 0; ch <= 4; ++ch) {
+    payload += "],\"samples_gpio";
+    payload += std::to_string(ch);
+    payload += "\":[";
+    for (size_t i = 0; i < channels[ch].size(); ++i) {
+      if (i > 0) payload += ",";
+      payload += std::to_string(channels[ch][i]);
+    }
   }
 
   payload += "]}";
@@ -236,14 +249,16 @@ const std::string Adc::getJson(uint32_t sampleRate, uint32_t sampleCount) const 
 }
 
 void Adc::streamJson(WebServer& server, uint32_t sampleRate,
-                     uint32_t sampleCount) const {
+                     uint32_t samplesPerChannel, uint32_t channelMask) const {
   if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
   if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  if (sampleCount == 0) sampleCount = SAMPLE_COUNT_DEFAULT;
+  if (samplesPerChannel == 0)
+    samplesPerChannel = SAMPLES_PER_CHANNEL_DEFAULT;
+  channelMask &= ADC_CHANNEL_MASK_ALL;
+  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
 
-  std::vector<uint16_t> samples1;
-  std::vector<uint16_t> samples0;
-  if (!collectSamples(samples1, samples0, sampleRate, sampleCount)) {
+  std::array<std::vector<uint16_t>, 5> channels;
+  if (!collectSamples(channels, sampleRate, samplesPerChannel, channelMask)) {
     server.sendContent("{\"error\":\"capture failed\"}");
     return;
   }
@@ -267,20 +282,30 @@ void Adc::streamJson(WebServer& server, uint32_t sampleRate,
   append(String(SAMPLE_BUFFER_BYTES));
   append(",\"sample_rate\":");
   append(String(sampleRate));
-  append(",\"sample_count\":");
-  append(String(sampleCount));
-  append(",\"samples\":[");
-
-  for (size_t i = 0; i < samples1.size(); ++i) {
-    if (i > 0) append(",");
-    append(String(samples1[i]));
+  append(",\"samples_per_channel\":");
+  append(String(samplesPerChannel));
+  append(",\"channels\":[");
+  bool firstChannel = true;
+  for (uint8_t ch = 0; ch <= 4; ++ch) {
+    if ((channelMask & (1U << ch)) == 0) continue;
+    if (!firstChannel) append(",");
+    append(String(ch));
+    firstChannel = false;
   }
+  append("],\"samples\":[");
 
-  append("],\"samples_gpio0\":[");
-
-  for (size_t i = 0; i < samples0.size(); ++i) {
+  for (size_t i = 0; i < channels[1].size(); ++i) {
     if (i > 0) append(",");
-    append(String(samples0[i]));
+    append(String(channels[1][i]));
+  }
+  for (uint8_t ch = 0; ch <= 4; ++ch) {
+    append("],\"samples_gpio");
+    append(String(ch));
+    append("\":[");
+    for (size_t i = 0; i < channels[ch].size(); ++i) {
+      if (i > 0) append(",");
+      append(String(channels[ch][i]));
+    }
   }
 
   append("]}");
