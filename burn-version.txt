@@ -1,0 +1,21 @@
+$ espefuse.py --chip esp32c3 -p /dev/ttyACM0 burn_bit BLOCK3 252 253 254
+Warning: DEPRECATED: 'espefuse.py' is deprecated. Please use 'espefuse' instead. The '.py' suffix will be removed in a future major release.
+espefuse v5.1.0
+Connecting...
+Warning: Deprecated: Command 'burn_bit' is deprecated. Use 'burn-bit' instead.
+
+=== Run "burn-bit" command ===
+bit_number:   [255]........................................................[0]
+BLOCK 3   : 0x7000000000000000000000000000000000000000000000000000000000000000
+BLOCK_USR_DATA  (BLOCK3          ) [3 ] regs_to_write: 00000000 00000000 00000000 00000000 00000000 00000000 00000000 70000000
+
+Check all blocks for burn...
+idx, BLOCK_NAME,          Conclusion
+[03] BLOCK_USR_DATA       is empty, will burn the new value
+. 
+This is an irreversible operation!
+Type 'BURN' (all capitals) to continue.
+BURN
+BURN BLOCK3  - OK (write block == read block)
+Reading updated eFuses...
+Successful.

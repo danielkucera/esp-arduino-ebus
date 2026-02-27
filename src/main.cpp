@@ -4,6 +4,7 @@
 #include <ArduinoOTA.h>
 #include <IotWebConf.h>
 #include <Preferences.h>
+#include <esp_efuse.h>
 
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
@@ -230,6 +231,21 @@ int reconnect_count = 0;
 uint32_t lastMqttUpdate = 0;
 #endif
 
+enum class AdapterHwVersionEfuse : uint8_t {
+  PRE_7_0 = 0x00,
+  V7_0 = 0x70,
+};
+
+static constexpr size_t ADAPTER_HW_VERSION_EFUSE_BITS = 8;
+static constexpr size_t ADAPTER_HW_VERSION_EFUSE_OFFSET = 248;  // BLOCK3 bit 248..255
+
+static const esp_efuse_desc_t ADAPTER_HW_VERSION_EFUSE_DESC = {
+    EFUSE_BLK3, ADAPTER_HW_VERSION_EFUSE_OFFSET, ADAPTER_HW_VERSION_EFUSE_BITS};
+static const esp_efuse_desc_t* ADAPTER_HW_VERSION_EFUSE_FIELD[] = {
+    &ADAPTER_HW_VERSION_EFUSE_DESC, nullptr};
+uint8_t adapterHwVersionRaw = 0xEE;
+std::string adapterHwVersion = "unread";
+
 void wifiConnected() {
   last_connect = millis();
   ++reconnect_count;
@@ -281,6 +297,40 @@ void calcUniqueId() {
   char tmp[9]{};
   snprintf(tmp, sizeof(tmp), "%08x", id);
   strncpy(unique_id, &tmp[2], 6);
+}
+
+std::string formatAdapterHwVersion(const uint8_t raw) {
+  switch (static_cast<AdapterHwVersionEfuse>(raw)) {
+    case AdapterHwVersionEfuse::PRE_7_0:
+      return "pre-7.0";
+    case AdapterHwVersionEfuse::V7_0:
+      return "7.0";
+  }
+
+  const uint8_t major = (raw >> 4) & 0x0F;
+  const uint8_t minor = raw & 0x0F;
+  if (major <= 9 && minor <= 9) {
+    return std::to_string(major) + "." + std::to_string(minor);
+  }
+
+  char tmp[8]{};
+  snprintf(tmp, sizeof(tmp), "0x%02X", raw);
+  return std::string(tmp);
+}
+
+void loadAdapterHwVersionFromEfuse() {
+  uint8_t raw;
+  const esp_err_t err =
+      esp_efuse_read_field_blob(ADAPTER_HW_VERSION_EFUSE_FIELD, &raw,
+                                ADAPTER_HW_VERSION_EFUSE_BITS);
+  if (err != ESP_OK) {
+    adapterHwVersionRaw = 0xEE;
+    adapterHwVersion = "reading error";
+    return;
+  }
+
+  adapterHwVersionRaw = raw;
+  adapterHwVersion = formatAdapterHwVersion(raw);
 }
 
 void restart() {
@@ -542,6 +592,10 @@ char* status_string() {
                   "max_loop_duration: %u us\r\n", maxLoopDuration);
   pos +=
       snprintf(status + pos, bufferSize - pos, "version: %s\r\n", AUTO_VERSION);
+  pos += snprintf(status + pos, bufferSize - pos, "adapter_hw_version: %s\r\n",
+                  adapterHwVersion.c_str());
+  pos += snprintf(status + pos, bufferSize - pos,
+                  "adapter_hw_version_raw: 0x%02X\r\n", adapterHwVersionRaw);
 
 #if defined(EBUS_INTERNAL)
   pos += snprintf(status + pos, bufferSize - pos, "sntpEnabled: %s\r\n",
@@ -634,6 +688,8 @@ const std::string getStatusJson() {
   Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
 #endif
   Firmware["Unique_ID"] = unique_id;
+  Firmware["Adapter_HW_Version"] = adapterHwVersion;
+  Firmware["Adapter_HW_Version_Raw"] = adapterHwVersionRaw;
   Firmware["Clock_Speed"] = getCpuFrequencyMhz();
   Firmware["Apb_Speed"] = getApbFrequency();
 
@@ -736,6 +792,7 @@ void setup() {
   reset_code = rtc_get_reset_reason(0);
 
   calcUniqueId();
+  loadAdapterHwVersionFromEfuse();
 
 #if defined(EBUS_INTERNAL)
   ebus::setupBusIsr(UART_NUM_1, UART_RX, UART_TX, 1, 0);
@@ -860,7 +917,7 @@ void setup() {
   mqttha.setThingModelId("Revision: " + std::to_string(ESP.getChipRevision()));
   mqttha.setThingManufacturer("danman.eu");
   mqttha.setThingSwVersion(AUTO_VERSION);
-  // mqttha.setThingHwVersion(""); // how to determine hardware version?
+  mqttha.setThingHwVersion(adapterHwVersion);
   mqttha.setThingConfigurationUrl(
       "http://" + std::string(WiFi.localIP().toString().c_str()) + "/");
 #endif
