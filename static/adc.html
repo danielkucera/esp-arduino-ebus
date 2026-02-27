@@ -305,27 +305,35 @@
             ctx.lineTo(lineX, chartTop + chartHeight);
             ctx.stroke();
 
-            const lines = [];
+            const rows = [];
             for (let i = 0; i < hoverInfo.values.length; i++) {
                 const p = hoverInfo.values[i];
-                lines.push(`GPIO${p.ch}: ${p.value} (${rawToMilliVolts(p.value)}mV)`);
+                rows.push({
+                    text: `GPIO${p.ch}: ${p.value} (${rawToMilliVolts(p.value)}mV)`,
+                    color: p.color,
+                    point: p
+                });
             }
-            if (lines.length === 0) return;
+            if (rows.length === 0) return;
             if (hoverInfo.globalIndex !== null) {
                 const sampleTime = getSampleEpochMs(hoverInfo.globalIndex, hoverInfo.totalSamples);
-                lines.unshift(sampleTime ? formatAxisTime(sampleTime) : `sample #${hoverInfo.globalIndex}`);
+                rows.unshift({
+                    text: sampleTime ? formatAxisTime(sampleTime) : `sample #${hoverInfo.globalIndex}`,
+                    color: '#111',
+                    point: null
+                });
             }
 
             ctx.font = '12px monospace';
             const padX = 6;
             const padY = 4;
             let maxTextWidth = 0;
-            for (let i = 0; i < lines.length; i++) {
-                maxTextWidth = Math.max(maxTextWidth, ctx.measureText(lines[i]).width);
+            for (let i = 0; i < rows.length; i++) {
+                maxTextWidth = Math.max(maxTextWidth, ctx.measureText(rows[i].text).width);
             }
             const lineHeight = 16;
             const boxW = maxTextWidth + padX * 2;
-            const boxH = lines.length * lineHeight + padY * 2;
+            const boxH = rows.length * lineHeight + padY * 2;
 
             let x = lineX + 10;
             let y = hoverInfo.y - 26;
@@ -343,13 +351,15 @@
             ctx.fillStyle = '#111';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
-            for (let i = 0; i < lines.length; i++) {
-                const p = hoverInfo.values[i];
-                ctx.fillStyle = p.color;
-                ctx.fillText(lines[i], x + padX, y + padY + i * lineHeight);
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-                ctx.fill();
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                ctx.fillStyle = row.color;
+                ctx.fillText(row.text, x + padX, y + padY + i * lineHeight);
+                if (row.point) {
+                    ctx.beginPath();
+                    ctx.arc(row.point.x, row.point.y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
 
