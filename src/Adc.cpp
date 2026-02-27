@@ -1,6 +1,8 @@
 #include "Adc.hpp"
 
+#include <cstdio>
 #include <cstring>
+#include <sys/time.h>
 
 #include <Arduino.h>
 #include <WebServer.h>
@@ -17,6 +19,7 @@ static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX = 200000;
 static constexpr uint32_t SAMPLES_PER_CHANNEL_DEFAULT = 2400;
 static constexpr uint32_t ADC_CHANNEL_MASK_ALL = 0x1F;      // GPIO0..4
 static constexpr uint32_t ADC_CHANNEL_MASK_DEFAULT = 0x03;  // GPIO0,1
+static constexpr time_t NTP_SYNCED_EPOCH_THRESHOLD = 1700000000;
 
 bool Adc::begin() {
   if (configured) return true;
@@ -213,12 +216,24 @@ const std::string Adc::getJson(uint32_t sampleRate, uint32_t samplesPerChannel,
   if (!collectSamples(channels, sampleRate, samplesPerChannel, channelMask))
     return "{\"error\":\"capture failed\"}";
 
+  struct timeval now = {};
+  gettimeofday(&now, nullptr);
+  const bool ntpSynced = now.tv_sec >= NTP_SYNCED_EPOCH_THRESHOLD;
+  const uint64_t captureEndEpochMs =
+      ntpSynced ? (static_cast<uint64_t>(now.tv_sec) * 1000ULL) +
+                      (static_cast<uint64_t>(now.tv_usec) / 1000ULL)
+                : 0ULL;
+
   std::string payload = "{\"gpio\":1,\"buffer_bytes\":";
   payload += std::to_string(SAMPLE_BUFFER_BYTES);
   payload += ",\"sample_rate\":";
   payload += std::to_string(sampleRate);
   payload += ",\"samples_per_channel\":";
   payload += std::to_string(samplesPerChannel);
+  payload += ",\"ntp_synced\":";
+  payload += ntpSynced ? "true" : "false";
+  payload += ",\"capture_end_epoch_ms\":";
+  payload += std::to_string(captureEndEpochMs);
   payload += ",\"channels\":[";
   bool firstChannel = true;
   for (uint8_t ch = 0; ch <= 4; ++ch) {
@@ -263,6 +278,14 @@ void Adc::streamJson(WebServer& server, uint32_t sampleRate,
     return;
   }
 
+  struct timeval now = {};
+  gettimeofday(&now, nullptr);
+  const bool ntpSynced = now.tv_sec >= NTP_SYNCED_EPOCH_THRESHOLD;
+  const uint64_t captureEndEpochMs =
+      ntpSynced ? (static_cast<uint64_t>(now.tv_sec) * 1000ULL) +
+                      (static_cast<uint64_t>(now.tv_usec) / 1000ULL)
+                : 0ULL;
+
   String chunk;
   chunk.reserve(1024);
 
@@ -284,6 +307,13 @@ void Adc::streamJson(WebServer& server, uint32_t sampleRate,
   append(String(sampleRate));
   append(",\"samples_per_channel\":");
   append(String(samplesPerChannel));
+  append(",\"ntp_synced\":");
+  append(ntpSynced ? "true" : "false");
+  append(",\"capture_end_epoch_ms\":");
+  char epochMsBuffer[24];
+  snprintf(epochMsBuffer, sizeof(epochMsBuffer), "%llu",
+           static_cast<unsigned long long>(captureEndEpochMs));
+  append(epochMsBuffer);
   append(",\"channels\":[");
   bool firstChannel = true;
   for (uint8_t ch = 0; ch <= 4; ++ch) {
