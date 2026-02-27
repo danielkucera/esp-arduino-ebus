@@ -300,11 +300,8 @@ void calcUniqueId() {
 }
 
 std::string formatAdapterHwVersion(const uint8_t raw) {
-  switch (static_cast<AdapterHwVersionEfuse>(raw)) {
-    case AdapterHwVersionEfuse::PRE_7_0:
-      return "pre-7.0";
-    case AdapterHwVersionEfuse::V7_0:
-      return "7.0";
+  if (static_cast<AdapterHwVersionEfuse>(raw) == AdapterHwVersionEfuse::PRE_7_0) {
+    return "pre-7.0";
   }
 
   const uint8_t major = (raw >> 4) & 0x0F;
