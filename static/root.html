@@ -44,17 +44,27 @@
 
         function checkEndpoint() {
             const url = '/commands';
-            const links = document.querySelectorAll('.link-button');
+            const disabledIds = ['Commands', 'Values', 'Devices', 'Statistics', 'Logs'];
 
-            // Enable all links initially
-            links.forEach(link => { link.classList.remove('disabled'); link.style.pointerEvents = 'auto'; });
-
-            fetch(url, { method: 'HEAD' }).then(response => { if (!response.ok) { disableLinks(); } }).catch(error => { disableLinks(); });
+            fetch(url, { method: 'HEAD' }).then(response => {
+                if (!response.ok) { disableLinks(disabledIds); } else { enableLinks(disabledIds); }
+            }).catch(() => {
+                disableLinks(disabledIds);
+            });
         }
 
-        function disableLinks() {
-            const links = document.querySelectorAll('.link-button');
-            links.forEach(link => { link.classList.add('disabled'); link.style.pointerEvents = 'none'; });
+        function disableLinks(disabledIds) {
+            disabledIds.forEach(id => {
+                const link = document.getElementById(id);
+                if (link) { link.classList.add('disabled'); link.style.pointerEvents = 'none'; }
+            });
+        }
+
+        function enableLinks(enabledIds) {
+            enabledIds.forEach(id => {
+                const link = document.getElementById(id);
+                if (link) { link.classList.remove('disabled'); link.style.pointerEvents = 'auto'; }
+            });
         }
 
         // Call checkEndpoint on page load
