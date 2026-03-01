@@ -17,11 +17,11 @@
                 <a href='/config' class="link-button">Configuration</a>
                 <a href='/firmware' class="link-button">Firmware Update</a>
                 <a href='/status' class="link-button">Status</a>
-                <a href="/commands" class="link-button" id="Commands">Commands</a>
-                <a href="/values" class="link-button" id="Values">Values</a>
-                <a href="/devices" class="link-button" id="Devices">Devices</a>
-                <a href="/statistics" class="link-button" id="Statistics">Statistics</a>
-                <a href="/logs" class="link-button" id="Logs">Logs</a>
+                <a href="/commands" class="link-button internal" id="Commands">Commands</a>
+                <a href="/values" class="link-button internal" id="Values">Values</a>
+                <a href="/devices" class="link-button internal" id="Devices">Devices</a>
+                <a href="/statistics" class="link-button internal" id="Statistics">Statistics</a>
+                <a href="/logs" class="link-button internal" id="Logs">Logs</a>
                 <a href='/restart' class="link-button danger" onclick="return confirmAction('restart');">Restart</a>
             </div>
             <div class="info-box">
@@ -44,27 +44,22 @@
 
         function checkEndpoint() {
             const url = '/commands';
-            const disabledIds = ['Commands', 'Values', 'Devices', 'Statistics', 'Logs'];
 
             fetch(url, { method: 'HEAD' }).then(response => {
-                if (!response.ok) { disableLinks(disabledIds); } else { enableLinks(disabledIds); }
+                if (!response.ok) { disableLinks(); } else { enableLinks(); }
             }).catch(() => {
-                disableLinks(disabledIds);
+                disableLinks();
             });
         }
 
-        function disableLinks(disabledIds) {
-            disabledIds.forEach(id => {
-                const link = document.getElementById(id);
-                if (link) { link.classList.add('disabled'); link.style.pointerEvents = 'none'; }
-            });
+        function disableLinks() {
+            const links = document.querySelectorAll('.internal');
+            links.forEach(link => { link.classList.add('disabled'); link.style.pointerEvents = 'none'; });
         }
 
-        function enableLinks(enabledIds) {
-            enabledIds.forEach(id => {
-                const link = document.getElementById(id);
-                if (link) { link.classList.remove('disabled'); link.style.pointerEvents = 'auto'; }
-            });
+        function enableLinks() {
+            const links = document.querySelectorAll('.internal');
+            links.forEach(link => { link.classList.remove('disabled'); link.style.pointerEvents = 'auto'; });
         }
 
         // Call checkEndpoint on page load
