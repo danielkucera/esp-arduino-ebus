@@ -34,12 +34,6 @@ void UpgradeManager::begin(WebServer* server) {
       "/api/v1/upgrade/upload", HTTP_POST,
       [this]() { handleUploadFinished(); },
       [this]() { handleUploadChunk(); });
-
-  // Keep legacy endpoint used by upload_http.py and PlatformIO remote upload.
-  server_->on(
-      "/firmware", HTTP_POST,
-      [this]() { handleUploadFinished(); },
-      [this]() { handleUploadChunk(); });
 }
 
 void UpgradeManager::beginEspOta(uint16_t port) {

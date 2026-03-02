@@ -300,10 +300,6 @@ void SetupHttpHandlers() {
   configServer.on("/api/v1/status", [] { handleStatus(); });
   configServer.on("/upgrade",
                   []() { handleStatic("text/html", upgrade_html_start); });
-  configServer.on("/firmware", HTTP_GET, []() {
-    configServer.sendHeader("Location", "/upgrade", true);
-    configServer.send(302, "text/plain", "");
-  });
 
 #if defined(EBUS_INTERNAL)
   // commands
