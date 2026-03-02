@@ -60,7 +60,7 @@ jobs:
     - name: Delete existing master release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: gh release delete master --cleanup-tag -y || true
+      run: gh release delete master --repo "$GITHUB_REPOSITORY" --cleanup-tag -y || true
     - name: Create or update master release
       uses: ncipollo/release-action@v1
       with:
