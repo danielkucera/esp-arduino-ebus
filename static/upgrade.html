@@ -9,6 +9,9 @@
 
 <body>
     <h1>Firmware Upgrade</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+    </div>
 
     <fieldset>
         <legend>Upload firmware file</legend>
@@ -28,13 +31,11 @@
         <div id="urlStatus" class="status"></div>
     </fieldset>
 
-    <div class="controls">
-        <a href="/" class="link-button secondary" style="display:inline-block">Back</a>
-    </div>
-
+    <script src="common.js"></script>
     <script>
         const uploadStatus = document.getElementById('uploadStatus');
         const urlStatus = document.getElementById('urlStatus');
+        document.getElementById('btnHome').addEventListener('click', handleHome);
 
         document.getElementById('uploadBtn').addEventListener('click', async () => {
             const fileInput = document.getElementById('firmwareFile');
