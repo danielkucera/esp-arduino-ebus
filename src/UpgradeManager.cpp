@@ -282,7 +282,7 @@ bool UpgradeManager::performEspOtaTransfer(const sockaddr_in& hostAddr,
   logger.info("ESPOTA: received " + String(totalReceived) + " bytes, rebooting");
   send(tcpSock, "OK", 2, 0);
   close(tcpSock);
-  delay(5000);
+  delay(1000);
   esp_restart();
   return true;
 }
@@ -578,6 +578,6 @@ void UpgradeManager::sendAndRestart(const char* message) {
   server_->send(200, "text/plain", message);
   server_->client().flush();
   server_->client().stop();
-  delay(5000);
+  delay(1000);
   esp_restart();
 }
