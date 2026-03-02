@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Firmware Upgrade</title>
+    <link rel="stylesheet" href="common.css">
+</head>
+
+<body>
+    <h1>Firmware Upgrade</h1>
+
+    <fieldset>
+        <legend>Upload firmware file</legend>
+        <div class="controls">
+            <input id="firmwareFile" type="file" accept=".bin,application/octet-stream">
+            <button id="uploadBtn">Upload</button>
+        </div>
+        <div id="uploadStatus" class="status"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Upgrade from URL</legend>
+        <div class="controls">
+            <input id="firmwareUrl" type="text" placeholder="http://host/firmware.bin">
+            <button id="urlBtn">Start HTTP Upgrade</button>
+        </div>
+        <div id="urlStatus" class="status"></div>
+    </fieldset>
+
+    <div class="controls">
+        <a href="/" class="link-button secondary" style="display:inline-block">Back</a>
+    </div>
+
+    <script>
+        const uploadStatus = document.getElementById('uploadStatus');
+        const urlStatus = document.getElementById('urlStatus');
+
+        document.getElementById('uploadBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('firmwareFile');
+            if (!fileInput.files.length) {
+                uploadStatus.textContent = 'Select a firmware .bin file first.';
+                return;
+            }
+
+            uploadStatus.textContent = 'Uploading firmware...';
+            const formData = new FormData();
+            formData.append('update', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/api/v1/upgrade/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const text = await response.text();
+                uploadStatus.textContent = response.ok ? text : `Error: ${text}`;
+            } catch (error) {
+                uploadStatus.textContent = `Upload failed: ${error}`;
+            }
+        });
+
+        document.getElementById('urlBtn').addEventListener('click', async () => {
+            const firmwareUrl = document.getElementById('firmwareUrl').value.trim();
+            if (!firmwareUrl) {
+                urlStatus.textContent = 'Enter firmware URL first.';
+                return;
+            }
+
+            urlStatus.textContent = 'Downloading and upgrading...';
+            try {
+                const response = await fetch('/api/v1/upgrade/http', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: firmwareUrl })
+                });
+                const text = await response.text();
+                urlStatus.textContent = response.ok ? text : `Error: ${text}`;
+            } catch (error) {
+                urlStatus.textContent = `HTTP upgrade failed: ${error}`;
+            }
+        });
+    </script>
+</body>
+
+</html>
