@@ -14,7 +14,7 @@ def main():
     password = sys.argv[3]
     firmware_path = sys.argv[4]
 
-    url = f"http://{ip}/firmware"
+    url = f"http://{ip}/api/v1/upgrade/upload"
 
     print(f"Uploading {firmware_path} to {url} ...")
 

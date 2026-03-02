@@ -1,7 +1,6 @@
 #include "main.hpp"
 
 #include <ArduinoJson.h>
-#include <ArduinoOTA.h>
 #include <IotWebConf.h>
 #include <Preferences.h>
 #include <esp_efuse.h>
@@ -22,20 +21,19 @@
 #endif
 
 #include <ESPmDNS.h>
-#include <IotWebConfESP32HTTPUpdateServer.h>
 #include <esp_task_wdt.h>
 
+#include "UpgradeManager.hpp"
 #include "esp32c3/rom/rtc.h"
 #include "esp_sntp.h"
 #include "http.hpp"
-
-HTTPUpdateServer httpUpdater;
 
 #if !defined(EBUS_INTERNAL)
 TaskHandle_t Task1;
 #endif
 
 Preferences preferences;
+UpgradeManager upgradeManager;
 
 // minimum time of reset pin
 #define RESET_MS 1000
@@ -877,14 +875,19 @@ void setup() {
   }
 
   SetupHttpHandlers();
-
-  iotWebConf.setupUpdateServer(
-      [](const char* updatePath) {
-        httpUpdater.setup(&configServer, updatePath);
-      },
-      [](const char* userName, char* password) {
-        httpUpdater.updateCredentials(userName, password);
-      });
+  upgradeManager.begin(&configServer);
+  upgradeManager.setPreUpgradeHook([]() {
+#if defined(EBUS_INTERNAL)
+    ebus::serviceRunner->stop();
+    schedule.stop();
+    clientManager.stop();
+#else
+    if (Task1 != nullptr) {
+      vTaskDelete(Task1);
+      Task1 = nullptr;
+    }
+#endif
+  });
 
   set_pwm(atoi(pwm_value));
 
@@ -927,7 +930,7 @@ void setup() {
 
   statusServer.begin();
 
-  ArduinoOTA.begin();
+  upgradeManager.beginEspOta();
   MDNS.begin(HOSTNAME);
   wdt_start();
 
@@ -954,12 +957,6 @@ void setup() {
   clientManager.setLastCommsCallback(updateLastComms);
   clientManager.start(ebus::bus, ebus::request, ebus::serviceRunner);
 
-  ArduinoOTA.onStart([]() {
-    ebus::serviceRunner->stop();
-    schedule.stop();
-    clientManager.stop();
-  });
-
   store.setDataUpdatedCallback(Mqtt::publishValue);
   store.setDataUpdatedLogCallback(
       [](const String& message) { logger.debug(message); });
@@ -967,17 +964,10 @@ void setup() {
   mqttha.publishComponents();
 #else
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
-  ArduinoOTA.onStart([]() { vTaskDelete(Task1); });
 #endif
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    printf("Progress: %u%%\r", (progress / (total / 100)));
-    wdt_feed();
-  });
 }
 
 void loop() {
-  ArduinoOTA.handle();
-
   wdt_feed();
 
   iotWebConf.doLoop();
