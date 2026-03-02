@@ -968,8 +968,6 @@ void setup() {
 }
 
 void loop() {
-  upgradeManager.handleEspOta();
-
   wdt_feed();
 
   iotWebConf.doLoop();

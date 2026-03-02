@@ -15,7 +15,6 @@ class UpgradeManager {
 
   void begin(WebServer* server);
   void beginEspOta(uint16_t port = 3232);
-  void handleEspOta();
   void setPreUpgradeHook(PreUpgradeHook hook);
 
  private:

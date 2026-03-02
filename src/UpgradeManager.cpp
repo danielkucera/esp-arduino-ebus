@@ -19,6 +19,8 @@ constexpr size_t kOtaBufferSize = 1024;
 constexpr uint8_t kEspImageMagic = 0xE9;
 constexpr int kEspOtaFlashCommand = 0;
 constexpr uint32_t kEspOtaTransferTimeoutMs = 60000;
+constexpr uint32_t kEspOtaTaskDelayMs = 10;
+constexpr uint32_t kEspOtaTaskStackSize = 8192;
 }
 
 void UpgradeManager::begin(WebServer* server) {
@@ -71,11 +73,32 @@ void UpgradeManager::beginEspOta(uint16_t port) {
   }
 
   logger.info("ESPOTA: listening on UDP port " + String(espOtaPort_));
+
+  if (espOtaTaskHandle_ == nullptr) {
+    BaseType_t taskResult =
+        xTaskCreate(espOtaTaskEntry, "espota_task", kEspOtaTaskStackSize, this, 1,
+                    &espOtaTaskHandle_);
+    if (taskResult != pdPASS) {
+      logger.error("ESPOTA: failed to start task");
+      espOtaTaskHandle_ = nullptr;
+    } else {
+      logger.info("ESPOTA: task started");
+    }
+  }
 }
 
-void UpgradeManager::handleEspOta() {
-  if (espOtaUdpSock_ < 0) return;
-  handleEspOtaInvitation();
+void UpgradeManager::espOtaTaskEntry(void* param) {
+  UpgradeManager* self = static_cast<UpgradeManager*>(param);
+  self->espOtaTaskLoop();
+}
+
+void UpgradeManager::espOtaTaskLoop() {
+  while (true) {
+    if (espOtaUdpSock_ >= 0) {
+      handleEspOtaInvitation();
+    }
+    vTaskDelay(pdMS_TO_TICKS(kEspOtaTaskDelayMs));
+  }
 }
 
 bool UpgradeManager::handleEspOtaInvitation() {
