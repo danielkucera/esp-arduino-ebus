@@ -25,6 +25,7 @@
 #include <IotWebConfESP32HTTPUpdateServer.h>
 #include <esp_task_wdt.h>
 
+#include "ConfigManager.hpp"
 #include "esp32c3/rom/rtc.h"
 #include "esp_sntp.h"
 #include "http.hpp"
@@ -36,6 +37,7 @@ TaskHandle_t Task1;
 #endif
 
 Preferences preferences;
+ConfigManager configManager;
 
 // minimum time of reset pin
 #define RESET_MS 1000
@@ -877,6 +879,7 @@ void setup() {
   }
 
   SetupHttpHandlers();
+  configManager.begin(&configServer);
 
   iotWebConf.setupUpdateServer(
       [](const char* updatePath) {

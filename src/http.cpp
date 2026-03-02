@@ -14,6 +14,7 @@ extern const char common_js_start[] asm("_binary_static_common_js_start");
 
 extern const char root_html_start[] asm("_binary_static_root_html_start");
 extern const char status_html_start[] asm("_binary_static_status_html_start");
+extern const char config2_html_start[] asm("_binary_static_config2_html_start");
 extern const char commands_html_start[] asm(
     "_binary_static_commands_html_start");
 extern const char values_html_start[] asm("_binary_static_values_html_start");
@@ -292,6 +293,8 @@ void SetupHttpHandlers() {
 
   // config
   configServer.on("/config", [] { iotWebConf.handleConfig(); });
+  configServer.on("/config2",
+                  []() { handleStatic("text/html", config2_html_start); });
 
   // status
   configServer.on("/status",
