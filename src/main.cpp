@@ -86,9 +86,6 @@ char sntpEnabled[STRING_LEN];
 char sntpServer[DNS_LEN];
 char sntpTimezone[STRING_LEN];
 
-uint32_t pwm;
-char pwm_value[NUMBER_LEN];
-
 #if defined(EBUS_INTERNAL)
 char ebus_address[NUMBER_LEN];
 static char ebus_address_values[][NUMBER_LEN] = {
@@ -141,9 +138,7 @@ iotwebconf::TextParameter sntpTimezoneParam =
 
 iotwebconf::ParameterGroup ebusGroup =
     iotwebconf::ParameterGroup("ebus", "eBUS configuration");
-iotwebconf::NumberParameter pwmParam =
-    iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
-                                "130", "1..255", "min='1' max='255' step='1'");
+
 #if defined(EBUS_INTERNAL)
 iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
     "eBUS address", "ebus_address", ebus_address, NUMBER_LEN,
@@ -273,7 +268,8 @@ inline void enableTX() {
 #endif
 }
 
-void set_pwm(uint8_t value) {
+void set_pwm() {
+  int value = atoi(configManager.readString("pwmValue", "130").c_str());
 #if defined(PWM_PIN)
   ledcWrite(PWM_CHANNEL, value);
 #if defined(EBUS_INTERNAL)
@@ -817,8 +813,6 @@ void setup() {
   sntpGroup.addItem(&sntpServerParam);
   sntpGroup.addItem(&sntpTimezoneParam);
 #endif
-
-  ebusGroup.addItem(&pwmParam);
 
 #if defined(EBUS_INTERNAL)
   ebusGroup.addItem(&ebusAddressParam);
