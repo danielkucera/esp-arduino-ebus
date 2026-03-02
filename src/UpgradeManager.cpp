@@ -11,6 +11,7 @@
 #include <lwip/sockets.h>
 #include <unistd.h>
 
+#include "Logger.hpp"
 #include "main.hpp"
 
 namespace {
@@ -48,8 +49,7 @@ void UpgradeManager::beginEspOta(uint16_t port) {
 
   espOtaUdpSock_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (espOtaUdpSock_ < 0) {
-    printf("ESPOTA: failed to bind UDP port %u\n",
-           static_cast<unsigned int>(espOtaPort_));
+    logger.error("ESPOTA: failed to create UDP socket");
     return;
   }
 
@@ -63,15 +63,14 @@ void UpgradeManager::beginEspOta(uint16_t port) {
   addr.sin_port = htons(espOtaPort_);
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
   if (bind(espOtaUdpSock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
-    printf("ESPOTA: failed to bind UDP port %u errno=%d\n",
-           static_cast<unsigned int>(espOtaPort_), errno);
+    logger.error("ESPOTA: failed to bind UDP port " + String(espOtaPort_) +
+                 " errno=" + String(errno));
     close(espOtaUdpSock_);
     espOtaUdpSock_ = -1;
     return;
   }
 
-  printf("ESPOTA: listening on UDP port %u\n",
-         static_cast<unsigned int>(espOtaPort_));
+  logger.info("ESPOTA: listening on UDP port " + String(espOtaPort_));
 }
 
 void UpgradeManager::handleEspOta() {
@@ -118,8 +117,9 @@ bool UpgradeManager::handleEspOtaInvitation() {
 
   char remoteIp[INET_ADDRSTRLEN] = {0};
   inet_ntop(AF_INET, &remoteAddr.sin_addr, remoteIp, sizeof(remoteIp));
-  printf("ESPOTA: invitation from %s:%u size=%u md5=%s\n", remoteIp, hostPort,
-         static_cast<unsigned int>(expectedSize), md5);
+  logger.info("ESPOTA: invitation from " + String(remoteIp) + ":" +
+              String(hostPort) + " size=" + String(expectedSize) + " md5=" +
+              String(md5));
 
   const char* ok = "OK";
   sendto(espOtaUdpSock_, ok, strlen(ok), 0,
@@ -175,6 +175,7 @@ bool UpgradeManager::performEspOtaTransfer(const sockaddr_in& hostAddr,
   uint8_t buffer[kOtaBufferSize];
   size_t totalReceived = 0;
   bool checkedMagic = false;
+  int nextProgressPercent = 10;
   uint32_t transferDeadline = millis() + kEspOtaTransferTimeoutMs;
 
   while (totalReceived < expectedSize) {
@@ -227,6 +228,14 @@ bool UpgradeManager::performEspOtaTransfer(const sockaddr_in& hostAddr,
     }
 
     totalReceived += static_cast<size_t>(bytesRead);
+    int percent = static_cast<int>((totalReceived * 100) / expectedSize);
+    if (percent >= nextProgressPercent) {
+      logger.info("ESPOTA progress " + String(percent) + "% (" +
+                  String(totalReceived) + "/" + String(expectedSize) + " bytes)");
+      while (percent >= nextProgressPercent && nextProgressPercent < 100) {
+        nextProgressPercent += 10;
+      }
+    }
     char ack[16];
     int ackLen = snprintf(ack, sizeof(ack), "%u",
                           static_cast<unsigned int>(totalReceived));
@@ -253,17 +262,16 @@ bool UpgradeManager::performEspOtaTransfer(const sockaddr_in& hostAddr,
     return false;
   }
 
-  printf("ESPOTA: received %u bytes, rebooting\n",
-         static_cast<unsigned int>(totalReceived));
+  logger.info("ESPOTA: received " + String(totalReceived) + " bytes, rebooting");
   send(tcpSock, "OK", 2, 0);
   close(tcpSock);
-  delay(100);
+  delay(5000);
   esp_restart();
   return true;
 }
 
 void UpgradeManager::failEspOta(const String& reason) {
-  printf("ESPOTA failure: %s\n", reason.c_str());
+  logger.error("ESPOTA failure: " + reason);
 }
 
 void UpgradeManager::setPreUpgradeHook(PreUpgradeHook hook) {
@@ -284,6 +292,8 @@ void UpgradeManager::resetUploadState() {
   uploadCompleted_ = false;
   uploadErrorMessage_ = "";
   preUpgradeDone_ = false;
+  uploadBytesReceived_ = 0;
+  uploadNextProgressPercent_ = 10;
 }
 
 void UpgradeManager::handleUploadChunk() {
@@ -316,6 +326,7 @@ void UpgradeManager::handleUploadChunk() {
   }
 
   if (upload.status == UPLOAD_FILE_WRITE) {
+    uploadBytesReceived_ += upload.currentSize;
     esp_err_t writeResult =
         esp_ota_write(uploadHandle_, upload.buf, upload.currentSize);
     wdt_feed();
@@ -323,6 +334,17 @@ void UpgradeManager::handleUploadChunk() {
       uploadHasError_ = true;
       uploadErrorMessage_ = String("esp_ota_write failed: ") +
                             esp_err_to_name(writeResult);
+    } else if (upload.totalSize > 0) {
+      int percent = static_cast<int>((uploadBytesReceived_ * 100) / upload.totalSize);
+      if (percent >= uploadNextProgressPercent_) {
+        logger.info("Upload progress " + String(percent) + "% (" +
+                    String(uploadBytesReceived_) + "/" + String(upload.totalSize) +
+                    " bytes)");
+        while (percent >= uploadNextProgressPercent_ &&
+               uploadNextProgressPercent_ < 100) {
+          uploadNextProgressPercent_ += 10;
+        }
+      }
     }
     return;
   }
@@ -407,8 +429,10 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
   int statusCode = esp_http_client_get_status_code(client);
   int contentLength = esp_http_client_get_content_length(client);
   bool isChunked = esp_http_client_is_chunked_response(client);
-  printf("Upgrade HTTP status=%d headers=%d content_length=%d chunked=%d\n",
-         statusCode, headerRet, contentLength, isChunked ? 1 : 0);
+  logger.debug("Upgrade HTTP status=" + String(statusCode) +
+               " headers=" + String(headerRet) +
+               " content_length=" + String(contentLength) +
+               " chunked=" + String(isChunked ? 1 : 0));
   if (statusCode != 200) {
     error = String("Unexpected HTTP status: ") + String(statusCode);
     esp_http_client_close(client);
@@ -429,6 +453,7 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
   bool ok = true;
   size_t totalWritten = 0;
   bool checkedMagic = false;
+  int nextProgressPercent = 10;
 
   while (true) {
     int bytesRead = esp_http_client_read(client, reinterpret_cast<char*>(buffer),
@@ -461,6 +486,16 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
       break;
     }
     totalWritten += static_cast<size_t>(bytesRead);
+    if (contentLength > 0) {
+      int percent = static_cast<int>((totalWritten * 100) / contentLength);
+      if (percent >= nextProgressPercent) {
+        logger.info("HTTP upgrade progress " + String(percent) + "% (" +
+                    String(totalWritten) + "/" + String(contentLength) + " bytes)");
+        while (percent >= nextProgressPercent && nextProgressPercent < 100) {
+          nextProgressPercent += 10;
+        }
+      }
+    }
     delay(1);
   }
 
@@ -526,6 +561,6 @@ void UpgradeManager::sendAndRestart(const char* message) {
   server_->send(200, "text/plain", message);
   server_->client().flush();
   server_->client().stop();
-  delay(200);
+  delay(5000);
   esp_restart();
 }
