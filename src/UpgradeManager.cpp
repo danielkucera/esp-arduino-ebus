@@ -10,6 +10,7 @@
 
 namespace {
 constexpr size_t kOtaBufferSize = 1024;
+constexpr uint8_t kEspImageMagic = 0xE9;
 }
 
 void UpgradeManager::begin(WebServer* server) {
@@ -153,6 +154,7 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
   esp_http_client_config_t config = {};
   config.url = url.c_str();
   config.timeout_ms = 20000;
+  config.user_agent = "esp-ebus-upgrader/1.0";
 
   esp_http_client_handle_t client = esp_http_client_init(&config);
   if (client == nullptr) {
@@ -163,6 +165,19 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
   esp_err_t openResult = esp_http_client_open(client, 0);
   if (openResult != ESP_OK) {
     error = String("esp_http_client_open failed: ") + esp_err_to_name(openResult);
+    esp_http_client_cleanup(client);
+    return false;
+  }
+
+  int headerRet = esp_http_client_fetch_headers(client);
+  int statusCode = esp_http_client_get_status_code(client);
+  int contentLength = esp_http_client_get_content_length(client);
+  bool isChunked = esp_http_client_is_chunked_response(client);
+  printf("Upgrade HTTP status=%d headers=%d content_length=%d chunked=%d\n",
+         statusCode, headerRet, contentLength, isChunked ? 1 : 0);
+  if (statusCode != 200) {
+    error = String("Unexpected HTTP status: ") + String(statusCode);
+    esp_http_client_close(client);
     esp_http_client_cleanup(client);
     return false;
   }
@@ -178,6 +193,8 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
 
   uint8_t buffer[kOtaBufferSize];
   bool ok = true;
+  size_t totalWritten = 0;
+  bool checkedMagic = false;
 
   while (true) {
     int bytesRead = esp_http_client_read(client, reinterpret_cast<char*>(buffer),
@@ -192,6 +209,16 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
       break;
     }
 
+    if (!checkedMagic) {
+      checkedMagic = true;
+      if (buffer[0] != kEspImageMagic) {
+        error = String("Downloaded file is not an ESP firmware image (magic=0x") +
+                String(buffer[0], HEX) + ")";
+        ok = false;
+        break;
+      }
+    }
+
     esp_err_t writeResult = esp_ota_write(handle, buffer, bytesRead);
     wdt_feed();
     if (writeResult != ESP_OK) {
@@ -199,6 +226,7 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
       ok = false;
       break;
     }
+    totalWritten += static_cast<size_t>(bytesRead);
     delay(1);
   }
 
@@ -207,6 +235,12 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
 
   if (!ok) {
     esp_ota_abort(handle);
+    return false;
+  }
+
+  if (totalWritten == 0) {
+    esp_ota_abort(handle);
+    error = "No firmware data downloaded";
     return false;
   }
 
