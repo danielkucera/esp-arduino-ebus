@@ -1,7 +1,6 @@
 #include "main.hpp"
 
 #include <ArduinoJson.h>
-#include <ArduinoOTA.h>
 #include <IotWebConf.h>
 #include <Preferences.h>
 #include <esp_efuse.h>
@@ -931,7 +930,7 @@ void setup() {
 
   statusServer.begin();
 
-  ArduinoOTA.begin();
+  upgradeManager.beginEspOta();
   MDNS.begin(HOSTNAME);
   wdt_start();
 
@@ -958,12 +957,6 @@ void setup() {
   clientManager.setLastCommsCallback(updateLastComms);
   clientManager.start(ebus::bus, ebus::request, ebus::serviceRunner);
 
-  ArduinoOTA.onStart([]() {
-    ebus::serviceRunner->stop();
-    schedule.stop();
-    clientManager.stop();
-  });
-
   store.setDataUpdatedCallback(Mqtt::publishValue);
   store.setDataUpdatedLogCallback(
       [](const String& message) { logger.debug(message); });
@@ -971,21 +964,11 @@ void setup() {
   mqttha.publishComponents();
 #else
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
-  ArduinoOTA.onStart([]() {
-    if (Task1 != nullptr) {
-      vTaskDelete(Task1);
-      Task1 = nullptr;
-    }
-  });
 #endif
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    printf("Progress: %u%%\r", (progress / (total / 100)));
-    wdt_feed();
-  });
 }
 
 void loop() {
-  ArduinoOTA.handle();
+  upgradeManager.handleEspOta();
 
   wdt_feed();
 
