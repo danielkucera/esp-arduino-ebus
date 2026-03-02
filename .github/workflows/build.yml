@@ -61,6 +61,7 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         allowUpdates: true
+        commit: ${{ github.sha }}
         removeArtifacts: true
         prerelease: true
         tag: master
