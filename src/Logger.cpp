@@ -1,6 +1,12 @@
 #include "Logger.hpp"
 
 #include <ArduinoJson.h>
+#include <cstring>
+
+namespace {
+constexpr size_t kPrintQueueLen = 32;
+constexpr size_t kPrintMsgMaxLen = 384;
+}  // namespace
 
 Logger logger;
 
@@ -8,11 +14,28 @@ Logger::Logger(size_t maxEntries)
     : maxEntries(maxEntries),
       index(0),
       entries(0),
-      mux(portMUX_INITIALIZER_UNLOCKED) {
+      mux(portMUX_INITIALIZER_UNLOCKED),
+      printQueue(nullptr),
+      printTask(nullptr) {
   buffer = new String[maxEntries];
+  printQueue = xQueueCreate(kPrintQueueLen, kPrintMsgMaxLen);
+  if (printQueue != nullptr) {
+    xTaskCreate(Logger::printTaskEntry, "logger_print", 4096, this, 1,
+                &printTask);
+  }
 }
 
-Logger::~Logger() { delete[] buffer; }
+Logger::~Logger() {
+  if (printTask != nullptr) {
+    vTaskDelete(printTask);
+    printTask = nullptr;
+  }
+  if (printQueue != nullptr) {
+    vQueueDelete(printQueue);
+    printQueue = nullptr;
+  }
+  delete[] buffer;
+}
 
 void Logger::error(String message) { log(LogLevel::ERROR, message); }
 
@@ -66,9 +89,30 @@ void Logger::log(LogLevel level, String message) {
   doc.shrinkToFit();
   serializeJson(doc, payload);
 
+  if (printQueue != nullptr) {
+    char msg[kPrintMsgMaxLen]{};
+    std::strncpy(msg, message.c_str(), sizeof(msg) - 1);
+    msg[sizeof(msg) - 1] = '\0';
+    xQueueSend(printQueue, msg, 0);
+  }
+
   portENTER_CRITICAL(&mux);
   buffer[index] = payload;
   index = (index + 1) % maxEntries;
   if (entries < maxEntries) entries++;
   portEXIT_CRITICAL(&mux);
+}
+
+void Logger::printTaskEntry(void* arg) {
+  Logger* self = static_cast<Logger*>(arg);
+  self->printTaskLoop();
+}
+
+void Logger::printTaskLoop() {
+  while (true) {
+    char msg[kPrintMsgMaxLen]{};
+    if (xQueueReceive(printQueue, msg, portMAX_DELAY) == pdTRUE) {
+      printf("%s\n", msg);
+    }
+  }
 }
