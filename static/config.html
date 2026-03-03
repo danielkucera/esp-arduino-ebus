@@ -4,12 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuration V2</title>
+    <title>Configuration</title>
     <link rel="stylesheet" href="common.css">
 </head>
 
 <body>
-    <h1>Configuration V2</h1>
+    <h1>Configuration</h1>
     <div class="controls">
         <button id="btnHome">Home</button>
         <button id="btnLoad">Load</button>
@@ -18,23 +18,80 @@
     </div>
 
     <fieldset>
+        <legend>WiFi Credentials</legend>
+        <div><label for="wifiSsid">WiFi SSID</label></div>
+        <div><input id="wifiSsid" type="text" class="config"></div>
+        <div><label for="wifiPassword">WiFi Password</label></div>
+        <div><input id="wifiPassword" type="password" class="config"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>General</legend>
+        <div><label for="thingName">Thing Name</label></div>
+        <div><input id="thingName" type="text" class="config"></div>
+        <div><label for="apModePassword">AP Mode Password</label></div>
+        <div><input id="apModePassword" type="password" class="config"></div>
+        <div><label for="apTimeout">AP Timeout (s)</label></div>
+        <div><input id="apTimeout" type="number" min="5" max="1200" step="1" class="config"></div>
+    </fieldset>
+
+    <fieldset>
         <legend>Connection</legend>
         <div><label><input id="staticIPEnabled" type="checkbox" class="config"> Static IP</label></div>
-        <div><input id="ipAddress" type="text" class="config" placeholder="IP address"></div>
-        <div><input id="gateway" type="text" class="config" placeholder="Gateway"></div>
-        <div><input id="netmask" type="text" class="config" placeholder="Netmask"></div>
+        <div><label for="ipAddress">IP Address</label></div>
+        <div><input id="ipAddress" type="text" class="config"></div>
+        <div><label for="gateway">Gateway</label></div>
+        <div><input id="gateway" type="text" class="config"></div>
+        <div><label for="netmask">Netmask</label></div>
+        <div><input id="netmask" type="text" class="config"></div>
     </fieldset>
 
     <fieldset>
         <legend>Adapter</legend>
-        <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config" placeholder="PWM"></div>
+        <div><label for="pwmValue">PWM</label></div>
+        <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config"></div>
+        <div><label for="ebusAddress">eBUS Address (hex, e.g. ff)</label></div>
+        <div><input id="ebusAddress" type="text" class="config"></div>
+        <div><label for="busisrWindow">Bus ISR Window (us)</label></div>
+        <div><input id="busisrWindow" type="number" min="4250" max="4500" step="1" class="config"></div>
+        <div><label for="busisrOffset">Bus ISR Offset (us)</label></div>
+        <div><input id="busisrOffset" type="number" min="0" max="200" step="1" class="config"></div>
     </fieldset>
 
     <fieldset>
-        <legend>WiFi Credentials</legend>
-        <div><input id="wifiSsid" type="text" class="config" placeholder="WiFi SSID"></div>
-        <div><input id="wifiPassword" type="text" class="config" placeholder="WiFi Password"></div>
-        <div><input id="apPassword" type="text" class="config" placeholder="AP Mode Password"></div>
+        <legend>SNTP</legend>
+        <div><label><input id="sntpEnabled" type="checkbox" class="config"> SNTP Enabled</label></div>
+        <div><label for="sntpServer">SNTP Server</label></div>
+        <div><input id="sntpServer" type="text" class="config"></div>
+        <div><label for="sntpTimezone">SNTP Timezone</label></div>
+        <div><input id="sntpTimezone" type="text" class="config"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Schedule</legend>
+        <div><label><input id="inquiryExistPrm" type="checkbox" class="config"> Inquiry Of Existence</label>
+        </div>
+        <div><label><input id="scanOnStartPrm" type="checkbox" class="config"> Scan On Startup</label></div>
+        <div><label for="firstCmdAfterSt">First Command After Start (s)</label></div>
+        <div><input id="firstCmdAfterSt" type="number" min="5" max="60" step="1" class="config"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>MQTT</legend>
+        <div><label><input id="mqttEnabled" type="checkbox" class="config"> MQTT Enabled</label></div>
+        <div><label for="mqttServer">MQTT Server</label></div>
+        <div><input id="mqttServer" type="text" class="config"></div>
+        <div><label for="mqttUser">MQTT User</label></div>
+        <div><input id="mqttUser" type="text" class="config"></div>
+        <div><label for="mqttPass">MQTT Password</label></div>
+        <div><input id="mqttPass" type="password" class="config"></div>
+        <div><label><input id="mqttPublishCnt" type="checkbox" class="config"> Publish Counter</label></div>
+        <div><label><input id="mqttPublishTmg" type="checkbox" class="config"> Publish Timing</label></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Home Assistant</legend>
+        <div><label><input id="haEnabledParam" type="checkbox" class="config"> Enabled</label></div>
     </fieldset>
 
     <script src="common.js"></script>
@@ -49,7 +106,10 @@
                 console.warn(`Field not found: ${id}`);
                 return;
             }
-            if (el.type === 'checkbox') el.checked = value == "true" ? true : false;
+            if (el.type === 'checkbox') {
+                const v = String(value || '').toLowerCase();
+                el.checked = v === 'true' || v === 'selected' || v === '1' || v === 'on';
+            }
             else el.value = value === undefined || value === null ? '' : value;
         }
 
@@ -87,10 +147,7 @@
             const el = document.getElementsByClassName("config");
 
             for (const e of el) {
-                if (e.type === 'checkbox') {
-                    e.value = e.checked ? "true" : "false";
-                }
-                payload[e.id] = e.value.trim();
+                payload[e.id] = getField(e.id);
             }
             
             try {
@@ -112,4 +169,3 @@
 </body>
 
 </html>
-

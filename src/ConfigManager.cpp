@@ -35,7 +35,7 @@ bool writeString(nvs_handle_t handle, const char* key, const String& value,
 void fillJsonFromNvs(JsonDocument& doc, nvs_handle_t handle) {
   JsonObject jConfig = doc["config"].to<JsonObject>();
   jConfig["thingName"] = readString(handle, "thingName", "esp-eBus");
-  jConfig["apModePassword"] = readString(handle, "ebusebus");
+  jConfig["apModePassword"] = readString(handle, "apModePassword", "ebusebus");
   jConfig["apTimeout"] = readString(handle, "apTimeout", "30");
 
   jConfig["wifiSsid"] = readString(handle, "wifiSsid");
@@ -55,16 +55,16 @@ void fillJsonFromNvs(JsonDocument& doc, nvs_handle_t handle) {
   jConfig["busisrWindow"] = readString(handle, "busisrWindow");
   jConfig["busisrOffset"] = readString(handle, "busisrOffset");
 
-  jConfig["inquiryOfExistenceParam"] = readString(handle, "inquiryOfExistenceParam");
-  jConfig["scanOnStartupParam"] = readString(handle, "scanOnStartupParam");
-  jConfig["firstCommandAfterStartParam"] = readString(handle, "firstCommandAfterStartParam");
+  jConfig["inquiryExistPrm"] = readString(handle, "inquiryExistPrm");
+  jConfig["scanOnStartPrm"] = readString(handle, "scanOnStartPrm");
+  jConfig["firstCmdAfterSt"] = readString(handle, "firstCmdAfterSt");
 
   jConfig["mqttEnabled"] = readString(handle, "mqttEnabled");
   jConfig["mqttServer"] = readString(handle, "mqttServer");
   jConfig["mqttUser"] = readString(handle, "mqttUser");
   jConfig["mqttPass"] = readString(handle, "mqttPass");
-  jConfig["mqttPublishCounterParam"] = readString(handle, "mqttPublishCounterParam");
-  jConfig["mqttPublishTimingParam"] = readString(handle, "mqttPublishTimingParam");
+  jConfig["mqttPublishCnt"] = readString(handle, "mqttPublishCnt");
+  jConfig["mqttPublishTmg"] = readString(handle, "mqttPublishTmg");
 
   jConfig["haEnabledParam"] = readString(handle, "haEnabledParam");
 
@@ -77,6 +77,7 @@ bool writeFromFlatPayload(JsonDocument& bodyDoc, nvs_handle_t handle, String& er
       if (!writeString(handle, kv.key().c_str(), kv.value().as<String>(), error)) {
         return false;
       }
+      dirty = true;
     } else {
       error = String("Unsupported value type for key '") + kv.key().c_str() + "'";
       return false;

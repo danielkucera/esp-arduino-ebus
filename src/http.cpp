@@ -293,7 +293,8 @@ void SetupHttpHandlers() {
   configServer.on("/", [] { handleRoot(); });
 
   // config
-  configServer.on("/config", [] { iotWebConf.handleConfig(); });
+  configServer.on("/config",
+                  []() { handleStatic("text/html", config_html_start); });
   configServer.on("/config2",
                   []() { handleStatic("text/html", config_html_start); });
 
