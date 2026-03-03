@@ -2,6 +2,7 @@
 
 #include <WString.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include <freertos/task.h>
 
 // Simple circular buffer logger
@@ -31,10 +32,14 @@ class Logger {
   static const char* logLevelText(LogLevel logLevel);
 
   static const String timestamp();
+  static void printTaskEntry(void* arg);
+  void printTaskLoop();
 
   void log(LogLevel level, String message);
 
   mutable portMUX_TYPE mux;  // Mutex for thread safety
+  QueueHandle_t printQueue;
+  TaskHandle_t printTask;
 };
 
 extern Logger logger;
