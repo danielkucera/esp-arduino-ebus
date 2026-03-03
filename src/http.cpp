@@ -31,8 +31,6 @@ void handleStatic(const char* contentType, const char* data) {
 
 // root
 void handleRoot() {
-  // -- Let IotWebConf test and handle captive portal requests.
-  if (iotWebConf.handleCaptivePortal()) return;  // already served
   handleStatic("text/html", root_html_start);
 }
 
@@ -280,7 +278,8 @@ void handleLogs() { configServer.send(200, "text/plain", logger.getLogs()); }
 
 void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
-  configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
+  configServer.onNotFound(
+      []() { configServer.send(404, "text/plain", "Not found"); });
 
   // common
   configServer.on("/common.css",

@@ -1,7 +1,7 @@
 #include "main.hpp"
 
 #include <ArduinoJson.h>
-#include <IotWebConf.h>
+#include <WiFi.h>
 #include <esp_efuse.h>
 
 #if defined(EBUS_INTERNAL)
@@ -24,6 +24,7 @@
 
 #include "ConfigManager.hpp"
 #include "UpgradeManager.hpp"
+#include "WifiNetworkManager.hpp"
 #include "esp32c3/rom/rtc.h"
 #include "esp_sntp.h"
 #include "http.hpp"
@@ -34,6 +35,7 @@ TaskHandle_t Task1;
 
 ConfigManager configManager;
 UpgradeManager upgradeManager;
+WifiNetworkManager wifiNetworkManager;
 
 // minimum time of reset pin
 #define RESET_MS 1000
@@ -45,10 +47,6 @@ UpgradeManager upgradeManager;
 
 // mDNS
 #define HOSTNAME "esp-eBus"
-
-// IotWebConf
-// adjust this if the iotwebconf structure has changed
-#define CONFIG_VERSION "eeb"
 
 #define STRING_LEN 64
 #define DNS_LEN 255
@@ -71,15 +69,6 @@ UpgradeManager upgradeManager;
 
 char unique_id[7]{};
 
-DNSServer dnsServer;
-
-IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, DEFAULT_APMODE_PASS,
-                      CONFIG_VERSION);
-
-IPAddress ipAddress;
-IPAddress gateway;
-IPAddress netmask;
-
 #if !defined(EBUS_INTERNAL)
 WiFiServer wifiServer(3333);
 WiFiClient wifiClients[MAX_WIFI_CLIENTS];
@@ -101,10 +90,6 @@ uint32_t uptime = 0;
 uint32_t free_heap = 0;
 uint32_t loopDuration = 0;
 uint32_t maxLoopDuration;
-
-// wifi
-uint32_t last_connect = 0;
-int reconnect_count = 0;
 
 #if defined(EBUS_INTERNAL)
 // mqtt
@@ -137,11 +122,6 @@ bool readConfigBool(const char* key, bool fallback = false) {
 
 String readConfigValue(const char* key, const char* fallback = "") {
   return configManager.readString(key, fallback);
-}
-
-void wifiConnected() {
-  last_connect = millis();
-  ++reconnect_count;
 }
 
 void wdt_start() {
@@ -386,22 +366,6 @@ void saveParamsCallback() {
 #endif
 }
 
-void connectWifi(const char* ssid, const char* password) {
-  if (readConfigBool("staticIPEnabled")) {
-    String ipAddressValue = readConfigValue("ipAddress");
-    String netmaskValue = readConfigValue("netmask");
-    String gatewayValue = readConfigValue("gateway");
-    bool valid = true;
-    valid = valid && ipAddress.fromString(ipAddressValue);
-    valid = valid && netmask.fromString(netmaskValue);
-    valid = valid && gateway.fromString(gatewayValue);
-
-    if (valid) WiFi.config(ipAddress, gateway, netmask);
-  }
-
-  WiFi.begin(ssid, password);
-}
-
 char* status_string() {
   const size_t bufferSize = 1024;
   static char status[bufferSize];
@@ -431,9 +395,9 @@ char* status_string() {
                   getApbFrequency());
   pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
-                  last_connect);
+                  wifiNetworkManager.getLastConnect());
   pos += snprintf(status + pos, bufferSize - pos, "reconnect_count: %d \n",
-                  reconnect_count);
+                  wifiNetworkManager.getReconnectCount());
   pos +=
       snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos +=
@@ -564,15 +528,15 @@ const std::string getStatusJson() {
 
   // WIFI
   JsonObject WIFI = doc["WIFI"].to<JsonObject>();
-  WIFI["Last_Connect"] = last_connect;
-  WIFI["Reconnect_Count"] = reconnect_count;
+  WIFI["Last_Connect"] = wifiNetworkManager.getLastConnect();
+  WIFI["Reconnect_Count"] = wifiNetworkManager.getReconnectCount();
   WIFI["RSSI"] = WiFi.RSSI();
 
-  if (readConfigBool("staticIPEnabled")) {
+  if (wifiNetworkManager.isStaticIpEnabled()) {
     WIFI["Static_IP"] = true;
-    WIFI["IP_Address"] = readConfigValue("ipAddress");
-    WIFI["Gateway"] = readConfigValue("gateway");
-    WIFI["Netmask"] = readConfigValue("netmask");
+    WIFI["IP_Address"] = wifiNetworkManager.getConfiguredIpAddress();
+    WIFI["Gateway"] = wifiNetworkManager.getConfiguredGateway();
+    WIFI["Netmask"] = wifiNetworkManager.getConfiguredNetmask();
   } else {
     WIFI["Static_IP"] = false;
     WIFI["IP_Address"] = WiFi.localIP().toString();
@@ -667,36 +631,15 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  // IotWebConf handles only core network/AP settings.
-  iotWebConf.setConfigSavedCallback(&saveParamsCallback);
-  iotWebConf.getApTimeoutParameter()->visible = true;
-  iotWebConf.setWifiConnectionTimeoutMs(7000);
-  iotWebConf.setWifiConnectionHandler(&connectWifi);
-  iotWebConf.setWifiConnectionCallback(&wifiConnected);
-
-#if defined(STATUS_LED_PIN)
-  iotWebConf.setStatusPin(STATUS_LED_PIN);
-#endif
-
   if (configManager.readInt("firstboot", 1)) {
     configManager.writeString("firstboot", "0");
-
-    iotWebConf.init();
-    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer,
-            DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, DEFAULT_AP,
-            IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, DEFAULT_PASS,
-            IOTWEBCONF_WORD_LEN);
-    iotWebConf.saveConfig();
-  } else {
-    iotWebConf.skipApStartup();
-    // -- Initializing the configuration.
-    iotWebConf.init();
   }
+
   SetupHttpHandlers();
   configManager.begin(&configServer);
   upgradeManager.begin(&configServer);
+  wifiNetworkManager.begin(&configManager, HOSTNAME, "esp-eBus", "ebusebus");
+  configServer.begin();
   upgradeManager.setPreUpgradeHook([]() {
 #if defined(EBUS_INTERNAL)
     ebus::serviceRunner->stop();
@@ -711,10 +654,6 @@ void setup() {
   });
 
   set_pwm();
-
-  while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
-    iotWebConf.doLoop();
-  }
 
 #if defined(EBUS_INTERNAL)
   if (readConfigBool("sntpEnabled")) {
@@ -739,7 +678,7 @@ void setup() {
   mqttha.setWillTopic(mqtt.getWillTopic());
   mqttha.setEnabled(readConfigBool("haEnabledParam"));
 
-  mqttha.setThingName(iotWebConf.getThingName());
+  mqttha.setThingName(readConfigValue("thingName", "esp-eBus").c_str());
   mqttha.setThingModel(ESP.getChipModel());
   mqttha.setThingModelId("Revision: " + std::to_string(ESP.getChipRevision()));
   mqttha.setThingManufacturer("danman.eu");
@@ -799,7 +738,7 @@ void setup() {
 void loop() {
   wdt_feed();
 
-  iotWebConf.doLoop();
+  configServer.handleClient();
 
 #if defined(EBUS_INTERNAL)
   if (mqtt.isEnabled()) {
