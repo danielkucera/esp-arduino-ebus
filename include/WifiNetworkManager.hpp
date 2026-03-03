@@ -7,8 +7,7 @@ class ConfigManager;
 
 class WifiNetworkManager {
  public:
-  void begin(ConfigManager* configManager, const char* hostname,
-             const char* apSsid, const char* apPassword);
+  void begin(ConfigManager* configManager);
 
   uint32_t getLastConnect() const;
   int getReconnectCount() const;

@@ -7,27 +7,33 @@
 
 WifiNetworkManager* WifiNetworkManager::instance_ = nullptr;
 
-void WifiNetworkManager::begin(ConfigManager* configManager, const char* hostname,
-                               const char* apSsid, const char* apPassword) {
+void WifiNetworkManager::begin(ConfigManager* configManager) {
+  static constexpr const char* kDefaultHostname = "esp-eBus";
+  static constexpr const char* kDefaultApSsid = "esp-eBus";
+  static constexpr const char* kDefaultApPassword = "ebusebus";
+
   configManager_ = configManager;
   instance_ = this;
+
+  String apPassword = readConfigValue("apModePassword", kDefaultApPassword);
+  if (apPassword.isEmpty()) apPassword = kDefaultApPassword;
 
   WiFi.onEvent(onWiFiEventStatic);
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
-  WiFi.setHostname(hostname);
+  WiFi.setHostname(kDefaultHostname);
   WiFi.mode(WIFI_AP_STA);
 
   wifi_config_t apConfig{};
-  std::strncpy(reinterpret_cast<char*>(apConfig.ap.ssid), apSsid,
+  std::strncpy(reinterpret_cast<char*>(apConfig.ap.ssid), kDefaultApSsid,
                sizeof(apConfig.ap.ssid) - 1);
-  apConfig.ap.ssid_len = std::strlen(apSsid);
-  std::strncpy(reinterpret_cast<char*>(apConfig.ap.password), apPassword,
+  apConfig.ap.ssid_len = std::strlen(kDefaultApSsid);
+  std::strncpy(reinterpret_cast<char*>(apConfig.ap.password), apPassword.c_str(),
                sizeof(apConfig.ap.password) - 1);
   apConfig.ap.max_connection = 4;
   apConfig.ap.channel = rand() % 13 + 1;
   apConfig.ap.authmode = WIFI_AUTH_WPA2_PSK;
-  if (std::strlen(apPassword) < 8) apConfig.ap.authmode = WIFI_AUTH_OPEN;
+  if (apPassword.length() < 8) apConfig.ap.authmode = WIFI_AUTH_OPEN;
   esp_wifi_set_config(WIFI_IF_AP, &apConfig);
   dnsServer_.start(53, "*", WiFi.softAPIP());
   if (dnsTaskHandle_ == nullptr) {
