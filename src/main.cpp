@@ -48,20 +48,8 @@ WifiNetworkManager wifiNetworkManager;
 // mDNS
 #define HOSTNAME "esp-eBus"
 
-#define STRING_LEN 64
-#define DNS_LEN 255
-#define NUMBER_LEN 8
-
-#define DUMMY_STATIC_IP "192.168.1.180"
-#define DUMMY_GATEWAY "192.168.1.1"
-#define DUMMY_NETMASK "255.255.255.0"
-
-#define DUMMY_SNTP_SERVER "pool.ntp.org"
-#define DUMMY_SNTP_TIMEZONE "UTC0"
-
-#define DUMMY_MQTT_SERVER DUMMY_GATEWAY
-#define DUMMY_MQTT_USER "roger"
-#define DUMMY_MQTT_PASS "password"
+#define DEFAULT_SNTP_SERVER "pool.ntp.org"
+#define DEFAULT_SNTP_TIMEZONE "UTC0"
 
 char unique_id[7]{};
 
@@ -279,8 +267,7 @@ void data_loop(void* pvParameters) {
 
 #if defined(EBUS_INTERNAL)
 void time_sync_notification_cb(struct timeval* tv) {
-  logger.info("SNTP synchronized to " +
-              readConfigValue("sntpServer", DUMMY_SNTP_SERVER));
+  logger.info("SNTP synchronized to " + String(sntp_getservername(0)));
 }
 
 void initSNTP(const char* server) {
@@ -330,11 +317,8 @@ void saveParamsCallback() {
 
   if (readConfigBool("sntpEnabled")) {
     esp_sntp_stop();
-    String sntpServerValue = readConfigValue("sntpServer", DUMMY_SNTP_SERVER);
-    String sntpTimezoneValue =
-        readConfigValue("sntpTimezone", DUMMY_SNTP_TIMEZONE);
-    initSNTP(sntpServerValue.c_str());
-    setTimezone(sntpTimezoneValue.c_str());
+    initSNTP(readConfigValue("sntpServer", DEFAULT_SNTP_SERVER).c_str());
+    setTimezone(readConfigValue("sntpTimezone", DEFAULT_SNTP_TIMEZONE).c_str());
   } else {
     esp_sntp_stop();
   }
@@ -345,9 +329,9 @@ void saveParamsCallback() {
   schedule.setFirstCommandAfterStart(
       configManager.readInt("firstCmdAfterSt", 10));
 
-  String mqttServerValue = readConfigValue("mqttServer", DUMMY_MQTT_SERVER);
-  String mqttUserValue = readConfigValue("mqttUser", DUMMY_MQTT_USER);
-  String mqttPassValue = readConfigValue("mqttPass", DUMMY_MQTT_PASS);
+  String mqttServerValue = readConfigValue("mqttServer");
+  String mqttUserValue = readConfigValue("mqttUser");
+  String mqttPassValue = readConfigValue("mqttPass");
   mqtt.setEnabled(readConfigBool("mqttEnabled"));
   mqtt.setServer(mqttServerValue.c_str(), 1883);
   mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
@@ -412,13 +396,12 @@ char* status_string() {
                   "adapter_hw_version_raw: 0x%02X\r\n", adapterHwVersionRaw);
 
 #if defined(EBUS_INTERNAL)
-  String sntpServerValue = readConfigValue("sntpServer", DUMMY_SNTP_SERVER);
   String sntpTimezoneValue =
-      readConfigValue("sntpTimezone", DUMMY_SNTP_TIMEZONE);
+      readConfigValue("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
   pos += snprintf(status + pos, bufferSize - pos, "sntpEnabled: %s\r\n",
                   readConfigBool("sntpEnabled") ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "sntpServer: %s\r\n",
-                  sntpServerValue.c_str());
+                  sntp_getservername(0));
   pos += snprintf(status + pos, bufferSize - pos, "sntpTimezone: %s\r\n",
                   sntpTimezoneValue.c_str());
 #endif
@@ -453,8 +436,8 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.isConnected() ? "true" : "false");
 
-  String mqttServerValue = readConfigValue("mqttServer", DUMMY_MQTT_SERVER);
-  String mqttUserValue = readConfigValue("mqttUser", DUMMY_MQTT_USER);
+  String mqttServerValue = readConfigValue("mqttServer");
+  String mqttUserValue = readConfigValue("mqttUser");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_server: %s\r\n",
                   mqttServerValue.c_str());
   pos +=
@@ -549,8 +532,8 @@ const std::string getStatusJson() {
 #if defined(EBUS_INTERNAL)
   JsonObject SNTP = doc["SNTP"].to<JsonObject>();
   SNTP["Enabled"] = readConfigBool("sntpEnabled");
-  SNTP["Server"] = readConfigValue("sntpServer", DUMMY_SNTP_SERVER);
-  SNTP["Timezone"] = readConfigValue("sntpTimezone", DUMMY_SNTP_TIMEZONE);
+  SNTP["Server"] = readConfigValue("sntpServer", sntp_getservername(0));
+  SNTP["Timezone"] = readConfigValue("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
 #endif
 
   // eBUS
@@ -573,8 +556,8 @@ const std::string getStatusJson() {
   // MQTT
   JsonObject MQTT = doc["MQTT"].to<JsonObject>();
   MQTT["Enabled"] = mqtt.isEnabled();
-  MQTT["Server"] = readConfigValue("mqttServer", DUMMY_MQTT_SERVER);
-  MQTT["User"] = readConfigValue("mqttUser", DUMMY_MQTT_USER);
+  MQTT["Server"] = readConfigValue("mqttServer");
+  MQTT["User"] = readConfigValue("mqttUser");
   MQTT["Connected"] = mqtt.isConnected();
   MQTT["Publish_Counter"] = schedule.getPublishCounter();
   MQTT["Publish_Timing"] = schedule.getPublishTiming();
@@ -651,16 +634,16 @@ void setup() {
 
 #if defined(EBUS_INTERNAL)
   if (readConfigBool("sntpEnabled")) {
-    String sntpServerValue = readConfigValue("sntpServer", DUMMY_SNTP_SERVER);
+    String sntpServerValue = readConfigValue("sntpServer", DEFAULT_SNTP_SERVER);
     String sntpTimezoneValue =
-        readConfigValue("sntpTimezone", DUMMY_SNTP_TIMEZONE);
+        readConfigValue("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
     initSNTP(sntpServerValue.c_str());
     setTimezone(sntpTimezoneValue.c_str());
   }
 
-  String mqttServerValue = readConfigValue("mqttServer", DUMMY_MQTT_SERVER);
-  String mqttUserValue = readConfigValue("mqttUser", DUMMY_MQTT_USER);
-  String mqttPassValue = readConfigValue("mqttPass", DUMMY_MQTT_PASS);
+  String mqttServerValue = readConfigValue("mqttServer");
+  String mqttUserValue = readConfigValue("mqttUser");
+  String mqttPassValue = readConfigValue("mqttPass");
   mqtt.setEnabled(readConfigBool("mqttEnabled"));
   mqtt.setup(unique_id);
   mqtt.setServer(mqttServerValue.c_str(), 1883);
