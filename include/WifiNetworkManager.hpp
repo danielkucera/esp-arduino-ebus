@@ -25,9 +25,6 @@ class WifiNetworkManager {
   static void onWiFiEventStatic(WiFiEvent_t event, WiFiEventInfo_t info);
   void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info);
   void configureStaticIpIfEnabled();
-  bool readConfigBool(const char* key, bool fallback = false) const;
-  String readConfigValue(const char* key, const char* fallback = "") const;
-  static bool parseStoredBool(const String& value);
 
   DNSServer dnsServer_;
   ConfigManager* configManager_ = nullptr;

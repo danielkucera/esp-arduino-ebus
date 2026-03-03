@@ -91,19 +91,6 @@ static const esp_efuse_desc_t* ADAPTER_HW_VERSION_EFUSE_FIELD[] = {
 uint8_t adapterHwVersionRaw = 0xEE;
 std::string adapterHwVersion = "unread";
 
-bool parseStoredBool(const String& value) {
-  return value == "selected" || value == "true" || value == "1" ||
-         value == "on";
-}
-
-bool readConfigBool(const char* key, bool fallback = false) {
-  return parseStoredBool(configManager.readString(key, fallback ? "selected" : ""));
-}
-
-String readConfigValue(const char* key, const char* fallback = "") {
-  return configManager.readString(key, fallback);
-}
-
 void wdt_start() {
   esp_task_wdt_init(6, true);
   esp_task_wdt_add(NULL);
@@ -305,38 +292,38 @@ void saveParamsCallback() {
   set_pwm();
 
 #if defined(EBUS_INTERNAL)
-  String ebusAddress = readConfigValue("ebusAddress", "ff");
+  String ebusAddress = configManager.readString("ebusAddress", "ff");
   ebus::handler->setSourceAddress(
       uint8_t(std::strtoul(ebusAddress.c_str(), nullptr, 16)));
   ebus::setBusIsrWindow(configManager.readInt("busisrWindow", 4300));
   ebus::setBusIsrOffset(configManager.readInt("busisrOffset", 80));
 
-  if (readConfigBool("sntpEnabled")) {
+  if (configManager.readBool("sntpEnabled")) {
     esp_sntp_stop();
-    initSNTP(readConfigValue("sntpServer", DEFAULT_SNTP_SERVER).c_str());
-    setTimezone(readConfigValue("sntpTimezone", DEFAULT_SNTP_TIMEZONE).c_str());
+    initSNTP(configManager.readString("sntpServer", DEFAULT_SNTP_SERVER).c_str());
+    setTimezone(configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE).c_str());
   } else {
     esp_sntp_stop();
   }
 
-  deviceManager.setScanOnStartup(readConfigBool("scanOnStartPrm"));
+  deviceManager.setScanOnStartup(configManager.readBool("scanOnStartPrm"));
 
-  schedule.setSendInquiryOfExistence(readConfigBool("inquiryExistPrm"));
+  schedule.setSendInquiryOfExistence(configManager.readBool("inquiryExistPrm"));
   schedule.setFirstCommandAfterStart(
       configManager.readInt("firstCmdAfterSt", 10));
 
-  String mqttServerValue = readConfigValue("mqttServer");
-  String mqttUserValue = readConfigValue("mqttUser");
-  String mqttPassValue = readConfigValue("mqttPass");
-  mqtt.setEnabled(readConfigBool("mqttEnabled"));
+  String mqttServerValue = configManager.readString("mqttServer");
+  String mqttUserValue = configManager.readString("mqttUser");
+  String mqttPassValue = configManager.readString("mqttPass");
+  mqtt.setEnabled(configManager.readBool("mqttEnabled"));
   mqtt.setServer(mqttServerValue.c_str(), 1883);
   mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
   mqtt.change();
 
-  schedule.setPublishCounter(readConfigBool("mqttPublishCnt"));
-  schedule.setPublishTiming(readConfigBool("mqttPublishTmg"));
+  schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
+  schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
 
-  mqttha.setEnabled(readConfigBool("haEnabledParam"));
+  mqttha.setEnabled(configManager.readBool("haEnabledParam"));
   mqttha.publishDeviceInfo();
   mqttha.publishComponents();
 #endif
@@ -393,9 +380,9 @@ char* status_string() {
 
 #if defined(EBUS_INTERNAL)
   String sntpTimezoneValue =
-      readConfigValue("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
+      configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
   pos += snprintf(status + pos, bufferSize - pos, "sntpEnabled: %s\r\n",
-                  readConfigBool("sntpEnabled") ? "true" : "false");
+                  configManager.readBool("sntpEnabled") ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "sntpServer: %s\r\n",
                   sntp_getservername(0));
   pos += snprintf(status + pos, bufferSize - pos, "sntpTimezone: %s\r\n",
@@ -406,7 +393,7 @@ char* status_string() {
       snprintf(status + pos, bufferSize - pos, "pwm_value: %u\r\n", get_pwm());
 
 #if defined(EBUS_INTERNAL)
-  String ebusAddress = readConfigValue("ebusAddress", "ff");
+  String ebusAddress = configManager.readString("ebusAddress", "ff");
   pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
                   ebusAddress.c_str());
   pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %i us\r\n",
@@ -416,9 +403,9 @@ char* status_string() {
 
   pos +=
       snprintf(status + pos, bufferSize - pos, "inquiry_of_existence: %s\r\n",
-               readConfigBool("inquiryExistPrm") ? "true" : "false");
+               configManager.readBool("inquiryExistPrm") ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "scan_on_startup: %s\r\n",
-                  readConfigBool("scanOnStartPrm") ? "true" : "false");
+                  configManager.readBool("scanOnStartPrm") ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos,
                   "first_command_after_start: %i\r\n",
                   configManager.readInt("firstCmdAfterSt", 10));
@@ -432,8 +419,8 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.isConnected() ? "true" : "false");
 
-  String mqttServerValue = readConfigValue("mqttServer");
-  String mqttUserValue = readConfigValue("mqttUser");
+  String mqttServerValue = configManager.readString("mqttServer");
+  String mqttUserValue = configManager.readString("mqttUser");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_server: %s\r\n",
                   mqttServerValue.c_str());
   pos +=
@@ -527,23 +514,23 @@ const std::string getStatusJson() {
 // SNTP
 #if defined(EBUS_INTERNAL)
   JsonObject SNTP = doc["SNTP"].to<JsonObject>();
-  SNTP["Enabled"] = readConfigBool("sntpEnabled");
-  SNTP["Server"] = readConfigValue("sntpServer", sntp_getservername(0));
-  SNTP["Timezone"] = readConfigValue("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
+  SNTP["Enabled"] = configManager.readBool("sntpEnabled");
+  SNTP["Server"] = configManager.readString("sntpServer", sntp_getservername(0));
+  SNTP["Timezone"] = configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
 #endif
 
   // eBUS
   JsonObject eBUS = doc["eBUS"].to<JsonObject>();
   eBUS["PWM"] = get_pwm();
 #if defined(EBUS_INTERNAL)
-  eBUS["Ebus_Address"] = readConfigValue("ebusAddress", "ff");
+  eBUS["Ebus_Address"] = configManager.readString("ebusAddress", "ff");
   eBUS["BusIsr_Window"] = configManager.readInt("busisrWindow", 4300);
   eBUS["BusIsr_Offset"] = configManager.readInt("busisrOffset", 80);
 
   // Schedule
   JsonObject Schedule = doc["Schedule"].to<JsonObject>();
-  Schedule["Inquiry_Of_Existence"] = readConfigBool("inquiryExistPrm");
-  Schedule["Scan_On_Startup"] = readConfigBool("scanOnStartPrm");
+  Schedule["Inquiry_Of_Existence"] = configManager.readBool("inquiryExistPrm");
+  Schedule["Scan_On_Startup"] = configManager.readBool("scanOnStartPrm");
   Schedule["First_Command_After_Start"] =
       configManager.readInt("firstCmdAfterSt", 10);
   Schedule["Active_Commands"] = store.getActiveCommands();
@@ -552,8 +539,8 @@ const std::string getStatusJson() {
   // MQTT
   JsonObject MQTT = doc["MQTT"].to<JsonObject>();
   MQTT["Enabled"] = mqtt.isEnabled();
-  MQTT["Server"] = readConfigValue("mqttServer");
-  MQTT["User"] = readConfigValue("mqttUser");
+  MQTT["Server"] = configManager.readString("mqttServer");
+  MQTT["User"] = configManager.readString("mqttUser");
   MQTT["Connected"] = mqtt.isConnected();
   MQTT["Publish_Counter"] = schedule.getPublishCounter();
   MQTT["Publish_Timing"] = schedule.getPublishTiming();
@@ -631,18 +618,18 @@ void setup() {
   set_pwm();
 
 #if defined(EBUS_INTERNAL)
-  if (readConfigBool("sntpEnabled")) {
-    String sntpServerValue = readConfigValue("sntpServer", DEFAULT_SNTP_SERVER);
+  if (configManager.readBool("sntpEnabled")) {
+    String sntpServerValue = configManager.readString("sntpServer", DEFAULT_SNTP_SERVER);
     String sntpTimezoneValue =
-        readConfigValue("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
+        configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
     initSNTP(sntpServerValue.c_str());
     setTimezone(sntpTimezoneValue.c_str());
   }
 
-  String mqttServerValue = readConfigValue("mqttServer");
-  String mqttUserValue = readConfigValue("mqttUser");
-  String mqttPassValue = readConfigValue("mqttPass");
-  mqtt.setEnabled(readConfigBool("mqttEnabled"));
+  String mqttServerValue = configManager.readString("mqttServer");
+  String mqttUserValue = configManager.readString("mqttUser");
+  String mqttPassValue = configManager.readString("mqttPass");
+  mqtt.setEnabled(configManager.readBool("mqttEnabled"));
   mqtt.setup(unique_id);
   mqtt.setServer(mqttServerValue.c_str(), 1883);
   mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
@@ -651,9 +638,9 @@ void setup() {
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
   mqttha.setWillTopic(mqtt.getWillTopic());
-  mqttha.setEnabled(readConfigBool("haEnabledParam"));
+  mqttha.setEnabled(configManager.readBool("haEnabledParam"));
 
-  mqttha.setThingName(readConfigValue("thingName", "esp-eBus").c_str());
+  mqttha.setThingName(configManager.readString("thingName", "esp-eBus").c_str());
   mqttha.setThingModel(ESP.getChipModel());
   mqttha.setThingModelId("Revision: " + std::to_string(ESP.getChipRevision()));
   mqttha.setThingManufacturer("danman.eu");
@@ -678,20 +665,20 @@ void setup() {
   enableTX();
 
 #if defined(EBUS_INTERNAL)
-  String ebusAddress = readConfigValue("ebusAddress", "ff");
+  String ebusAddress = configManager.readString("ebusAddress", "ff");
   ebus::handler->setSourceAddress(
       uint8_t(std::strtoul(ebusAddress.c_str(), nullptr, 16)));
   ebus::setBusIsrWindow(configManager.readInt("busisrWindow", 4300));
   ebus::setBusIsrOffset(configManager.readInt("busisrOffset", 80));
 
   deviceManager.setEbusHandler(ebus::handler);
-  deviceManager.setScanOnStartup(readConfigBool("scanOnStartPrm"));
+  deviceManager.setScanOnStartup(configManager.readBool("scanOnStartPrm"));
 
-  schedule.setSendInquiryOfExistence(readConfigBool("inquiryExistPrm"));
+  schedule.setSendInquiryOfExistence(configManager.readBool("inquiryExistPrm"));
   schedule.setFirstCommandAfterStart(
       configManager.readInt("firstCmdAfterSt", 10));
-  schedule.setPublishCounter(readConfigBool("mqttPublishCnt"));
-  schedule.setPublishTiming(readConfigBool("mqttPublishTmg"));
+  schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
+  schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
   schedule.start(ebus::request, ebus::handler);
 
   ebus::serviceRunner->start();

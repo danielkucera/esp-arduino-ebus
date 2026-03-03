@@ -17,7 +17,10 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   configManager_ = configManager;
   instance_ = this;
 
-  String apPassword = readConfigValue("apModePassword", kDefaultApPassword);
+  String apPassword = configManager_ != nullptr
+                          ? configManager_->readString("apModePassword",
+                                                       kDefaultApPassword)
+                          : String(kDefaultApPassword);
   if (apPassword.isEmpty()) apPassword = kDefaultApPassword;
 
   WiFi.onEvent(onWiFiEventStatic);
@@ -54,8 +57,12 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
     logger.info("Captive DNS task started");
   }
 
-  String staSsid = readConfigValue("wifiSsid", "ebus-test");
-  String staPass = readConfigValue("wifiPassword", "lectronz");
+  String staSsid = configManager_ != nullptr
+                       ? configManager_->readString("wifiSsid", "ebus-test")
+                       : String("ebus-test");
+  String staPass = configManager_ != nullptr
+                       ? configManager_->readString("wifiPassword", "lectronz")
+                       : String("lectronz");
   staConfigured_ = staSsid.length() > 0;
 
   if (!staConfigured_) {
@@ -103,19 +110,19 @@ void WifiNetworkManager::dnsTaskLoop() {
 }
 
 bool WifiNetworkManager::isStaticIpEnabled() const {
-  return readConfigBool("staticIPEnabled");
+  return configManager_ != nullptr && configManager_->readBool("staticIPEnabled");
 }
 
 String WifiNetworkManager::getConfiguredIpAddress() const {
-  return readConfigValue("ipAddress");
+  return configManager_ != nullptr ? configManager_->readString("ipAddress") : "";
 }
 
 String WifiNetworkManager::getConfiguredGateway() const {
-  return readConfigValue("gateway");
+  return configManager_ != nullptr ? configManager_->readString("gateway") : "";
 }
 
 String WifiNetworkManager::getConfiguredNetmask() const {
-  return readConfigValue("netmask");
+  return configManager_ != nullptr ? configManager_->readString("netmask") : "";
 }
 
 void WifiNetworkManager::onWiFiEventStatic(WiFiEvent_t event,
@@ -160,21 +167,4 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
   } else {
     logger.warn("Invalid static IP config, falling back to DHCP");
   }
-}
-
-bool WifiNetworkManager::readConfigBool(const char* key, bool fallback) const {
-  if (configManager_ == nullptr) return fallback;
-  return parseStoredBool(
-      configManager_->readString(key, fallback ? "selected" : ""));
-}
-
-String WifiNetworkManager::readConfigValue(const char* key,
-                                           const char* fallback) const {
-  if (configManager_ == nullptr) return String(fallback);
-  return configManager_->readString(key, fallback);
-}
-
-bool WifiNetworkManager::parseStoredBool(const String& value) {
-  return value == "selected" || value == "true" || value == "1" ||
-         value == "on";
 }

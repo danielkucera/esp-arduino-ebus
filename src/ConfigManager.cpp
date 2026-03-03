@@ -32,6 +32,11 @@ bool writeString(nvs_handle_t handle, const char* key, const String& value,
   return true;
 }
 
+bool parseStoredBool(const String& value) {
+  return value == "selected" || value == "true" || value == "1" ||
+         value == "on";
+}
+
 void fillJsonFromNvs(JsonDocument& doc, nvs_handle_t handle) {
   JsonObject jConfig = doc["config"].to<JsonObject>();
   jConfig["thingName"] = readString(handle, "thingName", "esp-eBus");
@@ -120,6 +125,10 @@ int32_t ConfigManager::readInt(const char* key, int32_t fallback) {
   const long parsed = std::strtol(strValue.c_str(), &end, 10);
   if (end == strValue.c_str() || *end != '\0') return fallback;
   return static_cast<int32_t>(parsed);
+}
+
+bool ConfigManager::readBool(const char* key, bool fallback) {
+  return parseStoredBool(readString(key, fallback ? "selected" : ""));
 }
 
 bool ConfigManager::writeString(const char* key, const String& value) {
