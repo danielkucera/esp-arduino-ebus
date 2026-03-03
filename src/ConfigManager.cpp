@@ -1,6 +1,7 @@
 #include "ConfigManager.hpp"
 
 #include <ArduinoJson.h>
+#include <cstdio>
 #include <cstdlib>
 #include <esp_err.h>
 #include <nvs.h>
@@ -37,42 +38,86 @@ bool parseStoredBool(const String& value) {
          value == "on";
 }
 
+bool readEntryValueAsString(nvs_handle_t handle, const nvs_entry_info_t& info,
+                            String& out) {
+  switch (info.type) {
+    case NVS_TYPE_STR: {
+      out = readString(handle, info.key);
+      return true;
+    }
+    case NVS_TYPE_I8: {
+      int8_t value = 0;
+      if (nvs_get_i8(handle, info.key, &value) != ESP_OK) return false;
+      out = String(value);
+      return true;
+    }
+    case NVS_TYPE_U8: {
+      uint8_t value = 0;
+      if (nvs_get_u8(handle, info.key, &value) != ESP_OK) return false;
+      out = String(value);
+      return true;
+    }
+    case NVS_TYPE_I16: {
+      int16_t value = 0;
+      if (nvs_get_i16(handle, info.key, &value) != ESP_OK) return false;
+      out = String(value);
+      return true;
+    }
+    case NVS_TYPE_U16: {
+      uint16_t value = 0;
+      if (nvs_get_u16(handle, info.key, &value) != ESP_OK) return false;
+      out = String(value);
+      return true;
+    }
+    case NVS_TYPE_I32: {
+      int32_t value = 0;
+      if (nvs_get_i32(handle, info.key, &value) != ESP_OK) return false;
+      out = String(value);
+      return true;
+    }
+    case NVS_TYPE_U32: {
+      uint32_t value = 0;
+      if (nvs_get_u32(handle, info.key, &value) != ESP_OK) return false;
+      out = String(value);
+      return true;
+    }
+    case NVS_TYPE_I64: {
+      int64_t value = 0;
+      if (nvs_get_i64(handle, info.key, &value) != ESP_OK) return false;
+      char buffer[32];
+      snprintf(buffer, sizeof(buffer), "%lld", static_cast<long long>(value));
+      out = String(buffer);
+      return true;
+    }
+    case NVS_TYPE_U64: {
+      uint64_t value = 0;
+      if (nvs_get_u64(handle, info.key, &value) != ESP_OK) return false;
+      char buffer[32];
+      snprintf(buffer, sizeof(buffer), "%llu",
+               static_cast<unsigned long long>(value));
+      out = String(buffer);
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
 void fillJsonFromNvs(JsonDocument& doc, nvs_handle_t handle) {
   JsonObject jConfig = doc["config"].to<JsonObject>();
-  jConfig["thingName"] = readString(handle, "thingName", "esp-eBus");
-  jConfig["apModePassword"] = readString(handle, "apModePassword", "ebusebus");
-  jConfig["apTimeout"] = readString(handle, "apTimeout", "30");
+  nvs_iterator_t it = nvs_entry_find("nvs", kNvsNamespace, NVS_TYPE_ANY);
+  while (it != nullptr) {
+    nvs_entry_info_t info{};
+    nvs_entry_info(it, &info);
 
-  jConfig["wifiSsid"] = readString(handle, "wifiSsid");
-  jConfig["wifiPassword"] = readString(handle, "wifiPassword");
+    String value;
+    if (readEntryValueAsString(handle, info, value)) {
+      jConfig[info.key] = value;
+    }
 
-  jConfig["staticIPEnabled"] = readString(handle, "staticIPEnabled");
-  jConfig["ipAddress"] = readString(handle, "ipAddress");
-  jConfig["gateway"] = readString(handle, "gateway");
-  jConfig["netmask"] = readString(handle, "netmask");
-
-  jConfig["sntpEnabled"] = readString(handle, "sntpEnabled");
-  jConfig["sntpServer"] = readString(handle, "sntpServer", "pool.ntp.org");
-  jConfig["sntpTimezone"] = readString(handle, "sntpTimezone", "UTC+1");
-
-  jConfig["pwmValue"] = readString(handle, "pwmValue", "130");
-  jConfig["ebusAddress"] = readString(handle, "ebusAddress", "ff");
-  jConfig["busisrWindow"] = readString(handle, "busisrWindow");
-  jConfig["busisrOffset"] = readString(handle, "busisrOffset");
-
-  jConfig["inquiryExistPrm"] = readString(handle, "inquiryExistPrm");
-  jConfig["scanOnStartPrm"] = readString(handle, "scanOnStartPrm");
-  jConfig["firstCmdAfterSt"] = readString(handle, "firstCmdAfterSt");
-
-  jConfig["mqttEnabled"] = readString(handle, "mqttEnabled");
-  jConfig["mqttServer"] = readString(handle, "mqttServer");
-  jConfig["mqttUser"] = readString(handle, "mqttUser");
-  jConfig["mqttPass"] = readString(handle, "mqttPass");
-  jConfig["mqttPublishCnt"] = readString(handle, "mqttPublishCnt");
-  jConfig["mqttPublishTmg"] = readString(handle, "mqttPublishTmg");
-
-  jConfig["haEnabledParam"] = readString(handle, "haEnabledParam");
-
+    it = nvs_entry_next(it);
+  }
+  nvs_release_iterator(it);
 }
 
 bool writeFromFlatPayload(JsonDocument& bodyDoc, nvs_handle_t handle, String& error,

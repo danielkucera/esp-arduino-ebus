@@ -30,11 +30,11 @@
     <fieldset>
         <legend>General</legend>
         <div><label for="thingName">Thing Name</label></div>
-        <div><input id="thingName" type="text" class="config"></div>
+        <div><input id="thingName" type="text" class="config" value="esp-eBus"></div>
         <div><label for="apModePassword">AP Mode Password</label></div>
-        <div><input id="apModePassword" type="password" class="config"></div>
+        <div><input id="apModePassword" type="password" class="config" value="ebusebus"></div>
         <div><label for="apTimeout">AP Timeout (s)</label></div>
-        <div><input id="apTimeout" type="number" min="5" max="1200" step="1" class="config"></div>
+        <div><input id="apTimeout" type="number" min="5" max="1200" step="1" class="config" value="30"></div>
     </fieldset>
 
     <fieldset>
@@ -51,9 +51,9 @@
     <fieldset>
         <legend>Adapter</legend>
         <div><label for="pwmValue">PWM</label></div>
-        <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config"></div>
+        <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config" value="130"></div>
         <div><label for="ebusAddress">eBUS Address (hex, e.g. ff)</label></div>
-        <div><input id="ebusAddress" type="text" class="config"></div>
+        <div><input id="ebusAddress" type="text" class="config" value="ff"></div>
         <div><label for="busisrWindow">Bus ISR Window (us)</label></div>
         <div><input id="busisrWindow" type="number" min="4250" max="4500" step="1" class="config"></div>
         <div><label for="busisrOffset">Bus ISR Offset (us)</label></div>
@@ -64,9 +64,9 @@
         <legend>SNTP</legend>
         <div><label><input id="sntpEnabled" type="checkbox" class="config"> SNTP Enabled</label></div>
         <div><label for="sntpServer">SNTP Server</label></div>
-        <div><input id="sntpServer" type="text" class="config"></div>
+        <div><input id="sntpServer" type="text" class="config" value="pool.ntp.org"></div>
         <div><label for="sntpTimezone">SNTP Timezone</label></div>
-        <div><input id="sntpTimezone" type="text" class="config"></div>
+        <div><input id="sntpTimezone" type="text" class="config" value="UTC0"></div>
     </fieldset>
 
     <fieldset>
@@ -75,7 +75,7 @@
         </div>
         <div><label><input id="scanOnStartPrm" type="checkbox" class="config"> Scan On Startup</label></div>
         <div><label for="firstCmdAfterSt">First Command After Start (s)</label></div>
-        <div><input id="firstCmdAfterSt" type="number" min="5" max="60" step="1" class="config"></div>
+        <div><input id="firstCmdAfterSt" type="number" min="5" max="60" step="1" class="config" value="10"></div>
     </fieldset>
 
     <fieldset>
@@ -124,8 +124,20 @@
             return el.value.trim();
         }
 
+        function resetFieldsToDefaultValues() {
+            const elements = document.getElementsByClassName("config");
+            for (const el of elements) {
+                if (el.type === 'checkbox') {
+                    el.checked = el.defaultChecked;
+                } else {
+                    el.value = el.defaultValue;
+                }
+            }
+        }
+
         async function loadConfig() {
             setStatus('Loading...');
+            resetFieldsToDefaultValues();
             try {
                 const res = await fetch('/api/v1/config');
                 if (!res.ok) throw new Error('Load failed');
