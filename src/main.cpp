@@ -2,7 +2,6 @@
 
 #include <ArduinoJson.h>
 #include <IotWebConf.h>
-#include <Preferences.h>
 #include <esp_efuse.h>
 
 #if defined(EBUS_INTERNAL)
@@ -33,7 +32,6 @@
 TaskHandle_t Task1;
 #endif
 
-Preferences preferences;
 ConfigManager configManager;
 UpgradeManager upgradeManager;
 
@@ -267,7 +265,7 @@ inline void enableTX() {
 }
 
 void set_pwm() {
-  int value = atoi(configManager.readString("pwmValue", "130").c_str());
+  int value = configManager.readInt("pwmValue", 130);
 #if defined(PWM_PIN)
   ledcWrite(PWM_CHANNEL, value);
 #if defined(EBUS_INTERNAL)
@@ -337,7 +335,7 @@ void check_reset() {
   uint32_t resetStart = millis();
   while (digitalRead(RESET_PIN) == 0) {
     if (millis() > resetStart + RESET_MS) {
-      preferences.clear();
+      configManager.resetConfig();
       restart();
     }
   }
@@ -492,8 +490,7 @@ bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
 }
 
 void saveParamsCallback() {
-  set_pwm(atoi(pwm_value));
-  pwm = get_pwm();
+  set_pwm();
 
 #if defined(EBUS_INTERNAL)
   ebus::handler->setSourceAddress(
@@ -778,8 +775,6 @@ void setup() {
   DebugSer.begin(115200);
   DebugSer.setDebugOutput(true);
 
-  preferences.begin("esp-ebus", false);
-
   check_reset();
 
   reset_code = rtc_get_reset_reason(0);
@@ -853,8 +848,8 @@ void setup() {
   iotWebConf.setStatusPin(STATUS_LED_PIN);
 #endif
 
-  if (preferences.getBool("firstboot", true)) {
-    preferences.putBool("firstboot", false);
+  if (configManager.readInt("firstboot", 1)) {
+    configManager.writeString("firstboot", "0");
 
     iotWebConf.init();
     strncpy(iotWebConf.getApPasswordParameter()->valueBuffer,
@@ -886,7 +881,7 @@ void setup() {
 #endif
   });
 
-  set_pwm(atoi(pwm_value));
+  set_pwm();
 
   while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
     iotWebConf.doLoop();

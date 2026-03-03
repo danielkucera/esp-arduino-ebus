@@ -1,6 +1,7 @@
 #include "ConfigManager.hpp"
 
 #include <ArduinoJson.h>
+#include <cstdlib>
 #include <esp_err.h>
 #include <nvs.h>
 #include <vector>
@@ -86,6 +87,69 @@ bool writeFromFlatPayload(JsonDocument& bodyDoc, nvs_handle_t handle, String& er
 }
 
 }  // namespace
+
+String ConfigManager::readString(const char* key, const char* fallback) {
+  nvs_handle_t handle = 0;
+  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
+  if (openErr != ESP_OK) return String(fallback);
+
+  String value = ::readString(handle, key, fallback);
+  nvs_close(handle);
+  return value;
+}
+
+int32_t ConfigManager::readInt(const char* key, int32_t fallback) {
+  nvs_handle_t handle = 0;
+  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
+  if (openErr != ESP_OK) return fallback;
+
+  int32_t value = fallback;
+  esp_err_t err = nvs_get_i32(handle, key, &value);
+  if (err == ESP_OK) {
+    nvs_close(handle);
+    return value;
+  }
+
+  // Backward compatibility for values stored as strings.
+  String strValue = ::readString(handle, key);
+  nvs_close(handle);
+  if (strValue.isEmpty()) return fallback;
+
+  char* end = nullptr;
+  const long parsed = std::strtol(strValue.c_str(), &end, 10);
+  if (end == strValue.c_str() || *end != '\0') return fallback;
+  return static_cast<int32_t>(parsed);
+}
+
+bool ConfigManager::writeString(const char* key, const String& value) {
+  nvs_handle_t handle = 0;
+  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
+  if (openErr != ESP_OK) return false;
+
+  String error;
+  const bool ok = ::writeString(handle, key, value, error);
+  if (!ok) {
+    nvs_close(handle);
+    return false;
+  }
+
+  const esp_err_t commitErr = nvs_commit(handle);
+  nvs_close(handle);
+  return commitErr == ESP_OK;
+}
+
+void ConfigManager::resetConfig() {
+  nvs_handle_t handle = 0;
+  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
+  if (openErr != ESP_OK) return;
+
+  const esp_err_t eraseErr = nvs_erase_all(handle);
+  if (eraseErr == ESP_OK) {
+    nvs_commit(handle);
+  }
+
+  nvs_close(handle);
+}
 
 void ConfigManager::begin(WebServer* server) {
   server_ = server;
