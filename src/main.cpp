@@ -588,6 +588,8 @@ void setup() {
   DebugSer.begin(115200);
   DebugSer.setDebugOutput(true);
 
+  logger.info("Starting esp-ebus adapter version " AUTO_VERSION);
+
   check_reset();
 
   reset_code = rtc_get_reset_reason(0);
