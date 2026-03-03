@@ -22,3 +22,4 @@ int DEBUG_LOG_IMPL(const char* format, ...);
 void restart();
 void wdt_feed();
 const std::string getStatusJson();
+bool isCaptivePortalActive();

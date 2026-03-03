@@ -52,9 +52,8 @@ WifiNetworkManager wifiNetworkManager;
 #define DNS_LEN 255
 #define NUMBER_LEN 8
 
-#define DEFAULT_APMODE_PASS "ebusebus"
-#define DEFAULT_AP "ebus-test"
-#define DEFAULT_PASS "lectronz"
+#define DEFAULT_AP "esp-eBus"
+#define DEFAULT_PASS "ebusebus"
 
 #define DUMMY_STATIC_IP "192.168.1.180"
 #define DUMMY_GATEWAY "192.168.1.1"
@@ -594,6 +593,8 @@ const std::string getStatusJson() {
   return payload;
 }
 
+bool isCaptivePortalActive() { return wifiNetworkManager.isCaptivePortalActive(); }
+
 bool handleStatusServerRequests() {
   if (!statusServer.hasClient()) return false;
 
@@ -638,7 +639,7 @@ void setup() {
   SetupHttpHandlers();
   configManager.begin(&configServer);
   upgradeManager.begin(&configServer);
-  wifiNetworkManager.begin(&configManager, HOSTNAME, "esp-eBus", "ebusebus");
+  wifiNetworkManager.begin(&configManager, HOSTNAME, DEFAULT_AP, DEFAULT_PASS);
   configServer.begin();
   upgradeManager.setPreUpgradeHook([]() {
 #if defined(EBUS_INTERNAL)

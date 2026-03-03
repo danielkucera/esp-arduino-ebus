@@ -278,8 +278,14 @@ void handleLogs() { configServer.send(200, "text/plain", logger.getLogs()); }
 
 void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
-  configServer.onNotFound(
-      []() { configServer.send(404, "text/plain", "Not found"); });
+  configServer.onNotFound([]() {
+    if (isCaptivePortalActive()) {
+      configServer.sendHeader("Location", "/config", true);
+      configServer.send(302, "text/plain", "");
+      return;
+    }
+    configServer.send(404, "text/plain", "Not found");
+  });
 
   // common
   configServer.on("/common.css",

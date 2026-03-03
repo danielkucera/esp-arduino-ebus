@@ -14,6 +14,7 @@
         <button id="btnHome">Home</button>
         <button id="btnLoad">Load</button>
         <button id="btnSave" class="apply">Save</button>
+        <button id="btnRestart" class="danger">Restart to Apply Changes</button>
         <button id="btnReset" class="danger">Reset Config</button>
         <span id="status">...</span>
     </div>
@@ -100,6 +101,7 @@
         document.getElementById('btnHome').addEventListener('click', handleHome);
         document.getElementById('btnLoad').addEventListener('click', loadConfig);
         document.getElementById('btnSave').addEventListener('click', saveConfig);
+        document.getElementById('btnRestart').addEventListener('click', restartDevice);
         document.getElementById('btnReset').addEventListener('click', resetConfig);
 
         function setField(id, value) {
@@ -176,6 +178,19 @@
                 if (res.ok) await loadConfig();
             } catch (err) {
                 setStatus('Reset failed');
+                console.error(err);
+            }
+        }
+
+        async function restartDevice() {
+            if (!confirm('Restart device now?')) return;
+            setStatus('Restarting...');
+            try {
+                const res = await fetch('/restart');
+                const text = await res.text();
+                setStatus(res.ok ? text : `Error: ${text}`);
+            } catch (err) {
+                setStatus('Restart failed');
                 console.error(err);
             }
         }
