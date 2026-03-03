@@ -16,6 +16,8 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
 
   configManager_ = configManager;
   instance_ = this;
+  initStatusLed();
+  setStatusLedMode(StatusLedMode::SlowBlink);
 
   String apPassword = configManager_ != nullptr
                           ? configManager_->readString("apModePassword",
@@ -82,6 +84,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
     return;
   }
   logger.info("Connecting STA to SSID: " + staSsid);
+  setStatusLedMode(StatusLedMode::SlowBlink);
   esp_wifi_connect();
 }
 
@@ -109,6 +112,47 @@ void WifiNetworkManager::dnsTaskLoop() {
   }
 }
 
+void WifiNetworkManager::statusLedTaskEntry(void* arg) {
+  WifiNetworkManager* self = static_cast<WifiNetworkManager*>(arg);
+  self->statusLedTaskLoop();
+}
+
+void WifiNetworkManager::statusLedTaskLoop() {
+#if defined(STATUS_LED_PIN)
+  bool ledOn = false;
+  while (true) {
+    if (statusLedMode_ == StatusLedMode::SolidOn) {
+      digitalWrite(STATUS_LED_PIN, HIGH);
+      vTaskDelay(pdMS_TO_TICKS(200));
+      continue;
+    }
+
+    ledOn = !ledOn;
+    digitalWrite(STATUS_LED_PIN, ledOn ? HIGH : LOW);
+    vTaskDelay(pdMS_TO_TICKS(700));
+  }
+#else
+  while (true) {
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+#endif
+}
+
+void WifiNetworkManager::initStatusLed() {
+#if defined(STATUS_LED_PIN)
+  pinMode(STATUS_LED_PIN, OUTPUT);
+  digitalWrite(STATUS_LED_PIN, LOW);
+  if (statusLedTaskHandle_ == nullptr) {
+    xTaskCreate(statusLedTaskEntry, "status_led_task", 2048, this, 1,
+                &statusLedTaskHandle_);
+  }
+#endif
+}
+
+void WifiNetworkManager::setStatusLedMode(StatusLedMode mode) {
+  statusLedMode_ = mode;
+}
+
 bool WifiNetworkManager::isStaticIpEnabled() const {
   return configManager_ != nullptr && configManager_->readBool("staticIPEnabled");
 }
@@ -133,6 +177,7 @@ void WifiNetworkManager::onWiFiEventStatic(WiFiEvent_t event,
 void WifiNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t) {
   if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
     staConnected_ = true;
+    setStatusLedMode(StatusLedMode::SolidOn);
     lastConnect_ = millis();
     ++reconnectCount_;
     logger.info("STA connected, IP: " + WiFi.localIP().toString());
@@ -141,6 +186,7 @@ void WifiNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t) {
     logger.info("Captive DNS stopped");
   } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
     staConnected_ = false;
+    setStatusLedMode(StatusLedMode::SlowBlink);
     logger.warn("STA disconnected, reconnecting");
     if (WiFi.getMode() != WIFI_MODE_STA) {
       dnsServer_.start(53, "*", WiFi.softAPIP());
