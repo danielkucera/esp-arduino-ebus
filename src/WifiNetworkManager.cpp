@@ -58,7 +58,7 @@ int WifiNetworkManager::getReconnectCount() const { return reconnectCount_; }
 bool WifiNetworkManager::isStaConnected() const { return staConnected_; }
 
 bool WifiNetworkManager::isCaptivePortalActive() const {
-  return WiFi.getMode() != WIFI_MODE_STA;
+  return !staConnected_ && WiFi.getMode() != WIFI_MODE_STA;
 }
 
 void WifiNetworkManager::dnsTaskEntry(void* arg) {
@@ -101,12 +101,13 @@ void WifiNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t) {
     staConnected_ = true;
     lastConnect_ = millis();
     ++reconnectCount_;
-    if (WiFi.getMode() == WIFI_MODE_APSTA) {
-      esp_wifi_set_mode(WIFI_MODE_STA);
-      dnsServer_.stop();
-    }
+    // Keep AP running in AP+STA mode; only disable captive DNS behavior.
+    dnsServer_.stop();
   } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
     staConnected_ = false;
+    if (WiFi.getMode() != WIFI_MODE_STA) {
+      dnsServer_.start(53, "*", WiFi.softAPIP());
+    }
     if (staConfigured_) esp_wifi_connect();
   }
 }

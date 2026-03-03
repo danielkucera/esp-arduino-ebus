@@ -53,7 +53,7 @@ WifiNetworkManager wifiNetworkManager;
 #define NUMBER_LEN 8
 
 #define DEFAULT_AP "esp-eBus"
-#define DEFAULT_PASS "ebusebus"
+#define DEFAULT_APMODE_PASS "ebusebus"
 
 #define DUMMY_STATIC_IP "192.168.1.180"
 #define DUMMY_GATEWAY "192.168.1.1"
@@ -635,7 +635,11 @@ void setup() {
   SetupHttpHandlers();
   configManager.begin(&configServer);
   upgradeManager.begin(&configServer);
-  wifiNetworkManager.begin(&configManager, HOSTNAME, DEFAULT_AP, DEFAULT_PASS);
+  String apModePassword =
+      readConfigValue("apModePassword", DEFAULT_APMODE_PASS);
+  if (apModePassword.isEmpty()) apModePassword = DEFAULT_APMODE_PASS;
+  wifiNetworkManager.begin(&configManager, HOSTNAME, DEFAULT_AP,
+                           apModePassword.c_str());
   configServer.begin();
   upgradeManager.setPreUpgradeHook([]() {
 #if defined(EBUS_INTERNAL)
