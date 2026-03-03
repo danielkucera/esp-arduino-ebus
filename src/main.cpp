@@ -4,12 +4,13 @@
 #include <WiFi.h>
 #include <esp_efuse.h>
 
+#include "Logger.hpp"
+
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
 
 #include "ClientManager.hpp"
 #include "DeviceManager.hpp"
-#include "Logger.hpp"
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
 #include "Schedule.hpp"
