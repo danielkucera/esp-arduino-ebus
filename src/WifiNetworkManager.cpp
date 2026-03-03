@@ -5,6 +5,7 @@
 #include <esp_wifi.h>
 
 #include "ConfigManager.hpp"
+#include "Logger.hpp"
 
 WifiNetworkManager* WifiNetworkManager::instance_ = nullptr;
 
@@ -24,7 +25,11 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   WiFi.setAutoReconnect(true);
   WiFi.setHostname(kDefaultHostname);
   WiFi.mode(WIFI_AP_STA);
-  MDNS.begin(kDefaultHostname);
+  if (MDNS.begin(kDefaultHostname)) {
+    logger.info("mDNS started: " + String(kDefaultHostname) + ".local");
+  } else {
+    logger.warn("mDNS start failed");
+  }
 
   wifi_config_t apConfig{};
   std::strncpy(reinterpret_cast<char*>(apConfig.ap.ssid), kDefaultApSsid,
@@ -36,17 +41,27 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   apConfig.ap.channel = rand() % 13 + 1;
   apConfig.ap.authmode = WIFI_AUTH_WPA2_PSK;
   if (apPassword.length() < 8) apConfig.ap.authmode = WIFI_AUTH_OPEN;
-  esp_wifi_set_config(WIFI_IF_AP, &apConfig);
+  if (esp_wifi_set_config(WIFI_IF_AP, &apConfig) != ESP_OK) {
+    logger.error("AP config apply failed");
+  } else {
+    logger.info("AP ready: " + String(kDefaultApSsid) + " (" +
+                String(apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2") +
+                ")");
+  }
   dnsServer_.start(53, "*", WiFi.softAPIP());
   if (dnsTaskHandle_ == nullptr) {
     xTaskCreate(dnsTaskEntry, "dns_task", 4096, this, 1, &dnsTaskHandle_);
+    logger.info("Captive DNS task started");
   }
 
   String staSsid = readConfigValue("wifiSsid", "ebus-test");
   String staPass = readConfigValue("wifiPassword", "lectronz");
   staConfigured_ = staSsid.length() > 0;
 
-  if (!staConfigured_) return;
+  if (!staConfigured_) {
+    logger.warn("STA credentials missing, AP-only mode");
+    return;
+  }
 
   configureStaticIpIfEnabled();
 
@@ -55,7 +70,11 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
                sizeof(staConfig.sta.ssid) - 1);
   std::strncpy(reinterpret_cast<char*>(staConfig.sta.password), staPass.c_str(),
                sizeof(staConfig.sta.password) - 1);
-  esp_wifi_set_config(WIFI_IF_STA, &staConfig);
+  if (esp_wifi_set_config(WIFI_IF_STA, &staConfig) != ESP_OK) {
+    logger.error("STA config apply failed");
+    return;
+  }
+  logger.info("Connecting STA to SSID: " + staSsid);
   esp_wifi_connect();
 }
 
@@ -109,26 +128,38 @@ void WifiNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t) {
     staConnected_ = true;
     lastConnect_ = millis();
     ++reconnectCount_;
+    logger.info("STA connected, IP: " + WiFi.localIP().toString());
     // Keep AP running in AP+STA mode; only disable captive DNS behavior.
     dnsServer_.stop();
+    logger.info("Captive DNS stopped");
   } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
     staConnected_ = false;
+    logger.warn("STA disconnected, reconnecting");
     if (WiFi.getMode() != WIFI_MODE_STA) {
       dnsServer_.start(53, "*", WiFi.softAPIP());
+      logger.info("Captive DNS started");
     }
     if (staConfigured_) esp_wifi_connect();
   }
 }
 
 void WifiNetworkManager::configureStaticIpIfEnabled() {
-  if (!isStaticIpEnabled()) return;
+  if (!isStaticIpEnabled()) {
+    logger.info("Static IP disabled, using DHCP");
+    return;
+  }
 
   bool valid = true;
   valid = valid && ipAddress_.fromString(getConfiguredIpAddress());
   valid = valid && netmask_.fromString(getConfiguredNetmask());
   valid = valid && gateway_.fromString(getConfiguredGateway());
 
-  if (valid) WiFi.config(ipAddress_, gateway_, netmask_);
+  if (valid) {
+    WiFi.config(ipAddress_, gateway_, netmask_);
+    logger.info("Static IP configured: " + ipAddress_.toString());
+  } else {
+    logger.warn("Invalid static IP config, falling back to DHCP");
+  }
 }
 
 bool WifiNetworkManager::readConfigBool(const char* key, bool fallback) const {
