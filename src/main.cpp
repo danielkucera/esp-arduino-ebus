@@ -19,7 +19,6 @@
 #include "client.hpp"
 #endif
 
-#include <ESPmDNS.h>
 #include <esp_task_wdt.h>
 
 #include "ConfigManager.hpp"
@@ -44,9 +43,6 @@ WifiNetworkManager wifiNetworkManager;
 #define PWM_CHANNEL 0
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
-
-// mDNS
-#define HOSTNAME "esp-eBus"
 
 #define DEFAULT_SNTP_SERVER "pool.ntp.org"
 #define DEFAULT_SNTP_TIMEZONE "UTC0"
@@ -674,7 +670,6 @@ void setup() {
   statusServer.begin();
 
   upgradeManager.beginEspOta();
-  MDNS.begin(HOSTNAME);
   wdt_start();
 
   last_comms = millis();

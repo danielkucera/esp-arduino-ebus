@@ -1,5 +1,6 @@
 #include "WifiNetworkManager.hpp"
 
+#include <ESPmDNS.h>
 #include <cstring>
 #include <esp_wifi.h>
 
@@ -23,6 +24,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   WiFi.setAutoReconnect(true);
   WiFi.setHostname(kDefaultHostname);
   WiFi.mode(WIFI_AP_STA);
+  MDNS.begin(kDefaultHostname);
 
   wifi_config_t apConfig{};
   std::strncpy(reinterpret_cast<char*>(apConfig.ap.ssid), kDefaultApSsid,
