@@ -34,8 +34,8 @@ void WifiNetworkManager::begin(ConfigManager* configManager, const char* hostnam
     xTaskCreate(dnsTaskEntry, "dns_task", 4096, this, 1, &dnsTaskHandle_);
   }
 
-  String staSsid = readConfigValue("wifiSsid");
-  String staPass = readConfigValue("wifiPassword");
+  String staSsid = readConfigValue("wifiSsid", "ebus-test");
+  String staPass = readConfigValue("wifiPassword", "lectronz");
   staConfigured_ = staSsid.length() > 0;
 
   if (!staConfigured_) return;
