@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration V2</title>
+    <link rel="stylesheet" href="common.css">
+</head>
+
+<body>
+    <h1>Configuration V2</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnLoad">Load</button>
+        <button id="btnSave" class="apply">Save</button>
+        <span id="status">...</span>
+    </div>
+
+    <fieldset>
+        <legend>Connection</legend>
+        <div><label><input id="staticIPEnabled" type="checkbox" class="config"> Static IP</label></div>
+        <div><input id="ipAddress" type="text" class="config" placeholder="IP address"></div>
+        <div><input id="gateway" type="text" class="config" placeholder="Gateway"></div>
+        <div><input id="netmask" type="text" class="config" placeholder="Netmask"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Adapter</legend>
+        <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config" placeholder="PWM"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>WiFi Credentials</legend>
+        <div><input id="wifiSsid" type="text" class="config" placeholder="WiFi SSID"></div>
+        <div><input id="wifiPassword" type="text" class="config" placeholder="WiFi Password"></div>
+        <div><input id="apPassword" type="text" class="config" placeholder="AP Mode Password"></div>
+    </fieldset>
+
+    <script src="common.js"></script>
+    <script>
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnLoad').addEventListener('click', loadConfig);
+        document.getElementById('btnSave').addEventListener('click', saveConfig);
+
+        function setField(id, value) {
+            const el = document.getElementById(id);
+            if (!el) {
+                console.warn(`Field not found: ${id}`);
+                return;
+            }
+            if (el.type === 'checkbox') el.checked = value == "true" ? true : false;
+            else el.value = value === undefined || value === null ? '' : value;
+        }
+
+        function getField(id) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            if (el.type === 'checkbox') return el.checked ? "true" : "false";
+            return el.value.trim();
+        }
+
+        async function loadConfig() {
+            setStatus('Loading...');
+            try {
+                const res = await fetch('/api/v1/config');
+                if (!res.ok) throw new Error('Load failed');
+                const cfg_obj = await res.json();
+                const cfg = cfg_obj.config || {};
+
+                for (const key in cfg) {
+                    if (cfg.hasOwnProperty(key)) {
+                        setField(key, cfg[key]);
+                    }
+                }
+                setStatus('Loaded');
+            } catch (err) {
+                setStatus('Load failed');
+                console.error(err);
+            }
+        }
+
+        async function saveConfig() {
+            const payload = {};
+
+            setStatus('Saving...');
+            const el = document.getElementsByClassName("config");
+
+            for (const e of el) {
+                if (e.type === 'checkbox') {
+                    e.value = e.checked ? "true" : "false";
+                }
+                payload[e.id] = e.value.trim();
+            }
+            
+            try {
+                const res = await fetch('/api/v1/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const text = await res.text();
+                setStatus(res.ok ? text : `Error: ${text}`);
+            } catch (err) {
+                setStatus('Save failed');
+                console.error(err);
+            }
+        }
+
+        loadConfig();
+    </script>
+</body>
+
+</html>
+
