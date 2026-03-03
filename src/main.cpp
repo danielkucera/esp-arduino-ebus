@@ -632,10 +632,6 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  if (configManager.readInt("firstboot", 1)) {
-    configManager.writeString("firstboot", "0");
-  }
-
   SetupHttpHandlers();
   configManager.begin(&configServer);
   upgradeManager.begin(&configServer);
