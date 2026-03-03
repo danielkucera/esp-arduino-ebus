@@ -16,6 +16,7 @@ class ConfigManager {
 
   void handleGet();
   void handleSet();
+  void handleReset();
 
   WebServer* server_ = nullptr;
 };

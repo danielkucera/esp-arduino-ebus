@@ -157,6 +157,7 @@ void ConfigManager::begin(WebServer* server) {
 
   server_->on("/api/v1/config", HTTP_GET, [this]() { handleGet(); });
   server_->on("/api/v1/config", HTTP_POST, [this]() { handleSet(); });
+  server_->on("/api/v1/config/reset", HTTP_POST, [this]() { handleReset(); });
 }
 
 String ConfigManager::readConfigJson() {
@@ -220,4 +221,9 @@ void ConfigManager::handleSet() {
   }
 
   server_->send(200, "text/plain", "Config saved to NVS");
+}
+
+void ConfigManager::handleReset() {
+  resetConfig();
+  server_->send(200, "text/plain", "Config reset");
 }

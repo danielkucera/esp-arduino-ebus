@@ -14,6 +14,7 @@
         <button id="btnHome">Home</button>
         <button id="btnLoad">Load</button>
         <button id="btnSave" class="apply">Save</button>
+        <button id="btnReset" class="danger">Reset Config</button>
         <span id="status">...</span>
     </div>
 
@@ -99,6 +100,7 @@
         document.getElementById('btnHome').addEventListener('click', handleHome);
         document.getElementById('btnLoad').addEventListener('click', loadConfig);
         document.getElementById('btnSave').addEventListener('click', saveConfig);
+        document.getElementById('btnReset').addEventListener('click', resetConfig);
 
         function setField(id, value) {
             const el = document.getElementById(id);
@@ -160,6 +162,20 @@
                 setStatus(res.ok ? text : `Error: ${text}`);
             } catch (err) {
                 setStatus('Save failed');
+                console.error(err);
+            }
+        }
+
+        async function resetConfig() {
+            if (!confirm('Reset all saved configuration values?')) return;
+            setStatus('Resetting...');
+            try {
+                const res = await fetch('/api/v1/config/reset', { method: 'POST' });
+                const text = await res.text();
+                setStatus(res.ok ? text : `Error: ${text}`);
+                if (res.ok) await loadConfig();
+            } catch (err) {
+                setStatus('Reset failed');
                 console.error(err);
             }
         }
