@@ -577,6 +577,8 @@ char* status_string() {
                   reconnect_count);
   pos +=
       snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
+  pos += snprintf(status + pos, bufferSize - pos, "bssid: %s\n",
+                  WiFi.BSSIDstr().c_str());
   pos +=
       snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n", free_heap);
   pos +=
