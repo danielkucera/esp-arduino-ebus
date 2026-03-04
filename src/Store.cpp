@@ -1,9 +1,33 @@
 #if defined(EBUS_INTERNAL)
 #include "Store.hpp"
 
+#include <Arduino.h>
 #include <Preferences.h>
 
 Store store;
+
+namespace {
+std::string printJson(cJSON* node, const char* fallback) {
+  char* printed = cJSON_PrintUnformatted(node);
+  std::string out = printed != nullptr ? printed : fallback;
+  if (printed != nullptr) cJSON_free(printed);
+  return out;
+}
+
+std::string jsonValueToString(cJSON* value) {
+  if (cJSON_IsString(value) && value->valuestring != nullptr)
+    return value->valuestring;
+  if (cJSON_IsBool(value)) return cJSON_IsTrue(value) ? "true" : "false";
+  if (cJSON_IsNumber(value)) {
+    String tmp(value->valuedouble, 6);
+    std::string s = tmp.c_str();
+    while (!s.empty() && s.back() == '0') s.pop_back();
+    if (!s.empty() && s.back() == '.') s.pop_back();
+    return s.empty() ? "0" : s;
+  }
+  return printJson(value, "null");
+}
+}  // namespace
 
 void Store::setDataUpdatedCallback(DataUpdatedCallback callback) {
   dataUpdatedCallback = std::move(callback);
@@ -14,7 +38,6 @@ void Store::setDataUpdatedLogCallback(DataUpdatedLogCallback callback) {
 }
 
 void Store::insertCommand(const Command& command) {
-  // Insert or update in commands map
   auto it = commands.find(command.getKey());
   if (it != commands.end())
     it->second = command;
@@ -40,7 +63,7 @@ int64_t Store::loadCommands() {
   preferences.begin("commands", true);
 
   int64_t bytes = preferences.getBytesLength("ebus");
-  if (bytes > 2) {  // 2 = empty json array "[]"
+  if (bytes > 2) {
     std::vector<char> buffer(bytes);
     bytes = preferences.getBytes("ebus", buffer.data(), bytes);
     if (bytes > 0) {
@@ -63,7 +86,7 @@ int64_t Store::saveCommands() const {
 
   std::string payload = serializeCommands();
   int64_t bytes = payload.size();
-  if (bytes > 2) {  // 2 = empty json array "[]"
+  if (bytes > 2) {
     bytes = preferences.putBytes("ebus", payload.data(), bytes);
     if (bytes == 0) bytes = -1;
   } else {
@@ -87,8 +110,8 @@ int64_t Store::wipeCommands() {
   return bytes;
 }
 
-const JsonDocument Store::getCommandsJsonDoc() const {
-  JsonDocument doc;
+const std::string Store::getCommandsJson() const {
+  cJSON* root = cJSON_CreateArray();
 
   std::vector<std::pair<std::string, Command>> orderedCommands(commands.begin(),
                                                                commands.end());
@@ -96,21 +119,16 @@ const JsonDocument Store::getCommandsJsonDoc() const {
   std::sort(orderedCommands.begin(), orderedCommands.end(),
             [](const std::pair<std::string, Command>& a,
                const std::pair<std::string, Command>& b) {
-              return a.first < b.first;  // Compare based on keys
+              return a.first < b.first;
             });
 
-  for (const auto& kv : orderedCommands) doc.add(kv.second.toJson());
+  for (const auto& kv : orderedCommands) {
+    cJSON* cmd = cJSON_Parse(kv.second.toJson().c_str());
+    if (cmd != nullptr) cJSON_AddItemToArray(root, cmd);
+  }
 
-  if (doc.isNull()) doc.to<JsonArray>();
-
-  doc.shrinkToFit();
-  return doc;
-}
-
-const std::string Store::getCommandsJson() const {
-  std::string payload;
-  JsonDocument doc = getCommandsJsonDoc();
-  serializeJson(doc, payload);
+  std::string payload = printJson(root, "[]");
+  cJSON_Delete(root);
   return payload;
 }
 
@@ -148,7 +166,7 @@ Command* Store::nextActiveCommand() {
   bool init = false;
   for (auto& kv : commands) {
     Command* cmd = &kv.second;
-    if (!cmd->getActive()) continue;  // Only consider active commands
+    if (!cmd->getActive()) continue;
     if (cmd->getLast() == 0) {
       next = cmd;
       init = true;
@@ -170,7 +188,7 @@ std::vector<Command*> Store::findPassiveCommands(
   std::vector<Command*> result;
   for (auto& kv : commands) {
     Command* cmd = &kv.second;
-    if (cmd->getActive()) continue;  // Skip active commands
+    if (cmd->getActive()) continue;
     if (ebus::contains(master, cmd->getReadCmd())) {
       result.push_back(cmd);
     }
@@ -190,53 +208,63 @@ std::vector<Command*> Store::updateData(Command* command,
     else
       cmd->setData(ebus::range(slave, cmd->getPosition(), cmd->getLength()));
 
-    dataUpdatedCallback(cmd->getName(), cmd->getValueJsonDoc());
+    std::string valueJson = cmd->getValueJson();
+    if (dataUpdatedCallback) dataUpdatedCallback(cmd->getName(), valueJson);
+
+    cJSON* valueDoc = cJSON_Parse(valueJson.c_str());
+    cJSON* valueNode =
+        valueDoc ? cJSON_GetObjectItemCaseSensitive(valueDoc, "value") : nullptr;
 
     std::string payload = " '" + ebus::to_string(cmd->getReadCmd()) + "' [" +
                           cmd->getName() + "] " +
                           ebus::to_string(cmd->getData()) + " -> " +
-                          cmd->getValueJsonDoc()["value"].as<std::string>() +
-                          " " + cmd->getUnit();
+                          jsonValueToString(valueNode) + " " + cmd->getUnit();
 
-    dataUpdatedLogCallback(payload.c_str());
+    if (valueDoc) cJSON_Delete(valueDoc);
+
+    if (dataUpdatedLogCallback) dataUpdatedLogCallback(payload.c_str());
   };
 
   if (command) {
     update(command, master, slave);
-    // Return a vector with just this command, but avoid heap allocation
     return {command};
   }
 
-  // Passive: potentially multiple matches
   std::vector<Command*> passiveCommands = findPassiveCommands(master);
   for (Command* cmd : passiveCommands) update(cmd, master, slave);
 
   return passiveCommands;
 }
 
-const JsonDocument Store::getValueFullJsonDoc(const Command* command) {
-  JsonDocument doc;
-
-  doc["key"] = command->getKey();
-  doc["name"] = command->getName();
-  doc["value"] = command->getValueJsonDoc()["value"];
-  doc["unit"] = command->getUnit();
-  doc["age"] = static_cast<uint32_t>((millis() - command->getLast()) / 1000);
-  doc["write"] = !command->getWriteCmd().empty();
-  doc["active"] = command->getActive();
-
-  doc.shrinkToFit();
-  return doc;
-}
-
 const std::string Store::getValueFullJson(const Command* command) {
-  std::string payload;
-  serializeJson(getValueFullJsonDoc(command), payload);
+  cJSON* doc = cJSON_CreateObject();
+
+  cJSON_AddStringToObject(doc, "key", command->getKey().c_str());
+  cJSON_AddStringToObject(doc, "name", command->getName().c_str());
+
+  cJSON* valueDoc = cJSON_Parse(command->getValueJson().c_str());
+  cJSON* valueNode =
+      valueDoc ? cJSON_GetObjectItemCaseSensitive(valueDoc, "value") : nullptr;
+  if (valueNode) {
+    cJSON_AddItemToObject(doc, "value", cJSON_Duplicate(valueNode, 1));
+  } else {
+    cJSON_AddNullToObject(doc, "value");
+  }
+  if (valueDoc) cJSON_Delete(valueDoc);
+
+  cJSON_AddStringToObject(doc, "unit", command->getUnit().c_str());
+  cJSON_AddNumberToObject(
+      doc, "age", static_cast<uint32_t>((millis() - command->getLast()) / 1000));
+  cJSON_AddBoolToObject(doc, "write", !command->getWriteCmd().empty());
+  cJSON_AddBoolToObject(doc, "active", command->getActive());
+
+  std::string payload = printJson(doc, "{}");
+  cJSON_Delete(doc);
   return payload;
 }
 
-const JsonDocument Store::getValuesJsonDoc() const {
-  JsonDocument doc;
+const std::string Store::getValuesJson() const {
+  cJSON* root = cJSON_CreateArray();
 
   std::vector<std::pair<std::string, Command>> orderedCommands(commands.begin(),
                                                                commands.end());
@@ -244,127 +272,112 @@ const JsonDocument Store::getValuesJsonDoc() const {
   std::sort(orderedCommands.begin(), orderedCommands.end(),
             [](const std::pair<std::string, Command>& a,
                const std::pair<std::string, Command>& b) {
-              return a.first < b.first;  // Compare based on keys
+              return a.first < b.first;
             });
 
-  for (const auto& kv : orderedCommands)
-    doc.add(getValueFullJsonDoc(&kv.second));
+  for (const auto& kv : orderedCommands) {
+    cJSON* value = cJSON_Parse(getValueFullJson(&kv.second).c_str());
+    if (value != nullptr) cJSON_AddItemToArray(root, value);
+  }
 
-  if (doc.isNull()) doc.to<JsonArray>();
-
-  doc.shrinkToFit();
-  return doc;
-}
-
-const std::string Store::getValuesJson() const {
-  std::string payload;
-  JsonDocument doc = getValuesJsonDoc();
-  serializeJson(doc, payload);
+  std::string payload = printJson(root, "[]");
+  cJSON_Delete(root);
   return payload;
 }
 
 const std::string Store::serializeCommands() const {
-  std::string payload;
-  JsonDocument doc;
+  cJSON* doc = cJSON_CreateArray();
 
-  // Define field names (order matters)
   std::vector<std::string> fields = {
-      // Command Fields
-      "key", "name", "read_cmd", "write_cmd", "active", "interval",
+      "key",          "name",          "read_cmd",      "write_cmd",
+      "active",       "interval",      "master",        "position",
+      "datatype",     "divider",       "min",           "max",
+      "digits",       "unit",          "ha",            "ha_component",
+      "ha_device_class", "ha_entity_category", "ha_mode", "ha_key_value_map",
+      "ha_default_key", "ha_payload_on", "ha_payload_off", "ha_state_class",
+      "ha_step"};
 
-      // Data Fields
-      "master", "position", "datatype", "divider", "min", "max", "digits",
-      "unit",
+  cJSON* header = cJSON_CreateArray();
+  for (const auto& field : fields)
+    cJSON_AddItemToArray(header, cJSON_CreateString(field.c_str()));
+  cJSON_AddItemToArray(doc, header);
 
-      // Home Assistant
-      "ha", "ha_component", "ha_device_class", "ha_entity_category", "ha_mode",
-      "ha_key_value_map", "ha_default_key", "ha_payload_on", "ha_payload_off",
-      "ha_state_class", "ha_step"};
-
-  // Add header as first entry
-  JsonArray header = doc.add<JsonArray>();
-  for (const auto& field : fields) header.add(field);
-
-  // Add each command as an array of values in the same order as header
   for (const auto& cmd : commands) {
-    const Command& command = cmd.second;
-    JsonArray array = doc.add<JsonArray>();
+    cJSON* cmdDoc = cJSON_Parse(cmd.second.toJson().c_str());
+    if (!cJSON_IsObject(cmdDoc)) {
+      if (cmdDoc) cJSON_Delete(cmdDoc);
+      continue;
+    }
 
-    // Command Fields
-    array.add(command.getKey());
-    array.add(command.getName());
-    array.add(ebus::to_string(command.getReadCmd()));
-    array.add(ebus::to_string(command.getWriteCmd()));
-    array.add(command.getActive());
-    array.add(command.getInterval());
+    cJSON* row = cJSON_CreateArray();
+    for (const auto& field : fields) {
+      cJSON* item = cJSON_GetObjectItemCaseSensitive(cmdDoc, field.c_str());
+      if (item)
+        cJSON_AddItemToArray(row, cJSON_Duplicate(item, 1));
+      else
+        cJSON_AddItemToArray(row, cJSON_CreateNull());
+    }
 
-    // Data Fields
-    array.add(command.getMaster());
-    array.add(command.getPosition());
-    array.add(ebus::datatype_2_string(command.getDatatype()));
-    array.add(command.getDivider());
-    array.add(command.getMin());
-    array.add(command.getMax());
-    array.add(command.getDigits());
-    array.add(command.getUnit());
-
-    // Home Assistant
-    array.add(command.getHA());
-    array.add(command.getHAComponent());
-    array.add(command.getHADeviceClass());
-    array.add(command.getHAEntityCategory());
-    array.add(command.getHAMode());
-
-    JsonObject ha_key_value_map = array.add<JsonObject>();
-    for (const auto& kv : command.getHAKeyValueMap())
-      ha_key_value_map[std::to_string(kv.first)] = kv.second;
-
-    array.add(command.getHADefaultKey());
-    array.add(command.getHAPayloadOn());
-    array.add(command.getHAPayloadOff());
-    array.add(command.getHAStateClass());
-    array.add(command.getHAStep());
+    cJSON_AddItemToArray(doc, row);
+    cJSON_Delete(cmdDoc);
   }
 
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
+  std::string payload = printJson(doc, "[]");
+  cJSON_Delete(doc);
   return payload;
 }
 
 void Store::deserializeCommands(const char* payload) {
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (!error) {
-    JsonArray array = doc.as<JsonArray>();
-    if (array.size() < 2) return;  // Need at least header + one command
-
-    // Read header
-    JsonArray header = array[0];
-    std::vector<std::string> fields;
-    for (JsonVariant v : header) fields.push_back(v.as<std::string>());
-
-    // Read each command
-    for (size_t i = 1; i < array.size(); ++i) {
-      JsonArray values = array[i];
-      JsonDocument tmpDoc;
-      for (size_t j = 0; j < fields.size() && j < values.size(); ++j) {
-        // Special handling for 'ha_key_value_map'
-        if (fields[j] == "ha_key_value_map") {
-          JsonObjectConst kvObject = values[j].as<JsonObject>();
-          JsonObject ha_key_value_map =
-              tmpDoc["ha_key_value_map"].to<JsonObject>();
-
-          for (JsonPairConst kv : kvObject)
-            ha_key_value_map[kv.key()] = kv.value();
-        } else {
-          tmpDoc[fields[j]] = values[j];
-        }
-      }
-      std::string evalError = Command::evaluate(tmpDoc);
-      if (evalError.empty()) insertCommand(Command::fromJson(tmpDoc));
-    }
+  cJSON* doc = cJSON_Parse(payload);
+  if (!cJSON_IsArray(doc)) {
+    if (doc) cJSON_Delete(doc);
+    return;
   }
+
+  int arraySize = cJSON_GetArraySize(doc);
+  if (arraySize < 2) {
+    cJSON_Delete(doc);
+    return;
+  }
+
+  cJSON* header = cJSON_GetArrayItem(doc, 0);
+  if (!cJSON_IsArray(header)) {
+    cJSON_Delete(doc);
+    return;
+  }
+
+  std::vector<std::string> fields;
+  int headerSize = cJSON_GetArraySize(header);
+  for (int i = 0; i < headerSize; ++i) {
+    cJSON* name = cJSON_GetArrayItem(header, i);
+    if (cJSON_IsString(name) && name->valuestring != nullptr)
+      fields.emplace_back(name->valuestring);
+    else
+      fields.emplace_back();
+  }
+
+  for (int i = 1; i < arraySize; ++i) {
+    cJSON* values = cJSON_GetArrayItem(doc, i);
+    if (!cJSON_IsArray(values)) continue;
+
+    cJSON* tmpDoc = cJSON_CreateObject();
+    int valueSize = cJSON_GetArraySize(values);
+    int limit = std::min(static_cast<int>(fields.size()), valueSize);
+
+    for (int j = 0; j < limit; ++j) {
+      cJSON* valueItem = cJSON_GetArrayItem(values, j);
+      if (fields[j].empty() || valueItem == nullptr) continue;
+      cJSON_AddItemToObject(tmpDoc, fields[j].c_str(),
+                            cJSON_Duplicate(valueItem, 1));
+    }
+
+    std::string evalError = Command::evaluate(tmpDoc);
+    if (evalError.empty()) insertCommand(Command::fromJson(tmpDoc));
+
+    cJSON_Delete(tmpDoc);
+  }
+
+  cJSON_Delete(doc);
 }
 
 #endif

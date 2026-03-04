@@ -1,8 +1,9 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <ArduinoJson.h>
+#include <Arduino.h>
 #include <Ebus.h>
+#include <cJSON.h>
 
 #include <functional>
 #include <string>
@@ -17,7 +18,7 @@
 // device is restarted.
 
 using DataUpdatedCallback =
-    std::function<void(const std::string& name, const JsonDocument& value)>;
+    std::function<void(const std::string& name, const std::string& valueJson)>;
 
 using DataUpdatedLogCallback = std::function<void(const String& message)>;
 
@@ -34,7 +35,6 @@ class Store {
   int64_t saveCommands() const;
   static int64_t wipeCommands();
 
-  const JsonDocument getCommandsJsonDoc() const;
   const std::string getCommandsJson() const;
 
   const std::vector<Command*> getCommands();
@@ -51,10 +51,8 @@ class Store {
                                    const std::vector<uint8_t>& master,
                                    const std::vector<uint8_t>& slave);
 
-  static const JsonDocument getValueFullJsonDoc(const Command* command);
   static const std::string getValueFullJson(const Command* command);
 
-  const JsonDocument getValuesJsonDoc() const;
   const std::string getValuesJson() const;
 
  private:

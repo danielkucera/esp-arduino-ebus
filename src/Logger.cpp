@@ -1,6 +1,8 @@
 #include "Logger.hpp"
 
-#include <ArduinoJson.h>
+#include <Arduino.h>
+#include <cJSON.h>
+#include <ctime>
 #include <cstring>
 
 namespace {
@@ -79,15 +81,14 @@ const String Logger::timestamp() {
 }
 
 void Logger::log(LogLevel level, String message) {
-  String payload;
-  JsonDocument doc;
-
-  doc["timestamp"] = timestamp();
-  doc["level"] = logLevelText(level);
-  doc["message"] = message;
-
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
+  cJSON* doc = cJSON_CreateObject();
+  cJSON_AddStringToObject(doc, "timestamp", timestamp().c_str());
+  cJSON_AddStringToObject(doc, "level", logLevelText(level));
+  cJSON_AddStringToObject(doc, "message", message.c_str());
+  char* printed = cJSON_PrintUnformatted(doc);
+  String payload = printed != nullptr ? String(printed) : String("{}");
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
 
   if (printQueue != nullptr) {
     char msg[kPrintMsgMaxLen]{};

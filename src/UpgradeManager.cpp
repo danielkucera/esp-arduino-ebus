@@ -1,6 +1,6 @@
 #include "UpgradeManager.hpp"
 
-#include <ArduinoJson.h>
+#include <cJSON.h>
 #include <esp_err.h>
 #include <esp_http_client.h>
 #include <esp_ota_ops.h>
@@ -144,11 +144,13 @@ void UpgradeManager::handleUploadFinished() {
 }
 
 void UpgradeManager::handleStatus() {
-  JsonDocument doc;
-  doc["ready"] = true;
-  doc["upgrading"] = false;
-  String payload;
-  serializeJson(doc, payload);
+  cJSON* doc = cJSON_CreateObject();
+  cJSON_AddBoolToObject(doc, "ready", true);
+  cJSON_AddBoolToObject(doc, "upgrading", false);
+  char* printed = cJSON_PrintUnformatted(doc);
+  String payload = printed != nullptr ? String(printed) : String("{}");
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
   server_->send(200, "application/json;charset=utf-8", payload);
 }
 
@@ -286,18 +288,22 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
 void UpgradeManager::handleHttpUpgrade() {
   preUpgradeDone_ = false;
 
-  JsonDocument doc;
-  DeserializationError jsonError = deserializeJson(doc, server_->arg("plain"));
-  if (jsonError) {
+  cJSON* doc = cJSON_Parse(server_->arg("plain").c_str());
+  if (doc == nullptr) {
     server_->send(400, "text/plain", "Invalid JSON payload");
     return;
   }
 
-  String url = doc["url"].as<String>();
+  cJSON* urlNode = cJSON_GetObjectItemCaseSensitive(doc, "url");
+  String url = (cJSON_IsString(urlNode) && urlNode->valuestring != nullptr)
+                   ? String(urlNode->valuestring)
+                   : String("");
   if (url.isEmpty()) {
+    cJSON_Delete(doc);
     server_->send(400, "text/plain", "Missing 'url'");
     return;
   }
+  cJSON_Delete(doc);
 
   prepareForUpgrade();
 

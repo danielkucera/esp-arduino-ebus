@@ -1,6 +1,8 @@
 #if defined(EBUS_INTERNAL)
 #include "Schedule.hpp"
 
+#include <Arduino.h>
+#include <algorithm>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
@@ -104,7 +106,7 @@ void Schedule::handleScan() {
     enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
 }
 
-void Schedule::handleScanAddresses(const JsonArrayConst& addresses) {
+void Schedule::handleScanAddresses(const std::vector<std::string>& addresses) {
   for (const auto& command : deviceManager.addressesScanCommands(addresses))
     enqueueCommand({Mode::scan, PRIO_SCAN, command, nullptr});
 }
@@ -118,9 +120,8 @@ void Schedule::handleSend(const std::vector<uint8_t>& command) {
   enqueueCommand({Mode::send, PRIO_SEND, command, nullptr});
 }
 
-void Schedule::handleSend(const JsonArrayConst& commands) {
-  for (JsonVariantConst command : commands)
-    handleSend(ebus::to_vector(command));
+void Schedule::handleSend(const std::vector<std::string>& commands) {
+  for (const std::string& command : commands) handleSend(ebus::to_vector(command));
 }
 
 void Schedule::handleWrite(const std::vector<uint8_t>& command) {
@@ -129,9 +130,9 @@ void Schedule::handleWrite(const std::vector<uint8_t>& command) {
 
 void Schedule::toggleForward(bool enable) { forward = enable; }
 
-void Schedule::handleForwardFilter(const JsonArrayConst& filters) {
+void Schedule::handleForwardFilter(const std::vector<std::string>& filters) {
   forwardfilters.clear();
-  for (JsonVariantConst filter : filters)
+  for (const std::string& filter : filters)
     forwardfilters.push_back(ebus::to_vector(filter));
 }
 
@@ -157,95 +158,103 @@ void Schedule::publishCounter() {
 }
 
 const std::string Schedule::getCounterJson() {
-  std::string payload;
-  JsonDocument doc;
+  cJSON* doc = cJSON_CreateObject();
 
-  // Addresses Master
-  JsonObject Addresses_Master = doc["Addresses"]["Master"].to<JsonObject>();
-  deviceManager.populateMasterAddresses(Addresses_Master);
+  cJSON* addresses = cJSON_AddObjectToObject(doc, "Addresses");
+  cJSON* addressesMaster = cJSON_AddObjectToObject(addresses, "Master");
+  cJSON* addressesSlave = cJSON_AddObjectToObject(addresses, "Slave");
+  deviceManager.populateMasterAddresses(addressesMaster);
+  deviceManager.populateSlaveAddresses(addressesSlave);
 
-  // Addresses Slave
-  JsonObject Addresses_Slave = doc["Addresses"]["Slave"].to<JsonObject>();
-  deviceManager.populateSlaveAddresses(Addresses_Slave);
+  cJSON* failed = cJSON_AddObjectToObject(doc, "Failed");
+  cJSON_AddNumberToObject(failed, "BusRequest", busRequestFailed);
+  cJSON_AddNumberToObject(failed, "Sending", sendingFailed);
 
-  // Failed
-  JsonObject Failed = doc["Failed"].to<JsonObject>();
-  Failed["BusRequest"] = busRequestFailed;
-  Failed["Sending"] = sendingFailed;
-
-  // Counter
   ebus::Handler::Counter handlerCounter = ebusHandler->getCounter();
   ebus::Request::Counter requestCounter = ebusRequest->getCounter();
 
-  // Messages
-  JsonObject Messages = doc["Messages"].to<JsonObject>();
-  Messages["Total"] = handlerCounter.messagesTotal;
-  Messages["Passive_Master_Slave"] = handlerCounter.messagesPassiveMasterSlave;
-  Messages["Passive_Master_Master"] =
-      handlerCounter.messagesPassiveMasterMaster;
-  Messages["Passive_Broadcast"] = handlerCounter.messagesPassiveBroadcast;
-  Messages["Reactive_Master_Slave"] =
-      handlerCounter.messagesReactiveMasterSlave;
-  Messages["Reactive_Master_Master"] =
-      handlerCounter.messagesReactiveMasterMaster;
-  Messages["Active_Master_Slave"] = handlerCounter.messagesActiveMasterSlave;
-  Messages["Active_Master_Master"] = handlerCounter.messagesActiveMasterMaster;
-  Messages["Active_Broadcast"] = handlerCounter.messagesActiveBroadcast;
+  cJSON* messages = cJSON_AddObjectToObject(doc, "Messages");
+  cJSON_AddNumberToObject(messages, "Total", handlerCounter.messagesTotal);
+  cJSON_AddNumberToObject(messages, "Passive_Master_Slave",
+                          handlerCounter.messagesPassiveMasterSlave);
+  cJSON_AddNumberToObject(messages, "Passive_Master_Master",
+                          handlerCounter.messagesPassiveMasterMaster);
+  cJSON_AddNumberToObject(messages, "Passive_Broadcast",
+                          handlerCounter.messagesPassiveBroadcast);
+  cJSON_AddNumberToObject(messages, "Reactive_Master_Slave",
+                          handlerCounter.messagesReactiveMasterSlave);
+  cJSON_AddNumberToObject(messages, "Reactive_Master_Master",
+                          handlerCounter.messagesReactiveMasterMaster);
+  cJSON_AddNumberToObject(messages, "Active_Master_Slave",
+                          handlerCounter.messagesActiveMasterSlave);
+  cJSON_AddNumberToObject(messages, "Active_Master_Master",
+                          handlerCounter.messagesActiveMasterMaster);
+  cJSON_AddNumberToObject(messages, "Active_Broadcast",
+                          handlerCounter.messagesActiveBroadcast);
 
-  // Requests
-  JsonObject Requests = doc["Requests"].to<JsonObject>();
-  Requests["StartBit"] = requestCounter.requestsStartBit;
-  Requests["FirstSyn"] = requestCounter.requestsFirstSyn;
-  Requests["FirstWon"] = requestCounter.requestsFirstWon;
-  Requests["FirstRetry"] = requestCounter.requestsFirstRetry;
-  Requests["FirstLost"] = requestCounter.requestsFirstLost;
-  Requests["FirstError"] = requestCounter.requestsFirstError;
-  Requests["RetrySyn"] = requestCounter.requestsRetrySyn;
-  Requests["RetryError"] = requestCounter.requestsRetryError;
-  Requests["SecondWon"] = requestCounter.requestsSecondWon;
-  Requests["SecondLost"] = requestCounter.requestsSecondLost;
-  Requests["SecondError"] = requestCounter.requestsSecondError;
+  cJSON* requests = cJSON_AddObjectToObject(doc, "Requests");
+  cJSON_AddNumberToObject(requests, "StartBit", requestCounter.requestsStartBit);
+  cJSON_AddNumberToObject(requests, "FirstSyn", requestCounter.requestsFirstSyn);
+  cJSON_AddNumberToObject(requests, "FirstWon", requestCounter.requestsFirstWon);
+  cJSON_AddNumberToObject(requests, "FirstRetry",
+                          requestCounter.requestsFirstRetry);
+  cJSON_AddNumberToObject(requests, "FirstLost",
+                          requestCounter.requestsFirstLost);
+  cJSON_AddNumberToObject(requests, "FirstError",
+                          requestCounter.requestsFirstError);
+  cJSON_AddNumberToObject(requests, "RetrySyn", requestCounter.requestsRetrySyn);
+  cJSON_AddNumberToObject(requests, "RetryError",
+                          requestCounter.requestsRetryError);
+  cJSON_AddNumberToObject(requests, "SecondWon", requestCounter.requestsSecondWon);
+  cJSON_AddNumberToObject(requests, "SecondLost",
+                          requestCounter.requestsSecondLost);
+  cJSON_AddNumberToObject(requests, "SecondError",
+                          requestCounter.requestsSecondError);
 
-  // Reset
-  JsonObject Reset = doc["Reset"].to<JsonObject>();
-  Reset["Total"] = handlerCounter.resetTotal;
-  Reset["Passive_00"] = handlerCounter.resetPassive00;
-  Reset["Passive_0704"] = handlerCounter.resetPassive0704;
-  Reset["Passive"] = handlerCounter.resetPassive;
-  Reset["Active_00"] = handlerCounter.resetActive00;
-  Reset["Active_0704"] = handlerCounter.resetActive0704;
-  Reset["Active"] = handlerCounter.resetActive;
+  cJSON* reset = cJSON_AddObjectToObject(doc, "Reset");
+  cJSON_AddNumberToObject(reset, "Total", handlerCounter.resetTotal);
+  cJSON_AddNumberToObject(reset, "Passive_00", handlerCounter.resetPassive00);
+  cJSON_AddNumberToObject(reset, "Passive_0704", handlerCounter.resetPassive0704);
+  cJSON_AddNumberToObject(reset, "Passive", handlerCounter.resetPassive);
+  cJSON_AddNumberToObject(reset, "Active_00", handlerCounter.resetActive00);
+  cJSON_AddNumberToObject(reset, "Active_0704", handlerCounter.resetActive0704);
+  cJSON_AddNumberToObject(reset, "Active", handlerCounter.resetActive);
 
-  // Error
-  JsonObject Error = doc["Error"].to<JsonObject>();
-  Error["Total"] = handlerCounter.errorTotal;
+  cJSON* error = cJSON_AddObjectToObject(doc, "Error");
+  cJSON_AddNumberToObject(error, "Total", handlerCounter.errorTotal);
 
-  // Error Passive
-  JsonObject Error_Passive = doc["Error"]["Passive"].to<JsonObject>();
-  Error_Passive["Total"] = handlerCounter.errorPassive;
-  Error_Passive["Master"] = handlerCounter.errorPassiveMaster;
-  Error_Passive["Master_ACK"] = handlerCounter.errorPassiveMasterACK;
-  Error_Passive["Slave"] = handlerCounter.errorPassiveSlave;
-  Error_Passive["Slave_ACK"] = handlerCounter.errorPassiveSlaveACK;
+  cJSON* errorPassive = cJSON_AddObjectToObject(error, "Passive");
+  cJSON_AddNumberToObject(errorPassive, "Total", handlerCounter.errorPassive);
+  cJSON_AddNumberToObject(errorPassive, "Master", handlerCounter.errorPassiveMaster);
+  cJSON_AddNumberToObject(errorPassive, "Master_ACK",
+                          handlerCounter.errorPassiveMasterACK);
+  cJSON_AddNumberToObject(errorPassive, "Slave", handlerCounter.errorPassiveSlave);
+  cJSON_AddNumberToObject(errorPassive, "Slave_ACK",
+                          handlerCounter.errorPassiveSlaveACK);
 
-  // Error Reactive
-  JsonObject Error_Reactive = doc["Error"]["Reactive"].to<JsonObject>();
-  Error_Reactive["Total"] = handlerCounter.errorReactive;
-  Error_Reactive["Master"] = handlerCounter.errorReactiveMaster;
-  Error_Reactive["Master_ACK"] = handlerCounter.errorReactiveMasterACK;
-  Error_Reactive["Slave"] = handlerCounter.errorReactiveSlave;
-  Error_Reactive["Slave_ACK"] = handlerCounter.errorReactiveSlaveACK;
+  cJSON* errorReactive = cJSON_AddObjectToObject(error, "Reactive");
+  cJSON_AddNumberToObject(errorReactive, "Total", handlerCounter.errorReactive);
+  cJSON_AddNumberToObject(errorReactive, "Master",
+                          handlerCounter.errorReactiveMaster);
+  cJSON_AddNumberToObject(errorReactive, "Master_ACK",
+                          handlerCounter.errorReactiveMasterACK);
+  cJSON_AddNumberToObject(errorReactive, "Slave", handlerCounter.errorReactiveSlave);
+  cJSON_AddNumberToObject(errorReactive, "Slave_ACK",
+                          handlerCounter.errorReactiveSlaveACK);
 
-  // Error Active
-  JsonObject Error_Active = doc["Error"]["Active"].to<JsonObject>();
-  Error_Active["Total"] = handlerCounter.errorActive;
-  Error_Active["Master"] = handlerCounter.errorActiveMaster;
-  Error_Active["Master_ACK"] = handlerCounter.errorActiveMasterACK;
-  Error_Active["Slave"] = handlerCounter.errorActiveSlave;
-  Error_Active["Slave_ACK"] = handlerCounter.errorActiveSlaveACK;
+  cJSON* errorActive = cJSON_AddObjectToObject(error, "Active");
+  cJSON_AddNumberToObject(errorActive, "Total", handlerCounter.errorActive);
+  cJSON_AddNumberToObject(errorActive, "Master", handlerCounter.errorActiveMaster);
+  cJSON_AddNumberToObject(errorActive, "Master_ACK",
+                          handlerCounter.errorActiveMasterACK);
+  cJSON_AddNumberToObject(errorActive, "Slave", handlerCounter.errorActiveSlave);
+  cJSON_AddNumberToObject(errorActive, "Slave_ACK",
+                          handlerCounter.errorActiveSlaveACK);
 
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "{}";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
 
   return payload;
 }
@@ -267,143 +276,132 @@ void Schedule::publishTiming() {
 }
 
 const std::string Schedule::getTimingJson() {
-  std::string payload;
-  JsonDocument doc;
+  cJSON* doc = cJSON_CreateObject();
 
-  // Timing
   ebus::Request::Timing requestTiming = ebusRequest->getTiming();
   ebus::Handler::Timing handlerTiming = ebusHandler->getTiming();
 
-  // Helper lambda to add timing stats to a JsonObject
-  auto addTiming = [](JsonObject obj, int64_t last, int64_t mean,
+  auto addTiming = [](cJSON* obj, int64_t last, int64_t mean,
                       int64_t stddev, uint64_t count) {
-    obj["Last"] = last;
-    obj["Mean"] = mean;
-    obj["StdDev"] = stddev;
-    obj["Count"] = count;
+    cJSON_AddNumberToObject(obj, "Last", static_cast<double>(last));
+    cJSON_AddNumberToObject(obj, "Mean", static_cast<double>(mean));
+    cJSON_AddNumberToObject(obj, "StdDev", static_cast<double>(stddev));
+    cJSON_AddNumberToObject(obj, "Count", static_cast<double>(count));
   };
 
-  addTiming(doc["BusIsr"]["Delay"].to<JsonObject>(),
-            requestTiming.busIsrDelayLast, requestTiming.busIsrDelayMean,
-            requestTiming.busIsrDelayStdDev, requestTiming.busIsrDelayCount);
+  cJSON* busIsr = cJSON_AddObjectToObject(doc, "BusIsr");
+  cJSON* busIsrDelay = cJSON_AddObjectToObject(busIsr, "Delay");
+  cJSON* busIsrWindow = cJSON_AddObjectToObject(busIsr, "Window");
+  cJSON* write = cJSON_AddObjectToObject(doc, "Write");
+  cJSON* active = cJSON_AddObjectToObject(doc, "Active");
+  cJSON* activeFirst = cJSON_AddObjectToObject(active, "First");
+  cJSON* activeData = cJSON_AddObjectToObject(active, "Data");
+  cJSON* passive = cJSON_AddObjectToObject(doc, "Passive");
+  cJSON* passiveFirst = cJSON_AddObjectToObject(passive, "First");
+  cJSON* passiveData = cJSON_AddObjectToObject(passive, "Data");
+  cJSON* sync = cJSON_AddObjectToObject(doc, "Sync");
+  cJSON* callback = cJSON_AddObjectToObject(doc, "Callback");
+  cJSON* callbackWon = cJSON_AddObjectToObject(callback, "Won");
+  cJSON* callbackLost = cJSON_AddObjectToObject(callback, "Lost");
+  cJSON* callbackReactive = cJSON_AddObjectToObject(callback, "Reactive");
+  cJSON* callbackTelegram = cJSON_AddObjectToObject(callback, "Telegram");
+  cJSON* callbackError = cJSON_AddObjectToObject(callback, "Error");
 
-  addTiming(doc["BusIsr"]["Window"].to<JsonObject>(),
-            requestTiming.busIsrWindowLast, requestTiming.busIsrWindowMean,
-            requestTiming.busIsrWindowStdDev, requestTiming.busIsrWindowCount);
+  addTiming(busIsrDelay, requestTiming.busIsrDelayLast,
+            requestTiming.busIsrDelayMean, requestTiming.busIsrDelayStdDev,
+            requestTiming.busIsrDelayCount);
 
-  addTiming(doc["Write"].to<JsonObject>(), handlerTiming.writeLast,
-            handlerTiming.writeMean, handlerTiming.writeStdDev,
-            handlerTiming.writeCount);
+  addTiming(busIsrWindow, requestTiming.busIsrWindowLast,
+            requestTiming.busIsrWindowMean, requestTiming.busIsrWindowStdDev,
+            requestTiming.busIsrWindowCount);
 
-  addTiming(doc["Active"]["First"].to<JsonObject>(),
-            handlerTiming.activeFirstLast, handlerTiming.activeFirstMean,
+  addTiming(write, handlerTiming.writeLast, handlerTiming.writeMean,
+            handlerTiming.writeStdDev, handlerTiming.writeCount);
+
+  addTiming(activeFirst, handlerTiming.activeFirstLast, handlerTiming.activeFirstMean,
             handlerTiming.activeFirstStdDev, handlerTiming.activeFirstCount);
 
-  addTiming(doc["Active"]["Data"].to<JsonObject>(),
-            handlerTiming.activeDataLast, handlerTiming.activeDataMean,
+  addTiming(activeData, handlerTiming.activeDataLast, handlerTiming.activeDataMean,
             handlerTiming.activeDataStdDev, handlerTiming.activeDataCount);
 
-  addTiming(doc["Passive"]["First"].to<JsonObject>(),
-            handlerTiming.passiveFirstLast, handlerTiming.passiveFirstMean,
-            handlerTiming.passiveFirstStdDev, handlerTiming.passiveFirstCount);
+  addTiming(passiveFirst, handlerTiming.passiveFirstLast,
+            handlerTiming.passiveFirstMean, handlerTiming.passiveFirstStdDev,
+            handlerTiming.passiveFirstCount);
 
-  addTiming(doc["Passive"]["Data"].to<JsonObject>(),
-            handlerTiming.passiveDataLast, handlerTiming.passiveDataMean,
-            handlerTiming.passiveDataStdDev, handlerTiming.passiveDataCount);
+  addTiming(passiveData, handlerTiming.passiveDataLast,
+            handlerTiming.passiveDataMean, handlerTiming.passiveDataStdDev,
+            handlerTiming.passiveDataCount);
 
-  addTiming(doc["Sync"].to<JsonObject>(), handlerTiming.syncLast,
-            handlerTiming.syncMean, handlerTiming.syncStdDev,
-            handlerTiming.syncCount);
+  addTiming(sync, handlerTiming.syncLast, handlerTiming.syncMean,
+            handlerTiming.syncStdDev, handlerTiming.syncCount);
 
-  addTiming(doc["Callback"]["Won"].to<JsonObject>(),
-            handlerTiming.callbackWonLast, handlerTiming.callbackWonMean,
-            handlerTiming.callbackWonStdDev, handlerTiming.callbackWonCount);
+  addTiming(callbackWon, handlerTiming.callbackWonLast,
+            handlerTiming.callbackWonMean, handlerTiming.callbackWonStdDev,
+            handlerTiming.callbackWonCount);
 
-  addTiming(doc["Callback"]["Lost"].to<JsonObject>(),
-            handlerTiming.callbackLostLast, handlerTiming.callbackLostMean,
-            handlerTiming.callbackLostStdDev, handlerTiming.callbackLostCount);
+  addTiming(callbackLost, handlerTiming.callbackLostLast,
+            handlerTiming.callbackLostMean, handlerTiming.callbackLostStdDev,
+            handlerTiming.callbackLostCount);
 
-  addTiming(doc["Callback"]["Reactive"].to<JsonObject>(),
-            handlerTiming.callbackReactiveLast,
+  addTiming(callbackReactive, handlerTiming.callbackReactiveLast,
             handlerTiming.callbackReactiveMean,
             handlerTiming.callbackReactiveStdDev,
             handlerTiming.callbackReactiveCount);
 
-  addTiming(doc["Callback"]["Telegram"].to<JsonObject>(),
-            handlerTiming.callbackTelegramLast,
+  addTiming(callbackTelegram, handlerTiming.callbackTelegramLast,
             handlerTiming.callbackTelegramMean,
             handlerTiming.callbackTelegramStdDev,
             handlerTiming.callbackTelegramCount);
 
-  addTiming(doc["Callback"]["Error"].to<JsonObject>(),
-            handlerTiming.callbackErrorLast, handlerTiming.callbackErrorMean,
-            handlerTiming.callbackErrorStdDev,
+  addTiming(callbackError, handlerTiming.callbackErrorLast,
+            handlerTiming.callbackErrorMean, handlerTiming.callbackErrorStdDev,
             handlerTiming.callbackErrorCount);
 
   ebus::Handler::StateTiming stateTiming = ebusHandler->getStateTiming();
 
-  // Output handler state timing
-  auto addStateTiming = [](JsonObject obj,
+  auto addStateTiming = [](cJSON* obj,
                            const ebus::Handler::StateTiming::Timing& timing) {
-    obj["Last"] = static_cast<int64_t>(timing.last);
-    obj["Mean"] = static_cast<int64_t>(timing.mean);
-    obj["StdDev"] = static_cast<int64_t>(timing.stddev);
-    obj["Count"] = timing.count;
+    cJSON_AddNumberToObject(obj, "Last", static_cast<int64_t>(timing.last));
+    cJSON_AddNumberToObject(obj, "Mean", static_cast<int64_t>(timing.mean));
+    cJSON_AddNumberToObject(obj, "StdDev", static_cast<int64_t>(timing.stddev));
+    cJSON_AddNumberToObject(obj, "Count", timing.count);
   };
 
-  addStateTiming(
-      doc["HandlerState"]["passiveReceiveMaster"].to<JsonObject>(),
-      stateTiming.timing.at(ebus::HandlerState::passiveReceiveMaster));
-  addStateTiming(
-      doc["HandlerState"]["passiveReceiveMasterAcknowledge"].to<JsonObject>(),
-      stateTiming.timing.at(
-          ebus::HandlerState::passiveReceiveMasterAcknowledge));
-  addStateTiming(
-      doc["HandlerState"]["passiveReceiveSlave"].to<JsonObject>(),
-      stateTiming.timing.at(ebus::HandlerState::passiveReceiveSlave));
-  addStateTiming(
-      doc["HandlerState"]["passiveReceiveSlaveAcknowledge"].to<JsonObject>(),
-      stateTiming.timing.at(
-          ebus::HandlerState::passiveReceiveSlaveAcknowledge));
-  addStateTiming(
-      doc["HandlerState"]["reactiveSendMasterPositiveAcknowledge"]
-          .to<JsonObject>(),
-      stateTiming.timing.at(
-          ebus::HandlerState::reactiveSendMasterPositiveAcknowledge));
-  addStateTiming(
-      doc["HandlerState"]["reactiveSendMasterNegativeAcknowledge"]
-          .to<JsonObject>(),
-      stateTiming.timing.at(
-          ebus::HandlerState::reactiveSendMasterNegativeAcknowledge));
-  addStateTiming(doc["HandlerState"]["reactiveSendSlave"].to<JsonObject>(),
-                 stateTiming.timing.at(ebus::HandlerState::reactiveSendSlave));
-  addStateTiming(
-      doc["HandlerState"]["reactiveReceiveSlaveAcknowledge"].to<JsonObject>(),
-      stateTiming.timing.at(
-          ebus::HandlerState::reactiveReceiveSlaveAcknowledge));
-  addStateTiming(doc["HandlerState"]["requestBus"].to<JsonObject>(),
-                 stateTiming.timing.at(ebus::HandlerState::requestBus));
-  addStateTiming(doc["HandlerState"]["activeSendMaster"].to<JsonObject>(),
-                 stateTiming.timing.at(ebus::HandlerState::activeSendMaster));
-  addStateTiming(
-      doc["HandlerState"]["activeReceiveMasterAcknowledge"].to<JsonObject>(),
-      stateTiming.timing.at(
-          ebus::HandlerState::activeReceiveMasterAcknowledge));
-  addStateTiming(doc["HandlerState"]["activeReceiveSlave"].to<JsonObject>(),
-                 stateTiming.timing.at(ebus::HandlerState::activeReceiveSlave));
-  addStateTiming(doc["HandlerState"]["activeSendSlavePositiveAcknowledge"]
-                     .to<JsonObject>(),
-                 stateTiming.timing.at(
-                     ebus::HandlerState::activeSendSlavePositiveAcknowledge));
-  addStateTiming(doc["HandlerState"]["activeSendSlaveNegativeAcknowledge"]
-                     .to<JsonObject>(),
-                 stateTiming.timing.at(
-                     ebus::HandlerState::activeSendSlaveNegativeAcknowledge));
-  addStateTiming(doc["HandlerState"]["releaseBus"].to<JsonObject>(),
-                 stateTiming.timing.at(ebus::HandlerState::releaseBus));
+  cJSON* handlerState = cJSON_AddObjectToObject(doc, "HandlerState");
+  auto addState = [&handlerState, &stateTiming, &addStateTiming](
+                      const char* name, ebus::HandlerState state) {
+    cJSON* node = cJSON_AddObjectToObject(handlerState, name);
+    addStateTiming(node, stateTiming.timing.at(state));
+  };
 
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
+  addState("passiveReceiveMaster", ebus::HandlerState::passiveReceiveMaster);
+  addState("passiveReceiveMasterAcknowledge",
+           ebus::HandlerState::passiveReceiveMasterAcknowledge);
+  addState("passiveReceiveSlave", ebus::HandlerState::passiveReceiveSlave);
+  addState("passiveReceiveSlaveAcknowledge",
+           ebus::HandlerState::passiveReceiveSlaveAcknowledge);
+  addState("reactiveSendMasterPositiveAcknowledge",
+           ebus::HandlerState::reactiveSendMasterPositiveAcknowledge);
+  addState("reactiveSendMasterNegativeAcknowledge",
+           ebus::HandlerState::reactiveSendMasterNegativeAcknowledge);
+  addState("reactiveSendSlave", ebus::HandlerState::reactiveSendSlave);
+  addState("reactiveReceiveSlaveAcknowledge",
+           ebus::HandlerState::reactiveReceiveSlaveAcknowledge);
+  addState("requestBus", ebus::HandlerState::requestBus);
+  addState("activeSendMaster", ebus::HandlerState::activeSendMaster);
+  addState("activeReceiveMasterAcknowledge",
+           ebus::HandlerState::activeReceiveMasterAcknowledge);
+  addState("activeReceiveSlave", ebus::HandlerState::activeReceiveSlave);
+  addState("activeSendSlavePositiveAcknowledge",
+           ebus::HandlerState::activeSendSlavePositiveAcknowledge);
+  addState("activeSendSlaveNegativeAcknowledge",
+           ebus::HandlerState::activeSendSlaveNegativeAcknowledge);
+  addState("releaseBus", ebus::HandlerState::releaseBus);
+
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "{}";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
 
   return payload;
 }

@@ -1,7 +1,7 @@
 #include "main.hpp"
 
-#include <ArduinoJson.h>
 #include <WiFi.h>
+#include <cJSON.h>
 #include <esp_efuse.h>
 
 #include "Logger.hpp"
@@ -95,7 +95,7 @@ uint8_t adapterHwVersionRaw = 0xEE;
 std::string adapterHwVersion = "unread";
 
 void wdt_start() {
-  esp_task_wdt_init(6, true);
+  esp_task_wdt_init(60, true);
   esp_task_wdt_add(NULL);
 }
 
@@ -286,18 +286,17 @@ void setTimezone(const char* timezone) {
 }
 
 const std::string getMqttStatusJson() {
-  std::string payload;
-  JsonDocument doc;
+  cJSON* doc = cJSON_CreateObject();
+  cJSON_AddNumberToObject(doc, "reset_code", reset_code);
+  cJSON_AddNumberToObject(doc, "uptime", uptime);
+  cJSON_AddNumberToObject(doc, "free_heap", free_heap);
+  cJSON_AddNumberToObject(doc, "loop_duration", loopDuration);
+  cJSON_AddNumberToObject(doc, "rssi", WiFi.RSSI());
 
-  doc["reset_code"] = reset_code;
-  doc["uptime"] = uptime;
-  doc["free_heap"] = free_heap;
-  doc["loop_duration"] = loopDuration;
-  doc["rssi"] = WiFi.RSSI();
-
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
-
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "{}";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
   return payload;
 }
 #endif
@@ -459,125 +458,153 @@ char* status_string() {
 }
 
 const std::string getStatusJson() {
-  std::string payload;
-  JsonDocument doc;
-
-  JsonObject Status = doc["Status"].to<JsonObject>();
-  Status["Reset_Code"] = reset_code;
-  Status["Uptime"] = uptime;
-  Status["Free_Heap"] = free_heap;
-  Status["Loop_Duration"] = loopDuration;
-  Status["Loop_Duration_Max"] = maxLoopDuration;
+  cJSON* doc = cJSON_CreateObject();
+  cJSON* status = cJSON_AddObjectToObject(doc, "Status");
+  cJSON_AddNumberToObject(status, "Reset_Code", reset_code);
+  cJSON_AddNumberToObject(status, "Uptime", uptime);
+  cJSON_AddNumberToObject(status, "Free_Heap", free_heap);
+  cJSON_AddNumberToObject(status, "Loop_Duration", loopDuration);
+  cJSON_AddNumberToObject(status, "Loop_Duration_Max", maxLoopDuration);
 
 #if !defined(EBUS_INTERNAL)
   // Arbitration
-  JsonObject Arbitration = doc["Arbitration"].to<JsonObject>();
-  Arbitration["Total"] = static_cast<int>(Bus._nbrArbitrations);
-  Arbitration["Restarts1"] = static_cast<int>(Bus._nbrRestarts1);
-  Arbitration["Restarts2"] = static_cast<int>(Bus._nbrRestarts2);
-  Arbitration["Won1"] = static_cast<int>(Bus._nbrWon1);
-  Arbitration["Won2"] = static_cast<int>(Bus._nbrWon2);
-  Arbitration["Lost1"] = static_cast<int>(Bus._nbrLost1);
-  Arbitration["Lost2"] = static_cast<int>(Bus._nbrLost2);
-  Arbitration["Late"] = static_cast<int>(Bus._nbrLate);
-  Arbitration["Errors"] = static_cast<int>(Bus._nbrErrors);
+  cJSON* arbitration = cJSON_AddObjectToObject(doc, "Arbitration");
+  cJSON_AddNumberToObject(arbitration, "Total",
+                          static_cast<int>(Bus._nbrArbitrations));
+  cJSON_AddNumberToObject(arbitration, "Restarts1",
+                          static_cast<int>(Bus._nbrRestarts1));
+  cJSON_AddNumberToObject(arbitration, "Restarts2",
+                          static_cast<int>(Bus._nbrRestarts2));
+  cJSON_AddNumberToObject(arbitration, "Won1", static_cast<int>(Bus._nbrWon1));
+  cJSON_AddNumberToObject(arbitration, "Won2", static_cast<int>(Bus._nbrWon2));
+  cJSON_AddNumberToObject(arbitration, "Lost1",
+                          static_cast<int>(Bus._nbrLost1));
+  cJSON_AddNumberToObject(arbitration, "Lost2",
+                          static_cast<int>(Bus._nbrLost2));
+  cJSON_AddNumberToObject(arbitration, "Late", static_cast<int>(Bus._nbrLate));
+  cJSON_AddNumberToObject(arbitration, "Errors",
+                          static_cast<int>(Bus._nbrErrors));
 #endif
 
   // Firmware
-  JsonObject Firmware = doc["Firmware"].to<JsonObject>();
-  Firmware["Version"] = AUTO_VERSION;
-  Firmware["SDK"] = ESP.getSdkVersion();
+  cJSON* firmware = cJSON_AddObjectToObject(doc, "Firmware");
+  cJSON_AddStringToObject(firmware, "Version", AUTO_VERSION);
+  cJSON_AddStringToObject(firmware, "SDK", ESP.getSdkVersion());
 #if !defined(EBUS_INTERNAL)
-  Firmware["Async"] = USE_ASYNCHRONOUS ? true : false;
-  Firmware["Software_Serial"] = USE_SOFTWARE_SERIAL ? true : false;
+  cJSON_AddBoolToObject(firmware, "Async", USE_ASYNCHRONOUS ? true : false);
+  cJSON_AddBoolToObject(firmware, "Software_Serial",
+                        USE_SOFTWARE_SERIAL ? true : false);
 #endif
-  Firmware["Unique_ID"] = unique_id;
-  Firmware["Adapter_HW_Version"] = adapterHwVersion;
-  Firmware["Adapter_HW_Version_Raw"] = adapterHwVersionRaw;
-  Firmware["Clock_Speed"] = getCpuFrequencyMhz();
-  Firmware["Apb_Speed"] = getApbFrequency();
+  cJSON_AddStringToObject(firmware, "Unique_ID", unique_id);
+  cJSON_AddStringToObject(firmware, "Adapter_HW_Version",
+                          adapterHwVersion.c_str());
+  cJSON_AddNumberToObject(firmware, "Adapter_HW_Version_Raw", adapterHwVersionRaw);
+  cJSON_AddNumberToObject(firmware, "Clock_Speed", getCpuFrequencyMhz());
+  cJSON_AddNumberToObject(firmware, "Apb_Speed", getApbFrequency());
 
   // Chip
-  JsonObject Chip = doc["Chip"].to<JsonObject>();
-  Chip["Chip_Model"] = ESP.getChipModel();
-  Chip["Chip_Revision"] = ESP.getChipRevision();
-  Chip["Flash_Chip_Size"] = ESP.getFlashChipSize();
-  Chip["Flash_Chip_Speed"] = ESP.getFlashChipSpeed();
-  Chip["Flash_Chip_Mode"] = ESP.getFlashChipMode();
+  cJSON* chip = cJSON_AddObjectToObject(doc, "Chip");
+  cJSON_AddStringToObject(chip, "Chip_Model", ESP.getChipModel());
+  cJSON_AddNumberToObject(chip, "Chip_Revision", ESP.getChipRevision());
+  cJSON_AddNumberToObject(chip, "Flash_Chip_Size", ESP.getFlashChipSize());
+  cJSON_AddNumberToObject(chip, "Flash_Chip_Speed", ESP.getFlashChipSpeed());
+  cJSON_AddNumberToObject(chip, "Flash_Chip_Mode", ESP.getFlashChipMode());
 
   // WIFI
-  JsonObject WIFI = doc["WIFI"].to<JsonObject>();
-  WIFI["Last_Connect"] = wifiNetworkManager.getLastConnect();
-  WIFI["Reconnect_Count"] = wifiNetworkManager.getReconnectCount();
-  WIFI["RSSI"] = WiFi.RSSI();
+  cJSON* wifi = cJSON_AddObjectToObject(doc, "WIFI");
+  cJSON_AddNumberToObject(wifi, "Last_Connect",
+                          wifiNetworkManager.getLastConnect());
+  cJSON_AddNumberToObject(wifi, "Reconnect_Count",
+                          wifiNetworkManager.getReconnectCount());
+  cJSON_AddNumberToObject(wifi, "RSSI", WiFi.RSSI());
 
   if (wifiNetworkManager.isStaticIpEnabled()) {
-    WIFI["Static_IP"] = true;
-    WIFI["IP_Address"] = wifiNetworkManager.getConfiguredIpAddress();
-    WIFI["Gateway"] = wifiNetworkManager.getConfiguredGateway();
-    WIFI["Netmask"] = wifiNetworkManager.getConfiguredNetmask();
-    WIFI["DNS1"] = wifiNetworkManager.getConfiguredDns1();
-    WIFI["DNS2"] = wifiNetworkManager.getConfiguredDns2();
+    cJSON_AddBoolToObject(wifi, "Static_IP", true);
+    cJSON_AddStringToObject(
+        wifi, "IP_Address", wifiNetworkManager.getConfiguredIpAddress().c_str());
+    cJSON_AddStringToObject(
+        wifi, "Gateway", wifiNetworkManager.getConfiguredGateway().c_str());
+    cJSON_AddStringToObject(
+        wifi, "Netmask", wifiNetworkManager.getConfiguredNetmask().c_str());
+    cJSON_AddStringToObject(
+        wifi, "DNS1", wifiNetworkManager.getConfiguredDns1().c_str());
+    cJSON_AddStringToObject(
+        wifi, "DNS2", wifiNetworkManager.getConfiguredDns2().c_str());
   } else {
-    WIFI["Static_IP"] = false;
-    WIFI["IP_Address"] = WiFi.localIP().toString();
-    WIFI["Gateway"] = WiFi.gatewayIP().toString();
-    WIFI["Netmask"] = WiFi.subnetMask().toString();
-    WIFI["DNS1"] = WiFi.dnsIP(0).toString();
-    WIFI["DNS2"] = WiFi.dnsIP(1).toString();
+    cJSON_AddBoolToObject(wifi, "Static_IP", false);
+    cJSON_AddStringToObject(wifi, "IP_Address", WiFi.localIP().toString().c_str());
+    cJSON_AddStringToObject(wifi, "Gateway", WiFi.gatewayIP().toString().c_str());
+    cJSON_AddStringToObject(wifi, "Netmask", WiFi.subnetMask().toString().c_str());
+    cJSON_AddStringToObject(wifi, "DNS1", WiFi.dnsIP(0).toString().c_str());
+    cJSON_AddStringToObject(wifi, "DNS2", WiFi.dnsIP(1).toString().c_str());
   }
-  WIFI["SSID"] = WiFi.SSID();
-  WIFI["BSSID"] = WiFi.BSSIDstr();
-  WIFI["Channel"] = WiFi.channel();
-  WIFI["Hostname"] = WiFi.getHostname();
-  WIFI["MAC_Address"] = WiFi.macAddress();
+  cJSON_AddStringToObject(wifi, "SSID", WiFi.SSID().c_str());
+  cJSON_AddStringToObject(wifi, "BSSID", WiFi.BSSIDstr().c_str());
+  cJSON_AddNumberToObject(wifi, "Channel", WiFi.channel());
+  cJSON_AddStringToObject(wifi, "Hostname", WiFi.getHostname());
+  cJSON_AddStringToObject(wifi, "MAC_Address", WiFi.macAddress().c_str());
 
 // SNTP
 #if defined(EBUS_INTERNAL)
-  JsonObject SNTP = doc["SNTP"].to<JsonObject>();
-  SNTP["Enabled"] = configManager.readBool("sntpEnabled");
+  cJSON* sntp = cJSON_AddObjectToObject(doc, "SNTP");
+  cJSON_AddBoolToObject(sntp, "Enabled", configManager.readBool("sntpEnabled"));
   const char* activeSntpServer = esp_sntp_getservername(0);
-  SNTP["Server"] = activeSntpServer != nullptr
-                       ? activeSntpServer
-                       : configManager.readString("sntpServer",
-                                                  DEFAULT_SNTP_SERVER);
-  SNTP["Timezone"] = configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
+  if (activeSntpServer != nullptr) {
+    cJSON_AddStringToObject(sntp, "Server", activeSntpServer);
+  } else {
+    cJSON_AddStringToObject(
+        sntp, "Server",
+        configManager.readString("sntpServer", DEFAULT_SNTP_SERVER).c_str());
+  }
+  cJSON_AddStringToObject(
+      sntp, "Timezone",
+      configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE).c_str());
 #endif
 
   // eBUS
-  JsonObject eBUS = doc["eBUS"].to<JsonObject>();
-  eBUS["PWM"] = get_pwm();
+  cJSON* ebus = cJSON_AddObjectToObject(doc, "eBUS");
+  cJSON_AddNumberToObject(ebus, "PWM", get_pwm());
 #if defined(EBUS_INTERNAL)
-  eBUS["Ebus_Address"] = configManager.readString("ebusAddress", "ff");
-  eBUS["BusIsr_Window"] = configManager.readInt("busisrWindow", 4300);
-  eBUS["BusIsr_Offset"] = configManager.readInt("busisrOffset", 80);
+  cJSON_AddStringToObject(ebus, "Ebus_Address",
+                          configManager.readString("ebusAddress", "ff").c_str());
+  cJSON_AddNumberToObject(ebus, "BusIsr_Window",
+                          configManager.readInt("busisrWindow", 4300));
+  cJSON_AddNumberToObject(ebus, "BusIsr_Offset",
+                          configManager.readInt("busisrOffset", 80));
 
   // Schedule
-  JsonObject Schedule = doc["Schedule"].to<JsonObject>();
-  Schedule["Inquiry_Of_Existence"] = configManager.readBool("inquiryExistPrm");
-  Schedule["Scan_On_Startup"] = configManager.readBool("scanOnStartPrm");
-  Schedule["First_Command_After_Start"] =
-      configManager.readInt("firstCmdAfterSt", 10);
-  Schedule["Active_Commands"] = store.getActiveCommands();
-  Schedule["Passive_Commands"] = store.getPassiveCommands();
+  cJSON* scheduleObj = cJSON_AddObjectToObject(doc, "Schedule");
+  cJSON_AddBoolToObject(scheduleObj, "Inquiry_Of_Existence",
+                        configManager.readBool("inquiryExistPrm"));
+  cJSON_AddBoolToObject(scheduleObj, "Scan_On_Startup",
+                        configManager.readBool("scanOnStartPrm"));
+  cJSON_AddNumberToObject(scheduleObj, "First_Command_After_Start",
+                          configManager.readInt("firstCmdAfterSt", 10));
+  cJSON_AddNumberToObject(scheduleObj, "Active_Commands",
+                          store.getActiveCommands());
+  cJSON_AddNumberToObject(scheduleObj, "Passive_Commands",
+                          store.getPassiveCommands());
 
   // MQTT
-  JsonObject MQTT = doc["MQTT"].to<JsonObject>();
-  MQTT["Enabled"] = mqtt.isEnabled();
-  MQTT["Server"] = configManager.readString("mqttServer");
-  MQTT["User"] = configManager.readString("mqttUser");
-  MQTT["Connected"] = mqtt.isConnected();
-  MQTT["Publish_Counter"] = schedule.getPublishCounter();
-  MQTT["Publish_Timing"] = schedule.getPublishTiming();
+  cJSON* mqttObj = cJSON_AddObjectToObject(doc, "MQTT");
+  cJSON_AddBoolToObject(mqttObj, "Enabled", mqtt.isEnabled());
+  cJSON_AddStringToObject(
+      mqttObj, "Server", configManager.readString("mqttServer").c_str());
+  cJSON_AddStringToObject(
+      mqttObj, "User", configManager.readString("mqttUser").c_str());
+  cJSON_AddBoolToObject(mqttObj, "Connected", mqtt.isConnected());
+  cJSON_AddBoolToObject(mqttObj, "Publish_Counter", schedule.getPublishCounter());
+  cJSON_AddBoolToObject(mqttObj, "Publish_Timing", schedule.getPublishTiming());
 
   // HomeAssistant
-  JsonObject HomeAssistant = doc["Home_Assistant"].to<JsonObject>();
-  HomeAssistant["Enabled"] = mqttha.isEnabled();
+  cJSON* homeAssistant = cJSON_AddObjectToObject(doc, "Home_Assistant");
+  cJSON_AddBoolToObject(homeAssistant, "Enabled", mqttha.isEnabled());
 #endif
 
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
-
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "{}";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
   return payload;
 }
 

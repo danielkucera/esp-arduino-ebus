@@ -6,6 +6,7 @@
 #include "Schedule.hpp"
 #include "Store.hpp"
 #include "main.hpp"
+#include <cJSON.h>
 
 WebServer configServer(80);
 
@@ -47,72 +48,63 @@ void handleCommands() {
 }
 
 void handleCommandsEvaluate() {
-  JsonDocument doc;
   String body = configServer.arg("plain");
-
-  DeserializationError error = deserializeJson(doc, body);
-
-  if (error) {
+  cJSON* doc = cJSON_Parse(body.c_str());
+  if (!cJSON_IsArray(doc)) {
     configServer.send(403, "text/html", "Json invalid");
   } else {
-    JsonArrayConst commands = doc.as<JsonArrayConst>();
-    if (!commands.isNull()) {
-      for (JsonVariantConst command : commands) {
-        std::string evalError = Command::evaluate(command);
-        if (!evalError.empty()) {
-          configServer.send(403, "text/html", evalError.c_str());
-          return;
-        }
+    cJSON* command = nullptr;
+    cJSON_ArrayForEach(command, doc) {
+      std::string evalError = Command::evaluate(command);
+      if (!evalError.empty()) {
+        cJSON_Delete(doc);
+        configServer.send(403, "text/html", evalError.c_str());
+        return;
       }
-      configServer.send(200, "text/html", "Ok");
-    } else {
-      configServer.send(403, "text/html", "No commands");
     }
+    configServer.send(200, "text/html", "Ok");
   }
+  if (doc) cJSON_Delete(doc);
 }
 
 void handleCommandsInsert() {
-  JsonDocument doc;
   String body = configServer.arg("plain");
-
-  DeserializationError error = deserializeJson(doc, body);
-
-  if (error) {
+  cJSON* doc = cJSON_Parse(body.c_str());
+  if (!cJSON_IsArray(doc)) {
     configServer.send(403, "text/html", "Json invalid");
   } else {
-    JsonArrayConst commands = doc.as<JsonArrayConst>();
-    if (!commands.isNull()) {
-      for (JsonVariantConst command : commands) {
-        std::string evalError = Command::evaluate(command);
-        if (evalError.empty())
-          store.insertCommand(Command::fromJson(command));
-        else
-          configServer.send(403, "text/html", evalError.c_str());
+    cJSON* command = nullptr;
+    cJSON_ArrayForEach(command, doc) {
+      std::string evalError = Command::evaluate(command);
+      if (evalError.empty())
+        store.insertCommand(Command::fromJson(command));
+      else {
+        cJSON_Delete(doc);
+        configServer.send(403, "text/html", evalError.c_str());
+        return;
       }
-      if (mqttha.isEnabled()) mqttha.publishComponents();
-      configServer.send(200, "text/html", "Ok");
-    } else {
-      configServer.send(403, "text/html", "No commands");
     }
+    if (mqttha.isEnabled()) mqttha.publishComponents();
+    configServer.send(200, "text/html", "Ok");
   }
+  if (doc) cJSON_Delete(doc);
 }
 
 void handleCommandsRemove() {
-  JsonDocument doc;
   String body = configServer.arg("plain");
-
-  DeserializationError error = deserializeJson(doc, body);
-
-  if (error) {
+  cJSON* doc = cJSON_Parse(body.c_str());
+  if (!cJSON_IsObject(doc)) {
     configServer.send(403, "text/html", "Json invalid");
   } else {
-    JsonArrayConst keys = doc["keys"].as<JsonArrayConst>();
-    if (keys.size() > 0) {
-      for (JsonVariantConst key : keys) {
-        const Command* cmd = store.findCommand(key.as<std::string>());
+    cJSON* keys = cJSON_GetObjectItemCaseSensitive(doc, "keys");
+    if (cJSON_IsArray(keys) && cJSON_GetArraySize(keys) > 0) {
+      cJSON* key = nullptr;
+      cJSON_ArrayForEach(key, keys) {
+        if (!cJSON_IsString(key) || key->valuestring == nullptr) continue;
+        const Command* cmd = store.findCommand(key->valuestring);
         if (cmd) {
           if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
-          store.removeCommand(key.as<std::string>());
+          store.removeCommand(key->valuestring);
         }
       }
       configServer.send(200, "text/html", "Ok");
@@ -126,6 +118,7 @@ void handleCommandsRemove() {
       configServer.send(403, "text/html", "No commands");
     }
   }
+  if (doc) cJSON_Delete(doc);
 }
 
 void handleCommandsLoad() {
@@ -167,15 +160,16 @@ void handleValues() {
 }
 
 void handleValuesWrite() {
-  JsonDocument doc;
   String body = configServer.arg("plain");
-
-  DeserializationError error = deserializeJson(doc, body);
-
-  if (error) {
-    configServer.send(403, "text/html", error.c_str());
+  cJSON* doc = cJSON_Parse(body.c_str());
+  if (!cJSON_IsObject(doc)) {
+    configServer.send(403, "text/html", "Json invalid");
   } else {
-    std::string key = doc["key"].as<std::string>();
+    cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(doc, "key");
+    std::string key =
+        (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
+            ? keyNode->valuestring
+            : "";
     Command* command = store.findCommand(key);
     if (command != nullptr) {
       std::vector<uint8_t> valueBytes = command->getVectorFromJson(doc);
@@ -193,44 +187,52 @@ void handleValuesWrite() {
                         String("Key '") + key.c_str() + "' not found");
     }
   }
+  if (doc) cJSON_Delete(doc);
 }
 
 void handleValuesRead() {
-  JsonDocument doc;
   String body = configServer.arg("plain");
-
-  DeserializationError error = deserializeJson(doc, body);
-
-  if (error) {
-    // Return MQTT-equivalent error payload: {"id":"read","status": "..."}
-    JsonDocument errDoc;
-    errDoc["id"] = "read";
-    errDoc["status"] = error.c_str();
-    std::string payload;
-    serializeJson(errDoc, payload);
+  cJSON* doc = cJSON_Parse(body.c_str());
+  if (!cJSON_IsObject(doc)) {
+    cJSON* errDoc = cJSON_CreateObject();
+    cJSON_AddStringToObject(errDoc, "id", "read");
+    cJSON_AddStringToObject(errDoc, "status", "invalid json payload");
+    char* printed = cJSON_PrintUnformatted(errDoc);
+    std::string payload = printed != nullptr ? printed : "{}";
+    if (printed != nullptr) cJSON_free(printed);
+    cJSON_Delete(errDoc);
     configServer.send(200, "application/json;charset=utf-8", payload.c_str());
   } else {
-    std::string key = doc["key"].as<std::string>();
+    cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(doc, "key");
+    std::string key =
+        (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
+            ? keyNode->valuestring
+            : "";
     Command* command = store.findCommand(key);
     if (command != nullptr) {
-      // Force immediate refresh by resetting last seen timestamp
       command->setLast(0);
-      // Do not return the old value immediately; confirm the read request
-      JsonDocument resp;
-      resp["id"] = "read";
-      resp["status"] = "requested";
-      std::string payload;
-      serializeJson(resp, payload);
+      cJSON* resp = cJSON_CreateObject();
+      cJSON_AddStringToObject(resp, "id", "read");
+      cJSON_AddStringToObject(resp, "status", "requested");
+      char* printed = cJSON_PrintUnformatted(resp);
+      std::string payload = printed != nullptr ? printed : "{}";
+      if (printed != nullptr) cJSON_free(printed);
+      cJSON_Delete(resp);
       configServer.send(200, "application/json;charset=utf-8", payload.c_str());
     } else {
-      JsonDocument errDoc;
-      errDoc["id"] = "read";
-      errDoc["status"] = std::string("Key '") + key + "' not found";
-      std::string payload;
-      serializeJson(errDoc, payload);
+      cJSON* errDoc = cJSON_CreateObject();
+      cJSON_AddStringToObject(errDoc, "id", "read");
+      cJSON_AddStringToObject(errDoc, "status",
+                              (std::string("Key '") + key + "' not found")
+                                  .c_str());
+      char* printed = cJSON_PrintUnformatted(errDoc);
+      std::string payload = printed != nullptr ? printed : "{}";
+      if (printed != nullptr) cJSON_free(printed);
+      cJSON_Delete(errDoc);
       configServer.send(200, "application/json;charset=utf-8", payload.c_str());
     }
   }
+  if (doc) cJSON_Delete(doc);
 }
 
 // devices

@@ -1,6 +1,8 @@
 #if defined(EBUS_INTERNAL)
 #include <Mqtt.hpp>
 #include <MqttHA.hpp>
+#include <cJSON.h>
+#include <algorithm>
 
 #include "Store.hpp"
 
@@ -94,28 +96,31 @@ void MqttHA::publishComponent(const Component& c, const bool remove) const {
 }
 
 const std::string MqttHA::getComponentJson(const Component& c) const {
-  JsonDocument doc;
-  doc["unique_id"] = c.uniqueId;
-  doc["name"] = c.name;
+  cJSON* doc = cJSON_CreateObject();
+  cJSON_AddStringToObject(doc, "unique_id", c.uniqueId.c_str());
+  cJSON_AddStringToObject(doc, "name", c.name.c_str());
 
-  // fields
-  for (const auto& kv : c.fields) doc[kv.first] = kv.second;
-
-  // options
-  if (!c.options.empty()) {
-    JsonArray options = doc["options"].to<JsonArray>();
-    for (const auto& opt : c.options) options.add(opt);
+  for (const auto& kv : c.fields) {
+    cJSON_AddStringToObject(doc, kv.first.c_str(), kv.second.c_str());
   }
 
-  // device
-  JsonObject device = doc["device"].to<JsonObject>();
-  device["identifiers"] = c.deviceIdentifiers;
-  for (const auto& kv : c.device) device[kv.first] = kv.second;
+  if (!c.options.empty()) {
+    cJSON* options = cJSON_AddArrayToObject(doc, "options");
+    for (const auto& opt : c.options) {
+      cJSON_AddItemToArray(options, cJSON_CreateString(opt.c_str()));
+    }
+  }
 
-  std::string payload;
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
+  cJSON* device = cJSON_AddObjectToObject(doc, "device");
+  cJSON_AddStringToObject(device, "identifiers", c.deviceIdentifiers.c_str());
+  for (const auto& kv : c.device) {
+    cJSON_AddStringToObject(device, kv.first.c_str(), kv.second.c_str());
+  }
 
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "{}";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
   return payload;
 }
 

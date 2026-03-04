@@ -26,35 +26,41 @@ void DeviceManager::resetAddresses() {
 }
 
 const std::string DeviceManager::getDevicesJson() {
-  std::string payload;
-  JsonDocument doc;
+  cJSON* doc = cJSON_CreateArray();
 
-  for (const auto& device : devices) doc.add(device.second.toJson());
+  for (const auto& device : devices) {
+    cJSON* item = cJSON_Parse(device.second.toJson().c_str());
+    if (item != nullptr) cJSON_AddItemToArray(doc, item);
+  }
 
-  if (doc.isNull()) doc.to<JsonArray>();
-
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "[]";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
 
   return payload;
 }
 
 const std::vector<const Device*> DeviceManager::getDevices() const {
-  std::vector<const Device*> result;  // Use const Device* here
+  std::vector<const Device*> result;
   for (const auto& device : devices) {
     result.push_back(&(device.second));
   }
   return result;
 }
 
-void DeviceManager::populateMasterAddresses(JsonObject& jsonObject) const {
+void DeviceManager::populateMasterAddresses(cJSON* jsonObject) const {
+  if (!cJSON_IsObject(jsonObject)) return;
   for (const auto& master : masters)
-    jsonObject[ebus::to_string(master.first)] = master.second;
+    cJSON_AddNumberToObject(jsonObject, ebus::to_string(master.first).c_str(),
+                            master.second);
 }
 
-void DeviceManager::populateSlaveAddresses(JsonObject& jsonObject) const {
+void DeviceManager::populateSlaveAddresses(cJSON* jsonObject) const {
+  if (!cJSON_IsObject(jsonObject)) return;
   for (const auto& slave : slaves)
-    jsonObject[ebus::to_string(slave.first)] = slave.second;
+    cJSON_AddNumberToObject(jsonObject, ebus::to_string(slave.first).c_str(),
+                            slave.second);
 }
 
 const std::vector<std::vector<uint8_t>> DeviceManager::scanCommands() const {
@@ -87,10 +93,12 @@ const std::vector<std::vector<uint8_t>> DeviceManager::vendorScanCommands()
 }
 
 const std::vector<std::vector<uint8_t>> DeviceManager::addressesScanCommands(
-    const JsonArrayConst& addresses) const {
+    const std::vector<std::string>& addresses) const {
   std::set<uint8_t> scanSlaves;
-  for (JsonVariantConst address : addresses) {
-    uint8_t firstByte = ebus::to_vector(address.as<std::string>())[0];
+  for (const std::string& address : addresses) {
+    const std::vector<uint8_t> bytes = ebus::to_vector(address);
+    if (bytes.empty()) continue;
+    uint8_t firstByte = bytes[0];
     if (ebus::isSlave(firstByte) &&
         firstByte != ebusHandler->getTargetAddress())
       scanSlaves.insert(firstByte);

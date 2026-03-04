@@ -1,9 +1,10 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <ArduinoJson.h>
+#include <cJSON.h>
 #include <mqtt_client.h>
 
+#include <functional>
 #include <queue>
 #include <string>
 #include <tuple>
@@ -54,7 +55,7 @@ struct OutgoingAction {
         haRemove(remove) {}
 };
 
-using CommandHandler = std::function<void(const JsonDocument&)>;
+using CommandHandler = std::function<void(const cJSON*)>;
 
 // The MQTT class acts as a wrapper for the entire MQTT subsystem.
 
@@ -88,7 +89,8 @@ class Mqtt {
                           const std::vector<uint8_t>& master,
                           const std::vector<uint8_t>& slave);
 
-  static void publishValue(const std::string& name, const JsonDocument& value);
+  static void publishValue(const std::string& name,
+                           const std::string& valueJson);
 
   void doLoop();
 
@@ -117,50 +119,50 @@ class Mqtt {
 
   // Command handlers map
   std::unordered_map<std::string, CommandHandler> commandHandlers = {
-      {"restart", [this](const JsonDocument& doc) { handleRestart(doc); }},
-      {"insert", [this](const JsonDocument& doc) { handleInsert(doc); }},
-      {"remove", [this](const JsonDocument& doc) { handleRemove(doc); }},
-      {"publish", [this](const JsonDocument& doc) { handlePublish(doc); }},
+      {"restart", [this](const cJSON* doc) { handleRestart(doc); }},
+      {"insert", [this](const cJSON* doc) { handleInsert(doc); }},
+      {"remove", [this](const cJSON* doc) { handleRemove(doc); }},
+      {"publish", [this](const cJSON* doc) { handlePublish(doc); }},
 
-      {"load", [this](const JsonDocument& doc) { handleLoad(doc); }},
-      {"save", [this](const JsonDocument& doc) { handleSave(doc); }},
-      {"wipe", [this](const JsonDocument& doc) { handleWipe(doc); }},
+      {"load", [this](const cJSON* doc) { handleLoad(doc); }},
+      {"save", [this](const cJSON* doc) { handleSave(doc); }},
+      {"wipe", [this](const cJSON* doc) { handleWipe(doc); }},
 
-      {"scan", [this](const JsonDocument& doc) { handleScan(doc); }},
-      {"devices", [this](const JsonDocument& doc) { handleDevices(doc); }},
+      {"scan", [this](const cJSON* doc) { handleScan(doc); }},
+      {"devices", [this](const cJSON* doc) { handleDevices(doc); }},
 
-      {"send", [this](const JsonDocument& doc) { handleSend(doc); }},
-      {"forward", [this](const JsonDocument& doc) { handleForward(doc); }},
+      {"send", [this](const cJSON* doc) { handleSend(doc); }},
+      {"forward", [this](const cJSON* doc) { handleForward(doc); }},
 
-      {"reset", [this](const JsonDocument& doc) { handleReset(doc); }},
+      {"reset", [this](const cJSON* doc) { handleReset(doc); }},
 
-      {"read", [this](const JsonDocument& doc) { handleRead(doc); }},
-      {"write", [this](const JsonDocument& doc) { handleWrite(doc); }},
+      {"read", [this](const cJSON* doc) { handleRead(doc); }},
+      {"write", [this](const cJSON* doc) { handleWrite(doc); }},
   };
 
   static void eventHandler(void* handler_args, esp_event_base_t base,
                            int32_t event_id, void* event_data);
 
   // Command handlers
-  static void handleRestart(const JsonDocument& doc);
-  void handleInsert(const JsonDocument& doc);
-  void handleRemove(const JsonDocument& doc);
-  static void handlePublish(const JsonDocument& doc);
+  static void handleRestart(const cJSON* doc);
+  void handleInsert(const cJSON* doc);
+  void handleRemove(const cJSON* doc);
+  static void handlePublish(const cJSON* doc);
 
-  static void handleLoad(const JsonDocument& doc);
-  static void handleSave(const JsonDocument& doc);
-  static void handleWipe(const JsonDocument& doc);
+  static void handleLoad(const cJSON* doc);
+  static void handleSave(const cJSON* doc);
+  static void handleWipe(const cJSON* doc);
 
-  void handleScan(const JsonDocument& doc);
-  static void handleDevices(const JsonDocument& doc);
+  void handleScan(const cJSON* doc);
+  static void handleDevices(const cJSON* doc);
 
-  void handleSend(const JsonDocument& doc);
-  void handleForward(const JsonDocument& doc);
+  void handleSend(const cJSON* doc);
+  void handleForward(const cJSON* doc);
 
-  static void handleReset(const JsonDocument& doc);
+  static void handleReset(const cJSON* doc);
 
-  void handleRead(const JsonDocument& doc);
-  void handleWrite(const JsonDocument& doc);
+  void handleRead(const cJSON* doc);
+  void handleWrite(const cJSON* doc);
 
   void checkIncomingQueue();
   void checkOutgoingQueue();
