@@ -23,6 +23,7 @@
 #include <esp_task_wdt.h>
 
 #include "ConfigManager.hpp"
+#include "EspOtaManager.hpp"
 #include "UpgradeManager.hpp"
 #include "WifiNetworkManager.hpp"
 #include "esp32c3/rom/rtc.h"
@@ -35,6 +36,7 @@ TaskHandle_t Task1;
 
 ConfigManager configManager;
 UpgradeManager upgradeManager;
+EspOtaManager espOtaManager;
 WifiNetworkManager wifiNetworkManager;
 
 // minimum time of reset pin
@@ -637,6 +639,18 @@ void setup() {
     }
 #endif
   });
+  espOtaManager.setPreUpgradeHook([]() {
+#if defined(EBUS_INTERNAL)
+    ebus::serviceRunner->stop();
+    schedule.stop();
+    clientManager.stop();
+#else
+    if (Task1 != nullptr) {
+      vTaskDelete(Task1);
+      Task1 = nullptr;
+    }
+#endif
+  });
 
   set_pwm();
 
@@ -681,7 +695,7 @@ void setup() {
 
   statusServer.begin();
 
-  upgradeManager.beginEspOta();
+  espOtaManager.begin();
   wdt_start();
 
   last_comms = millis();
