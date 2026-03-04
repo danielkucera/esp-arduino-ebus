@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration</title>
+    <link rel="stylesheet" href="common.css">
+</head>
+
+<body>
+    <h1>Configuration</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnLoad">Load</button>
+        <button id="btnSave" class="apply">Save</button>
+        <button id="btnRestart" class="danger">Restart to Apply Changes</button>
+        <button id="btnReset" class="danger">Reset Config</button>
+        <span id="status">...</span>
+    </div>
+
+    <fieldset>
+        <legend>WiFi Credentials</legend>
+        <div><label for="wifiSsid">WiFi SSID</label></div>
+        <div><input id="wifiSsid" type="text" class="config"></div>
+        <div><label for="wifiPassword">WiFi Password</label></div>
+        <div><input id="wifiPassword" type="password" class="config"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>General</legend>
+        <div><label for="thingName">Thing Name</label></div>
+        <div><input id="thingName" type="text" class="config" value="esp-eBus"></div>
+        <div><label for="apModePassword">AP Mode Password</label></div>
+        <div><input id="apModePassword" type="password" class="config" value="ebusebus"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Connection</legend>
+        <div><label><input id="staticIPEnabled" type="checkbox" class="config"> Static IP</label></div>
+        <div><label for="ipAddress">IP Address</label></div>
+        <div><input id="ipAddress" type="text" class="config"></div>
+        <div><label for="gateway">Gateway</label></div>
+        <div><input id="gateway" type="text" class="config"></div>
+        <div><label for="netmask">Netmask</label></div>
+        <div><input id="netmask" type="text" class="config"></div>
+        <div><label for="dns1">DNS 1</label></div>
+        <div><input id="dns1" type="text" class="config"></div>
+        <div><label for="dns2">DNS 2</label></div>
+        <div><input id="dns2" type="text" class="config"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Adapter</legend>
+        <div><label for="pwmValue">PWM</label></div>
+        <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config" value="130"></div>
+        <div><label for="ebusAddress">eBUS Address (hex, e.g. ff)</label></div>
+        <div><input id="ebusAddress" type="text" class="config" value="ff"></div>
+        <div><label for="busisrWindow">Bus ISR Window (us)</label></div>
+        <div><input id="busisrWindow" type="number" min="4250" max="4500" step="1" class="config"></div>
+        <div><label for="busisrOffset">Bus ISR Offset (us)</label></div>
+        <div><input id="busisrOffset" type="number" min="0" max="200" step="1" class="config"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>SNTP</legend>
+        <div><label><input id="sntpEnabled" type="checkbox" class="config"> SNTP Enabled</label></div>
+        <div><label for="sntpServer">SNTP Server</label></div>
+        <div><input id="sntpServer" type="text" class="config" value="pool.ntp.org"></div>
+        <div><label for="sntpTimezone">SNTP Timezone</label></div>
+        <div><input id="sntpTimezone" type="text" class="config" value="UTC0"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Schedule</legend>
+        <div><label><input id="inquiryExistPrm" type="checkbox" class="config"> Inquiry Of Existence</label>
+        </div>
+        <div><label><input id="scanOnStartPrm" type="checkbox" class="config"> Scan On Startup</label></div>
+        <div><label for="firstCmdAfterSt">First Command After Start (s)</label></div>
+        <div><input id="firstCmdAfterSt" type="number" min="5" max="60" step="1" class="config" value="10"></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>MQTT</legend>
+        <div><label><input id="mqttEnabled" type="checkbox" class="config"> MQTT Enabled</label></div>
+        <div><label for="mqttServer">MQTT Server</label></div>
+        <div><input id="mqttServer" type="text" class="config"></div>
+        <div><label for="mqttUser">MQTT User</label></div>
+        <div><input id="mqttUser" type="text" class="config"></div>
+        <div><label for="mqttPass">MQTT Password</label></div>
+        <div><input id="mqttPass" type="password" class="config"></div>
+        <div><label><input id="mqttPublishCnt" type="checkbox" class="config"> Publish Counter</label></div>
+        <div><label><input id="mqttPublishTmg" type="checkbox" class="config"> Publish Timing</label></div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Home Assistant</legend>
+        <div><label><input id="haEnabledParam" type="checkbox" class="config"> Enabled</label></div>
+    </fieldset>
+
+    <script src="common.js"></script>
+    <script>
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnLoad').addEventListener('click', loadConfig);
+        document.getElementById('btnSave').addEventListener('click', saveConfig);
+        document.getElementById('btnRestart').addEventListener('click', restartDevice);
+        document.getElementById('btnReset').addEventListener('click', resetConfig);
+
+        function setField(id, value) {
+            const el = document.getElementById(id);
+            if (!el) {
+                console.warn(`Field not found: ${id}`);
+                return;
+            }
+            if (el.type === 'checkbox') {
+                const v = String(value || '').toLowerCase();
+                el.checked = v === 'true' || v === 'selected' || v === '1' || v === 'on';
+            }
+            else el.value = value === undefined || value === null ? '' : value;
+        }
+
+        function getField(id) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            if (el.type === 'checkbox') return el.checked ? "true" : "false";
+            return el.value.trim();
+        }
+
+        function resetFieldsToDefaultValues() {
+            const elements = document.getElementsByClassName("config");
+            for (const el of elements) {
+                if (el.type === 'checkbox') {
+                    el.checked = el.defaultChecked;
+                } else {
+                    el.value = el.defaultValue;
+                }
+            }
+        }
+
+        async function loadConfig() {
+            setStatus('Loading...');
+            resetFieldsToDefaultValues();
+            try {
+                const res = await fetch('/api/v1/config');
+                if (!res.ok) throw new Error('Load failed');
+                const cfg_obj = await res.json();
+                const cfg = cfg_obj.config || {};
+
+                for (const key in cfg) {
+                    if (cfg.hasOwnProperty(key)) {
+                        setField(key, cfg[key]);
+                    }
+                }
+                setStatus('Loaded');
+            } catch (err) {
+                setStatus('Load failed');
+                console.error(err);
+            }
+        }
+
+        async function saveConfig() {
+            const payload = {};
+
+            setStatus('Saving...');
+            const el = document.getElementsByClassName("config");
+
+            for (const e of el) {
+                payload[e.id] = getField(e.id);
+            }
+            
+            try {
+                const res = await fetch('/api/v1/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const text = await res.text();
+                setStatus(res.ok ? text : `Error: ${text}`);
+            } catch (err) {
+                setStatus('Save failed');
+                console.error(err);
+            }
+        }
+
+        async function resetConfig() {
+            if (!confirm('Reset all saved configuration values?')) return;
+            setStatus('Resetting...');
+            try {
+                const res = await fetch('/api/v1/config/reset', { method: 'POST' });
+                const text = await res.text();
+                setStatus(res.ok ? text : `Error: ${text}`);
+                if (res.ok) await loadConfig();
+            } catch (err) {
+                setStatus('Reset failed');
+                console.error(err);
+            }
+        }
+
+        async function restartDevice() {
+            if (!confirm('Restart device now?')) return;
+            setStatus('Restarting...');
+            try {
+                const res = await fetch('/restart');
+                const text = await res.text();
+                setStatus(res.ok ? text : `Error: ${text}`);
+            } catch (err) {
+                setStatus('Restart failed');
+                console.error(err);
+            }
+        }
+
+        loadConfig();
+    </script>
+</body>
+
+</html>

@@ -1,16 +1,16 @@
 #include "main.hpp"
 
 #include <ArduinoJson.h>
-#include <IotWebConf.h>
-#include <Preferences.h>
+#include <WiFi.h>
 #include <esp_efuse.h>
+
+#include "Logger.hpp"
 
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
 
 #include "ClientManager.hpp"
 #include "DeviceManager.hpp"
-#include "Logger.hpp"
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
 #include "Schedule.hpp"
@@ -20,10 +20,11 @@
 #include "client.hpp"
 #endif
 
-#include <ESPmDNS.h>
 #include <esp_task_wdt.h>
 
+#include "ConfigManager.hpp"
 #include "UpgradeManager.hpp"
+#include "WifiNetworkManager.hpp"
 #include "esp32c3/rom/rtc.h"
 #include "esp_sntp.h"
 #include "http.hpp"
@@ -32,8 +33,9 @@
 TaskHandle_t Task1;
 #endif
 
-Preferences preferences;
+ConfigManager configManager;
 UpgradeManager upgradeManager;
+WifiNetworkManager wifiNetworkManager;
 
 // minimum time of reset pin
 #define RESET_MS 1000
@@ -43,160 +45,10 @@ UpgradeManager upgradeManager;
 #define PWM_FREQ 10000
 #define PWM_RESOLUTION 8
 
-// mDNS
-#define HOSTNAME "esp-eBus"
-
-// IotWebConf
-// adjust this if the iotwebconf structure has changed
-#define CONFIG_VERSION "eeb"
-
-#define STRING_LEN 64
-#define DNS_LEN 255
-#define NUMBER_LEN 8
-
-#define DEFAULT_APMODE_PASS "ebusebus"
-#define DEFAULT_AP "ebus-test"
-#define DEFAULT_PASS "lectronz"
-
-#define DUMMY_STATIC_IP "192.168.1.180"
-#define DUMMY_GATEWAY "192.168.1.1"
-#define DUMMY_NETMASK "255.255.255.0"
-
-#define DUMMY_SNTP_SERVER "pool.ntp.org"
-#define DUMMY_SNTP_TIMEZONE "UTC0"
-
-#define DUMMY_MQTT_SERVER DUMMY_GATEWAY
-#define DUMMY_MQTT_USER "roger"
-#define DUMMY_MQTT_PASS "password"
+#define DEFAULT_SNTP_SERVER "pool.ntp.org"
+#define DEFAULT_SNTP_TIMEZONE "UTC0"
 
 char unique_id[7]{};
-
-DNSServer dnsServer;
-
-char staticIPValue[STRING_LEN];
-char ipAddressValue[STRING_LEN];
-char gatewayValue[STRING_LEN];
-char netmaskValue[STRING_LEN];
-
-char sntpEnabled[STRING_LEN];
-char sntpServer[DNS_LEN];
-char sntpTimezone[STRING_LEN];
-
-uint32_t pwm;
-char pwm_value[NUMBER_LEN];
-
-#if defined(EBUS_INTERNAL)
-char ebus_address[NUMBER_LEN];
-static char ebus_address_values[][NUMBER_LEN] = {
-    "00", "10", "30", "70", "f0", "01", "11", "31", "71",
-    "f1", "03", "13", "33", "73", "f3", "07", "17", "37",
-    "77", "f7", "0f", "1f", "3f", "7f", "ff"};
-char busisr_window[NUMBER_LEN];
-char busisr_offset[NUMBER_LEN];
-
-char inquiryOfExistenceValue[STRING_LEN];
-char scanOnStartupValue[STRING_LEN];
-char firstCommandAfterStartValue[NUMBER_LEN];
-
-char mqtt_enabled[STRING_LEN];
-char mqtt_server[STRING_LEN];
-char mqtt_user[STRING_LEN];
-char mqtt_pass[STRING_LEN];
-
-char mqttPublishCounterValue[STRING_LEN];
-char mqttPublishTimingValue[STRING_LEN];
-
-char haEnabledValue[STRING_LEN];
-#endif
-
-IotWebConf iotWebConf(HOSTNAME, &dnsServer, &configServer, DEFAULT_APMODE_PASS,
-                      CONFIG_VERSION);
-
-iotwebconf::ParameterGroup connGroup =
-    iotwebconf::ParameterGroup("conn", "Connection parameters");
-iotwebconf::CheckboxParameter staticIPParam = iotwebconf::CheckboxParameter(
-    "Static IP", "staticIPParam", staticIPValue, STRING_LEN);
-iotwebconf::TextParameter ipAddressParam = iotwebconf::TextParameter(
-    "IP address", "ipAddress", ipAddressValue, STRING_LEN, "", DUMMY_STATIC_IP);
-iotwebconf::TextParameter gatewayParam = iotwebconf::TextParameter(
-    "Gateway", "gateway", gatewayValue, STRING_LEN, "", DUMMY_GATEWAY);
-iotwebconf::TextParameter netmaskParam = iotwebconf::TextParameter(
-    "Subnet mask", "netmask", netmaskValue, STRING_LEN, "", DUMMY_NETMASK);
-
-#if defined(EBUS_INTERNAL)
-iotwebconf::ParameterGroup sntpGroup =
-    iotwebconf::ParameterGroup("sntp", "SNTP configuration");
-iotwebconf::CheckboxParameter sntpEnabledParam = iotwebconf::CheckboxParameter(
-    "SNTP enabled", "sntpEnabled", sntpEnabled, STRING_LEN);
-iotwebconf::TextParameter sntpServerParam = iotwebconf::TextParameter(
-    "SNTP server", "sntpServer", sntpServer, DNS_LEN, "", DUMMY_SNTP_SERVER);
-iotwebconf::TextParameter sntpTimezoneParam =
-    iotwebconf::TextParameter("SNTP timezone", "sntpTimezone", sntpTimezone,
-                              STRING_LEN, "", DUMMY_SNTP_TIMEZONE);
-#endif
-
-iotwebconf::ParameterGroup ebusGroup =
-    iotwebconf::ParameterGroup("ebus", "eBUS configuration");
-iotwebconf::NumberParameter pwmParam =
-    iotwebconf::NumberParameter("PWM value", "pwm_value", pwm_value, NUMBER_LEN,
-                                "130", "1..255", "min='1' max='255' step='1'");
-#if defined(EBUS_INTERNAL)
-iotwebconf::SelectParameter ebusAddressParam = iotwebconf::SelectParameter(
-    "eBUS address", "ebus_address", ebus_address, NUMBER_LEN,
-    reinterpret_cast<char*>(ebus_address_values),
-    reinterpret_cast<char*>(ebus_address_values),
-    sizeof(ebus_address_values) / NUMBER_LEN, NUMBER_LEN, "ff");
-iotwebconf::NumberParameter busIsrWindowParam = iotwebconf::NumberParameter(
-    "Bus ISR window (microseconds)", "busisr_window", busisr_window, NUMBER_LEN,
-    "4300", "4250..4500", "min='4250' max='4500' step='1'");
-iotwebconf::NumberParameter busIsrOffsetParam = iotwebconf::NumberParameter(
-    "Bus ISR offset (microseconds)", "busisr_offset", busisr_offset, NUMBER_LEN,
-    "80", "0..200", "min='0' max='200' step='1'");
-
-iotwebconf::ParameterGroup scheduleGroup =
-    iotwebconf::ParameterGroup("schedule", "Schedule configuration");
-iotwebconf::CheckboxParameter inquiryOfExistenceParam =
-    iotwebconf::CheckboxParameter("Send an inquiry of existence command",
-                                  "inquiryOfExistenceParam",
-                                  inquiryOfExistenceValue, STRING_LEN);
-iotwebconf::CheckboxParameter scanOnStartupParam =
-    iotwebconf::CheckboxParameter("Scan for eBUS devices on startup",
-                                  "scanOnStartupParam", scanOnStartupValue,
-                                  STRING_LEN);
-iotwebconf::NumberParameter firstCommandAfterStartParam =
-    iotwebconf::NumberParameter("First command after start (seconds)",
-                                "firstCommandAfterStartParam",
-                                firstCommandAfterStartValue, NUMBER_LEN, "10",
-                                "5..60", "min='5' max='60' step='1'");
-
-iotwebconf::ParameterGroup mqttGroup =
-    iotwebconf::ParameterGroup("mqtt", "MQTT configuration");
-iotwebconf::CheckboxParameter mqttEnabledParam = iotwebconf::CheckboxParameter(
-    "MQTT enabled", "mqttEnabledParam", mqtt_enabled, STRING_LEN);
-iotwebconf::TextParameter mqttServerParam =
-    iotwebconf::TextParameter("MQTT server", "mqtt_server", mqtt_server,
-                              STRING_LEN, "", DUMMY_MQTT_SERVER);
-iotwebconf::TextParameter mqttUserParam = iotwebconf::TextParameter(
-    "MQTT user", "mqtt_user", mqtt_user, STRING_LEN, "", DUMMY_MQTT_USER);
-iotwebconf::PasswordParameter mqttPasswordParam = iotwebconf::PasswordParameter(
-    "MQTT password", "mqtt_pass", mqtt_pass, STRING_LEN, "", DUMMY_MQTT_PASS);
-
-iotwebconf::CheckboxParameter mqttPublishCounterParam =
-    iotwebconf::CheckboxParameter("Publish counter", "mqttPublishCounterParam",
-                                  mqttPublishCounterValue, STRING_LEN);
-iotwebconf::CheckboxParameter mqttPublishTimingParam =
-    iotwebconf::CheckboxParameter("Publish timing", "mqttPublishTimingParam",
-                                  mqttPublishTimingValue, STRING_LEN);
-
-iotwebconf::ParameterGroup haGroup =
-    iotwebconf::ParameterGroup("ha", "Home Assistant configuration");
-iotwebconf::CheckboxParameter haEnabledParam = iotwebconf::CheckboxParameter(
-    "Home Assistant enabled", "haEnabledParam", haEnabledValue, STRING_LEN);
-#endif
-
-IPAddress ipAddress;
-IPAddress gateway;
-IPAddress netmask;
 
 #if !defined(EBUS_INTERNAL)
 WiFiServer wifiServer(3333);
@@ -220,10 +72,6 @@ uint32_t free_heap = 0;
 uint32_t loopDuration = 0;
 uint32_t maxLoopDuration;
 
-// wifi
-uint32_t last_connect = 0;
-int reconnect_count = 0;
-
 #if defined(EBUS_INTERNAL)
 // mqtt
 uint32_t lastMqttUpdate = 0;
@@ -243,11 +91,6 @@ static const esp_efuse_desc_t* ADAPTER_HW_VERSION_EFUSE_FIELD[] = {
     &ADAPTER_HW_VERSION_EFUSE_DESC, nullptr};
 uint8_t adapterHwVersionRaw = 0xEE;
 std::string adapterHwVersion = "unread";
-
-void wifiConnected() {
-  last_connect = millis();
-  ++reconnect_count;
-}
 
 void wdt_start() {
   esp_task_wdt_init(6, true);
@@ -269,7 +112,8 @@ inline void enableTX() {
 #endif
 }
 
-void set_pwm(uint8_t value) {
+void set_pwm() {
+  int value = configManager.readInt("pwmValue", 130);
 #if defined(PWM_PIN)
   ledcWrite(PWM_CHANNEL, value);
 #if defined(EBUS_INTERNAL)
@@ -339,7 +183,7 @@ void check_reset() {
   uint32_t resetStart = millis();
   while (digitalRead(RESET_PIN) == 0) {
     if (millis() > resetStart + RESET_MS) {
-      preferences.clear();
+      configManager.resetConfig();
       restart();
     }
   }
@@ -407,7 +251,7 @@ void data_loop(void* pvParameters) {
 
 #if defined(EBUS_INTERNAL)
 void time_sync_notification_cb(struct timeval* tv) {
-  logger.info("SNTP synchronized to " + String(sntpServer));
+  logger.info("SNTP synchronized to " + String(sntp_getservername(0)));
 }
 
 void initSNTP(const char* server) {
@@ -445,102 +289,45 @@ const std::string getMqttStatusJson() {
 }
 #endif
 
-bool formValidator(iotwebconf::WebRequestWrapper* webRequestWrapper) {
-  bool valid = true;
-
-  if (webRequestWrapper->arg(staticIPParam.getId()).equals("selected")) {
-    if (!ipAddress.fromString(webRequestWrapper->arg(ipAddressParam.getId()))) {
-      ipAddressParam.errorMessage = "Please provide a valid IP address!";
-      valid = false;
-    }
-    if (!netmask.fromString(webRequestWrapper->arg(netmaskParam.getId()))) {
-      netmaskParam.errorMessage = "Please provide a valid netmask!";
-      valid = false;
-    }
-    if (!gateway.fromString(webRequestWrapper->arg(gatewayParam.getId()))) {
-      gatewayParam.errorMessage = "Please provide a valid gateway address!";
-      valid = false;
-    }
-  }
-#if defined(EBUS_INTERNAL)
-  if (webRequestWrapper->arg(sntpServerParam.getId()).length() > DNS_LEN - 1) {
-    String tmp = "max. ";
-    tmp += String(DNS_LEN);
-    tmp += " characters allowed";
-    sntpServerParam.errorMessage = tmp.c_str();
-    valid = false;
-  }
-
-  if (webRequestWrapper->arg(sntpTimezoneParam.getId()).length() >
-      STRING_LEN - 1) {
-    String tmp = "max. ";
-    tmp += String(STRING_LEN);
-    tmp += " characters allowed";
-    sntpTimezoneParam.errorMessage = tmp.c_str();
-    valid = false;
-  }
-
-  if (webRequestWrapper->arg(mqttServerParam.getId()).length() >
-      STRING_LEN - 1) {
-    String tmp = "max. ";
-    tmp += String(STRING_LEN);
-    tmp += " characters allowed";
-    mqttServerParam.errorMessage = tmp.c_str();
-    valid = false;
-  }
-#endif
-
-  return valid;
-}
-
 void saveParamsCallback() {
-  set_pwm(atoi(pwm_value));
-  pwm = get_pwm();
+  set_pwm();
 
 #if defined(EBUS_INTERNAL)
+  String ebusAddress = configManager.readString("ebusAddress", "ff");
   ebus::handler->setSourceAddress(
-      uint8_t(std::strtoul(ebus_address, nullptr, 16)));
-  ebus::setBusIsrWindow(atoi(busisr_window));
-  ebus::setBusIsrOffset(atoi(busisr_offset));
+      uint8_t(std::strtoul(ebusAddress.c_str(), nullptr, 16)));
+  ebus::setBusIsrWindow(configManager.readInt("busisrWindow", 4300));
+  ebus::setBusIsrOffset(configManager.readInt("busisrOffset", 80));
 
-  if (sntpEnabledParam.isChecked()) {
+  if (configManager.readBool("sntpEnabled")) {
     esp_sntp_stop();
-    initSNTP(sntpServer);
-    setTimezone(sntpTimezone);
+    initSNTP(configManager.readString("sntpServer", DEFAULT_SNTP_SERVER).c_str());
+    setTimezone(configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE).c_str());
   } else {
     esp_sntp_stop();
   }
 
-  deviceManager.setScanOnStartup(scanOnStartupParam.isChecked());
+  deviceManager.setScanOnStartup(configManager.readBool("scanOnStartPrm"));
 
-  schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
-  schedule.setFirstCommandAfterStart(atoi(firstCommandAfterStartValue));
+  schedule.setSendInquiryOfExistence(configManager.readBool("inquiryExistPrm"));
+  schedule.setFirstCommandAfterStart(
+      configManager.readInt("firstCmdAfterSt", 10));
 
-  mqtt.setEnabled(mqttEnabledParam.isChecked());
-  mqtt.setServer(mqtt_server, 1883);
-  mqtt.setCredentials(mqtt_user, mqtt_pass);
+  String mqttServerValue = configManager.readString("mqttServer");
+  String mqttUserValue = configManager.readString("mqttUser");
+  String mqttPassValue = configManager.readString("mqttPass");
+  mqtt.setEnabled(configManager.readBool("mqttEnabled"));
+  mqtt.setServer(mqttServerValue.c_str(), 1883);
+  mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
   mqtt.change();
 
-  schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
-  schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
+  schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
+  schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
 
-  mqttha.setEnabled(haEnabledParam.isChecked());
+  mqttha.setEnabled(configManager.readBool("haEnabledParam"));
   mqttha.publishDeviceInfo();
   mqttha.publishComponents();
 #endif
-}
-
-void connectWifi(const char* ssid, const char* password) {
-  if (staticIPParam.isChecked()) {
-    bool valid = true;
-    valid = valid && ipAddress.fromString(String(ipAddressValue));
-    valid = valid && netmask.fromString(String(netmaskValue));
-    valid = valid && gateway.fromString(String(gatewayValue));
-
-    if (valid) WiFi.config(ipAddress, gateway, netmask);
-  }
-
-  WiFi.begin(ssid, password);
 }
 
 char* status_string() {
@@ -572,9 +359,9 @@ char* status_string() {
                   getApbFrequency());
   pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", millis());
   pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
-                  last_connect);
+                  wifiNetworkManager.getLastConnect());
   pos += snprintf(status + pos, bufferSize - pos, "reconnect_count: %d \n",
-                  reconnect_count);
+                  wifiNetworkManager.getReconnectCount());
   pos +=
       snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
   pos += snprintf(status + pos, bufferSize - pos, "bssid: %s\n",
@@ -595,33 +382,36 @@ char* status_string() {
                   "adapter_hw_version_raw: 0x%02X\r\n", adapterHwVersionRaw);
 
 #if defined(EBUS_INTERNAL)
+  String sntpTimezoneValue =
+      configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
   pos += snprintf(status + pos, bufferSize - pos, "sntpEnabled: %s\r\n",
-                  sntpEnabledParam.isChecked() ? "true" : "false");
+                  configManager.readBool("sntpEnabled") ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "sntpServer: %s\r\n",
-                  sntpServer);
+                  sntp_getservername(0));
   pos += snprintf(status + pos, bufferSize - pos, "sntpTimezone: %s\r\n",
-                  sntpTimezone);
+                  sntpTimezoneValue.c_str());
 #endif
 
   pos +=
       snprintf(status + pos, bufferSize - pos, "pwm_value: %u\r\n", get_pwm());
 
 #if defined(EBUS_INTERNAL)
+  String ebusAddress = configManager.readString("ebusAddress", "ff");
   pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
-                  ebus_address);
+                  ebusAddress.c_str());
   pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %i us\r\n",
-                  atoi(busisr_window));
+                  configManager.readInt("busisrWindow", 4300));
   pos += snprintf(status + pos, bufferSize - pos, "busisr_offset: %i us\r\n",
-                  atoi(busisr_offset));
+                  configManager.readInt("busisrOffset", 80));
 
   pos +=
       snprintf(status + pos, bufferSize - pos, "inquiry_of_existence: %s\r\n",
-               inquiryOfExistenceParam.isChecked() ? "true" : "false");
+               configManager.readBool("inquiryExistPrm") ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos, "scan_on_startup: %s\r\n",
-                  scanOnStartupParam.isChecked() ? "true" : "false");
+                  configManager.readBool("scanOnStartPrm") ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos,
                   "first_command_after_start: %i\r\n",
-                  atoi(firstCommandAfterStartValue));
+                  configManager.readInt("firstCmdAfterSt", 10));
   pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
@@ -632,10 +422,13 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.isConnected() ? "true" : "false");
 
+  String mqttServerValue = configManager.readString("mqttServer");
+  String mqttUserValue = configManager.readString("mqttUser");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_server: %s\r\n",
-                  mqtt_server);
+                  mqttServerValue.c_str());
   pos +=
-      snprintf(status + pos, bufferSize - pos, "mqtt_user: %s\r\n", mqtt_user);
+      snprintf(status + pos, bufferSize - pos, "mqtt_user: %s\r\n",
+               mqttUserValue.c_str());
   pos +=
       snprintf(status + pos, bufferSize - pos, "mqtt_publish_counter: %s\r\n",
                schedule.getPublishCounter() ? "true" : "false");
@@ -700,20 +493,24 @@ const std::string getStatusJson() {
 
   // WIFI
   JsonObject WIFI = doc["WIFI"].to<JsonObject>();
-  WIFI["Last_Connect"] = last_connect;
-  WIFI["Reconnect_Count"] = reconnect_count;
+  WIFI["Last_Connect"] = wifiNetworkManager.getLastConnect();
+  WIFI["Reconnect_Count"] = wifiNetworkManager.getReconnectCount();
   WIFI["RSSI"] = WiFi.RSSI();
 
-  if (staticIPParam.isChecked()) {
+  if (wifiNetworkManager.isStaticIpEnabled()) {
     WIFI["Static_IP"] = true;
-    WIFI["IP_Address"] = ipAddress.toString();
-    WIFI["Gateway"] = gateway.toString();
-    WIFI["Netmask"] = netmask.toString();
+    WIFI["IP_Address"] = wifiNetworkManager.getConfiguredIpAddress();
+    WIFI["Gateway"] = wifiNetworkManager.getConfiguredGateway();
+    WIFI["Netmask"] = wifiNetworkManager.getConfiguredNetmask();
+    WIFI["DNS1"] = wifiNetworkManager.getConfiguredDns1();
+    WIFI["DNS2"] = wifiNetworkManager.getConfiguredDns2();
   } else {
     WIFI["Static_IP"] = false;
     WIFI["IP_Address"] = WiFi.localIP().toString();
     WIFI["Gateway"] = WiFi.gatewayIP().toString();
     WIFI["Netmask"] = WiFi.subnetMask().toString();
+    WIFI["DNS1"] = WiFi.dnsIP(0).toString();
+    WIFI["DNS2"] = WiFi.dnsIP(1).toString();
   }
   WIFI["SSID"] = WiFi.SSID();
   WIFI["BSSID"] = WiFi.BSSIDstr();
@@ -724,32 +521,33 @@ const std::string getStatusJson() {
 // SNTP
 #if defined(EBUS_INTERNAL)
   JsonObject SNTP = doc["SNTP"].to<JsonObject>();
-  SNTP["Enabled"] = sntpEnabledParam.isChecked();
-  SNTP["Server"] = sntpServer;
-  SNTP["Timezone"] = sntpTimezone;
+  SNTP["Enabled"] = configManager.readBool("sntpEnabled");
+  SNTP["Server"] = configManager.readString("sntpServer", sntp_getservername(0));
+  SNTP["Timezone"] = configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
 #endif
 
   // eBUS
   JsonObject eBUS = doc["eBUS"].to<JsonObject>();
   eBUS["PWM"] = get_pwm();
 #if defined(EBUS_INTERNAL)
-  eBUS["Ebus_Address"] = ebus_address;
-  eBUS["BusIsr_Window"] = atoi(busisr_window);
-  eBUS["BusIsr_Offset"] = atoi(busisr_offset);
+  eBUS["Ebus_Address"] = configManager.readString("ebusAddress", "ff");
+  eBUS["BusIsr_Window"] = configManager.readInt("busisrWindow", 4300);
+  eBUS["BusIsr_Offset"] = configManager.readInt("busisrOffset", 80);
 
   // Schedule
   JsonObject Schedule = doc["Schedule"].to<JsonObject>();
-  Schedule["Inquiry_Of_Existence"] = inquiryOfExistenceParam.isChecked();
-  Schedule["Scan_On_Startup"] = scanOnStartupParam.isChecked();
-  Schedule["First_Command_After_Start"] = atoi(firstCommandAfterStartValue);
+  Schedule["Inquiry_Of_Existence"] = configManager.readBool("inquiryExistPrm");
+  Schedule["Scan_On_Startup"] = configManager.readBool("scanOnStartPrm");
+  Schedule["First_Command_After_Start"] =
+      configManager.readInt("firstCmdAfterSt", 10);
   Schedule["Active_Commands"] = store.getActiveCommands();
   Schedule["Passive_Commands"] = store.getPassiveCommands();
 
   // MQTT
   JsonObject MQTT = doc["MQTT"].to<JsonObject>();
   MQTT["Enabled"] = mqtt.isEnabled();
-  MQTT["Server"] = mqtt_server;
-  MQTT["User"] = mqtt_user;
+  MQTT["Server"] = configManager.readString("mqttServer");
+  MQTT["User"] = configManager.readString("mqttUser");
   MQTT["Connected"] = mqtt.isConnected();
   MQTT["Publish_Counter"] = schedule.getPublishCounter();
   MQTT["Publish_Timing"] = schedule.getPublishTiming();
@@ -764,6 +562,8 @@ const std::string getStatusJson() {
 
   return payload;
 }
+
+bool isCaptivePortalActive() { return wifiNetworkManager.isCaptivePortalActive(); }
 
 bool handleStatusServerRequests() {
   if (!statusServer.hasClient()) return false;
@@ -782,7 +582,7 @@ void setup() {
   DebugSer.begin(115200);
   DebugSer.setDebugOutput(true);
 
-  preferences.begin("esp-ebus", false);
+  logger.info("Starting esp-ebus adapter version " AUTO_VERSION);
 
   check_reset();
 
@@ -804,80 +604,11 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  // IotWebConf
-  connGroup.addItem(&staticIPParam);
-  connGroup.addItem(&ipAddressParam);
-  connGroup.addItem(&gatewayParam);
-  connGroup.addItem(&netmaskParam);
-
-#if defined(EBUS_INTERNAL)
-  sntpGroup.addItem(&sntpEnabledParam);
-  sntpGroup.addItem(&sntpServerParam);
-  sntpGroup.addItem(&sntpTimezoneParam);
-#endif
-
-  ebusGroup.addItem(&pwmParam);
-
-#if defined(EBUS_INTERNAL)
-  ebusGroup.addItem(&ebusAddressParam);
-  ebusGroup.addItem(&busIsrWindowParam);
-  ebusGroup.addItem(&busIsrOffsetParam);
-
-  scheduleGroup.addItem(&inquiryOfExistenceParam);
-  scheduleGroup.addItem(&scanOnStartupParam);
-  scheduleGroup.addItem(&firstCommandAfterStartParam);
-
-  mqttGroup.addItem(&mqttEnabledParam);
-  mqttGroup.addItem(&mqttServerParam);
-  mqttGroup.addItem(&mqttUserParam);
-  mqttGroup.addItem(&mqttPasswordParam);
-
-  mqttGroup.addItem(&mqttPublishCounterParam);
-  mqttGroup.addItem(&mqttPublishTimingParam);
-
-  haGroup.addItem(&haEnabledParam);
-#endif
-
-  iotWebConf.addParameterGroup(&connGroup);
-#if defined(EBUS_INTERNAL)
-  iotWebConf.addParameterGroup(&sntpGroup);
-#endif
-  iotWebConf.addParameterGroup(&ebusGroup);
-#if defined(EBUS_INTERNAL)
-  iotWebConf.addParameterGroup(&scheduleGroup);
-  iotWebConf.addParameterGroup(&mqttGroup);
-  iotWebConf.addParameterGroup(&haGroup);
-#endif
-  iotWebConf.setFormValidator(&formValidator);
-  iotWebConf.setConfigSavedCallback(&saveParamsCallback);
-  iotWebConf.getApTimeoutParameter()->visible = true;
-  iotWebConf.setWifiConnectionTimeoutMs(7000);
-  iotWebConf.setWifiConnectionHandler(&connectWifi);
-  iotWebConf.setWifiConnectionCallback(&wifiConnected);
-
-#if defined(STATUS_LED_PIN)
-  iotWebConf.setStatusPin(STATUS_LED_PIN);
-#endif
-
-  if (preferences.getBool("firstboot", true)) {
-    preferences.putBool("firstboot", false);
-
-    iotWebConf.init();
-    strncpy(iotWebConf.getApPasswordParameter()->valueBuffer,
-            DEFAULT_APMODE_PASS, IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiSsidParameter()->valueBuffer, DEFAULT_AP,
-            IOTWEBCONF_WORD_LEN);
-    strncpy(iotWebConf.getWifiPasswordParameter()->valueBuffer, DEFAULT_PASS,
-            IOTWEBCONF_WORD_LEN);
-    iotWebConf.saveConfig();
-  } else {
-    iotWebConf.skipApStartup();
-    // -- Initializing the configuration.
-    iotWebConf.init();
-  }
-
   SetupHttpHandlers();
+  configManager.begin(&configServer);
   upgradeManager.begin(&configServer);
+  wifiNetworkManager.begin(&configManager);
+  configServer.begin();
   upgradeManager.setPreUpgradeHook([]() {
 #if defined(EBUS_INTERNAL)
     ebus::serviceRunner->stop();
@@ -891,30 +622,32 @@ void setup() {
 #endif
   });
 
-  set_pwm(atoi(pwm_value));
-
-  while (iotWebConf.getState() != iotwebconf::NetworkState::OnLine) {
-    iotWebConf.doLoop();
-  }
+  set_pwm();
 
 #if defined(EBUS_INTERNAL)
-  if (sntpEnabledParam.isChecked()) {
-    initSNTP(sntpServer);
-    setTimezone(sntpTimezone);
+  if (configManager.readBool("sntpEnabled")) {
+    String sntpServerValue = configManager.readString("sntpServer", DEFAULT_SNTP_SERVER);
+    String sntpTimezoneValue =
+        configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
+    initSNTP(sntpServerValue.c_str());
+    setTimezone(sntpTimezoneValue.c_str());
   }
 
-  mqtt.setEnabled(mqttEnabledParam.isChecked());
+  String mqttServerValue = configManager.readString("mqttServer");
+  String mqttUserValue = configManager.readString("mqttUser");
+  String mqttPassValue = configManager.readString("mqttPass");
+  mqtt.setEnabled(configManager.readBool("mqttEnabled"));
   mqtt.setup(unique_id);
-  mqtt.setServer(mqtt_server, 1883);
-  mqtt.setCredentials(mqtt_user, mqtt_pass);
+  mqtt.setServer(mqttServerValue.c_str(), 1883);
+  mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
   mqtt.start();
 
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
   mqttha.setWillTopic(mqtt.getWillTopic());
-  mqttha.setEnabled(haEnabledParam.isChecked());
+  mqttha.setEnabled(configManager.readBool("haEnabledParam"));
 
-  mqttha.setThingName(iotWebConf.getThingName());
+  mqttha.setThingName(configManager.readString("thingName", "esp-eBus").c_str());
   mqttha.setThingModel(ESP.getChipModel());
   mqttha.setThingModelId("Revision: " + std::to_string(ESP.getChipRevision()));
   mqttha.setThingManufacturer("danman.eu");
@@ -933,25 +666,26 @@ void setup() {
   statusServer.begin();
 
   upgradeManager.beginEspOta();
-  MDNS.begin(HOSTNAME);
   wdt_start();
 
   last_comms = millis();
   enableTX();
 
 #if defined(EBUS_INTERNAL)
+  String ebusAddress = configManager.readString("ebusAddress", "ff");
   ebus::handler->setSourceAddress(
-      uint8_t(std::strtoul(ebus_address, nullptr, 16)));
-  ebus::setBusIsrWindow(atoi(busisr_window));
-  ebus::setBusIsrOffset(atoi(busisr_offset));
+      uint8_t(std::strtoul(ebusAddress.c_str(), nullptr, 16)));
+  ebus::setBusIsrWindow(configManager.readInt("busisrWindow", 4300));
+  ebus::setBusIsrOffset(configManager.readInt("busisrOffset", 80));
 
   deviceManager.setEbusHandler(ebus::handler);
-  deviceManager.setScanOnStartup(scanOnStartupParam.isChecked());
+  deviceManager.setScanOnStartup(configManager.readBool("scanOnStartPrm"));
 
-  schedule.setSendInquiryOfExistence(inquiryOfExistenceParam.isChecked());
-  schedule.setFirstCommandAfterStart(atoi(firstCommandAfterStartValue));
-  schedule.setPublishCounter(mqttPublishCounterParam.isChecked());
-  schedule.setPublishTiming(mqttPublishTimingParam.isChecked());
+  schedule.setSendInquiryOfExistence(configManager.readBool("inquiryExistPrm"));
+  schedule.setFirstCommandAfterStart(
+      configManager.readInt("firstCmdAfterSt", 10));
+  schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
+  schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
   schedule.start(ebus::request, ebus::handler);
 
   ebus::serviceRunner->start();
@@ -972,7 +706,7 @@ void setup() {
 void loop() {
   wdt_feed();
 
-  iotWebConf.doLoop();
+  configServer.handleClient();
 
 #if defined(EBUS_INTERNAL)
   if (mqtt.isEnabled()) {

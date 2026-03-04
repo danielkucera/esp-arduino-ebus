@@ -14,6 +14,7 @@ extern const char common_js_start[] asm("_binary_static_common_js_start");
 
 extern const char root_html_start[] asm("_binary_static_root_html_start");
 extern const char status_html_start[] asm("_binary_static_status_html_start");
+extern const char config_html_start[] asm("_binary_static_config_html_start");
 extern const char upgrade_html_start[] asm("_binary_static_upgrade_html_start");
 extern const char commands_html_start[] asm(
     "_binary_static_commands_html_start");
@@ -30,8 +31,6 @@ void handleStatic(const char* contentType, const char* data) {
 
 // root
 void handleRoot() {
-  // -- Let IotWebConf test and handle captive portal requests.
-  if (iotWebConf.handleCaptivePortal()) return;  // already served
   handleStatic("text/html", root_html_start);
 }
 
@@ -279,7 +278,14 @@ void handleLogs() { configServer.send(200, "text/plain", logger.getLogs()); }
 
 void SetupHttpHandlers() {
   // -- Set up required URL handlers on the web server.
-  configServer.onNotFound([]() { iotWebConf.handleNotFound(); });
+  configServer.onNotFound([]() {
+    if (isCaptivePortalActive()) {
+      configServer.sendHeader("Location", "/config", true);
+      configServer.send(302, "text/plain", "");
+      return;
+    }
+    configServer.send(404, "text/plain", "Not found");
+  });
 
   // common
   configServer.on("/common.css",
@@ -292,7 +298,10 @@ void SetupHttpHandlers() {
   configServer.on("/", [] { handleRoot(); });
 
   // config
-  configServer.on("/config", [] { iotWebConf.handleConfig(); });
+  configServer.on("/config",
+                  []() { handleStatic("text/html", config_html_start); });
+  configServer.on("/config2",
+                  []() { handleStatic("text/html", config_html_start); });
 
   // status
   configServer.on("/status",
