@@ -1,6 +1,7 @@
 #include "WifiNetworkManager.hpp"
 
 #include <ESPmDNS.h>
+#include <cctype>
 #include <cstring>
 #include <esp_wifi.h>
 
@@ -8,6 +9,34 @@
 #include "Logger.hpp"
 
 WifiNetworkManager* WifiNetworkManager::instance_ = nullptr;
+
+namespace {
+
+String buildHostname(const String& source, const char* fallback) {
+  String hostname = source;
+  hostname.trim();
+  if (hostname.isEmpty()) hostname = fallback;
+
+  String sanitized;
+  sanitized.reserve(hostname.length());
+  for (size_t i = 0; i < hostname.length(); ++i) {
+    const char c = hostname[i];
+    if (std::isalnum(static_cast<unsigned char>(c))) {
+      sanitized += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    } else if (c == '-' || c == '_' || c == ' ') {
+      sanitized += '-';
+    }
+  }
+
+  while (sanitized.startsWith("-")) sanitized.remove(0, 1);
+  while (sanitized.endsWith("-")) sanitized.remove(sanitized.length() - 1, 1);
+
+  if (sanitized.isEmpty()) sanitized = "esp-ebus";
+  if (sanitized.length() > 63) sanitized.remove(63);
+  return sanitized;
+}
+
+}  // namespace
 
 void WifiNetworkManager::begin(ConfigManager* configManager) {
   static constexpr const char* kDefaultHostname = "esp-eBus";
@@ -24,14 +53,19 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
                                                        kDefaultApPassword)
                           : String(kDefaultApPassword);
   if (apPassword.isEmpty()) apPassword = kDefaultApPassword;
+  const String configuredThingName =
+      configManager_ != nullptr
+          ? configManager_->readString("thingName", kDefaultHostname)
+          : String(kDefaultHostname);
+  const String hostname = buildHostname(configuredThingName, kDefaultHostname);
 
   WiFi.onEvent(onWiFiEventStatic);
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
-  WiFi.setHostname(kDefaultHostname);
+  WiFi.setHostname(hostname.c_str());
   WiFi.mode(WIFI_AP_STA);
-  if (MDNS.begin(kDefaultHostname)) {
-    logger.info("mDNS started: " + String(kDefaultHostname) + ".local");
+  if (MDNS.begin(hostname.c_str())) {
+    logger.info("Hostname/mDNS: " + hostname + ".local");
   } else {
     logger.warn("mDNS start failed");
   }
