@@ -251,17 +251,28 @@ void data_loop(void* pvParameters) {
 
 #if defined(EBUS_INTERNAL)
 void time_sync_notification_cb(struct timeval* tv) {
-  logger.info("SNTP synchronized to " + String(sntp_getservername(0)));
+  const char* activeServer = esp_sntp_getservername(0);
+  logger.info("SNTP synchronized to " +
+              String(activeServer != nullptr ? activeServer : "unknown"));
 }
 
+static String sntpServerStorage = DEFAULT_SNTP_SERVER;
+
 void initSNTP(const char* server) {
+  if (server != nullptr && strlen(server) > 0) {
+    sntpServerStorage = server;
+  } else {
+    sntpServerStorage = DEFAULT_SNTP_SERVER;
+  }
+
   sntp_set_sync_interval(1 * 60 * 60 * 1000UL);  // 1 hour
 
   esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
-  esp_sntp_setservername(0, server);
+  esp_sntp_setservername(0, sntpServerStorage.c_str());
 
   sntp_set_time_sync_notification_cb(time_sync_notification_cb);
   esp_sntp_init();
+  logger.info("SNTP started with server " + sntpServerStorage);
 }
 
 void setTimezone(const char* timezone) {
@@ -386,8 +397,9 @@ char* status_string() {
       configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
   pos += snprintf(status + pos, bufferSize - pos, "sntpEnabled: %s\r\n",
                   configManager.readBool("sntpEnabled") ? "true" : "false");
+  const char* activeSntpServer = esp_sntp_getservername(0);
   pos += snprintf(status + pos, bufferSize - pos, "sntpServer: %s\r\n",
-                  sntp_getservername(0));
+                  activeSntpServer != nullptr ? activeSntpServer : "");
   pos += snprintf(status + pos, bufferSize - pos, "sntpTimezone: %s\r\n",
                   sntpTimezoneValue.c_str());
 #endif
@@ -522,7 +534,11 @@ const std::string getStatusJson() {
 #if defined(EBUS_INTERNAL)
   JsonObject SNTP = doc["SNTP"].to<JsonObject>();
   SNTP["Enabled"] = configManager.readBool("sntpEnabled");
-  SNTP["Server"] = configManager.readString("sntpServer", sntp_getservername(0));
+  const char* activeSntpServer = esp_sntp_getservername(0);
+  SNTP["Server"] = activeSntpServer != nullptr
+                       ? activeSntpServer
+                       : configManager.readString("sntpServer",
+                                                  DEFAULT_SNTP_SERVER);
   SNTP["Timezone"] = configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
 #endif
 
