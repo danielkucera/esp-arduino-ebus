@@ -500,11 +500,15 @@ const std::string getStatusJson() {
     WIFI["IP_Address"] = wifiNetworkManager.getConfiguredIpAddress();
     WIFI["Gateway"] = wifiNetworkManager.getConfiguredGateway();
     WIFI["Netmask"] = wifiNetworkManager.getConfiguredNetmask();
+    WIFI["DNS1"] = wifiNetworkManager.getConfiguredDns1();
+    WIFI["DNS2"] = wifiNetworkManager.getConfiguredDns2();
   } else {
     WIFI["Static_IP"] = false;
     WIFI["IP_Address"] = WiFi.localIP().toString();
     WIFI["Gateway"] = WiFi.gatewayIP().toString();
     WIFI["Netmask"] = WiFi.subnetMask().toString();
+    WIFI["DNS1"] = WiFi.dnsIP(0).toString();
+    WIFI["DNS2"] = WiFi.dnsIP(1).toString();
   }
   WIFI["SSID"] = WiFi.SSID();
   WIFI["BSSID"] = WiFi.BSSIDstr();

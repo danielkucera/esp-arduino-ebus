@@ -17,6 +17,8 @@ class WifiNetworkManager {
   String getConfiguredIpAddress() const;
   String getConfiguredGateway() const;
   String getConfiguredNetmask() const;
+  String getConfiguredDns1() const;
+  String getConfiguredDns2() const;
 
  private:
   enum class StatusLedMode : uint8_t { SlowBlink = 0, SolidOn = 1 };
@@ -37,6 +39,8 @@ class WifiNetworkManager {
   IPAddress ipAddress_;
   IPAddress gateway_;
   IPAddress netmask_;
+  IPAddress dns1_;
+  IPAddress dns2_;
   uint32_t lastConnect_ = 0;
   int reconnectCount_ = 0;
   bool staConnected_ = false;

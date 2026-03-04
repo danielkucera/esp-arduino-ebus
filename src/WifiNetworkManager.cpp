@@ -169,6 +169,14 @@ String WifiNetworkManager::getConfiguredNetmask() const {
   return configManager_ != nullptr ? configManager_->readString("netmask") : "";
 }
 
+String WifiNetworkManager::getConfiguredDns1() const {
+  return configManager_ != nullptr ? configManager_->readString("dns1") : "";
+}
+
+String WifiNetworkManager::getConfiguredDns2() const {
+  return configManager_ != nullptr ? configManager_->readString("dns2") : "";
+}
+
 void WifiNetworkManager::onWiFiEventStatic(WiFiEvent_t event,
                                            WiFiEventInfo_t info) {
   if (instance_ != nullptr) instance_->onWiFiEvent(event, info);
@@ -202,15 +210,40 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
     return;
   }
 
-  bool valid = true;
-  valid = valid && ipAddress_.fromString(getConfiguredIpAddress());
-  valid = valid && netmask_.fromString(getConfiguredNetmask());
-  valid = valid && gateway_.fromString(getConfiguredGateway());
+  const String gatewayValue = getConfiguredGateway();
+  const String dns1Value = getConfiguredDns1();
+  const String dns2Value = getConfiguredDns2();
 
+  const bool valid = ipAddress_.fromString(getConfiguredIpAddress()) &&
+                     netmask_.fromString(getConfiguredNetmask());
   if (valid) {
-    WiFi.config(ipAddress_, gateway_, netmask_);
-    logger.info("Static IP configured: " + ipAddress_.toString());
+    if (!gatewayValue.isEmpty() && !gateway_.fromString(gatewayValue)) {
+      logger.warn("Invalid gateway configured, using 0.0.0.0");
+      gateway_ = IPAddress(0, 0, 0, 0);
+    } else if (gatewayValue.isEmpty()) {
+      gateway_ = IPAddress(0, 0, 0, 0);
+    }
+
+    bool dns1IsValid = true;
+    if (!dns1Value.isEmpty()) dns1IsValid = dns1_.fromString(dns1Value);
+    if (!dns1IsValid) logger.warn("Invalid DNS1 configured, ignoring");
+
+    bool dns2IsValid = true;
+    if (!dns2Value.isEmpty()) dns2IsValid = dns2_.fromString(dns2Value);
+    if (!dns2IsValid) logger.warn("Invalid DNS2 configured, ignoring");
+
+    const IPAddress dns1 =
+        (dns1Value.isEmpty() || !dns1IsValid)
+            ? (gatewayValue.isEmpty() ? IPAddress(0, 0, 0, 0) : gateway_)
+            : dns1_;
+    const IPAddress dns2 =
+        (dns2Value.isEmpty() || !dns2IsValid) ? IPAddress(0, 0, 0, 0) : dns2_;
+    WiFi.config(ipAddress_, gateway_, netmask_, dns1, dns2);
+    logger.info("Static IP configured: " + ipAddress_.toString() +
+                ", Gateway: " + gateway_.toString() +
+                ", DNS1: " + dns1.toString() +
+                (dns2Value.isEmpty() ? "" : ", DNS2: " + dns2.toString()));
   } else {
-    logger.warn("Invalid static IP config, falling back to DHCP");
+    logger.warn("Invalid static IP/netmask config, falling back to DHCP");
   }
 }
