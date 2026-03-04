@@ -189,9 +189,15 @@ void WifiNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t) {
     lastConnect_ = millis();
     ++reconnectCount_;
     logger.info("STA connected, IP: " + WiFi.localIP().toString());
-    // Keep AP running in AP+STA mode; only disable captive DNS behavior.
     dnsServer_.stop();
     logger.info("Captive DNS stopped");
+    if (WiFi.getMode() != WIFI_MODE_STA) {
+      if (WiFi.mode(WIFI_MODE_STA)) {
+        logger.info("Switched WiFi mode to STA only");
+      } else {
+        logger.warn("Failed to switch WiFi mode to STA only");
+      }
+    }
   } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
     staConnected_ = false;
     setStatusLedMode(StatusLedMode::SlowBlink);
