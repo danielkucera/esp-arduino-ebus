@@ -65,10 +65,12 @@ void Mqtt::setup(const char* id) {
   requestTopic = mqtt.rootTopic + "request";
 
   mqtt_cfg.client_id = clientId.c_str();
+  // Last Will
   mqtt_cfg.lwt_topic = willTopic.c_str();
   mqtt_cfg.lwt_msg = "{ \"value\": \"offline\" }";
   mqtt_cfg.lwt_qos = 1;
   mqtt_cfg.lwt_retain = 1;
+  // Keep-alive interval in seconds
   mqtt_cfg.keepalive = 60;
 }
 
@@ -194,6 +196,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       if (it != mqtt.commandHandlers.end()) {
         it->second(doc);
       } else {
+        // Unknown command error handling
         mqtt.publish("response", 0, false,
                      errorPayload("command '" + id + "' not found").c_str());
       }

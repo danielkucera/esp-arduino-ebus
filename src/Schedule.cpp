@@ -278,9 +278,11 @@ void Schedule::publishTiming() {
 const std::string Schedule::getTimingJson() {
   cJSON* doc = cJSON_CreateObject();
 
+  // Timing
   ebus::Request::Timing requestTiming = ebusRequest->getTiming();
   ebus::Handler::Timing handlerTiming = ebusHandler->getTiming();
 
+  // Helper lambda to add timing stats to a cJSON object
   auto addTiming = [](cJSON* obj, int64_t last, int64_t mean,
                       int64_t stddev, uint64_t count) {
     cJSON_AddNumberToObject(obj, "Last", static_cast<double>(last));
@@ -359,6 +361,7 @@ const std::string Schedule::getTimingJson() {
 
   ebus::Handler::StateTiming stateTiming = ebusHandler->getStateTiming();
 
+  // Output handler state timing
   auto addStateTiming = [](cJSON* obj,
                            const ebus::Handler::StateTiming::Timing& timing) {
     cJSON_AddNumberToObject(obj, "Last", static_cast<int64_t>(timing.last));

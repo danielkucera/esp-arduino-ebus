@@ -38,6 +38,7 @@ void Store::setDataUpdatedLogCallback(DataUpdatedLogCallback callback) {
 }
 
 void Store::insertCommand(const Command& command) {
+  // Insert or update in commands map
   auto it = commands.find(command.getKey());
   if (it != commands.end())
     it->second = command;
@@ -63,7 +64,7 @@ int64_t Store::loadCommands() {
   preferences.begin("commands", true);
 
   int64_t bytes = preferences.getBytesLength("ebus");
-  if (bytes > 2) {
+  if (bytes > 2) {  // 2 = empty json array "[]"
     std::vector<char> buffer(bytes);
     bytes = preferences.getBytes("ebus", buffer.data(), bytes);
     if (bytes > 0) {
@@ -86,7 +87,7 @@ int64_t Store::saveCommands() const {
 
   std::string payload = serializeCommands();
   int64_t bytes = payload.size();
-  if (bytes > 2) {
+  if (bytes > 2) {  // 2 = empty json array "[]"
     bytes = preferences.putBytes("ebus", payload.data(), bytes);
     if (bytes == 0) bytes = -1;
   } else {
@@ -119,6 +120,7 @@ const std::string Store::getCommandsJson() const {
   std::sort(orderedCommands.begin(), orderedCommands.end(),
             [](const std::pair<std::string, Command>& a,
                const std::pair<std::string, Command>& b) {
+              // Compare based on keys
               return a.first < b.first;
             });
 
@@ -166,6 +168,7 @@ Command* Store::nextActiveCommand() {
   bool init = false;
   for (auto& kv : commands) {
     Command* cmd = &kv.second;
+    // Only consider active commands
     if (!cmd->getActive()) continue;
     if (cmd->getLast() == 0) {
       next = cmd;
@@ -188,6 +191,7 @@ std::vector<Command*> Store::findPassiveCommands(
   std::vector<Command*> result;
   for (auto& kv : commands) {
     Command* cmd = &kv.second;
+    // Skip active commands
     if (cmd->getActive()) continue;
     if (ebus::contains(master, cmd->getReadCmd())) {
       result.push_back(cmd);
@@ -227,9 +231,11 @@ std::vector<Command*> Store::updateData(Command* command,
 
   if (command) {
     update(command, master, slave);
+    // Return a vector with just this command, but avoid heap allocation
     return {command};
   }
 
+  // Passive: potentially multiple matches
   std::vector<Command*> passiveCommands = findPassiveCommands(master);
   for (Command* cmd : passiveCommands) update(cmd, master, slave);
 
@@ -288,6 +294,7 @@ const std::string Store::getValuesJson() const {
 const std::string Store::serializeCommands() const {
   cJSON* doc = cJSON_CreateArray();
 
+  // Define field names (order matters)
   std::vector<std::string> fields = {
       "key",          "name",          "read_cmd",      "write_cmd",
       "active",       "interval",      "master",        "position",
@@ -297,11 +304,13 @@ const std::string Store::serializeCommands() const {
       "ha_default_key", "ha_payload_on", "ha_payload_off", "ha_state_class",
       "ha_step"};
 
+  // Add header as first entry
   cJSON* header = cJSON_CreateArray();
   for (const auto& field : fields)
     cJSON_AddItemToArray(header, cJSON_CreateString(field.c_str()));
   cJSON_AddItemToArray(doc, header);
 
+  // Add each command as an array of values in the same order as header
   for (const auto& cmd : commands) {
     cJSON* cmdDoc = cJSON_Parse(cmd.second.toJson().c_str());
     if (!cJSON_IsObject(cmdDoc)) {
@@ -340,6 +349,7 @@ void Store::deserializeCommands(const char* payload) {
     return;
   }
 
+  // Read header
   cJSON* header = cJSON_GetArrayItem(doc, 0);
   if (!cJSON_IsArray(header)) {
     cJSON_Delete(doc);
@@ -356,6 +366,7 @@ void Store::deserializeCommands(const char* payload) {
       fields.emplace_back();
   }
 
+  // Read each command
   for (int i = 1; i < arraySize; ++i) {
     cJSON* values = cJSON_GetArrayItem(doc, i);
     if (!cJSON_IsArray(values)) continue;
@@ -367,6 +378,7 @@ void Store::deserializeCommands(const char* payload) {
     for (int j = 0; j < limit; ++j) {
       cJSON* valueItem = cJSON_GetArrayItem(values, j);
       if (fields[j].empty() || valueItem == nullptr) continue;
+      // Copy each indexed field value into a temporary command object
       cJSON_AddItemToObject(tmpDoc, fields[j].c_str(),
                             cJSON_Duplicate(valueItem, 1));
     }

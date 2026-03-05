@@ -261,6 +261,7 @@ Command Command::fromJson(const cJSON* doc) {
 }
 
 const std::string Command::evaluate(const cJSON* doc) {
+  // Define the fields to evaluate
   const FieldEvaluation fields[] = {
       {"key", true, FT_String},
       {"name", true, FT_String},
@@ -288,6 +289,7 @@ const std::string Command::evaluate(const cJSON* doc) {
       {"ha_state_class", false, FT_String},
       {"ha_step", false, FT_Float}};
 
+  // Evaluate each field in a loop
   for (const auto& field : fields) {
     std::string error =
         isFieldValid(doc, field.name, field.required, field.type);
@@ -305,8 +307,9 @@ const std::string Command::isFieldValid(const cJSON* doc,
   }
 
   cJSON* v = cJSON_GetObjectItemCaseSensitive(doc, field.c_str());
-
+  // Check if the required field exists
   if (required && v == nullptr) return "Missing required field: " + field;
+  // Skip type checking if the field is not present and not required
   if (v == nullptr || cJSON_IsNull(v)) return "";
 
   auto isInteger = [](double value) {
@@ -380,6 +383,7 @@ const std::string Command::isKeyValueMapValid(const cJSON* ha_key_value_map) {
   for (cJSON* kv = ha_key_value_map->child; kv != nullptr; kv = kv->next) {
     if (kv->string == nullptr) return "Invalid key in map";
 
+    // Check if the key can be converted to an integer
     try {
       std::stoi(kv->string);
     } catch (const std::invalid_argument&) {
@@ -391,6 +395,7 @@ const std::string Command::isKeyValueMapValid(const cJSON* ha_key_value_map) {
     if (!cJSON_IsString(kv) || kv->valuestring == nullptr)
       return "Invalid value type in map";
   }
+  // Passed key-value map evaluation checks
   return "";
 }
 

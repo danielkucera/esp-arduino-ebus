@@ -82,7 +82,13 @@ const std::string Device::toJson() const {
     serial += ebus::byte_2_char(ebus::range(vec_b5090126, 1, 9));
     serial += ebus::byte_2_char(ebus::range(vec_b5090127, 1, 2));
 
+    // cJSON_AddStringToObject(doc, "prefix", serial.substr(0, 2).c_str());
+    // cJSON_AddStringToObject(doc, "year", serial.substr(2, 2).c_str());
+    // cJSON_AddStringToObject(doc, "week", serial.substr(4, 2).c_str());
     cJSON_AddStringToObject(doc, "product", serial.substr(6, 10).c_str());
+    // cJSON_AddStringToObject(doc, "supplier", serial.substr(16, 4).c_str());
+    // cJSON_AddStringToObject(doc, "counter", serial.substr(20, 6).c_str());
+    // cJSON_AddStringToObject(doc, "suffix", serial.substr(26, 2).c_str());
   }
 
   char* printed = cJSON_PrintUnformatted(doc);
