@@ -1,14 +1,16 @@
 #include "http.hpp"
 
+#include <cJSON.h>
+
 #include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "MqttHA.hpp"
 #include "Schedule.hpp"
 #include "Store.hpp"
 #include "main.hpp"
-#include <cJSON.h>
 
-WebServer configServer(80);
+namespace {
+httpd_handle_t configServer = nullptr;
 
 extern const char common_css_start[] asm("_binary_static_common_css_start");
 extern const char common_js_start[] asm("_binary_static_common_js_start");
@@ -25,76 +27,136 @@ extern const char statistics_html_start[] asm(
     "_binary_static_statistics_html_start");
 extern const char logs_html_start[] asm("_binary_static_logs_html_start");
 
-// static
-void handleStatic(const char* contentType, const char* data) {
-  configServer.send(200, contentType, data);
+void sendResponse(httpd_req_t* req, const char* status, const char* type,
+                  const String& body) {
+  httpd_resp_set_status(req, status);
+  httpd_resp_set_type(req, type);
+  httpd_resp_send(req, body.c_str(), body.length());
 }
 
-// root
-void handleRoot() {
-  handleStatic("text/html", root_html_start);
+void sendStatic(httpd_req_t* req, const char* contentType, const char* data) {
+  sendResponse(req, "200 OK", contentType, String(data));
 }
 
-void handleStatus() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    getStatusJson().c_str());
+String readBody(httpd_req_t* req) {
+  String out;
+  int remaining = req->content_len;
+  char buffer[512];
+
+  while (remaining > 0) {
+    int toRead = remaining > static_cast<int>(sizeof(buffer))
+                     ? sizeof(buffer)
+                     : remaining;
+    int received = httpd_req_recv(req, buffer, toRead);
+    if (received <= 0) return "";
+    out.concat(buffer, received);
+    remaining -= received;
+  }
+
+  return out;
+}
+
+esp_err_t handleRoot(httpd_req_t* req) {
+  sendStatic(req, "text/html", root_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleStatusPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", status_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleStatusApi(httpd_req_t* req) {
+  sendResponse(req, "200 OK", "application/json;charset=utf-8",
+               getStatusJson().c_str());
+  return ESP_OK;
+}
+
+esp_err_t handleConfigPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", config_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleUpgradePage(httpd_req_t* req) {
+  sendStatic(req, "text/html", upgrade_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleCommonCss(httpd_req_t* req) {
+  sendStatic(req, "text/css", common_css_start);
+  return ESP_OK;
+}
+
+esp_err_t handleCommonJs(httpd_req_t* req) {
+  sendStatic(req, "application/javascript", common_js_start);
+  return ESP_OK;
+}
+
+esp_err_t handleRestart(httpd_req_t* req) {
+  sendResponse(req, "200 OK", "text/html", "Restarting...");
+  restart();
+  return ESP_OK;
 }
 
 #if defined(EBUS_INTERNAL)
-// commands
-void handleCommands() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    store.getCommandsJson().c_str());
+esp_err_t handleCommandsPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", commands_html_start);
+  return ESP_OK;
 }
 
-void handleCommandsEvaluate() {
-  String body = configServer.arg("plain");
-  cJSON* doc = cJSON_Parse(body.c_str());
+esp_err_t handleCommands(httpd_req_t* req) {
+  sendResponse(req, "200 OK", "application/json;charset=utf-8",
+               store.getCommandsJson().c_str());
+  return ESP_OK;
+}
+
+esp_err_t handleCommandsEvaluate(httpd_req_t* req) {
+  cJSON* doc = cJSON_Parse(readBody(req).c_str());
   if (!cJSON_IsArray(doc)) {
-    configServer.send(403, "text/html", "Json invalid");
+    sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
   } else {
     cJSON* command = nullptr;
     cJSON_ArrayForEach(command, doc) {
       std::string evalError = Command::evaluate(command);
       if (!evalError.empty()) {
         cJSON_Delete(doc);
-        configServer.send(403, "text/html", evalError.c_str());
-        return;
+        sendResponse(req, "403 Forbidden", "text/html", evalError.c_str());
+        return ESP_OK;
       }
     }
-    configServer.send(200, "text/html", "Ok");
+    sendResponse(req, "200 OK", "text/html", "Ok");
   }
   if (doc) cJSON_Delete(doc);
+  return ESP_OK;
 }
 
-void handleCommandsInsert() {
-  String body = configServer.arg("plain");
-  cJSON* doc = cJSON_Parse(body.c_str());
+esp_err_t handleCommandsInsert(httpd_req_t* req) {
+  cJSON* doc = cJSON_Parse(readBody(req).c_str());
   if (!cJSON_IsArray(doc)) {
-    configServer.send(403, "text/html", "Json invalid");
+    sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
   } else {
     cJSON* command = nullptr;
     cJSON_ArrayForEach(command, doc) {
       std::string evalError = Command::evaluate(command);
-      if (evalError.empty())
+      if (evalError.empty()) {
         store.insertCommand(Command::fromJson(command));
-      else {
+      } else {
         cJSON_Delete(doc);
-        configServer.send(403, "text/html", evalError.c_str());
-        return;
+        sendResponse(req, "403 Forbidden", "text/html", evalError.c_str());
+        return ESP_OK;
       }
     }
     if (mqttha.isEnabled()) mqttha.publishComponents();
-    configServer.send(200, "text/html", "Ok");
+    sendResponse(req, "200 OK", "text/html", "Ok");
   }
   if (doc) cJSON_Delete(doc);
+  return ESP_OK;
 }
 
-void handleCommandsRemove() {
-  String body = configServer.arg("plain");
-  cJSON* doc = cJSON_Parse(body.c_str());
+esp_err_t handleCommandsRemove(httpd_req_t* req) {
+  cJSON* doc = cJSON_Parse(readBody(req).c_str());
   if (!cJSON_IsObject(doc)) {
-    configServer.send(403, "text/html", "Json invalid");
+    sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
   } else {
     cJSON* keys = cJSON_GetObjectItemCaseSensitive(doc, "keys");
     if (cJSON_IsArray(keys) && cJSON_GetArraySize(keys) > 0) {
@@ -107,63 +169,71 @@ void handleCommandsRemove() {
           store.removeCommand(key->valuestring);
         }
       }
-      configServer.send(200, "text/html", "Ok");
+      sendResponse(req, "200 OK", "text/html", "Ok");
     } else if (store.getActiveCommands() + store.getPassiveCommands() > 0) {
       for (const Command* cmd : store.getCommands()) {
         if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
         store.removeCommand(cmd->getKey());
       }
-      configServer.send(200, "text/html", "Ok");
+      sendResponse(req, "200 OK", "text/html", "Ok");
     } else {
-      configServer.send(403, "text/html", "No commands");
+      sendResponse(req, "403 Forbidden", "text/html", "No commands");
     }
   }
   if (doc) cJSON_Delete(doc);
+  return ESP_OK;
 }
 
-void handleCommandsLoad() {
+esp_err_t handleCommandsLoad(httpd_req_t* req) {
   int64_t bytes = store.loadCommands();
   if (bytes > 0)
-    configServer.send(200, "text/html", String(bytes) + " bytes loaded");
+    sendResponse(req, "200 OK", "text/html", String(bytes) + " bytes loaded");
   else if (bytes < 0)
-    configServer.send(200, "text/html", "Loading failed");
+    sendResponse(req, "200 OK", "text/html", "Loading failed");
   else
-    configServer.send(200, "text/html", "No data loaded");
+    sendResponse(req, "200 OK", "text/html", "No data loaded");
 
   if (mqttha.isEnabled()) mqttha.publishComponents();
+  return ESP_OK;
 }
 
-void handleCommandsSave() {
+esp_err_t handleCommandsSave(httpd_req_t* req) {
   int64_t bytes = store.saveCommands();
   if (bytes > 0)
-    configServer.send(200, "text/html", String(bytes) + " bytes saved");
+    sendResponse(req, "200 OK", "text/html", String(bytes) + " bytes saved");
   else if (bytes < 0)
-    configServer.send(200, "text/html", "Saving failed");
+    sendResponse(req, "200 OK", "text/html", "Saving failed");
   else
-    configServer.send(200, "text/html", "No data saved");
+    sendResponse(req, "200 OK", "text/html", "No data saved");
+  return ESP_OK;
 }
 
-void handleCommandsWipe() {
+esp_err_t handleCommandsWipe(httpd_req_t* req) {
   int64_t bytes = store.wipeCommands();
   if (bytes > 0)
-    configServer.send(200, "text/html", String(bytes) + " bytes wiped");
+    sendResponse(req, "200 OK", "text/html", String(bytes) + " bytes wiped");
   else if (bytes < 0)
-    configServer.send(200, "text/html", "Wiping failed");
+    sendResponse(req, "200 OK", "text/html", "Wiping failed");
   else
-    configServer.send(200, "text/html", "No data wiped");
+    sendResponse(req, "200 OK", "text/html", "No data wiped");
+  return ESP_OK;
 }
 
-// values
-void handleValues() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    store.getValuesJson().c_str());
+esp_err_t handleValuesPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", values_html_start);
+  return ESP_OK;
 }
 
-void handleValuesWrite() {
-  String body = configServer.arg("plain");
-  cJSON* doc = cJSON_Parse(body.c_str());
+esp_err_t handleValues(httpd_req_t* req) {
+  sendResponse(req, "200 OK", "application/json;charset=utf-8",
+               store.getValuesJson().c_str());
+  return ESP_OK;
+}
+
+esp_err_t handleValuesWrite(httpd_req_t* req) {
+  cJSON* doc = cJSON_Parse(readBody(req).c_str());
   if (!cJSON_IsObject(doc)) {
-    configServer.send(403, "text/html", "Json invalid");
+    sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
   } else {
     cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(doc, "key");
     std::string key =
@@ -173,28 +243,27 @@ void handleValuesWrite() {
     Command* command = store.findCommand(key);
     if (command != nullptr) {
       std::vector<uint8_t> valueBytes = command->getVectorFromJson(doc);
-      if (valueBytes.size() > 0) {
+      if (!valueBytes.empty()) {
         std::vector<uint8_t> writeCmd = command->getWriteCmd();
         writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
         schedule.handleWrite(writeCmd);
-        configServer.send(200, "text/html", "Ok");
+        sendResponse(req, "200 OK", "text/html", "Ok");
       } else {
-        configServer.send(403, "text/html",
-                          String("Invalid value for key '") + key.c_str());
+        sendResponse(req, "403 Forbidden", "text/html",
+                     String("Invalid value for key '") + key.c_str());
       }
     } else {
-      configServer.send(403, "text/html",
-                        String("Key '") + key.c_str() + "' not found");
+      sendResponse(req, "403 Forbidden", "text/html",
+                   String("Key '") + key.c_str() + "' not found");
     }
   }
   if (doc) cJSON_Delete(doc);
+  return ESP_OK;
 }
 
-void handleValuesRead() {
-  String body = configServer.arg("plain");
-  cJSON* doc = cJSON_Parse(body.c_str());
+esp_err_t handleValuesRead(httpd_req_t* req) {
+  cJSON* doc = cJSON_Parse(readBody(req).c_str());
   if (!cJSON_IsObject(doc)) {
-    // Return MQTT-equivalent error payload: {"id":"read","status": "..."}
     cJSON* errDoc = cJSON_CreateObject();
     cJSON_AddStringToObject(errDoc, "id", "read");
     cJSON_AddStringToObject(errDoc, "status", "invalid json payload");
@@ -202,7 +271,7 @@ void handleValuesRead() {
     std::string payload = printed != nullptr ? printed : "{}";
     if (printed != nullptr) cJSON_free(printed);
     cJSON_Delete(errDoc);
-    configServer.send(200, "application/json;charset=utf-8", payload.c_str());
+    sendResponse(req, "200 OK", "application/json;charset=utf-8", payload.c_str());
   } else {
     cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(doc, "key");
     std::string key =
@@ -211,9 +280,7 @@ void handleValuesRead() {
             : "";
     Command* command = store.findCommand(key);
     if (command != nullptr) {
-      // Force immediate refresh by resetting last seen timestamp
       command->setLast(0);
-      // Do not return the old value immediately; confirm the read request
       cJSON* resp = cJSON_CreateObject();
       cJSON_AddStringToObject(resp, "id", "read");
       cJSON_AddStringToObject(resp, "status", "requested");
@@ -221,149 +288,168 @@ void handleValuesRead() {
       std::string payload = printed != nullptr ? printed : "{}";
       if (printed != nullptr) cJSON_free(printed);
       cJSON_Delete(resp);
-      configServer.send(200, "application/json;charset=utf-8", payload.c_str());
+      sendResponse(req, "200 OK", "application/json;charset=utf-8", payload.c_str());
     } else {
       cJSON* errDoc = cJSON_CreateObject();
       cJSON_AddStringToObject(errDoc, "id", "read");
       cJSON_AddStringToObject(errDoc, "status",
-                              (std::string("Key '") + key + "' not found")
-                                  .c_str());
+                              (std::string("Key '") + key + "' not found").c_str());
       char* printed = cJSON_PrintUnformatted(errDoc);
       std::string payload = printed != nullptr ? printed : "{}";
       if (printed != nullptr) cJSON_free(printed);
       cJSON_Delete(errDoc);
-      configServer.send(200, "application/json;charset=utf-8", payload.c_str());
+      sendResponse(req, "200 OK", "application/json;charset=utf-8", payload.c_str());
     }
   }
   if (doc) cJSON_Delete(doc);
+  return ESP_OK;
 }
 
-// devices
-void handleDevices() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    deviceManager.getDevicesJson().c_str());
+esp_err_t handleDevicesPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", devices_html_start);
+  return ESP_OK;
 }
 
-void handleDevicesScan() {
+esp_err_t handleDevices(httpd_req_t* req) {
+  sendResponse(req, "200 OK", "application/json;charset=utf-8",
+               deviceManager.getDevicesJson().c_str());
+  return ESP_OK;
+}
+
+esp_err_t handleDevicesScan(httpd_req_t* req) {
   schedule.handleScan();
-  configServer.send(200, "text/html", "Scan initiated");
+  sendResponse(req, "200 OK", "text/html", "Scan initiated");
+  return ESP_OK;
 }
 
-void handleDevicesScanFull() {
+esp_err_t handleDevicesScanFull(httpd_req_t* req) {
   schedule.handleScanFull();
-  configServer.send(200, "text/html", "Full scan initiated");
+  sendResponse(req, "200 OK", "text/html", "Full scan initiated");
+  return ESP_OK;
 }
 
-void handleDevicesScanVendor() {
+esp_err_t handleDevicesScanVendor(httpd_req_t* req) {
   schedule.handleScanVendor();
-  configServer.send(200, "text/html", "Vendor scan initiated");
+  sendResponse(req, "200 OK", "text/html", "Vendor scan initiated");
+  return ESP_OK;
 }
 
-// statistics
-void handleStatisticsCounter() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    schedule.getCounterJson().c_str());
+esp_err_t handleStatisticsPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", statistics_html_start);
+  return ESP_OK;
 }
 
-void handleStatisticsTiming() {
-  configServer.send(200, "application/json;charset=utf-8",
-                    schedule.getTimingJson().c_str());
+esp_err_t handleStatisticsCounter(httpd_req_t* req) {
+  sendResponse(req, "200 OK", "application/json;charset=utf-8",
+               schedule.getCounterJson().c_str());
+  return ESP_OK;
 }
 
-void handleStatisticsReset() {
+esp_err_t handleStatisticsTiming(httpd_req_t* req) {
+  sendResponse(req, "200 OK", "application/json;charset=utf-8",
+               schedule.getTimingJson().c_str());
+  return ESP_OK;
+}
+
+esp_err_t handleStatisticsReset(httpd_req_t* req) {
   deviceManager.resetAddresses();
   schedule.resetCounter();
   schedule.resetTiming();
-  configServer.send(200, "text/html", "Statistics reset");
+  sendResponse(req, "200 OK", "text/html", "Statistics reset");
+  return ESP_OK;
 }
 
-// logs
-void handleLogs() { configServer.send(200, "text/plain", logger.getLogs()); }
+esp_err_t handleLogsPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", logs_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleLogs(httpd_req_t* req) {
+  sendResponse(req, "200 OK", "text/plain", logger.getLogs());
+  return ESP_OK;
+}
 #endif
+
+esp_err_t handleNotFound(httpd_req_t* req) {
+  if (isCaptivePortalActive()) {
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_set_hdr(req, "Location", "/config");
+    httpd_resp_send(req, "", 0);
+    return ESP_OK;
+  }
+
+  sendResponse(req, "404 Not Found", "text/plain", "Not found");
+  return ESP_OK;
+}
+
+void registerUri(const char* uri, httpd_method_t method,
+                 esp_err_t (*handler)(httpd_req_t*)) {
+  httpd_uri_t route = {};
+  route.uri = uri;
+  route.method = method;
+  route.handler = handler;
+  route.user_ctx = nullptr;
+  httpd_register_uri_handler(configServer, &route);
+}
+
+}  // namespace
+
+httpd_handle_t GetHttpServer() { return configServer; }
 
 void SetupHttpHandlers() {
-  // -- Set up required URL handlers on the web server.
-  configServer.onNotFound([]() {
-    if (isCaptivePortalActive()) {
-      configServer.sendHeader("Location", "/config", true);
-      configServer.send(302, "text/plain", "");
-      return;
-    }
-    configServer.send(404, "text/plain", "Not found");
-  });
+  if (configServer != nullptr) return;
 
-  // common
-  configServer.on("/common.css",
-                  []() { handleStatic("text/css", common_css_start); });
-  configServer.on("/common.js", []() {
-    handleStatic("application/javascript", common_js_start);
-  });
+  httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+  config.server_port = 80;
+  config.uri_match_fn = httpd_uri_match_wildcard;
 
-  // root
-  configServer.on("/", [] { handleRoot(); });
+  if (httpd_start(&configServer, &config) != ESP_OK) {
+    logger.error("Failed to start HTTP server");
+    return;
+  }
 
-  // config
-  configServer.on("/config",
-                  []() { handleStatic("text/html", config_html_start); });
-  configServer.on("/config2",
-                  []() { handleStatic("text/html", config_html_start); });
-
-  // status
-  configServer.on("/status",
-                  []() { handleStatic("text/html", status_html_start); });
-  configServer.on("/api/v1/status", [] { handleStatus(); });
-  configServer.on("/upgrade",
-                  []() { handleStatic("text/html", upgrade_html_start); });
+  registerUri("/common.css", HTTP_GET, handleCommonCss);
+  registerUri("/common.js", HTTP_GET, handleCommonJs);
+  registerUri("/", HTTP_GET, handleRoot);
+  registerUri("/config", HTTP_GET, handleConfigPage);
+  registerUri("/config2", HTTP_GET, handleConfigPage);
+  registerUri("/status", HTTP_GET, handleStatusPage);
+  registerUri("/api/v1/status", HTTP_GET, handleStatusApi);
+  registerUri("/upgrade", HTTP_GET, handleUpgradePage);
 
 #if defined(EBUS_INTERNAL)
-  // commands
-  configServer.on("/commands",
-                  []() { handleStatic("text/html", commands_html_start); });
-  configServer.on("/api/v1/commands", [] { handleCommands(); });
-  configServer.on("/api/v1/commands/evaluate",
-                  [] { handleCommandsEvaluate(); });
-  configServer.on("/api/v1/commands/insert", [] { handleCommandsInsert(); });
-  configServer.on("/api/v1/commands/remove", [] { handleCommandsRemove(); });
-  configServer.on("/api/v1/commands/load", [] { handleCommandsLoad(); });
-  configServer.on("/api/v1/commands/save", [] { handleCommandsSave(); });
-  configServer.on("/api/v1/commands/wipe", [] { handleCommandsWipe(); });
+  registerUri("/commands", HTTP_GET, handleCommandsPage);
+  registerUri("/api/v1/commands", HTTP_GET, handleCommands);
+  registerUri("/api/v1/commands/evaluate", HTTP_POST, handleCommandsEvaluate);
+  registerUri("/api/v1/commands/insert", HTTP_POST, handleCommandsInsert);
+  registerUri("/api/v1/commands/remove", HTTP_POST, handleCommandsRemove);
+  registerUri("/api/v1/commands/load", HTTP_POST, handleCommandsLoad);
+  registerUri("/api/v1/commands/save", HTTP_POST, handleCommandsSave);
+  registerUri("/api/v1/commands/wipe", HTTP_POST, handleCommandsWipe);
 
-  // values
-  configServer.on("/values",
-                  []() { handleStatic("text/html", values_html_start); });
-  configServer.on("/api/v1/values", [] { handleValues(); });
-  configServer.on("/api/v1/values/write", [] { handleValuesWrite(); });
-  configServer.on("/api/v1/values/read", [] { handleValuesRead(); });
+  registerUri("/values", HTTP_GET, handleValuesPage);
+  registerUri("/api/v1/values", HTTP_GET, handleValues);
+  registerUri("/api/v1/values/write", HTTP_POST, handleValuesWrite);
+  registerUri("/api/v1/values/read", HTTP_POST, handleValuesRead);
 
-  // devices
-  configServer.on("/devices",
-                  []() { handleStatic("text/html", devices_html_start); });
-  configServer.on("/api/v1/devices", [] { handleDevices(); });
-  configServer.on("/api/v1/devices/scan", [] { handleDevicesScan(); });
-  configServer.on("/api/v1/devices/scan/full", [] { handleDevicesScanFull(); });
-  configServer.on("/api/v1/devices/scan/vendor",
-                  [] { handleDevicesScanVendor(); });
+  registerUri("/devices", HTTP_GET, handleDevicesPage);
+  registerUri("/api/v1/devices", HTTP_GET, handleDevices);
+  registerUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
+  registerUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
+  registerUri("/api/v1/devices/scan/vendor", HTTP_POST, handleDevicesScanVendor);
 
-  // statistics
-  configServer.on("/statistics",
-                  []() { handleStatic("text/html", statistics_html_start); });
-  configServer.on("/api/v1/statistics/counter",
-                  [] { handleStatisticsCounter(); });
-  configServer.on("/api/v1/statistics/timing",
-                  [] { handleStatisticsTiming(); });
-  configServer.on("/api/v1/statistics/reset", [] { handleStatisticsReset(); });
+  registerUri("/statistics", HTTP_GET, handleStatisticsPage);
+  registerUri("/api/v1/statistics/counter", HTTP_GET, handleStatisticsCounter);
+  registerUri("/api/v1/statistics/timing", HTTP_GET, handleStatisticsTiming);
+  registerUri("/api/v1/statistics/reset", HTTP_POST, handleStatisticsReset);
 
-  // logs
-  configServer.on("/logs",
-                  []() { handleStatic("text/html", logs_html_start); });
-  configServer.on("/api/v1/logs", [] { handleLogs(); });
+  registerUri("/logs", HTTP_GET, handleLogsPage);
+  registerUri("/api/v1/logs", HTTP_GET, handleLogs);
 #endif
 
-  // restart
-  configServer.on("/restart", [] {
-    configServer.send(200, "text/html", "Restarting...");
-    configServer.client().flush(); // ensure response is sent before restarting
-    configServer.client().stop(); // close the connection
-    restart();
-  });
+  registerUri("/restart", HTTP_POST, handleRestart);
+
+  registerUri("/*", HTTP_GET, handleNotFound);
+  registerUri("/*", HTTP_POST, handleNotFound);
 }

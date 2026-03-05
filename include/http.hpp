@@ -1,8 +1,6 @@
 #pragma once
 
-#include <WebServer.h>
-#include <WiFiServer.h>
+#include <esp_http_server.h>
 
 void SetupHttpHandlers();
-
-extern WebServer configServer;
+httpd_handle_t GetHttpServer();

@@ -12,19 +12,60 @@
 namespace {
 constexpr size_t kOtaBufferSize = 1024;
 constexpr uint8_t kEspImageMagic = 0xE9;
+
+void sendResponse(httpd_req_t* req, const char* status, const char* type,
+                  const String& body) {
+  httpd_resp_set_status(req, status);
+  httpd_resp_set_type(req, type);
+  httpd_resp_send(req, body.c_str(), body.length());
 }
 
-void UpgradeManager::begin(WebServer* server) {
+String readBody(httpd_req_t* req) {
+  String out;
+  int remaining = req->content_len;
+  char buffer[512];
+
+  while (remaining > 0) {
+    int toRead = remaining > static_cast<int>(sizeof(buffer))
+                     ? sizeof(buffer)
+                     : remaining;
+    int received = httpd_req_recv(req, buffer, toRead);
+    if (received <= 0) return "";
+    out.concat(buffer, received);
+    remaining -= received;
+  }
+
+  return out;
+}
+}  // namespace
+
+void UpgradeManager::begin(httpd_handle_t server) {
   server_ = server;
+  if (server_ == nullptr) {
+    logger.error("UpgradeManager: HTTP server handle is null");
+    return;
+  }
 
-  server_->on("/api/v1/upgrade/status", HTTP_GET, [this]() { handleStatus(); });
+  httpd_uri_t statusUri = {};
+  statusUri.uri = "/api/v1/upgrade/status";
+  statusUri.method = HTTP_GET;
+  statusUri.handler = &UpgradeManager::handleStatusTrampoline;
+  statusUri.user_ctx = this;
+  httpd_register_uri_handler(server_, &statusUri);
 
-  server_->on("/api/v1/upgrade/http", HTTP_POST, [this]() { handleHttpUpgrade(); });
+  httpd_uri_t httpUri = {};
+  httpUri.uri = "/api/v1/upgrade/http";
+  httpUri.method = HTTP_POST;
+  httpUri.handler = &UpgradeManager::handleHttpUpgradeTrampoline;
+  httpUri.user_ctx = this;
+  httpd_register_uri_handler(server_, &httpUri);
 
-  server_->on(
-      "/api/v1/upgrade/upload", HTTP_POST,
-      [this]() { handleUploadFinished(); },
-      [this]() { handleUploadChunk(); });
+  httpd_uri_t uploadUri = {};
+  uploadUri.uri = "/api/v1/upgrade/upload";
+  uploadUri.method = HTTP_POST;
+  uploadUri.handler = &UpgradeManager::handleUploadTrampoline;
+  uploadUri.user_ctx = this;
+  httpd_register_uri_handler(server_, &uploadUri);
 }
 
 void UpgradeManager::setPreUpgradeHook(PreUpgradeHook hook) {
@@ -41,57 +82,76 @@ void UpgradeManager::prepareForUpgrade() {
 void UpgradeManager::resetUploadState() {
   uploadPartition_ = nullptr;
   uploadHandle_ = 0;
-  uploadHasError_ = false;
-  uploadCompleted_ = false;
-  uploadErrorMessage_ = "";
   preUpgradeDone_ = false;
   uploadBytesReceived_ = 0;
   uploadNextProgressPercent_ = 10;
 }
 
-void UpgradeManager::handleUploadChunk() {
+esp_err_t UpgradeManager::handleUploadTrampoline(httpd_req_t* req) {
+  return static_cast<UpgradeManager*>(req->user_ctx)->handleUpload(req);
+}
+
+esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   wdt_feed();
-  HTTPUpload& upload = server_->upload();
+  resetUploadState();
+  prepareForUpgrade();
 
-  if (upload.status == UPLOAD_FILE_START) {
-    resetUploadState();
-    prepareForUpgrade();
-
-    uploadPartition_ = esp_ota_get_next_update_partition(nullptr);
-    if (uploadPartition_ == nullptr) {
-      uploadHasError_ = true;
-      uploadErrorMessage_ = "No OTA partition available";
-      return;
-    }
-
-    esp_err_t beginResult =
-        esp_ota_begin(uploadPartition_, OTA_SIZE_UNKNOWN, &uploadHandle_);
-    if (beginResult != ESP_OK) {
-      uploadHasError_ = true;
-      uploadErrorMessage_ = String("esp_ota_begin failed: ") +
-                            esp_err_to_name(beginResult);
-    }
-    return;
+  uploadPartition_ = esp_ota_get_next_update_partition(nullptr);
+  if (uploadPartition_ == nullptr) {
+    sendResponse(req, "500 Internal Server Error", "text/plain",
+                 "No OTA partition available");
+    return ESP_OK;
   }
 
-  if (uploadHasError_) {
-    return;
+  esp_err_t beginResult =
+      esp_ota_begin(uploadPartition_, OTA_SIZE_UNKNOWN, &uploadHandle_);
+  if (beginResult != ESP_OK) {
+    sendResponse(req, "500 Internal Server Error", "text/plain",
+                 String("esp_ota_begin failed: ") + esp_err_to_name(beginResult));
+    return ESP_OK;
   }
 
-  if (upload.status == UPLOAD_FILE_WRITE) {
-    uploadBytesReceived_ += upload.currentSize;
-    esp_err_t writeResult =
-        esp_ota_write(uploadHandle_, upload.buf, upload.currentSize);
+  uint8_t buffer[kOtaBufferSize];
+  bool checkedMagic = false;
+  int remaining = req->content_len;
+
+  while (remaining > 0) {
+    int toRead = remaining > static_cast<int>(sizeof(buffer))
+                     ? sizeof(buffer)
+                     : remaining;
+    int received = httpd_req_recv(req, reinterpret_cast<char*>(buffer), toRead);
+    if (received <= 0) {
+      esp_ota_abort(uploadHandle_);
+      sendResponse(req, "500 Internal Server Error", "text/plain",
+                   "Upload receive failed");
+      return ESP_OK;
+    }
+
+    if (!checkedMagic) {
+      checkedMagic = true;
+      if (buffer[0] != kEspImageMagic) {
+        esp_ota_abort(uploadHandle_);
+        sendResponse(req, "400 Bad Request", "text/plain",
+                     "Upload must contain raw ESP firmware bytes");
+        return ESP_OK;
+      }
+    }
+
+    uploadBytesReceived_ += static_cast<size_t>(received);
+    esp_err_t writeResult = esp_ota_write(uploadHandle_, buffer, received);
     wdt_feed();
     if (writeResult != ESP_OK) {
-      uploadHasError_ = true;
-      uploadErrorMessage_ = String("esp_ota_write failed: ") +
-                            esp_err_to_name(writeResult);
-    } else if (upload.totalSize > 0) {
-      int percent = static_cast<int>((uploadBytesReceived_ * 100) / upload.totalSize);
+      esp_ota_abort(uploadHandle_);
+      sendResponse(req, "500 Internal Server Error", "text/plain",
+                   String("esp_ota_write failed: ") + esp_err_to_name(writeResult));
+      return ESP_OK;
+    }
+
+    if (req->content_len > 0) {
+      int percent = static_cast<int>((uploadBytesReceived_ * 100) / req->content_len);
       if (percent >= uploadNextProgressPercent_) {
         logger.info("Upload progress " + String(percent) + "% (" +
-                    String(uploadBytesReceived_) + "/" + String(upload.totalSize) +
+                    String(uploadBytesReceived_) + "/" + String(req->content_len) +
                     " bytes)");
         while (percent >= uploadNextProgressPercent_ &&
                uploadNextProgressPercent_ < 100) {
@@ -99,51 +159,35 @@ void UpgradeManager::handleUploadChunk() {
         }
       }
     }
-    return;
+
+    remaining -= received;
   }
 
-  if (upload.status == UPLOAD_FILE_END) {
-    esp_err_t endResult = esp_ota_end(uploadHandle_);
-    wdt_feed();
-    if (endResult != ESP_OK) {
-      uploadHasError_ = true;
-      uploadErrorMessage_ = String("esp_ota_end failed: ") +
-                            esp_err_to_name(endResult);
-      return;
-    }
-
-    esp_err_t partitionResult = esp_ota_set_boot_partition(uploadPartition_);
-    if (partitionResult != ESP_OK) {
-      uploadHasError_ = true;
-      uploadErrorMessage_ = String("esp_ota_set_boot_partition failed: ") +
-                            esp_err_to_name(partitionResult);
-      return;
-    }
-
-    uploadCompleted_ = true;
-    return;
+  esp_err_t endResult = esp_ota_end(uploadHandle_);
+  wdt_feed();
+  if (endResult != ESP_OK) {
+    sendResponse(req, "500 Internal Server Error", "text/plain",
+                 String("esp_ota_end failed: ") + esp_err_to_name(endResult));
+    return ESP_OK;
   }
 
-  if (upload.status == UPLOAD_FILE_ABORTED) {
-    uploadHasError_ = true;
-    uploadErrorMessage_ = "Upload aborted";
+  esp_err_t partitionResult = esp_ota_set_boot_partition(uploadPartition_);
+  if (partitionResult != ESP_OK) {
+    sendResponse(req, "500 Internal Server Error", "text/plain",
+                 String("esp_ota_set_boot_partition failed: ") +
+                     esp_err_to_name(partitionResult));
+    return ESP_OK;
   }
+
+  sendAndRestart(req, "Upgrade uploaded. Restarting...");
+  return ESP_OK;
 }
 
-void UpgradeManager::handleUploadFinished() {
-  if (uploadCompleted_ && !uploadHasError_) {
-    sendAndRestart("Upgrade uploaded. Restarting...");
-    return;
-  }
-
-  if (uploadErrorMessage_.isEmpty()) {
-    uploadErrorMessage_ = "Upgrade failed";
-  }
-
-  server_->send(500, "text/plain", uploadErrorMessage_);
+esp_err_t UpgradeManager::handleStatusTrampoline(httpd_req_t* req) {
+  return static_cast<UpgradeManager*>(req->user_ctx)->handleStatus(req);
 }
 
-void UpgradeManager::handleStatus() {
+esp_err_t UpgradeManager::handleStatus(httpd_req_t* req) {
   cJSON* doc = cJSON_CreateObject();
   cJSON_AddBoolToObject(doc, "ready", true);
   cJSON_AddBoolToObject(doc, "upgrading", false);
@@ -151,7 +195,8 @@ void UpgradeManager::handleStatus() {
   String payload = printed != nullptr ? String(printed) : String("{}");
   if (printed != nullptr) cJSON_free(printed);
   cJSON_Delete(doc);
-  server_->send(200, "application/json;charset=utf-8", payload);
+  sendResponse(req, "200 OK", "application/json;charset=utf-8", payload);
+  return ESP_OK;
 }
 
 bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
@@ -285,13 +330,17 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
   return true;
 }
 
-void UpgradeManager::handleHttpUpgrade() {
+esp_err_t UpgradeManager::handleHttpUpgradeTrampoline(httpd_req_t* req) {
+  return static_cast<UpgradeManager*>(req->user_ctx)->handleHttpUpgrade(req);
+}
+
+esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
   preUpgradeDone_ = false;
 
-  cJSON* doc = cJSON_Parse(server_->arg("plain").c_str());
+  cJSON* doc = cJSON_Parse(readBody(req).c_str());
   if (doc == nullptr) {
-    server_->send(400, "text/plain", "Invalid JSON payload");
-    return;
+    sendResponse(req, "400 Bad Request", "text/plain", "Invalid JSON payload");
+    return ESP_OK;
   }
 
   cJSON* urlNode = cJSON_GetObjectItemCaseSensitive(doc, "url");
@@ -300,8 +349,8 @@ void UpgradeManager::handleHttpUpgrade() {
                    : String("");
   if (url.isEmpty()) {
     cJSON_Delete(doc);
-    server_->send(400, "text/plain", "Missing 'url'");
-    return;
+    sendResponse(req, "400 Bad Request", "text/plain", "Missing 'url'");
+    return ESP_OK;
   }
   cJSON_Delete(doc);
 
@@ -309,17 +358,16 @@ void UpgradeManager::handleHttpUpgrade() {
 
   String error;
   if (!performHttpUpgrade(url, error)) {
-    server_->send(500, "text/plain", error.c_str());
-    return;
+    sendResponse(req, "500 Internal Server Error", "text/plain", error.c_str());
+    return ESP_OK;
   }
 
-  sendAndRestart("Upgrade fetched. Restarting...");
+  sendAndRestart(req, "Upgrade fetched. Restarting...");
+  return ESP_OK;
 }
 
-void UpgradeManager::sendAndRestart(const char* message) {
-  server_->send(200, "text/plain", message);
-  server_->client().flush();
-  server_->client().stop();
+void UpgradeManager::sendAndRestart(httpd_req_t* req, const char* message) {
+  sendResponse(req, "200 OK", "text/plain", message);
   delay(1000);
   esp_restart();
 }

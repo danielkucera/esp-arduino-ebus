@@ -649,11 +649,10 @@ void setup() {
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
 #endif
 
-  SetupHttpHandlers();
-  configManager.begin(&configServer);
-  upgradeManager.begin(&configServer);
   wifiNetworkManager.begin(&configManager);
-  configServer.begin();
+  SetupHttpHandlers();
+  configManager.begin(GetHttpServer());
+  upgradeManager.begin(GetHttpServer());
   upgradeManager.setPreUpgradeHook([]() {
 #if defined(EBUS_INTERNAL)
     ebus::serviceRunner->stop();
@@ -762,8 +761,6 @@ void setup() {
 
 void loop() {
   wdt_feed();
-
-  configServer.handleClient();
 
 #if defined(EBUS_INTERNAL)
   if (mqtt.isEnabled()) {

@@ -1,10 +1,11 @@
 #pragma once
 
-#include <WebServer.h>
+#include <Arduino.h>
+#include <esp_http_server.h>
 
 class ConfigManager {
  public:
-  void begin(WebServer* server);
+  void begin(httpd_handle_t server);
   void resetConfig();
   String readString(const char* key, const char* fallback = "");
   int32_t readInt(const char* key, int32_t fallback = 0);
@@ -15,9 +16,13 @@ class ConfigManager {
   String readConfigJson();
   bool writeConfigJson(const String& body, String& error);
 
-  void handleGet();
-  void handleSet();
-  void handleReset();
+  static esp_err_t handleGetTrampoline(httpd_req_t* req);
+  static esp_err_t handleSetTrampoline(httpd_req_t* req);
+  static esp_err_t handleResetTrampoline(httpd_req_t* req);
 
-  WebServer* server_ = nullptr;
+  esp_err_t handleGet(httpd_req_t* req);
+  esp_err_t handleSet(httpd_req_t* req);
+  esp_err_t handleReset(httpd_req_t* req);
+
+  httpd_handle_t server_ = nullptr;
 };

@@ -141,6 +141,31 @@ bool writeFromFlatPayload(cJSON* bodyDoc, nvs_handle_t handle, String& error,
   return true;
 }
 
+void sendResponse(httpd_req_t* req, const char* status, const char* type,
+                  const String& body) {
+  httpd_resp_set_status(req, status);
+  httpd_resp_set_type(req, type);
+  httpd_resp_send(req, body.c_str(), body.length());
+}
+
+String readBody(httpd_req_t* req) {
+  String out;
+  int remaining = req->content_len;
+  char buffer[512];
+
+  while (remaining > 0) {
+    int toRead = remaining > static_cast<int>(sizeof(buffer))
+                     ? sizeof(buffer)
+                     : remaining;
+    int received = httpd_req_recv(req, buffer, toRead);
+    if (received <= 0) return "";
+    out.concat(buffer, received);
+    remaining -= received;
+  }
+
+  return out;
+}
+
 }  // namespace
 
 String ConfigManager::readString(const char* key, const char* fallback) {
@@ -210,12 +235,33 @@ void ConfigManager::resetConfig() {
   nvs_close(handle);
 }
 
-void ConfigManager::begin(WebServer* server) {
+void ConfigManager::begin(httpd_handle_t server) {
   server_ = server;
+  if (server_ == nullptr) {
+    log_e("ConfigManager: HTTP server handle is null");
+    return;
+  }
 
-  server_->on("/api/v1/config", HTTP_GET, [this]() { handleGet(); });
-  server_->on("/api/v1/config", HTTP_POST, [this]() { handleSet(); });
-  server_->on("/api/v1/config/reset", HTTP_POST, [this]() { handleReset(); });
+  httpd_uri_t getUri = {};
+  getUri.uri = "/api/v1/config";
+  getUri.method = HTTP_GET;
+  getUri.handler = &ConfigManager::handleGetTrampoline;
+  getUri.user_ctx = this;
+  httpd_register_uri_handler(server_, &getUri);
+
+  httpd_uri_t setUri = {};
+  setUri.uri = "/api/v1/config";
+  setUri.method = HTTP_POST;
+  setUri.handler = &ConfigManager::handleSetTrampoline;
+  setUri.user_ctx = this;
+  httpd_register_uri_handler(server_, &setUri);
+
+  httpd_uri_t resetUri = {};
+  resetUri.uri = "/api/v1/config/reset";
+  resetUri.method = HTTP_POST;
+  resetUri.handler = &ConfigManager::handleResetTrampoline;
+  resetUri.user_ctx = this;
+  httpd_register_uri_handler(server_, &resetUri);
 }
 
 String ConfigManager::readConfigJson() {
@@ -273,22 +319,37 @@ bool ConfigManager::writeConfigJson(const String& body, String& error) {
   return true;
 }
 
-void ConfigManager::handleGet() {
-  server_->send(200, "application/json;charset=utf-8", readConfigJson());
+esp_err_t ConfigManager::handleGetTrampoline(httpd_req_t* req) {
+  return static_cast<ConfigManager*>(req->user_ctx)->handleGet(req);
 }
 
-void ConfigManager::handleSet() {
+esp_err_t ConfigManager::handleSetTrampoline(httpd_req_t* req) {
+  return static_cast<ConfigManager*>(req->user_ctx)->handleSet(req);
+}
+
+esp_err_t ConfigManager::handleResetTrampoline(httpd_req_t* req) {
+  return static_cast<ConfigManager*>(req->user_ctx)->handleReset(req);
+}
+
+esp_err_t ConfigManager::handleGet(httpd_req_t* req) {
+  sendResponse(req, "200 OK", "application/json;charset=utf-8", readConfigJson());
+  return ESP_OK;
+}
+
+esp_err_t ConfigManager::handleSet(httpd_req_t* req) {
   String error;
-  const String body = server_->arg("plain");
+  const String body = readBody(req);
   if (!writeConfigJson(body, error)) {
-    server_->send(400, "text/plain", error);
-    return;
+    sendResponse(req, "400 Bad Request", "text/plain", error);
+    return ESP_OK;
   }
 
-  server_->send(200, "text/plain", "Config saved to NVS");
+  sendResponse(req, "200 OK", "text/plain", "Config saved to NVS");
+  return ESP_OK;
 }
 
-void ConfigManager::handleReset() {
+esp_err_t ConfigManager::handleReset(httpd_req_t* req) {
   resetConfig();
-  server_->send(200, "text/plain", "Config reset");
+  sendResponse(req, "200 OK", "text/plain", "Config reset");
+  return ESP_OK;
 }
