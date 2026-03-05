@@ -297,15 +297,14 @@ const std::string Store::serializeCommands() const {
   // Define field names (order matters)
   std::vector<std::string> fields = {
       // Command Fields
-      "key",          "name",          "read_cmd",      "write_cmd",
-      "active",       "interval",      "master",        "position",
+      "key", "name", "read_cmd", "write_cmd", "active", "interval",
       // Data Fields
-      "datatype",     "divider",       "min",           "max",
-      "digits",       "unit",          "ha",            "ha_component",
+      "master", "position", "datatype", "divider", "min", "max", "digits",
+      "unit",
       // Home Assistant
-      "ha_device_class", "ha_entity_category", "ha_mode", "ha_key_value_map",
-      "ha_default_key", "ha_payload_on", "ha_payload_off", "ha_state_class",
-      "ha_step"};
+      "ha", "ha_component", "ha_device_class", "ha_entity_category", "ha_mode",
+      "ha_key_value_map", "ha_default_key", "ha_payload_on", "ha_payload_off",
+      "ha_state_class", "ha_step"};
 
   // Add header as first entry
   cJSON* header = cJSON_CreateArray();
