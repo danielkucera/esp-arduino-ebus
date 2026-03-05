@@ -390,7 +390,11 @@ void registerUri(const char* uri, httpd_method_t method,
   route.method = method;
   route.handler = handler;
   route.user_ctx = nullptr;
-  httpd_register_uri_handler(configServer, &route);
+  const esp_err_t err = httpd_register_uri_handler(configServer, &route);
+  if (err != ESP_OK) {
+    logger.error(String("HTTP route register failed: ") + uri + " (" +
+                 esp_err_to_name(err) + ")");
+  }
 }
 
 }  // namespace
@@ -403,6 +407,7 @@ void SetupHttpHandlers() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 80;
   config.uri_match_fn = httpd_uri_match_wildcard;
+  config.max_uri_handlers = 64;
 
   if (httpd_start(&configServer, &config) != ESP_OK) {
     logger.error("Failed to start HTTP server");

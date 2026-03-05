@@ -13,6 +13,14 @@ namespace {
 constexpr size_t kOtaBufferSize = 1024;
 constexpr uint8_t kEspImageMagic = 0xE9;
 
+void registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
+  const esp_err_t err = httpd_register_uri_handler(server, &route);
+  if (err != ESP_OK) {
+    logger.error(String("HTTP route register failed: ") + route.uri + " (" +
+                 esp_err_to_name(err) + ")");
+  }
+}
+
 void sendResponse(httpd_req_t* req, const char* status, const char* type,
                   const String& body) {
   httpd_resp_set_status(req, status);
@@ -51,21 +59,21 @@ void UpgradeManager::begin(httpd_handle_t server) {
   statusUri.method = HTTP_GET;
   statusUri.handler = &UpgradeManager::handleStatusTrampoline;
   statusUri.user_ctx = this;
-  httpd_register_uri_handler(server_, &statusUri);
+  registerRoute(server_, statusUri);
 
   httpd_uri_t httpUri = {};
   httpUri.uri = "/api/v1/upgrade/http";
   httpUri.method = HTTP_POST;
   httpUri.handler = &UpgradeManager::handleHttpUpgradeTrampoline;
   httpUri.user_ctx = this;
-  httpd_register_uri_handler(server_, &httpUri);
+  registerRoute(server_, httpUri);
 
   httpd_uri_t uploadUri = {};
   uploadUri.uri = "/api/v1/upgrade/upload";
   uploadUri.method = HTTP_POST;
   uploadUri.handler = &UpgradeManager::handleUploadTrampoline;
   uploadUri.user_ctx = this;
-  httpd_register_uri_handler(server_, &uploadUri);
+  registerRoute(server_, uploadUri);
 }
 
 void UpgradeManager::setPreUpgradeHook(PreUpgradeHook hook) {

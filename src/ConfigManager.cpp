@@ -11,6 +11,13 @@ namespace {
 
 constexpr const char* kNvsNamespace = "esp-ebus";
 
+void registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
+  const esp_err_t err = httpd_register_uri_handler(server, &route);
+  if (err != ESP_OK) {
+    log_e("HTTP route register failed: %s (%s)", route.uri, esp_err_to_name(err));
+  }
+}
+
 String readString(nvs_handle_t handle, const char* key, const char* fallback = "") {
   size_t required = 0;
   esp_err_t err = nvs_get_str(handle, key, nullptr, &required);
@@ -247,21 +254,21 @@ void ConfigManager::begin(httpd_handle_t server) {
   getUri.method = HTTP_GET;
   getUri.handler = &ConfigManager::handleGetTrampoline;
   getUri.user_ctx = this;
-  httpd_register_uri_handler(server_, &getUri);
+  registerRoute(server_, getUri);
 
   httpd_uri_t setUri = {};
   setUri.uri = "/api/v1/config";
   setUri.method = HTTP_POST;
   setUri.handler = &ConfigManager::handleSetTrampoline;
   setUri.user_ctx = this;
-  httpd_register_uri_handler(server_, &setUri);
+  registerRoute(server_, setUri);
 
   httpd_uri_t resetUri = {};
   resetUri.uri = "/api/v1/config/reset";
   resetUri.method = HTTP_POST;
   resetUri.handler = &ConfigManager::handleResetTrampoline;
   resetUri.user_ctx = this;
-  httpd_register_uri_handler(server_, &resetUri);
+  registerRoute(server_, resetUri);
 }
 
 String ConfigManager::readConfigJson() {
