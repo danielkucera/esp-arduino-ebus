@@ -3,6 +3,8 @@
 
 #include <Ebus.h>
 
+#include <algorithm>
+#include <cctype>
 #include <map>
 #include <string>
 
@@ -46,29 +48,32 @@ void Device::update(const std::vector<uint8_t>& master,
     vec_b5090127 = slave;
 }
 
-JsonDocument Device::toJson() const {
-  JsonDocument doc;
+const std::string Device::toJson() const {
+  cJSON* doc = cJSON_CreateObject();
 
   uint8_t master = ebus::masterOf(slave);
-  doc["master"] = master != slave ? ebus::to_string(master) : "";
-  doc["slave"] = ebus::to_string(slave);
+  cJSON_AddStringToObject(doc, "master",
+                          (master != slave ? ebus::to_string(master) : "").c_str());
+  cJSON_AddStringToObject(doc, "slave", ebus::to_string(slave).c_str());
 
   if (vec_070400.size() > 1) {
-    doc["manufacturer"] = (manufacturers.count(vec_070400[1]) > 0)
-                              ? manufacturers.at(vec_070400[1])
-                              : "";
-    doc["unitid"] = ebus::byte_2_char(ebus::range(vec_070400, 2, 5));
-    doc["software"] = ebus::to_string(ebus::range(vec_070400, 7, 2));
-    doc["hardware"] = ebus::to_string(ebus::range(vec_070400, 9, 2));
+    const std::string manufacturer =
+        (manufacturers.count(vec_070400[1]) > 0) ? manufacturers.at(vec_070400[1]) : "";
+    cJSON_AddStringToObject(doc, "manufacturer", manufacturer.c_str());
+    cJSON_AddStringToObject(
+        doc, "unitid", ebus::byte_2_char(ebus::range(vec_070400, 2, 5)).c_str());
+    cJSON_AddStringToObject(
+        doc, "software", ebus::to_string(ebus::range(vec_070400, 7, 2)).c_str());
+    cJSON_AddStringToObject(
+        doc, "hardware", ebus::to_string(ebus::range(vec_070400, 9, 2)).c_str());
 
-    doc["ebusd"] = ebusdConfiguration();
+    cJSON_AddStringToObject(doc, "ebusd", ebusdConfiguration().c_str());
   } else {
-    doc["manufacturer"] = "";
-    doc["unitid"] = "";
-    doc["software"] = "";
-    doc["hardware"] = "";
-
-    doc["ebusd"] = "";
+    cJSON_AddStringToObject(doc, "manufacturer", "");
+    cJSON_AddStringToObject(doc, "unitid", "");
+    cJSON_AddStringToObject(doc, "software", "");
+    cJSON_AddStringToObject(doc, "hardware", "");
+    cJSON_AddStringToObject(doc, "ebusd", "");
   }
 
   if (isVaillant() && isVaillantValid()) {
@@ -80,14 +85,18 @@ JsonDocument Device::toJson() const {
     // doc["prefix"] = serial.substr(0, 2);
     // doc["year"] = serial.substr(2, 2);
     // doc["week"] = serial.substr(4, 2);
-    doc["product"] = serial.substr(6, 10);
+    cJSON_AddStringToObject(doc, "product", serial.substr(6, 10).c_str());
     // doc["supplier"] = serial.substr(16, 4);
     // doc["counter"] = serial.substr(20, 6);
     // doc["suffix"] = serial.substr(26, 2);
   }
 
-  doc.shrinkToFit();
-  return doc;
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "{}";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
+
+  return payload;
 }
 
 const std::vector<uint8_t> Device::createScanCommand(const uint8_t& slave) {

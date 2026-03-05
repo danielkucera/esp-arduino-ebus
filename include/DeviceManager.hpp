@@ -3,6 +3,7 @@
 #if defined(EBUS_INTERNAL)
 
 #include <Ebus.h>
+#include <cJSON.h>
 
 #include <cstdint>
 #include <map>
@@ -28,13 +29,13 @@ class DeviceManager {
   const std::string getDevicesJson();
   const std::vector<const Device*> getDevices() const;
 
-  void populateMasterAddresses(JsonObject& jsonObject) const;
-  void populateSlaveAddresses(JsonObject& jsonObject) const;
+  void populateMasterAddresses(cJSON* jsonObject) const;
+  void populateSlaveAddresses(cJSON* jsonObject) const;
 
   const std::vector<std::vector<uint8_t>> scanCommands() const;
   const std::vector<std::vector<uint8_t>> vendorScanCommands() const;
   const std::vector<std::vector<uint8_t>> addressesScanCommands(
-      const JsonArrayConst& addresses) const;
+      const std::vector<std::string>& addresses) const;
 
   void setFullScan(bool enable);
   bool getFullScan() const;

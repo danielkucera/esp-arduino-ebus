@@ -12,6 +12,36 @@
 
 Mqtt mqtt;
 
+namespace {
+std::string printJson(cJSON* node, const char* fallback = "{}") {
+  char* printed = cJSON_PrintUnformatted(node);
+  std::string out = printed != nullptr ? printed : fallback;
+  if (printed != nullptr) cJSON_free(printed);
+  return out;
+}
+
+std::string errorPayload(const std::string& message) {
+  cJSON* doc = cJSON_CreateObject();
+  cJSON_AddStringToObject(doc, "error", message.c_str());
+  std::string payload = printJson(doc);
+  cJSON_Delete(doc);
+  return payload;
+}
+
+std::vector<std::string> getStringArray(cJSON* doc, const char* key) {
+  std::vector<std::string> out;
+  cJSON* arr = cJSON_GetObjectItemCaseSensitive(doc, key);
+  if (!cJSON_IsArray(arr)) return out;
+
+  cJSON* item = nullptr;
+  cJSON_ArrayForEach(item, arr) {
+    if (cJSON_IsString(item) && item->valuestring != nullptr)
+      out.emplace_back(item->valuestring);
+  }
+  return out;
+}
+}  // namespace
+
 void Mqtt::start() {
   if (enabled) {
     client = esp_mqtt_client_init(&mqtt_cfg);
@@ -82,7 +112,6 @@ void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
 
 void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
   if (!mqtt.enabled) return;
-
   mqtt.outgoingQueue.push(action);
 }
 
@@ -91,29 +120,26 @@ void Mqtt::publishData(const std::string& id,
                        const std::vector<uint8_t>& slave) {
   if (!mqtt.enabled) return;
 
-  std::string payload;
-  JsonDocument doc;
-  doc["id"] = id;
-  doc["master"] = ebus::to_string(master);
-  doc["slave"] = ebus::to_string(slave);
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
+  cJSON* doc = cJSON_CreateObject();
+  cJSON_AddStringToObject(doc, "id", id.c_str());
+  cJSON_AddStringToObject(doc, "master", ebus::to_string(master).c_str());
+  cJSON_AddStringToObject(doc, "slave", ebus::to_string(slave).c_str());
+
+  std::string payload = printJson(doc);
+  cJSON_Delete(doc);
+
   mqtt.publish("response", 0, false, payload.c_str());
 }
 
-void Mqtt::publishValue(const std::string& name, const JsonDocument& value) {
+void Mqtt::publishValue(const std::string& name, const std::string& valueJson) {
   if (!mqtt.enabled) return;
-
-  std::string payload;
-  serializeJson(value, payload);
 
   std::string subTopic = name;
   std::transform(subTopic.begin(), subTopic.end(), subTopic.begin(),
                  [](unsigned char c) { return std::tolower(c); });
 
   std::string topic = "values/" + subTopic;
-
-  mqtt.publish(topic.c_str(), 0, false, payload.c_str());
+  mqtt.publish(topic.c_str(), 0, false, valueJson.c_str());
 }
 
 void Mqtt::doLoop() {
@@ -146,38 +172,36 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
     case MQTT_EVENT_SUBSCRIBED: {
       logger.debug(String(self->requestTopic.c_str()) + " subscribed");
     } break;
-    case MQTT_EVENT_UNSUBSCRIBED: {
-    } break;
-    case MQTT_EVENT_PUBLISHED: {
-    } break;
+    case MQTT_EVENT_UNSUBSCRIBED:
+    case MQTT_EVENT_PUBLISHED:
+      break;
     case MQTT_EVENT_DATA: {
       logger.debug("MQTT data received");
-      JsonDocument doc;
-      DeserializationError error = deserializeJson(doc, event->data);
 
-      if (error) {
-        std::string errorPayload;
-        JsonDocument errorDoc;
-        errorDoc["error"] = error.c_str();
-        errorDoc.shrinkToFit();
-        serializeJson(errorDoc, errorPayload);
-        mqtt.publish("response", 0, false, errorPayload.c_str());
+      std::string incoming(event->data, event->data + event->data_len);
+      cJSON* doc = cJSON_Parse(incoming.c_str());
+      if (!cJSON_IsObject(doc)) {
+        mqtt.publish("response", 0, false,
+                     errorPayload("invalid json payload").c_str());
+        if (doc) cJSON_Delete(doc);
         return;
       }
 
-      std::string id = doc["id"].as<std::string>();
+      cJSON* idNode = cJSON_GetObjectItemCaseSensitive(doc, "id");
+      std::string id = (cJSON_IsString(idNode) && idNode->valuestring != nullptr)
+                           ? idNode->valuestring
+                           : "";
+
       auto it = mqtt.commandHandlers.find(id);
       if (it != mqtt.commandHandlers.end()) {
-        it->second(doc);  // Call the handler
+        it->second(doc);
       } else {
         // Unknown command error handling
-        std::string errorPayload;
-        JsonDocument errorDoc;
-        errorDoc["error"] = "command '" + id + "' not found";
-        errorDoc.shrinkToFit();
-        serializeJson(errorDoc, errorPayload);
-        mqtt.publish("response", 0, false, errorPayload.c_str());
+        mqtt.publish("response", 0, false,
+                     errorPayload("command '" + id + "' not found").c_str());
       }
+
+      cJSON_Delete(doc);
     } break;
     case MQTT_EVENT_DELETED: {
     } break;
@@ -185,49 +209,46 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       logger.error("MQTT Error occured");
     } break;
     default: {
-      logger.warn("Unhandled event id:" + event->event_id);
+      logger.warn(String("Unhandled event id: ") + event->event_id);
     } break;
   }
 }
 
-void Mqtt::handleRestart(const JsonDocument& doc) { restart(); }
+void Mqtt::handleRestart(const cJSON* doc) { restart(); }
 
-void Mqtt::handleInsert(const JsonDocument& doc) {
-  JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
-  if (!commands.isNull()) {
-    for (JsonVariantConst command : commands) {
-      std::string evalError = Command::evaluate(command);
-      if (evalError.empty()) {
-        incomingQueue.push(IncomingAction(Command::fromJson(command)));
-      } else {
-        std::string errorPayload;
-        JsonDocument errorDoc;
-        errorDoc["error"] = evalError;
-        errorDoc.shrinkToFit();
-        serializeJson(errorDoc, errorPayload);
-        mqtt.publish("response", 0, false, errorPayload.c_str());
-      }
+void Mqtt::handleInsert(const cJSON* doc) {
+  cJSON* commands = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "commands");
+  if (!cJSON_IsArray(commands)) return;
+
+  cJSON* command = nullptr;
+  cJSON_ArrayForEach(command, commands) {
+    std::string evalError = Command::evaluate(command);
+    if (evalError.empty()) {
+      incomingQueue.push(IncomingAction(Command::fromJson(command)));
+    } else {
+      mqtt.publish("response", 0, false, errorPayload(evalError).c_str());
     }
   }
 }
 
-void Mqtt::handleRemove(const JsonDocument& doc) {
-  JsonArrayConst keys = doc["keys"].as<JsonArrayConst>();
-  if (!keys.isNull()) {
-    for (JsonVariantConst key : keys)
-      incomingQueue.push(IncomingAction(key.as<std::string>()));
+void Mqtt::handleRemove(const cJSON* doc) {
+  std::vector<std::string> keys =
+      getStringArray(const_cast<cJSON*>(doc), "keys");
+
+  if (!keys.empty()) {
+    for (const std::string& key : keys) incomingQueue.push(IncomingAction(key));
   } else {
     for (const Command* command : store.getCommands())
       incomingQueue.push(IncomingAction(command->getKey()));
   }
 }
 
-void Mqtt::handlePublish(const JsonDocument& doc) {
+void Mqtt::handlePublish(const cJSON* doc) {
   for (const Command* command : store.getCommands())
     enqueueOutgoing(OutgoingAction(command));
 }
 
-void Mqtt::handleLoad(const JsonDocument& doc) {
+void Mqtt::handleLoad(const cJSON* doc) {
   int64_t bytes = store.loadCommands();
   if (bytes > 0)
     mqtt.publishResponse("load", "successful", bytes);
@@ -239,7 +260,7 @@ void Mqtt::handleLoad(const JsonDocument& doc) {
   if (mqttha.isEnabled()) mqttha.publishComponents();
 }
 
-void Mqtt::handleSave(const JsonDocument& doc) {
+void Mqtt::handleSave(const cJSON* doc) {
   int64_t bytes = store.saveCommands();
   if (bytes > 0)
     mqtt.publishResponse("save", "successful", bytes);
@@ -249,7 +270,7 @@ void Mqtt::handleSave(const JsonDocument& doc) {
     mqtt.publishResponse("save", "no data");
 }
 
-void Mqtt::handleWipe(const JsonDocument& doc) {
+void Mqtt::handleWipe(const cJSON* doc) {
   int64_t bytes = store.wipeCommands();
   if (bytes > 0)
     mqtt.publishResponse("wipe", "successful", bytes);
@@ -259,16 +280,20 @@ void Mqtt::handleWipe(const JsonDocument& doc) {
     mqtt.publishResponse("wipe", "no data");
 }
 
-void Mqtt::handleScan(const JsonDocument& doc) {
-  boolean full = doc["full"].as<boolean>();
-  boolean vendor = doc["vendor"].as<boolean>();
-  JsonArrayConst addresses = doc["addresses"].as<JsonArrayConst>();
+void Mqtt::handleScan(const cJSON* doc) {
+  cJSON* fullNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "full");
+  cJSON* vendorNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "vendor");
+  bool full = cJSON_IsTrue(fullNode);
+  bool vendor = cJSON_IsTrue(vendorNode);
+
+  std::vector<std::string> addresses =
+      getStringArray(const_cast<cJSON*>(doc), "addresses");
 
   if (full)
     schedule.handleScanFull();
   else if (vendor)
     schedule.handleScanVendor();
-  else if (addresses.isNull() || addresses.size() == 0)
+  else if (addresses.empty())
     schedule.handleScan();
   else
     schedule.handleScanAddresses(addresses);
@@ -276,56 +301,67 @@ void Mqtt::handleScan(const JsonDocument& doc) {
   mqtt.publishResponse("scan", "initiated");
 }
 
-void Mqtt::handleDevices(const JsonDocument& doc) {
+void Mqtt::handleDevices(const cJSON* doc) {
   for (const Device* device : deviceManager.getDevices())
     enqueueOutgoing(OutgoingAction(device));
 }
 
-void Mqtt::handleSend(const JsonDocument& doc) {
-  JsonArrayConst commands = doc["commands"].as<JsonArrayConst>();
-  if (commands.isNull() || commands.size() == 0)
+void Mqtt::handleSend(const cJSON* doc) {
+  std::vector<std::string> commands =
+      getStringArray(const_cast<cJSON*>(doc), "commands");
+  if (commands.empty())
     mqtt.publishResponse("send", "commands array invalid");
   else
     schedule.handleSend(commands);
 }
 
-void Mqtt::handleForward(const JsonDocument& doc) {
-  JsonArrayConst filters = doc["filters"].as<JsonArrayConst>();
-  if (!filters.isNull()) schedule.handleForwardFilter(filters);
-  boolean enable = doc["enable"].as<boolean>();
-  schedule.toggleForward(enable);
+void Mqtt::handleForward(const cJSON* doc) {
+  std::vector<std::string> filters =
+      getStringArray(const_cast<cJSON*>(doc), "filters");
+  if (!filters.empty()) schedule.handleForwardFilter(filters);
+
+  cJSON* enableNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "enable");
+  schedule.toggleForward(cJSON_IsTrue(enableNode));
 }
 
-void Mqtt::handleReset(const JsonDocument& doc) {
+void Mqtt::handleReset(const cJSON* doc) {
   deviceManager.resetAddresses();
   schedule.resetCounter();
   schedule.resetTiming();
 }
 
-void Mqtt::handleRead(const JsonDocument& doc) {
-  std::string key = doc["key"].as<std::string>();
+void Mqtt::handleRead(const cJSON* doc) {
+  cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
+  std::string key = (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
+                        ? keyNode->valuestring
+                        : "";
+
   const Command* command = store.findCommand(key);
   if (command != nullptr) {
     String s = "{\"id\":\"read\",";
-    s += store.getValueFullJson(command).substr(1).c_str();  // skip opening {
+    s += store.getValueFullJson(command).substr(1).c_str();
     publish("response", 0, false, s.c_str());
   } else {
     mqtt.publishResponse("read", "key '" + key + "' not found");
   }
 }
 
-void Mqtt::handleWrite(const JsonDocument& doc) {
-  std::string key = doc["key"].as<std::string>();
+void Mqtt::handleWrite(const cJSON* doc) {
+  cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
+  std::string key = (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
+                        ? keyNode->valuestring
+                        : "";
+
   Command* command = store.findCommand(key);
   if (command != nullptr) {
     std::vector<uint8_t> valueBytes = command->getVectorFromJson(doc);
-    if (valueBytes.size() > 0) {
+    if (!valueBytes.empty()) {
       std::vector<uint8_t> writeCmd = command->getWriteCmd();
       writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
       schedule.handleWrite(writeCmd);
       mqtt.publishResponse("write", "scheduled for key '" + key + "' name '" +
                                         command->getName() + "'");
-      command->setLast(0);  // force immediate update
+      command->setLast(0);
     } else {
       mqtt.publishResponse("write", "invalid value for key '" + key + "'");
     }
@@ -383,27 +419,26 @@ void Mqtt::checkOutgoingQueue() {
 
 void Mqtt::publishResponse(const std::string& id, const std::string& status,
                            const size_t& bytes) {
-  std::string payload;
-  JsonDocument doc;
-  doc["id"] = id;
-  doc["status"] = status;
-  if (bytes > 0) doc["bytes"] = bytes;
-  doc.shrinkToFit();
-  serializeJson(doc, payload);
+  cJSON* doc = cJSON_CreateObject();
+  cJSON_AddStringToObject(doc, "id", id.c_str());
+  cJSON_AddStringToObject(doc, "status", status.c_str());
+  if (bytes > 0) cJSON_AddNumberToObject(doc, "bytes", bytes);
+
+  std::string payload = printJson(doc);
+  cJSON_Delete(doc);
+
   publish("response", 0, false, payload.c_str());
 }
 
 void Mqtt::publishCommand(const Command* command) {
   std::string topic = "commands/" + command->getKey();
-  std::string payload;
-  serializeJson(command->toJson(), payload);
+  std::string payload = command->toJson();
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 
 void Mqtt::publishDevice(const Device* device) {
   std::string topic = "devices/" + ebus::to_string(device->getSlave());
-  std::string payload;
-  serializeJson(device->toJson(), payload);
+  std::string payload = device->toJson();
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 

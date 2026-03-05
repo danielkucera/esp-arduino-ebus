@@ -1,9 +1,9 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <ArduinoJson.h>
-
+#include <cJSON.h>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 // Represents a device on the eBUS, identified by its slave address and
@@ -20,7 +20,7 @@ class Device {
               const std::vector<uint8_t>& slave);
 
   // Serialization
-  JsonDocument toJson() const;
+  const std::string toJson() const;
 
   // Scan commands
   static const std::vector<uint8_t> createScanCommand(const uint8_t& slave);

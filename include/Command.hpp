@@ -1,7 +1,7 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <ArduinoJson.h>
+#include <cJSON.h>
 #include <Ebus.h>
 
 #include <map>
@@ -55,14 +55,14 @@ class Command {
   const float& getHAStep() const;
 
   // Data conversion
-  const JsonDocument getValueJsonDoc() const;
-  const std::vector<uint8_t> getVectorFromJson(const JsonDocument& doc);
+  const std::string getValueJson() const;
+  const std::vector<uint8_t> getVectorFromJson(const cJSON* doc) const;
 
   // Serialization / Deserialization
-  JsonDocument toJson() const;
-  static Command fromJson(const JsonDocument& doc);
+  const std::string toJson() const;
+  static Command fromJson(const cJSON* doc);
 
-  static const std::string evaluate(const JsonDocument& doc);
+  static const std::string evaluate(const cJSON* doc);
 
  private:
   // Internal fields
@@ -152,12 +152,11 @@ class Command {
     FieldType type;
   };
 
-  static const std::string isFieldValid(const JsonDocument& doc,
+  static const std::string isFieldValid(const cJSON* doc,
                                         const std::string& field, bool required,
                                         FieldType type);
 
-  static const std::string isKeyValueMapValid(
-      const JsonObjectConst ha_key_value_map);
+  static const std::string isKeyValueMapValid(const cJSON* ha_key_value_map);
 
   const double getDoubleFromVector() const;
   const std::string getStringFromVector() const;

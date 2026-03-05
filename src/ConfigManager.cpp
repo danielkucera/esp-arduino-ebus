@@ -1,8 +1,8 @@
 #include "ConfigManager.hpp"
 
-#include <ArduinoJson.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cJSON.h>
 #include <esp_err.h>
 #include <nvs.h>
 #include <vector>
@@ -103,8 +103,7 @@ bool readEntryValueAsString(nvs_handle_t handle, const nvs_entry_info_t& info,
   }
 }
 
-void fillJsonFromNvs(JsonDocument& doc, nvs_handle_t handle) {
-  JsonObject jConfig = doc["config"].to<JsonObject>();
+void fillJsonFromNvs(cJSON* configNode, nvs_handle_t handle) {
   nvs_iterator_t it = nvs_entry_find("nvs", kNvsNamespace, NVS_TYPE_ANY);
   while (it != nullptr) {
     nvs_entry_info_t info{};
@@ -112,7 +111,7 @@ void fillJsonFromNvs(JsonDocument& doc, nvs_handle_t handle) {
 
     String value;
     if (readEntryValueAsString(handle, info, value)) {
-      jConfig[info.key] = value;
+      cJSON_AddStringToObject(configNode, info.key, value.c_str());
     }
 
     it = nvs_entry_next(it);
@@ -120,16 +119,21 @@ void fillJsonFromNvs(JsonDocument& doc, nvs_handle_t handle) {
   nvs_release_iterator(it);
 }
 
-bool writeFromFlatPayload(JsonDocument& bodyDoc, nvs_handle_t handle, String& error,
+bool writeFromFlatPayload(cJSON* bodyDoc, nvs_handle_t handle, String& error,
                           bool& dirty) {
-  for (JsonPair kv : bodyDoc.as<JsonObject>()) {
-    if (kv.value().is<String>()) {
-      if (!writeString(handle, kv.key().c_str(), kv.value().as<String>(), error)) {
+  if (!cJSON_IsObject(bodyDoc)) {
+    error = "JSON root must be an object";
+    return false;
+  }
+
+  for (cJSON* item = bodyDoc->child; item != nullptr; item = item->next) {
+    if (cJSON_IsString(item) && item->valuestring != nullptr) {
+      if (!writeString(handle, item->string, String(item->valuestring), error)) {
         return false;
       }
       dirty = true;
     } else {
-      error = String("Unsupported value type for key '") + kv.key().c_str() + "'";
+      error = String("Unsupported value type for key '") + item->string + "'";
       return false;
     }
   }
@@ -219,26 +223,30 @@ String ConfigManager::readConfigJson() {
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
   if (openErr != ESP_OK) return "{}";
 
-  JsonDocument doc;
-  fillJsonFromNvs(doc, handle);
+  cJSON* root = cJSON_CreateObject();
+  cJSON* config = cJSON_AddObjectToObject(root, "config");
+  fillJsonFromNvs(config, handle);
   nvs_close(handle);
 
-  String payload;
-  serializeJson(doc, payload);
+  char* printed = cJSON_PrintUnformatted(root);
+  String payload = printed != nullptr ? String(printed) : String("{}");
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(root);
   return payload;
 }
 
 bool ConfigManager::writeConfigJson(const String& body, String& error) {
-  JsonDocument bodyDoc;
-  DeserializationError parseError = deserializeJson(bodyDoc, body);
-  if (parseError) {
-    error = String("Invalid JSON: ") + parseError.c_str();
+  cJSON* bodyDoc = cJSON_Parse(body.c_str());
+  if (bodyDoc == nullptr) {
+    const char* parseError = cJSON_GetErrorPtr();
+    error = String("Invalid JSON: ") + (parseError != nullptr ? parseError : "");
     return false;
   }
 
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
   if (openErr != ESP_OK) {
+    cJSON_Delete(bodyDoc);
     error = String("Failed to open NVS: ") + esp_err_to_name(openErr);
     return false;
   }
@@ -246,6 +254,7 @@ bool ConfigManager::writeConfigJson(const String& body, String& error) {
   bool dirty = false;
   bool ok = writeFromFlatPayload(bodyDoc, handle, error, dirty);
   if (!ok) {
+    cJSON_Delete(bodyDoc);
     nvs_close(handle);
     return false;
   }
@@ -253,11 +262,13 @@ bool ConfigManager::writeConfigJson(const String& body, String& error) {
   if (dirty) {
     const esp_err_t commitErr = nvs_commit(handle);
     if (commitErr != ESP_OK) {
+      cJSON_Delete(bodyDoc);
       nvs_close(handle);
       error = String("Failed to commit NVS: ") + esp_err_to_name(commitErr);
       return false;
     }
   }
+  cJSON_Delete(bodyDoc);
   nvs_close(handle);
   return true;
 }

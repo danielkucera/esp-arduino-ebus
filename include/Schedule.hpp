@@ -1,8 +1,8 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <ArduinoJson.h>
 #include <Ebus.h>
+#include <cJSON.h>
 
 #include <map>
 #include <queue>
@@ -30,16 +30,16 @@ class Schedule {
 
   void handleScanFull();
   void handleScan();
-  void handleScanAddresses(const JsonArrayConst& addresses);
+  void handleScanAddresses(const std::vector<std::string>& addresses);
   void handleScanVendor();
 
   void handleSend(const std::vector<uint8_t>& command);
-  void handleSend(const JsonArrayConst& commands);
+  void handleSend(const std::vector<std::string>& commands);
 
   void handleWrite(const std::vector<uint8_t>& command);
 
   void toggleForward(bool enable);
-  void handleForwardFilter(const JsonArrayConst& filters);
+  void handleForwardFilter(const std::vector<std::string>& filters);
 
   void setPublishCounter(bool enable);
   const bool getPublishCounter() const;

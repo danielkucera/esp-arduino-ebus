@@ -1,10 +1,12 @@
 #if defined(EBUS_INTERNAL)
 #include "Command.hpp"
 
-#include <ArduinoJson.h>
 #include <Ebus.h>
 
+#include <cmath>
+#include <limits>
 #include <regex>
+#include <stdexcept>
 
 const uint32_t& Command::getLast() const { return last; }
 
@@ -72,202 +74,259 @@ const std::string& Command::getHAStateClass() const { return ha_state_class; }
 
 const float& Command::getHAStep() const { return ha_step; }
 
-const JsonDocument Command::getValueJsonDoc() const {
-  JsonDocument doc;
-
+const std::string Command::getValueJson() const {
+  cJSON* doc = cJSON_CreateObject();
   if (numeric)
-    doc["value"] = getDoubleFromVector();
+    cJSON_AddNumberToObject(doc, "value", getDoubleFromVector());
   else
-    doc["value"] = getStringFromVector();
+    cJSON_AddStringToObject(doc, "value", getStringFromVector().c_str());
 
-  doc.shrinkToFit();
-  return doc;
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "{}";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
+  return payload;
 }
 
-const std::vector<uint8_t> Command::getVectorFromJson(const JsonDocument& doc) {
+const std::vector<uint8_t> Command::getVectorFromJson(const cJSON* doc) const {
   std::vector<uint8_t> result;
 
-  if (numeric && doc["value"].is<double>()) {
-    double value = doc["value"].as<double>();
+  if (doc == nullptr) return result;
+  cJSON* valueNode = cJSON_GetObjectItemCaseSensitive(doc, "value");
+  if (valueNode == nullptr) return result;
+
+  if (numeric && cJSON_IsNumber(valueNode)) {
+    double value = valueNode->valuedouble;
     if ((value >= min) && (value <= max)) result = getVectorFromDouble(value);
-  } else if (!numeric && doc["value"].is<const char*>()) {
-    std::string value = doc["value"].as<const char*>();
-    result = getVectorFromString(value);
+  } else if (!numeric && cJSON_IsString(valueNode) &&
+             valueNode->valuestring != nullptr) {
+    result = getVectorFromString(valueNode->valuestring);
   }
 
   return result;
 }
 
-JsonDocument Command::toJson() const {
-  JsonDocument doc;
+const std::string Command::toJson() const {
+  cJSON* doc = cJSON_CreateObject();
 
   // Command Fields
-  doc["key"] = key;
-  doc["name"] = name;
-  doc["read_cmd"] = ebus::to_string(read_cmd);
-  doc["write_cmd"] = ebus::to_string(write_cmd);
-  doc["active"] = active;
-  doc["interval"] = interval;
+  cJSON_AddStringToObject(doc, "key", key.c_str());
+  cJSON_AddStringToObject(doc, "name", name.c_str());
+  cJSON_AddStringToObject(doc, "read_cmd", ebus::to_string(read_cmd).c_str());
+  cJSON_AddStringToObject(doc, "write_cmd",
+                          ebus::to_string(write_cmd).c_str());
+  cJSON_AddBoolToObject(doc, "active", active);
+  cJSON_AddNumberToObject(doc, "interval", interval);
 
   // Data Fields
-  doc["master"] = master;
-  doc["position"] = position;
-  doc["datatype"] = ebus::datatype_2_string(datatype);
-  doc["divider"] = divider;
-  doc["min"] = min;
-  doc["max"] = max;
-  doc["digits"] = digits;
-  doc["unit"] = unit;
+  cJSON_AddBoolToObject(doc, "master", master);
+  cJSON_AddNumberToObject(doc, "position", static_cast<double>(position));
+  cJSON_AddStringToObject(doc, "datatype", ebus::datatype_2_string(datatype));
+  cJSON_AddNumberToObject(doc, "divider", divider);
+  cJSON_AddNumberToObject(doc, "min", min);
+  cJSON_AddNumberToObject(doc, "max", max);
+  cJSON_AddNumberToObject(doc, "digits", digits);
+  cJSON_AddStringToObject(doc, "unit", unit.c_str());
 
   // Home Assistant
-  doc["ha"] = ha;
-  doc["ha_component"] = ha_component;
-  doc["ha_device_class"] = ha_device_class;
-  doc["ha_entity_category"] = ha_entity_category;
-  doc["ha_mode"] = ha_mode;
+  cJSON_AddBoolToObject(doc, "ha", ha);
+  cJSON_AddStringToObject(doc, "ha_component", ha_component.c_str());
+  cJSON_AddStringToObject(doc, "ha_device_class", ha_device_class.c_str());
+  cJSON_AddStringToObject(doc, "ha_entity_category", ha_entity_category.c_str());
+  cJSON_AddStringToObject(doc, "ha_mode", ha_mode.c_str());
 
-  JsonObject ha_key_value_map_object = doc["ha_key_value_map"].to<JsonObject>();
+  cJSON* haMap = cJSON_AddObjectToObject(doc, "ha_key_value_map");
   for (const auto& kv : ha_key_value_map)
-    ha_key_value_map_object[std::to_string(kv.first)] = kv.second;
+    cJSON_AddStringToObject(haMap, std::to_string(kv.first).c_str(),
+                            kv.second.c_str());
 
-  doc["ha_default_key"] = ha_default_key;
-  doc["ha_payload_on"] = ha_payload_on;
-  doc["ha_payload_off"] = ha_payload_off;
-  doc["ha_state_class"] = ha_state_class;
-  doc["ha_step"] = ha_step;
+  cJSON_AddNumberToObject(doc, "ha_default_key", ha_default_key);
+  cJSON_AddNumberToObject(doc, "ha_payload_on", ha_payload_on);
+  cJSON_AddNumberToObject(doc, "ha_payload_off", ha_payload_off);
+  cJSON_AddStringToObject(doc, "ha_state_class", ha_state_class.c_str());
+  cJSON_AddNumberToObject(doc, "ha_step", ha_step);
 
-  doc.shrinkToFit();
-  return doc;
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "{}";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
+  return payload;
 }
 
-Command Command::fromJson(const JsonDocument& doc) {
+Command Command::fromJson(const cJSON* doc) {
   Command command;
+  if (doc == nullptr) return command;
+
+  auto getString = [doc](const char* key, const std::string& def = "") {
+    cJSON* node = cJSON_GetObjectItemCaseSensitive(doc, key);
+    if (cJSON_IsString(node) && node->valuestring != nullptr)
+      return std::string(node->valuestring);
+    return def;
+  };
+
+  auto getBool = [doc](const char* key, bool def = false) {
+    cJSON* node = cJSON_GetObjectItemCaseSensitive(doc, key);
+    if (cJSON_IsBool(node)) return cJSON_IsTrue(node) != 0;
+    return def;
+  };
+
+  auto getDouble = [doc](const char* key, double def = 0.0) {
+    cJSON* node = cJSON_GetObjectItemCaseSensitive(doc, key);
+    if (cJSON_IsNumber(node)) return node->valuedouble;
+    return def;
+  };
 
   // Command Fields
-  command.key = doc["key"].as<std::string>();
-  command.name = doc["name"].as<std::string>();
-  command.read_cmd = ebus::to_vector(doc["read_cmd"].as<std::string>());
-  if (!doc["write_cmd"].isNull())
-    command.write_cmd = ebus::to_vector(doc["write_cmd"].as<std::string>());
-  command.active = doc["active"].as<bool>();
-  if (!doc["interval"].isNull())
-    command.interval = doc["interval"].as<uint32_t>();
+  command.key = getString("key");
+  command.name = getString("name");
+  command.read_cmd = ebus::to_vector(getString("read_cmd"));
+
+  std::string writeCmd = getString("write_cmd");
+  if (!writeCmd.empty()) command.write_cmd = ebus::to_vector(writeCmd);
+
+  command.active = getBool("active", false);
+  cJSON* intervalNode = cJSON_GetObjectItemCaseSensitive(doc, "interval");
+  if (cJSON_IsNumber(intervalNode) && intervalNode->valuedouble >= 0)
+    command.interval = static_cast<uint32_t>(intervalNode->valuedouble);
   command.last = 0;
   command.data = std::vector<uint8_t>();
 
   // Data Fields
-  command.master = doc["master"].as<bool>();
-  command.position = doc["position"].as<size_t>();
-  command.datatype = ebus::string_2_datatype(doc["datatype"].as<const char*>());
+  command.master = getBool("master", false);
+  cJSON* positionNode = cJSON_GetObjectItemCaseSensitive(doc, "position");
+  if (cJSON_IsNumber(positionNode) && positionNode->valuedouble >= 0)
+    command.position = static_cast<size_t>(positionNode->valuedouble);
+
+  command.datatype = ebus::string_2_datatype(getString("datatype").c_str());
   command.length = ebus::sizeof_datatype(command.datatype);
   command.numeric = ebus::typeof_datatype(command.datatype);
-  if (!doc["divider"].isNull() && doc["divider"].as<float>() > 0)
-    command.divider = doc["divider"].as<float>();
-  if (!doc["min"].isNull()) command.min = doc["min"].as<float>();
-  if (!doc["max"].isNull()) command.max = doc["max"].as<float>();
-  if (!doc["digits"].isNull()) command.digits = doc["digits"].as<uint8_t>();
-  if (!doc["unit"].isNull()) command.unit = doc["unit"].as<std::string>();
+
+  cJSON* dividerNode = cJSON_GetObjectItemCaseSensitive(doc, "divider");
+  if (cJSON_IsNumber(dividerNode) && dividerNode->valuedouble > 0)
+    command.divider = static_cast<float>(dividerNode->valuedouble);
+
+  cJSON* minNode = cJSON_GetObjectItemCaseSensitive(doc, "min");
+  if (cJSON_IsNumber(minNode)) command.min = static_cast<float>(minNode->valuedouble);
+
+  cJSON* maxNode = cJSON_GetObjectItemCaseSensitive(doc, "max");
+  if (cJSON_IsNumber(maxNode)) command.max = static_cast<float>(maxNode->valuedouble);
+
+  cJSON* digitsNode = cJSON_GetObjectItemCaseSensitive(doc, "digits");
+  if (cJSON_IsNumber(digitsNode) && digitsNode->valuedouble >= 0)
+    command.digits = static_cast<uint8_t>(digitsNode->valuedouble);
+
+  command.unit = getString("unit");
 
   // Home Assistant
-  if (!doc["ha"].isNull()) command.ha = doc["ha"].as<bool>();
+  command.ha = getBool("ha", false);
 
   if (command.ha) {
-    if (!doc["ha_component"].isNull())
-      command.ha_component = doc["ha_component"].as<std::string>();
-    if (!doc["ha_device_class"].isNull())
-      command.ha_device_class = doc["ha_device_class"].as<std::string>();
-    if (!doc["ha_entity_category"].isNull())
-      command.ha_entity_category = doc["ha_entity_category"].as<std::string>();
-    if (!doc["ha_mode"].isNull())
-      command.ha_mode = doc["ha_mode"].as<std::string>();
+    command.ha_component = getString("ha_component", command.ha_component);
+    command.ha_device_class =
+        getString("ha_device_class", command.ha_device_class);
+    command.ha_entity_category =
+        getString("ha_entity_category", command.ha_entity_category);
+    command.ha_mode = getString("ha_mode", command.ha_mode);
 
-    if (!doc["ha_key_value_map"].isNull()) {
-      JsonObjectConst ha_key_value_map = doc["ha_key_value_map"];
-      for (JsonPairConst kv : ha_key_value_map) {
-        command.ha_key_value_map[std::stoi(kv.key().c_str())] =
-            kv.value().as<std::string>();
+    cJSON* haMap = cJSON_GetObjectItemCaseSensitive(doc, "ha_key_value_map");
+    if (cJSON_IsObject(haMap)) {
+      for (cJSON* item = haMap->child; item != nullptr; item = item->next) {
+        if (item->string != nullptr && cJSON_IsString(item) &&
+            item->valuestring != nullptr) {
+          command.ha_key_value_map[std::stoi(item->string)] = item->valuestring;
+        }
       }
     }
 
-    if (!doc["ha_default_key"].isNull())
-      command.ha_default_key = doc["ha_default_key"].as<int>();
-    if (!doc["ha_payload_on"].isNull())
-      command.ha_payload_on = doc["ha_payload_on"].as<uint8_t>();
-    if (!doc["ha_payload_off"].isNull())
-      command.ha_payload_off = doc["ha_payload_off"].as<uint8_t>();
-    if (!doc["ha_state_class"].isNull())
-      command.ha_state_class = doc["ha_state_class"].as<std::string>();
-    if (!doc["ha_step"].isNull() && doc["ha_step"].as<float>() > 0)
-      command.ha_step = doc["ha_step"].as<float>();
+    cJSON* defaultKeyNode = cJSON_GetObjectItemCaseSensitive(doc, "ha_default_key");
+    if (cJSON_IsNumber(defaultKeyNode))
+      command.ha_default_key = static_cast<int>(defaultKeyNode->valuedouble);
+
+    cJSON* payloadOnNode = cJSON_GetObjectItemCaseSensitive(doc, "ha_payload_on");
+    if (cJSON_IsNumber(payloadOnNode) && payloadOnNode->valuedouble >= 0)
+      command.ha_payload_on = static_cast<uint8_t>(payloadOnNode->valuedouble);
+
+    cJSON* payloadOffNode = cJSON_GetObjectItemCaseSensitive(doc, "ha_payload_off");
+    if (cJSON_IsNumber(payloadOffNode) && payloadOffNode->valuedouble >= 0)
+      command.ha_payload_off = static_cast<uint8_t>(payloadOffNode->valuedouble);
+
+    command.ha_state_class = getString("ha_state_class", command.ha_state_class);
+
+    cJSON* stepNode = cJSON_GetObjectItemCaseSensitive(doc, "ha_step");
+    if (cJSON_IsNumber(stepNode) && stepNode->valuedouble > 0)
+      command.ha_step = static_cast<float>(stepNode->valuedouble);
   }
 
   return command;
 }
 
-const std::string Command::evaluate(const JsonDocument& doc) {
+const std::string Command::evaluate(const cJSON* doc) {
   // Define the fields to evaluate
-  const FieldEvaluation fields[] = {// Command Fields
-                                    {"key", true, FT_String},
-                                    {"name", true, FT_String},
-                                    {"read_cmd", true, FT_HexString},
-                                    {"write_cmd", false, FT_HexString},
-                                    {"active", true, FT_Bool},
-                                    {"interval", false, FT_Uint32T},
-                                    // Data Fields
-                                    {"master", true, FT_Bool},
-                                    {"position", true, FT_SizeT},
-                                    {"datatype", true, FT_DataType},
-                                    {"divider", false, FT_Float},
-                                    {"min", false, FT_Float},
-                                    {"max", false, FT_Float},
-                                    {"digits", false, FT_Uint8T},
-                                    {"unit", false, FT_String},
-                                    // Home Assistant
-                                    {"ha", false, FT_Bool},
-                                    {"ha_component", false, FT_String},
-                                    {"ha_device_class", false, FT_String},
-                                    {"ha_entity_category", false, FT_String},
-                                    {"ha_mode", false, FT_String},
-                                    {"ha_key_value_map", false, FT_KeyValueMap},
-                                    {"ha_default_key", false, FT_Int},
-                                    {"ha_payload_on", false, FT_Uint8T},
-                                    {"ha_payload_off", false, FT_Uint8T},
-                                    {"ha_state_class", false, FT_String},
-                                    {"ha_step", false, FT_Float}};
+  const FieldEvaluation fields[] = {
+      {"key", true, FT_String},
+      {"name", true, FT_String},
+      {"read_cmd", true, FT_HexString},
+      {"write_cmd", false, FT_HexString},
+      {"active", true, FT_Bool},
+      {"interval", false, FT_Uint32T},
+      // Data Fields
+      {"master", true, FT_Bool},
+      {"position", true, FT_SizeT},
+      {"datatype", true, FT_DataType},
+      {"divider", false, FT_Float},
+      {"min", false, FT_Float},
+      {"max", false, FT_Float},
+      {"digits", false, FT_Uint8T},
+      {"unit", false, FT_String},
+      // Home Assistant
+      {"ha", false, FT_Bool},
+      {"ha_component", false, FT_String},
+      {"ha_device_class", false, FT_String},
+      {"ha_entity_category", false, FT_String},
+      {"ha_mode", false, FT_String},
+      {"ha_key_value_map", false, FT_KeyValueMap},
+      {"ha_default_key", false, FT_Int},
+      {"ha_payload_on", false, FT_Uint8T},
+      {"ha_payload_off", false, FT_Uint8T},
+      {"ha_state_class", false, FT_String},
+      {"ha_step", false, FT_Float}};
 
   // Evaluate each field in a loop
   for (const auto& field : fields) {
     std::string error =
         isFieldValid(doc, field.name, field.required, field.type);
-    if (!error.empty()) return error;  // Return the first error found
+    if (!error.empty()) return error;
   }
 
-  return "";  // No errors found
+  return "";
 }
 
-const std::string Command::isFieldValid(const JsonDocument& doc,
+const std::string Command::isFieldValid(const cJSON* doc,
                                         const std::string& field, bool required,
                                         FieldType type) {
-  JsonObjectConst root = doc.as<JsonObjectConst>();
+  if (doc == nullptr || !cJSON_IsObject(doc)) {
+    return "Invalid json root";
+  }
 
+  cJSON* v = cJSON_GetObjectItemCaseSensitive(doc, field.c_str());
   // Check if the required field exists
-  if (required && !root[field.c_str()].is<JsonVariantConst>())
-    return "Missing required field: " + field;
-
+  if (required && v == nullptr) return "Missing required field: " + field;
   // Skip type checking if the field is not present and not required
-  if (!root[field.c_str()].is<JsonVariantConst>() ||
-      root[field.c_str()].isNull())
-    return "";  // not present and not required => ok
+  if (v == nullptr || cJSON_IsNull(v)) return "";
 
-  JsonVariantConst v = root[field.c_str()];
+  auto isInteger = [](double value) {
+    return std::floor(value) == value;
+  };
 
   switch (type) {
     case FT_String: {
-      if (!v.is<std::string>()) return "Invalid type for field: " + field;
+      if (!cJSON_IsString(v) || v->valuestring == nullptr)
+        return "Invalid type for field: " + field;
     } break;
     case FT_HexString: {
-      if (!v.is<std::string>()) return "Invalid type for field: " + field;
-      const std::string hexStr = v.as<std::string>();
+      if (!cJSON_IsString(v) || v->valuestring == nullptr)
+        return "Invalid type for field: " + field;
+      const std::string hexStr = v->valuestring;
       if (!hexStr.empty()) {
         std::regex hexRegex(R"(^([0-9A-Fa-f]{2})+$)");
         if (!std::regex_match(hexStr, hexRegex))
@@ -275,59 +334,71 @@ const std::string Command::isFieldValid(const JsonDocument& doc,
       }
     } break;
     case FT_Bool: {
-      if (!v.is<bool>()) return "Invalid type for field: " + field;
+      if (!cJSON_IsBool(v)) return "Invalid type for field: " + field;
     } break;
     case FT_Int: {
-      if (!v.is<int>()) return "Invalid type for field: " + field;
+      if (!cJSON_IsNumber(v) || !isInteger(v->valuedouble))
+        return "Invalid type for field: " + field;
+      if (v->valuedouble < std::numeric_limits<int>::min() ||
+          v->valuedouble > std::numeric_limits<int>::max())
+        return "Out of range for field: " + field;
     } break;
     case FT_Float: {
-      if (!v.is<float>() && !v.is<double>() && !v.is<long>())
-        return "Invalid type for field: " + field;
+      if (!cJSON_IsNumber(v)) return "Invalid type for field: " + field;
     } break;
     case FT_Uint8T: {
-      if (!v.is<uint8_t>()) return "Invalid type for field: " + field;
-      long val = v.as<long>();
-      if (val < 0 || val > 0xFF) return "Out of range for field: " + field;
+      if (!cJSON_IsNumber(v) || !isInteger(v->valuedouble))
+        return "Invalid type for field: " + field;
+      if (v->valuedouble < 0 || v->valuedouble > 0xFF)
+        return "Out of range for field: " + field;
     } break;
     case FT_Uint32T: {
-      if (!v.is<uint32_t>()) return "Invalid type for field: " + field;
-      long val = v.as<long>();
-      if (val < 0 || val > UINT32_MAX)
+      if (!cJSON_IsNumber(v) || !isInteger(v->valuedouble))
+        return "Invalid type for field: " + field;
+      if (v->valuedouble < 0 || v->valuedouble > UINT32_MAX)
         return "Out of range for field: " + field;
     } break;
     case FT_SizeT: {
-      if (!v.is<size_t>()) return "Invalid type for field: " + field;
-      long val = v.as<long>();
-      if (val < 0 || val > SIZE_MAX) return "Out of range for field: " + field;
+      if (!cJSON_IsNumber(v) || !isInteger(v->valuedouble))
+        return "Invalid type for field: " + field;
+      if (v->valuedouble < 0 ||
+          v->valuedouble > static_cast<double>(std::numeric_limits<size_t>::max()))
+        return "Out of range for field: " + field;
     } break;
     case FT_DataType: {
-      if (!v.is<const char*>() ||
-          ebus::string_2_datatype(v.as<const char*>()) == ebus::DataType::ERROR)
+      if (!cJSON_IsString(v) || v->valuestring == nullptr ||
+          ebus::string_2_datatype(v->valuestring) == ebus::DataType::ERROR)
         return "Invalid datatype for field: " + field;
     } break;
     case FT_KeyValueMap: {
-      if (!v.is<JsonObjectConst>()) return "Invalid type for field: " + field;
-      return isKeyValueMapValid(v.as<JsonObjectConst>());
-    };
+      if (!cJSON_IsObject(v)) return "Invalid type for field: " + field;
+      return isKeyValueMapValid(v);
+    }
   }
 
   return "";
 }
 
-const std::string Command::isKeyValueMapValid(
-    const JsonObjectConst ha_key_value_map) {
-  for (JsonPairConst kv : ha_key_value_map) {
+const std::string Command::isKeyValueMapValid(const cJSON* ha_key_value_map) {
+  if (!cJSON_IsObject(ha_key_value_map)) return "Invalid value type in map";
+
+  for (cJSON* kv = ha_key_value_map->child; kv != nullptr; kv = kv->next) {
+    if (kv->string == nullptr) return "Invalid key in map";
+
     // Check if the key can be converted to an integer
     try {
-      std::stoi(kv.key().c_str());
-    } catch (const std::invalid_argument& e) {
-      return "Invalid key: " + std::string(kv.key().c_str());
-    } catch (const std::out_of_range& e) {
-      return "Key out of range: " + std::string(kv.key().c_str());
+      std::stoi(kv->string);
+    } catch (const std::invalid_argument&) {
+      return "Invalid key: " + std::string(kv->string);
+    } catch (const std::out_of_range&) {
+      return "Key out of range: " + std::string(kv->string);
     }
-    if (!kv.value().is<std::string>()) return "Invalid value type in map";
+
+    if (!cJSON_IsString(kv) || kv->valuestring == nullptr)
+      return "Invalid value type in map";
   }
-  return "";  // Passed key-value map evaluation checks
+  // Passed key-value map evaluation checks
+  return "";
 }
 
 const double Command::getDoubleFromVector() const {
