@@ -95,7 +95,7 @@ uint8_t adapterHwVersionRaw = 0xEE;
 std::string adapterHwVersion = "unread";
 
 void wdt_start() {
-  esp_task_wdt_init(6, true);
+  esp_task_wdt_init(60, true);
   esp_task_wdt_add(NULL);
 }
 
