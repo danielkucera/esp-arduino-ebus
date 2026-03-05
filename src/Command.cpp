@@ -269,6 +269,7 @@ const std::string Command::evaluate(const cJSON* doc) {
       {"write_cmd", false, FT_HexString},
       {"active", true, FT_Bool},
       {"interval", false, FT_Uint32T},
+      // Data Fields
       {"master", true, FT_Bool},
       {"position", true, FT_SizeT},
       {"datatype", true, FT_DataType},
@@ -277,6 +278,7 @@ const std::string Command::evaluate(const cJSON* doc) {
       {"max", false, FT_Float},
       {"digits", false, FT_Uint8T},
       {"unit", false, FT_String},
+      // Home Assistant
       {"ha", false, FT_Bool},
       {"ha_component", false, FT_String},
       {"ha_device_class", false, FT_String},

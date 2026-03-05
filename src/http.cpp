@@ -194,6 +194,7 @@ void handleValuesRead() {
   String body = configServer.arg("plain");
   cJSON* doc = cJSON_Parse(body.c_str());
   if (!cJSON_IsObject(doc)) {
+    // Return MQTT-equivalent error payload: {"id":"read","status": "..."}
     cJSON* errDoc = cJSON_CreateObject();
     cJSON_AddStringToObject(errDoc, "id", "read");
     cJSON_AddStringToObject(errDoc, "status", "invalid json payload");
@@ -210,7 +211,9 @@ void handleValuesRead() {
             : "";
     Command* command = store.findCommand(key);
     if (command != nullptr) {
+      // Force immediate refresh by resetting last seen timestamp
       command->setLast(0);
+      // Do not return the old value immediately; confirm the read request
       cJSON* resp = cJSON_CreateObject();
       cJSON_AddStringToObject(resp, "id", "read");
       cJSON_AddStringToObject(resp, "status", "requested");

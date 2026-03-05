@@ -296,10 +296,13 @@ const std::string Store::serializeCommands() const {
 
   // Define field names (order matters)
   std::vector<std::string> fields = {
+      // Command Fields
       "key",          "name",          "read_cmd",      "write_cmd",
       "active",       "interval",      "master",        "position",
+      // Data Fields
       "datatype",     "divider",       "min",           "max",
       "digits",       "unit",          "ha",            "ha_component",
+      // Home Assistant
       "ha_device_class", "ha_entity_category", "ha_mode", "ha_key_value_map",
       "ha_default_key", "ha_payload_on", "ha_payload_off", "ha_state_class",
       "ha_step"};
@@ -378,7 +381,7 @@ void Store::deserializeCommands(const char* payload) {
     for (int j = 0; j < limit; ++j) {
       cJSON* valueItem = cJSON_GetArrayItem(values, j);
       if (fields[j].empty() || valueItem == nullptr) continue;
-      // Copy each indexed field value into a temporary command object
+      // Special handling for 'ha_key_value_map'
       cJSON_AddItemToObject(tmpDoc, fields[j].c_str(),
                             cJSON_Duplicate(valueItem, 1));
     }

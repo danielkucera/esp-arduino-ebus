@@ -160,19 +160,25 @@ void Schedule::publishCounter() {
 const std::string Schedule::getCounterJson() {
   cJSON* doc = cJSON_CreateObject();
 
+  // Addresses Master
   cJSON* addresses = cJSON_AddObjectToObject(doc, "Addresses");
   cJSON* addressesMaster = cJSON_AddObjectToObject(addresses, "Master");
-  cJSON* addressesSlave = cJSON_AddObjectToObject(addresses, "Slave");
   deviceManager.populateMasterAddresses(addressesMaster);
+
+  // Addresses Slave
+  cJSON* addressesSlave = cJSON_AddObjectToObject(addresses, "Slave");
   deviceManager.populateSlaveAddresses(addressesSlave);
 
+  // Failed
   cJSON* failed = cJSON_AddObjectToObject(doc, "Failed");
   cJSON_AddNumberToObject(failed, "BusRequest", busRequestFailed);
   cJSON_AddNumberToObject(failed, "Sending", sendingFailed);
 
+  // Counter
   ebus::Handler::Counter handlerCounter = ebusHandler->getCounter();
   ebus::Request::Counter requestCounter = ebusRequest->getCounter();
 
+  // Messages
   cJSON* messages = cJSON_AddObjectToObject(doc, "Messages");
   cJSON_AddNumberToObject(messages, "Total", handlerCounter.messagesTotal);
   cJSON_AddNumberToObject(messages, "Passive_Master_Slave",
@@ -192,6 +198,7 @@ const std::string Schedule::getCounterJson() {
   cJSON_AddNumberToObject(messages, "Active_Broadcast",
                           handlerCounter.messagesActiveBroadcast);
 
+  // Requests
   cJSON* requests = cJSON_AddObjectToObject(doc, "Requests");
   cJSON_AddNumberToObject(requests, "StartBit", requestCounter.requestsStartBit);
   cJSON_AddNumberToObject(requests, "FirstSyn", requestCounter.requestsFirstSyn);
@@ -211,6 +218,7 @@ const std::string Schedule::getCounterJson() {
   cJSON_AddNumberToObject(requests, "SecondError",
                           requestCounter.requestsSecondError);
 
+  // Reset
   cJSON* reset = cJSON_AddObjectToObject(doc, "Reset");
   cJSON_AddNumberToObject(reset, "Total", handlerCounter.resetTotal);
   cJSON_AddNumberToObject(reset, "Passive_00", handlerCounter.resetPassive00);
@@ -220,9 +228,11 @@ const std::string Schedule::getCounterJson() {
   cJSON_AddNumberToObject(reset, "Active_0704", handlerCounter.resetActive0704);
   cJSON_AddNumberToObject(reset, "Active", handlerCounter.resetActive);
 
+  // Error
   cJSON* error = cJSON_AddObjectToObject(doc, "Error");
   cJSON_AddNumberToObject(error, "Total", handlerCounter.errorTotal);
 
+  // Error Passive
   cJSON* errorPassive = cJSON_AddObjectToObject(error, "Passive");
   cJSON_AddNumberToObject(errorPassive, "Total", handlerCounter.errorPassive);
   cJSON_AddNumberToObject(errorPassive, "Master", handlerCounter.errorPassiveMaster);
@@ -232,6 +242,7 @@ const std::string Schedule::getCounterJson() {
   cJSON_AddNumberToObject(errorPassive, "Slave_ACK",
                           handlerCounter.errorPassiveSlaveACK);
 
+  // Error Reactive
   cJSON* errorReactive = cJSON_AddObjectToObject(error, "Reactive");
   cJSON_AddNumberToObject(errorReactive, "Total", handlerCounter.errorReactive);
   cJSON_AddNumberToObject(errorReactive, "Master",
@@ -242,6 +253,7 @@ const std::string Schedule::getCounterJson() {
   cJSON_AddNumberToObject(errorReactive, "Slave_ACK",
                           handlerCounter.errorReactiveSlaveACK);
 
+  // Error Active
   cJSON* errorActive = cJSON_AddObjectToObject(error, "Active");
   cJSON_AddNumberToObject(errorActive, "Total", handlerCounter.errorActive);
   cJSON_AddNumberToObject(errorActive, "Master", handlerCounter.errorActiveMaster);
@@ -282,7 +294,7 @@ const std::string Schedule::getTimingJson() {
   ebus::Request::Timing requestTiming = ebusRequest->getTiming();
   ebus::Handler::Timing handlerTiming = ebusHandler->getTiming();
 
-  // Helper lambda to add timing stats to a cJSON object
+  // Helper lambda to add timing stats to a JsonObject
   auto addTiming = [](cJSON* obj, int64_t last, int64_t mean,
                       int64_t stddev, uint64_t count) {
     cJSON_AddNumberToObject(obj, "Last", static_cast<double>(last));

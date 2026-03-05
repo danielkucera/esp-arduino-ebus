@@ -100,10 +100,12 @@ const std::string MqttHA::getComponentJson(const Component& c) const {
   cJSON_AddStringToObject(doc, "unique_id", c.uniqueId.c_str());
   cJSON_AddStringToObject(doc, "name", c.name.c_str());
 
+  // fields
   for (const auto& kv : c.fields) {
     cJSON_AddStringToObject(doc, kv.first.c_str(), kv.second.c_str());
   }
 
+  // options
   if (!c.options.empty()) {
     cJSON* options = cJSON_AddArrayToObject(doc, "options");
     for (const auto& opt : c.options) {
@@ -111,6 +113,7 @@ const std::string MqttHA::getComponentJson(const Component& c) const {
     }
   }
 
+  // device
   cJSON* device = cJSON_AddObjectToObject(doc, "device");
   cJSON_AddStringToObject(device, "identifiers", c.deviceIdentifiers.c_str());
   for (const auto& kv : c.device) {
