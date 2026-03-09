@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "HttpUtils.hpp"
 #include "Logger.hpp"
 #include "main.hpp"
 
@@ -17,39 +18,6 @@ namespace {
 constexpr size_t kOtaBufferSize = 1024;
 constexpr uint8_t kEspImageMagic = 0xE9;
 constexpr size_t kProgressStepBytes = 64 * 1024;
-
-void registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
-  const esp_err_t err = httpd_register_uri_handler(server, &route);
-  if (err != ESP_OK) {
-    logger.error(String("HTTP route register failed: ") + route.uri + " (" +
-                 esp_err_to_name(err) + ")");
-  }
-}
-
-void sendResponse(httpd_req_t* req, const char* status, const char* type,
-                  const String& body) {
-  httpd_resp_set_status(req, status);
-  httpd_resp_set_type(req, type);
-  httpd_resp_send(req, body.c_str(), body.length());
-}
-
-String readBody(httpd_req_t* req) {
-  String out;
-  int remaining = req->content_len;
-  char buffer[512];
-
-  while (remaining > 0) {
-    int toRead = remaining > static_cast<int>(sizeof(buffer))
-                     ? sizeof(buffer)
-                     : remaining;
-    int received = httpd_req_recv(req, buffer, toRead);
-    if (received <= 0) return "";
-    out.concat(buffer, received);
-    remaining -= received;
-  }
-
-  return out;
-}
 
 int findSequence(const std::vector<uint8_t>& data, const std::string& needle) {
   if (needle.empty() || data.size() < needle.size()) return -1;
@@ -104,21 +72,21 @@ void UpgradeManager::begin(httpd_handle_t server) {
   statusUri.method = HTTP_GET;
   statusUri.handler = &UpgradeManager::handleStatusTrampoline;
   statusUri.user_ctx = this;
-  registerRoute(server_, statusUri);
+  HttpUtils::registerRoute(server_, statusUri);
 
   httpd_uri_t httpUri = {};
   httpUri.uri = "/api/v1/upgrade/http";
   httpUri.method = HTTP_POST;
   httpUri.handler = &UpgradeManager::handleHttpUpgradeTrampoline;
   httpUri.user_ctx = this;
-  registerRoute(server_, httpUri);
+  HttpUtils::registerRoute(server_, httpUri);
 
   httpd_uri_t uploadUri = {};
   uploadUri.uri = "/api/v1/upgrade/upload";
   uploadUri.method = HTTP_POST;
   uploadUri.handler = &UpgradeManager::handleUploadTrampoline;
   uploadUri.user_ctx = this;
-  registerRoute(server_, uploadUri);
+  HttpUtils::registerRoute(server_, uploadUri);
 }
 
 void UpgradeManager::setPreUpgradeHook(PreUpgradeHook hook) {
@@ -151,7 +119,7 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
 
   uploadPartition_ = esp_ota_get_next_update_partition(nullptr);
   if (uploadPartition_ == nullptr) {
-    sendResponse(req, "500 Internal Server Error", "text/plain",
+    HttpUtils::sendResponse(req, "500 Internal Server Error", "text/plain",
                  "No OTA partition available");
     return ESP_OK;
   }
@@ -159,7 +127,7 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   esp_err_t beginResult =
       esp_ota_begin(uploadPartition_, OTA_SIZE_UNKNOWN, &uploadHandle_);
   if (beginResult != ESP_OK) {
-    sendResponse(req, "500 Internal Server Error", "text/plain",
+    HttpUtils::sendResponse(req, "500 Internal Server Error", "text/plain",
                  String("esp_ota_begin failed: ") + esp_err_to_name(beginResult));
     return ESP_OK;
   }
@@ -183,7 +151,7 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
 
   auto abortUpload = [&](const char* status, const char* message) -> esp_err_t {
     esp_ota_abort(uploadHandle_);
-    sendResponse(req, status, "text/plain", message);
+    HttpUtils::sendResponse(req, status, "text/plain", message);
     return ESP_OK;
   };
 
@@ -297,14 +265,14 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   esp_err_t endResult = esp_ota_end(uploadHandle_);
   wdt_feed();
   if (endResult != ESP_OK) {
-    sendResponse(req, "500 Internal Server Error", "text/plain",
+    HttpUtils::sendResponse(req, "500 Internal Server Error", "text/plain",
                  String("esp_ota_end failed: ") + esp_err_to_name(endResult));
     return ESP_OK;
   }
 
   esp_err_t partitionResult = esp_ota_set_boot_partition(uploadPartition_);
   if (partitionResult != ESP_OK) {
-    sendResponse(req, "500 Internal Server Error", "text/plain",
+    HttpUtils::sendResponse(req, "500 Internal Server Error", "text/plain",
                  String("esp_ota_set_boot_partition failed: ") +
                      esp_err_to_name(partitionResult));
     return ESP_OK;
@@ -327,7 +295,7 @@ esp_err_t UpgradeManager::handleStatus(httpd_req_t* req) {
   String payload = printed != nullptr ? String(printed) : String("{}");
   if (printed != nullptr) cJSON_free(printed);
   cJSON_Delete(doc);
-  sendResponse(req, "200 OK", "application/json;charset=utf-8", payload);
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", payload);
   return ESP_OK;
 }
 
@@ -490,9 +458,9 @@ esp_err_t UpgradeManager::handleHttpUpgradeTrampoline(httpd_req_t* req) {
 esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
   preUpgradeDone_ = false;
 
-  cJSON* doc = cJSON_Parse(readBody(req).c_str());
+  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
   if (doc == nullptr) {
-    sendResponse(req, "400 Bad Request", "text/plain", "Invalid JSON payload");
+    HttpUtils::sendResponse(req, "400 Bad Request", "text/plain", "Invalid JSON payload");
     return ESP_OK;
   }
 
@@ -502,7 +470,7 @@ esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
                    : String("");
   if (url.isEmpty()) {
     cJSON_Delete(doc);
-    sendResponse(req, "400 Bad Request", "text/plain", "Missing 'url'");
+    HttpUtils::sendResponse(req, "400 Bad Request", "text/plain", "Missing 'url'");
     return ESP_OK;
   }
   cJSON_Delete(doc);
@@ -511,7 +479,7 @@ esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
 
   String error;
   if (!performHttpUpgrade(url, error)) {
-    sendResponse(req, "500 Internal Server Error", "text/plain", error.c_str());
+    HttpUtils::sendResponse(req, "500 Internal Server Error", "text/plain", error.c_str());
     return ESP_OK;
   }
 
@@ -520,7 +488,7 @@ esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
 }
 
 void UpgradeManager::sendAndRestart(httpd_req_t* req, const char* message) {
-  sendResponse(req, "200 OK", "text/plain", message);
+  HttpUtils::sendResponse(req, "200 OK", "text/plain", message);
   delay(1000);
   esp_restart();
 }
