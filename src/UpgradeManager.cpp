@@ -6,6 +6,10 @@
 #include <esp_ota_ops.h>
 #include <esp_system.h>
 
+#include <algorithm>
+#include <string>
+#include <vector>
+
 #include "Logger.hpp"
 #include "main.hpp"
 
@@ -44,6 +48,46 @@ String readBody(httpd_req_t* req) {
   }
 
   return out;
+}
+
+int findSequence(const std::vector<uint8_t>& data, const std::string& needle) {
+  if (needle.empty() || data.size() < needle.size()) return -1;
+
+  for (size_t i = 0; i + needle.size() <= data.size(); ++i) {
+    if (std::equal(needle.begin(), needle.end(), data.begin() + i)) {
+      return static_cast<int>(i);
+    }
+  }
+  return -1;
+}
+
+String getContentType(httpd_req_t* req) {
+  const size_t len = httpd_req_get_hdr_value_len(req, "Content-Type");
+  if (len == 0 || len > 255) return "";
+
+  char buf[256];
+  if (httpd_req_get_hdr_value_str(req, "Content-Type", buf, sizeof(buf)) != ESP_OK) {
+    return "";
+  }
+  return String(buf);
+}
+
+bool extractMultipartBoundary(const String& contentType, std::string& boundary) {
+  int marker = contentType.indexOf("boundary=");
+  if (marker < 0) return false;
+
+  String raw = contentType.substring(marker + 9);
+  raw.trim();
+  int semicolon = raw.indexOf(';');
+  if (semicolon >= 0) raw = raw.substring(0, semicolon);
+  raw.trim();
+  if (raw.startsWith("\"") && raw.endsWith("\"") && raw.length() >= 2) {
+    raw = raw.substring(1, raw.length() - 1);
+  }
+  if (raw.isEmpty()) return false;
+
+  boundary = raw.c_str();
+  return !boundary.empty();
 }
 }  // namespace
 
@@ -122,37 +166,39 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   uint8_t buffer[kOtaBufferSize];
   bool checkedMagic = false;
   int remaining = req->content_len;
+  const String contentType = getContentType(req);
+  std::string multipartBoundary;
+  const bool isMultipart = contentType.indexOf("multipart/form-data") >= 0 &&
+                           extractMultipartBoundary(contentType, multipartBoundary);
+  const std::string multipartDelimiter = "\r\n--" + multipartBoundary;
+  bool multipartStarted = false;
+  bool multipartFinished = false;
+  std::vector<uint8_t> pending;
+  int writeError = 0;  // 1=invalid_magic, 2=ota_write_failed
 
-  while (remaining > 0) {
-    int toRead = remaining > static_cast<int>(sizeof(buffer))
-                     ? sizeof(buffer)
-                     : remaining;
-    int received = httpd_req_recv(req, reinterpret_cast<char*>(buffer), toRead);
-    if (received <= 0) {
-      esp_ota_abort(uploadHandle_);
-      sendResponse(req, "500 Internal Server Error", "text/plain",
-                   "Upload receive failed");
-      return ESP_OK;
-    }
+  auto abortUpload = [&](const char* status, const char* message) -> esp_err_t {
+    esp_ota_abort(uploadHandle_);
+    sendResponse(req, status, "text/plain", message);
+    return ESP_OK;
+  };
+
+  auto writeOtaChunk = [&](const uint8_t* data, size_t len) -> bool {
+    if (len == 0) return true;
 
     if (!checkedMagic) {
       checkedMagic = true;
-      if (buffer[0] != kEspImageMagic) {
-        esp_ota_abort(uploadHandle_);
-        sendResponse(req, "400 Bad Request", "text/plain",
-                     "Upload must contain raw ESP firmware bytes");
-        return ESP_OK;
+      if (data[0] != kEspImageMagic) {
+        writeError = 1;
+        return false;
       }
     }
 
-    uploadBytesReceived_ += static_cast<size_t>(received);
-    esp_err_t writeResult = esp_ota_write(uploadHandle_, buffer, received);
+    uploadBytesReceived_ += len;
+    esp_err_t writeResult = esp_ota_write(uploadHandle_, data, len);
     wdt_feed();
     if (writeResult != ESP_OK) {
-      esp_ota_abort(uploadHandle_);
-      sendResponse(req, "500 Internal Server Error", "text/plain",
-                   String("esp_ota_write failed: ") + esp_err_to_name(writeResult));
-      return ESP_OK;
+      writeError = 2;
+      return false;
     }
 
     if (req->content_len > 0) {
@@ -167,8 +213,75 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
         }
       }
     }
+    return true;
+  };
 
+  while (remaining > 0) {
+    int toRead = remaining > static_cast<int>(sizeof(buffer))
+                     ? sizeof(buffer)
+                     : remaining;
+    int received = httpd_req_recv(req, reinterpret_cast<char*>(buffer), toRead);
+    if (received <= 0) {
+      return abortUpload("500 Internal Server Error", "Upload receive failed");
+    }
     remaining -= received;
+
+    if (!isMultipart) {
+      if (!writeOtaChunk(buffer, static_cast<size_t>(received))) {
+        if (writeError == 2) {
+          return abortUpload("500 Internal Server Error", "esp_ota_write failed");
+        }
+        return abortUpload("400 Bad Request", "Upload must contain raw ESP firmware bytes");
+      }
+      continue;
+    }
+
+    if (multipartFinished) continue;
+
+    pending.insert(pending.end(), buffer, buffer + received);
+
+    if (!multipartStarted) {
+      static const std::string headerEnd = "\r\n\r\n";
+      const int headerEndPos = findSequence(pending, headerEnd);
+      if (headerEndPos < 0) {
+        if (pending.size() > 8192) {
+          return abortUpload("400 Bad Request", "Invalid multipart upload");
+        }
+        continue;
+      }
+      pending.erase(pending.begin(),
+                    pending.begin() + headerEndPos + headerEnd.size());
+      multipartStarted = true;
+    }
+
+    const int delimiterPos = findSequence(pending, multipartDelimiter);
+    if (delimiterPos >= 0) {
+      if (!writeOtaChunk(pending.data(), static_cast<size_t>(delimiterPos))) {
+        if (writeError == 2) {
+          return abortUpload("500 Internal Server Error", "esp_ota_write failed");
+        }
+        return abortUpload("400 Bad Request", "Upload must contain raw ESP firmware bytes");
+      }
+      pending.clear();
+      multipartFinished = true;
+      continue;
+    }
+
+    const size_t keepTail = multipartDelimiter.empty() ? 0 : multipartDelimiter.size() - 1;
+    if (pending.size() > keepTail) {
+      const size_t writable = pending.size() - keepTail;
+      if (!writeOtaChunk(pending.data(), writable)) {
+        if (writeError == 2) {
+          return abortUpload("500 Internal Server Error", "esp_ota_write failed");
+        }
+        return abortUpload("400 Bad Request", "Upload must contain raw ESP firmware bytes");
+      }
+      pending.erase(pending.begin(), pending.begin() + writable);
+    }
+  }
+
+  if (isMultipart && (!multipartStarted || !multipartFinished)) {
+    return abortUpload("400 Bad Request", "Invalid multipart upload");
   }
 
   esp_err_t endResult = esp_ota_end(uploadHandle_);
