@@ -16,6 +16,7 @@
 namespace {
 constexpr size_t kOtaBufferSize = 1024;
 constexpr uint8_t kEspImageMagic = 0xE9;
+constexpr size_t kProgressStepBytes = 64 * 1024;
 
 void registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
   const esp_err_t err = httpd_register_uri_handler(server, &route);
@@ -175,6 +176,10 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   bool multipartFinished = false;
   std::vector<uint8_t> pending;
   int writeError = 0;  // 1=invalid_magic, 2=ota_write_failed
+  size_t nextProgressBytes = kProgressStepBytes;
+
+  logger.info("Upload started: content_len=" + String(req->content_len) +
+              ", multipart=" + String(isMultipart ? 1 : 0));
 
   auto abortUpload = [&](const char* status, const char* message) -> esp_err_t {
     esp_ota_abort(uploadHandle_);
@@ -211,6 +216,11 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
                uploadNextProgressPercent_ < 100) {
           uploadNextProgressPercent_ += 10;
         }
+      }
+    } else if (uploadBytesReceived_ >= nextProgressBytes) {
+      logger.info("Upload progress " + String(uploadBytesReceived_) + " bytes");
+      while (uploadBytesReceived_ >= nextProgressBytes) {
+        nextProgressBytes += kProgressStepBytes;
       }
     }
     return true;
@@ -300,6 +310,7 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
     return ESP_OK;
   }
 
+  logger.info("Upload completed: " + String(uploadBytesReceived_) + " bytes");
   sendAndRestart(req, "Upgrade uploaded. Restarting...");
   return ESP_OK;
 }
@@ -375,6 +386,11 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
   size_t totalWritten = 0;
   bool checkedMagic = false;
   int nextProgressPercent = 10;
+  size_t nextProgressBytes = kProgressStepBytes;
+
+  logger.info("HTTP upgrade download started: url=" + url +
+              ", content_length=" + String(contentLength) +
+              ", chunked=" + String(isChunked ? 1 : 0));
 
   while (true) {
     int bytesRead = esp_http_client_read(client, reinterpret_cast<char*>(buffer),
@@ -416,6 +432,11 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
           nextProgressPercent += 10;
         }
       }
+    } else if (totalWritten >= nextProgressBytes) {
+      logger.info("HTTP upgrade progress " + String(totalWritten) + " bytes");
+      while (totalWritten >= nextProgressBytes) {
+        nextProgressBytes += kProgressStepBytes;
+      }
     }
     delay(1);
   }
@@ -448,6 +469,7 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
     return false;
   }
 
+  logger.info("HTTP upgrade download completed: " + String(totalWritten) + " bytes");
   return true;
 }
 
