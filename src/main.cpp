@@ -653,6 +653,7 @@ void setup() {
   SetupHttpHandlers();
   configManager.begin(GetHttpServer());
   upgradeManager.begin(GetHttpServer());
+  SetupHttpFallbackHandlers();
   upgradeManager.setPreUpgradeHook([]() {
 #if defined(EBUS_INTERNAL)
     ebus::serviceRunner->stop();

@@ -11,6 +11,7 @@
 
 namespace {
 httpd_handle_t configServer = nullptr;
+bool fallbackHandlersRegistered = false;
 
 extern const char common_css_start[] asm("_binary_static_common_css_start");
 extern const char common_js_start[] asm("_binary_static_common_js_start");
@@ -454,7 +455,11 @@ void SetupHttpHandlers() {
 #endif
 
   registerUri("/restart", HTTP_POST, handleRestart);
+}
 
+void SetupHttpFallbackHandlers() {
+  if (configServer == nullptr || fallbackHandlersRegistered) return;
   registerUri("/*", HTTP_GET, handleNotFound);
   registerUri("/*", HTTP_POST, handleNotFound);
+  fallbackHandlersRegistered = true;
 }
