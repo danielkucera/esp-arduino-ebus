@@ -409,6 +409,7 @@ void SetupHttpHandlers() {
   config.server_port = 80;
   config.uri_match_fn = httpd_uri_match_wildcard;
   config.max_uri_handlers = 64;
+  config.stack_size = 12288;
 
   if (httpd_start(&configServer, &config) != ESP_OK) {
     logger.error("Failed to start HTTP server");

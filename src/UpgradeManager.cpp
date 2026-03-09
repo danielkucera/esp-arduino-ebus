@@ -441,6 +441,16 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
     delay(1);
   }
 
+  if (ok && contentLength > 0 && static_cast<int>(totalWritten) != contentLength) {
+    error = String("Downloaded size mismatch: got ") + String(totalWritten) +
+            ", expected " + String(contentLength);
+    ok = false;
+  }
+  if (ok && !esp_http_client_is_complete_data_received(client)) {
+    error = "HTTP download incomplete";
+    ok = false;
+  }
+
   esp_http_client_close(client);
   esp_http_client_cleanup(client);
 
