@@ -775,7 +775,7 @@ void setup() {
     initSNTP(sntpServerValue.c_str());
     setTimezone(sntpTimezoneValue.c_str());
   }
-/*
+
   std::string mqttServerValue = configManager.readString("mqttServer");
   std::string mqttUserValue = configManager.readString("mqttUser");
   std::string mqttPassValue = configManager.readString("mqttPass");
@@ -790,15 +790,14 @@ void setup() {
   mqttha.setWillTopic(mqtt.getWillTopic());
   mqttha.setEnabled(configManager.readBool("haEnabledParam"));
 
-  mqttha.setThingName(configManager.readString("thingName",
-  "esp-eBus").c_str()); mqttha.setThingModel(ESP.getChipModel());
-  mqttha.setThingModelId("Revision: " + std::to_string(ESP.getChipRevision()));
-  mqttha.setThingManufacturer("danman.eu");
-  mqttha.setThingSwVersion(AUTO_VERSION);
+  mqttha.setThingName(configManager.readString("thingName", "esp-eBus").c_str()); 
   mqttha.setThingHwVersion(adapterHwVersion);
+/*
+  mqttha.setThingModel(ESP.getChipModel());
+  mqttha.setThingModelId("Revision: " + std::to_string(ESP.getChipRevision()));
   mqttha.setThingConfigurationUrl(
       "http://" + std::string(WiFi.localIP().toString().c_str()) + "/");
-      */
+*/
 #endif
 
 #if !defined(EBUS_INTERNAL)

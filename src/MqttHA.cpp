@@ -33,14 +33,6 @@ void MqttHA::setThingModelId(const std::string& modelId) {
   thingModelId = modelId;
 }
 
-void MqttHA::setThingManufacturer(const std::string& manufacturer) {
-  thingManufacturer = manufacturer;
-}
-
-void MqttHA::setThingSwVersion(const std::string& swVersion) {
-  thingSwVersion = swVersion;
-}
-
 void MqttHA::setThingHwVersion(const std::string& hwVersion) {
   thingHwVersion = hwVersion;
 }
