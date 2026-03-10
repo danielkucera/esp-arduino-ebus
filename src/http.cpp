@@ -365,12 +365,12 @@ esp_err_t handleNotFound(httpd_req_t* req) {
 httpd_handle_t GetHttpServer() { return configServer; }
 
 bool RegisterUri(const char* uri, httpd_method_t method,
-                 esp_err_t (*handler)(httpd_req_t*), void* user_ctx) {
+                 esp_err_t (*handler)(httpd_req_t*)) {
   if (configServer == nullptr) {
     log_e("HTTP server not started; cannot register %s", uri);
     return false;
   }
-  return HttpUtils::registerRoute(configServer, uri, method, handler, user_ctx);
+  return HttpUtils::registerRoute(configServer, uri, method, handler);
 }
 
 void SetupHttpHandlers() {

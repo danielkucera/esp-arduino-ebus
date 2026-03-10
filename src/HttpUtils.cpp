@@ -39,14 +39,12 @@ bool registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
 }
 
 bool registerRoute(httpd_handle_t server, const char* uri, httpd_method_t method,
-                   esp_err_t (*handler)(httpd_req_t*), void* user_ctx) {
+                   esp_err_t (*handler)(httpd_req_t*)) {
   httpd_uri_t route = {};
   route.uri = uri;
   route.method = method;
   route.handler = handler;
-  route.user_ctx = user_ctx;
   return registerRoute(server, route);
 }
 
 }  // namespace HttpUtils
-
