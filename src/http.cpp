@@ -17,20 +17,18 @@ static httpd_handle_t configServer = nullptr;
 static bool fallbackHandlersRegistered = false;
 
 namespace {
-extern const char common_css_start[] asm("_binary_static_common_css_start");
-extern const char common_js_start[] asm("_binary_static_common_js_start");
+extern const char common_css_start[] asm("_binary_common_css_start");
+extern const char common_js_start[] asm("_binary_common_js_start");
 
-extern const char root_html_start[] asm("_binary_static_root_html_start");
-extern const char status_html_start[] asm("_binary_static_status_html_start");
-extern const char config_html_start[] asm("_binary_static_config_html_start");
-extern const char upgrade_html_start[] asm("_binary_static_upgrade_html_start");
-extern const char commands_html_start[] asm(
-    "_binary_static_commands_html_start");
-extern const char values_html_start[] asm("_binary_static_values_html_start");
-extern const char devices_html_start[] asm("_binary_static_devices_html_start");
-extern const char statistics_html_start[] asm(
-    "_binary_static_statistics_html_start");
-extern const char logs_html_start[] asm("_binary_static_logs_html_start");
+extern const char root_html_start[] asm("_binary_root_html_start");
+extern const char status_html_start[] asm("_binary_status_html_start");
+extern const char config_html_start[] asm("_binary_config_html_start");
+extern const char upgrade_html_start[] asm("_binary_upgrade_html_start");
+extern const char commands_html_start[] asm("_binary_commands_html_start");
+extern const char values_html_start[] asm("_binary_values_html_start");
+extern const char devices_html_start[] asm("_binary_devices_html_start");
+extern const char statistics_html_start[] asm("_binary_statistics_html_start");
+extern const char logs_html_start[] asm("_binary_logs_html_start");
 
 void sendStatic(httpd_req_t* req, const char* contentType, const char* data) {
   HttpUtils::sendResponse(req, "200 OK", contentType, std::string(data));
