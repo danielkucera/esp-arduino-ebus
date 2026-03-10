@@ -9,6 +9,7 @@
 #include <esp_idf_version.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <inttypes.h>
 
 #include "Logger.hpp"
 
@@ -204,7 +205,7 @@ void calcUniqueId() {
     id |= ((ESP.getEfuseMac() >> (8 * (5 - i))) & 0xff) << (8 * i);
   }
   char tmp[9]{};
-  snprintf(tmp, sizeof(tmp), "%08x", id);
+  snprintf(tmp, sizeof(tmp), "%08" PRIx32, id);
   strncpy(unique_id, &tmp[2], 6);
 }
 
@@ -424,35 +425,36 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
   pos += snprintf(status + pos, bufferSize - pos, "chip_model: %s\n",
                   ESP.getChipModel());
-  pos += snprintf(status + pos, bufferSize - pos, "chip_revision: %u\n",
+  pos += snprintf(status + pos, bufferSize - pos, "chip_revision: %" PRIu32 "\n",
                   ESP.getChipRevision());
-  pos += snprintf(status + pos, bufferSize - pos, "flash_chip_size: %u B\n",
+  pos += snprintf(status + pos, bufferSize - pos, "flash_chip_size: %" PRIu32 " B\n",
                   ESP.getFlashChipSize());
-  pos += snprintf(status + pos, bufferSize - pos, "flash_chip_speed: %u Hz\n",
+  pos += snprintf(status + pos, bufferSize - pos, "flash_chip_speed: %" PRIu32 " Hz\n",
                   ESP.getFlashChipSpeed());
   pos += snprintf(status + pos, bufferSize - pos, "flash_chip_mode: %u\n",
                   ESP.getFlashChipMode());
-  pos += snprintf(status + pos, bufferSize - pos, "clock_speed: %u Mhz\n",
+  pos += snprintf(status + pos, bufferSize - pos, "clock_speed: %" PRIu32 " Mhz\n",
                   getCpuFrequencyMhz());
-  pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %u Hz\n",
+  pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %" PRIu32 " Hz\n",
                   getApbFrequency());
-  pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", (uint32_t)(esp_timer_get_time() / 1000ULL));
-  pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
+  pos += snprintf(status + pos, bufferSize - pos, "uptime: %" PRIu32 " ms\n",
+                  static_cast<uint32_t>(esp_timer_get_time() / 1000ULL));
+  pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %" PRIu32 " ms\n",
                   wifiNetworkManager.getLastConnect());
   pos += snprintf(status + pos, bufferSize - pos, "reconnect_count: %d \n",
                   wifiNetworkManager.getReconnectCount());
   pos +=
-      snprintf(status + pos, bufferSize - pos, "rssi: %d dBm\n", WiFi.RSSI());
+      snprintf(status + pos, bufferSize - pos, "rssi: %" PRId32 " dBm\n", WiFi.RSSI());
   pos += snprintf(status + pos, bufferSize - pos, "bssid: %s\n",
                   WiFi.BSSIDstr().c_str());
   pos +=
-      snprintf(status + pos, bufferSize - pos, "free_heap: %u B\n", free_heap);
+      snprintf(status + pos, bufferSize - pos, "free_heap: %" PRIu32 " B\n", free_heap);
   pos +=
-      snprintf(status + pos, bufferSize - pos, "reset_code: %u\n", reset_code);
-  pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %u us\r\n",
+      snprintf(status + pos, bufferSize - pos, "reset_code: %" PRIu32 "\n", reset_code);
+  pos += snprintf(status + pos, bufferSize - pos, "loop_duration: %" PRIu32 " us\r\n",
                   loopDuration);
   pos += snprintf(status + pos, bufferSize - pos,
-                  "max_loop_duration: %u us\r\n", maxLoopDuration);
+                  "max_loop_duration: %" PRIu32 " us\r\n", maxLoopDuration);
   pos +=
       snprintf(status + pos, bufferSize - pos, "version: %s\r\n", AUTO_VERSION);
   pos += snprintf(status + pos, bufferSize - pos, "adapter_hw_version: %s\r\n",
@@ -473,16 +475,16 @@ char* status_string() {
 #endif
 
   pos +=
-      snprintf(status + pos, bufferSize - pos, "pwm_value: %u\r\n", get_pwm());
+      snprintf(status + pos, bufferSize - pos, "pwm_value: %" PRIu32 "\r\n", get_pwm());
 
 #if defined(EBUS_INTERNAL)
   std::string ebusAddress = configManager.readString("ebusAddress", "ff");
   pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
                   ebusAddress.c_str());
-  pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %i us\r\n",
-                  configManager.readInt("busisrWindow", 4300));
-  pos += snprintf(status + pos, bufferSize - pos, "busisr_offset: %i us\r\n",
-                  configManager.readInt("busisrOffset", 80));
+  pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %" PRId32 " us\r\n",
+                  static_cast<int32_t>(configManager.readInt("busisrWindow", 4300)));
+  pos += snprintf(status + pos, bufferSize - pos, "busisr_offset: %" PRId32 " us\r\n",
+                  static_cast<int32_t>(configManager.readInt("busisrOffset", 80)));
 
   pos +=
       snprintf(status + pos, bufferSize - pos, "inquiry_of_existence: %s\r\n",
@@ -490,8 +492,8 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "scan_on_startup: %s\r\n",
                   configManager.readBool("scanOnStartPrm") ? "true" : "false");
   pos += snprintf(status + pos, bufferSize - pos,
-                  "first_command_after_start: %i\r\n",
-                  configManager.readInt("firstCmdAfterSt", 10));
+                  "first_command_after_start: %" PRId32 "\r\n",
+                  static_cast<int32_t>(configManager.readInt("firstCmdAfterSt", 10)));
   pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
                   store.getActiveCommands());
   pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
