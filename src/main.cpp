@@ -756,7 +756,7 @@ void setup() {
     initSNTP(sntpServerValue.c_str());
     setTimezone(sntpTimezoneValue.c_str());
   }
-
+/*
   std::string mqttServerValue = configManager.readString("mqttServer");
   std::string mqttUserValue = configManager.readString("mqttUser");
   std::string mqttPassValue = configManager.readString("mqttPass");
@@ -779,6 +779,7 @@ void setup() {
   mqttha.setThingHwVersion(adapterHwVersion);
   mqttha.setThingConfigurationUrl(
       "http://" + std::string(WiFi.localIP().toString().c_str()) + "/");
+      */
 #endif
 
 #if !defined(EBUS_INTERNAL)

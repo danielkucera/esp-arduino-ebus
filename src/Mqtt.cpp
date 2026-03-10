@@ -65,14 +65,15 @@ void Mqtt::setup(const char* id) {
   willTopic = mqtt.rootTopic + "available";
   requestTopic = mqtt.rootTopic + "request";
 
-  mqtt_cfg.client_id = clientId.c_str();
+  mqtt_cfg.credentials.client_id = clientId.c_str();
   // Last Will
-  mqtt_cfg.lwt_topic = willTopic.c_str();
-  mqtt_cfg.lwt_msg = "{ \"value\": \"offline\" }";
-  mqtt_cfg.lwt_qos = 1;
-  mqtt_cfg.lwt_retain = 1;
+  mqtt_cfg.session.last_will.topic = willTopic.c_str();
+  mqtt_cfg.session.last_will.msg = "{ \"value\": \"offline\" }";
+  mqtt_cfg.session.last_will.msg_len = 0;
+  mqtt_cfg.session.last_will.qos = 1;
+  mqtt_cfg.session.last_will.retain = 1;
   // Keep-alive interval in seconds
-  mqtt_cfg.keepalive = 60;
+  mqtt_cfg.session.keepalive = 60;
 }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
@@ -83,12 +84,12 @@ void Mqtt::setServer(const char* host, uint16_t port) {
   uri = "mqtt://" + hostname;
   if (port > 0) uri += ":" + std::to_string(port);
 
-  mqtt_cfg.uri = uri.c_str();
+  mqtt_cfg.broker.address.uri = uri.c_str();
 }
 
 void Mqtt::setCredentials(const char* username, const char* password) {
-  mqtt_cfg.username = username;
-  mqtt_cfg.password = password;
+  mqtt_cfg.credentials.username = username;
+  mqtt_cfg.credentials.authentication.password = password;
 }
 
 void Mqtt::setEnabled(const bool enable) { enabled = enable; }
