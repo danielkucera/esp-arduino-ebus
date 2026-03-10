@@ -45,13 +45,13 @@
             }
 
             uploadStatus.textContent = 'Uploading firmware...';
-            const formData = new FormData();
-            formData.append('update', fileInput.files[0]);
+            const file = fileInput.files[0];
 
             try {
                 const response = await fetch('/api/v1/upgrade/upload', {
                     method: 'POST',
-                    body: formData
+                    headers: { 'Content-Type': 'application/octet-stream' },
+                    body: file
                 });
                 const text = await response.text();
                 uploadStatus.textContent = response.ok ? text : `Error: ${text}`;

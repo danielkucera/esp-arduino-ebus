@@ -43,9 +43,9 @@
         }
 
         function checkEndpoint() {
-            const url = '/commands';
+            const url = '/api/v1/commands';
 
-            fetch(url, { method: 'HEAD' }).then(response => {
+            fetch(url, { method: 'GET' }).then(response => {
                 if (!response.ok) { disableLinks(); } else { enableLinks(); }
             }).catch(() => {
                 disableLinks();

@@ -7,6 +7,11 @@
 #include <nvs.h>
 #include <vector>
 
+#include "HttpUtils.hpp"
+#include "http.hpp"
+
+extern ConfigManager configManager;
+
 namespace {
 
 constexpr const char* kNvsNamespace = "esp-ebus";
@@ -210,12 +215,24 @@ void ConfigManager::resetConfig() {
   nvs_close(handle);
 }
 
-void ConfigManager::begin(WebServer* server) {
-  server_ = server;
+namespace {
+esp_err_t handleConfigGet(httpd_req_t* req) {
+  return configManager.handleGet(req);
+}
 
-  server_->on("/api/v1/config", HTTP_GET, [this]() { handleGet(); });
-  server_->on("/api/v1/config", HTTP_POST, [this]() { handleSet(); });
-  server_->on("/api/v1/config/reset", HTTP_POST, [this]() { handleReset(); });
+esp_err_t handleConfigSet(httpd_req_t* req) {
+  return configManager.handleSet(req);
+}
+
+esp_err_t handleConfigReset(httpd_req_t* req) {
+  return configManager.handleReset(req);
+}
+}  // namespace
+
+void ConfigManager::begin() {
+  RegisterUri("/api/v1/config", HTTP_GET, handleConfigGet);
+  RegisterUri("/api/v1/config", HTTP_POST, handleConfigSet);
+  RegisterUri("/api/v1/config/reset", HTTP_POST, handleConfigReset);
 }
 
 String ConfigManager::readConfigJson() {
@@ -273,22 +290,25 @@ bool ConfigManager::writeConfigJson(const String& body, String& error) {
   return true;
 }
 
-void ConfigManager::handleGet() {
-  server_->send(200, "application/json;charset=utf-8", readConfigJson());
+esp_err_t ConfigManager::handleGet(httpd_req_t* req) {
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", readConfigJson());
+  return ESP_OK;
 }
 
-void ConfigManager::handleSet() {
+esp_err_t ConfigManager::handleSet(httpd_req_t* req) {
   String error;
-  const String body = server_->arg("plain");
+  const String body = HttpUtils::readBody(req);
   if (!writeConfigJson(body, error)) {
-    server_->send(400, "text/plain", error);
-    return;
+    HttpUtils::sendResponse(req, "400 Bad Request", "text/plain", error);
+    return ESP_OK;
   }
 
-  server_->send(200, "text/plain", "Config saved to NVS");
+  HttpUtils::sendResponse(req, "200 OK", "text/plain", "Config saved to NVS");
+  return ESP_OK;
 }
 
-void ConfigManager::handleReset() {
+esp_err_t ConfigManager::handleReset(httpd_req_t* req) {
   resetConfig();
-  server_->send(200, "text/plain", "Config reset");
+  HttpUtils::sendResponse(req, "200 OK", "text/plain", "Config reset");
+  return ESP_OK;
 }
