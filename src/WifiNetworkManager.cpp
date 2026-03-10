@@ -97,7 +97,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   std::strncpy(reinterpret_cast<char*>(apConfig.ap.password), apPassword.c_str(),
                sizeof(apConfig.ap.password) - 1);
   apConfig.ap.max_connection = 4;
-  apConfig.ap.channel = rand() % 13 + 1;
+  apConfig.ap.channel = rand() % 12 + 1;
   apConfig.ap.authmode = WIFI_AUTH_WPA2_PSK;
   if (apPassword.size() < 8) apConfig.ap.authmode = WIFI_AUTH_OPEN;
   if (esp_wifi_set_config(WIFI_IF_AP, &apConfig) != ESP_OK) {
