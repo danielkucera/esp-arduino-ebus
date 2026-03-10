@@ -88,3 +88,44 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         artifacts: "release/artifact/*"
+
+deploy-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Your 'build' job uploads to a folder named 'release'
+          # This will download it into a local 'tmp_artifacts' folder
+          name: artifact
+          path: tmp_artifacts
+
+      - name: Organize Files
+        run: |
+          # Create the specific path: firmware/<commit>/
+          # Using short SHA (first 6 chars) for the folder name
+          DEST_DIR="firmware/${GITHUB_SHA::6}"
+          mkdir -p "$DEST_DIR"
+          
+          # Move files from the download into the versioned folder
+          cp -r tmp_artifacts/* "$DEST_DIR/"
+          
+          # Ensure CNAME exists so GitHub doesn't drop your custom domain
+          echo "esp-ebus.gh.danman.eu" > CNAME
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          publish_branch: gh-pages
+          keep_files: true # This keeps /firmware/<old-sha>/ from being deleted
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: "Deploy firmware for ${GITHUB_SHA::6}"
