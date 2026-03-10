@@ -475,6 +475,9 @@ void Schedule::handleEventQueue() {
               schedule.processPassive(std::vector<uint8_t>(event->data.master),
                                       std::vector<uint8_t>(event->data.slave));
               break;
+            case ebus::MessageType::undefined:
+            default:
+              break;
           }
         } break;
         case CallbackType::error: {
