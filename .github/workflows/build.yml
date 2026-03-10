@@ -28,7 +28,7 @@ jobs:
       with:
         python-version: '3.11'
     - name: Install PlatformIO Core
-        run: pip install --upgrade platformio
+      run: pip install --upgrade platformio
     - name: Prepare release dir
       run: mkdir release
     - name: Build v5.x-internal
