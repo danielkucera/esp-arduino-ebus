@@ -24,7 +24,7 @@ jobs:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-idf-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-
+          ${{ runner.os }}-pip-idf-
     - name: Cache PlatformIO
       uses: actions/cache@v3
       with:
