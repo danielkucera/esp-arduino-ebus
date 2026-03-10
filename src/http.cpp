@@ -387,7 +387,6 @@ void SetupHttpHandlers() {
   registerUri("/common.js", HTTP_GET, handleCommonJs);
   registerUri("/", HTTP_GET, handleRoot);
   registerUri("/config", HTTP_GET, handleConfigPage);
-  registerUri("/config2", HTTP_GET, handleConfigPage);
   registerUri("/status", HTTP_GET, handleStatusPage);
   registerUri("/api/v1/status", HTTP_GET, handleStatusApi);
   registerUri("/upgrade", HTTP_GET, handleUpgradePage);
