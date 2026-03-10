@@ -1,5 +1,7 @@
 #pragma once
 
+#include <esp_timer.h>
+
 #include "main.hpp"
 
 enum symbols { SYN = 0xAA };
@@ -88,12 +90,12 @@ class BusState {
   }
   inline eState syn(eState newstate) {
     _previousSYNtime = _SYNtime;
-    _SYNtime = micros();
+    _SYNtime = (uint32_t)(esp_timer_get_time());
     return newstate;
   }
   eState error(eState currentstate, eState newstate) {
     _previousSYNtime = _SYNtime;
-    _SYNtime = micros();
+    _SYNtime = (uint32_t)(esp_timer_get_time());
     DEBUG_LOG(
         "unexpected SYN on bus while state is %s, setting state to %s "
         "m=0x%02x, b=0x%02x %lu us\n",
@@ -104,10 +106,10 @@ class BusState {
 
   void reset() { _state = eStartup; }
 
-  const uint32_t microsSinceLastSyn() const { return micros() - _SYNtime; }
+  const uint32_t microsSinceLastSyn() const { return (uint32_t)(esp_timer_get_time()) - _SYNtime; }
 
   const uint32_t microsSincePreviousSyn() const {
-    return micros() - _previousSYNtime;
+    return (uint32_t)(esp_timer_get_time()) - _previousSYNtime;
   }
 
   eState _state;

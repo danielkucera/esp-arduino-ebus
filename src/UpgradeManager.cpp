@@ -6,6 +6,9 @@
 #include <esp_http_client.h>
 #include <esp_ota_ops.h>
 #include <esp_system.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include <string>
 
@@ -13,7 +16,6 @@
 #undef INADDR_NONE
 #endif
 
-#include "ArduinoCompat.hpp"
 #include "HttpUtils.hpp"
 #include "Logger.hpp"
 #include "main.hpp"
@@ -321,7 +323,7 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
         nextProgressBytes += kProgressStepBytes;
       }
     }
-    delay(1);
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 
   if (ok && contentLength > 0 && static_cast<int>(totalWritten) != contentLength) {
@@ -404,6 +406,6 @@ esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
 
 void UpgradeManager::sendAndRestart(httpd_req_t* req, const char* message) {
   HttpUtils::sendResponse(req, "200 OK", "text/plain", message);
-  delay(1000);
+  vTaskDelay(pdMS_TO_TICKS(1000));
   esp_restart();
 }

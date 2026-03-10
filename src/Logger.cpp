@@ -3,8 +3,8 @@
 #include <cJSON.h>
 #include <ctime>
 #include <cstring>
+#include <esp_timer.h>
 
-#include "ArduinoCompat.hpp"
 
 namespace {
 constexpr size_t kPrintQueueLen = 32;
@@ -76,7 +76,7 @@ const std::string Logger::timestamp() {
   char timestamp[40];
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", &timeinfo);
   snprintf(timestamp + strlen(timestamp), sizeof(timestamp) - strlen(timestamp),
-           ".%03uZ", millis() % 1000);
+           ".%03uZ", (uint32_t)(esp_timer_get_time() / 1000ULL) % 1000);
 
   return std::string(timestamp);
 }

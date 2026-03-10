@@ -4,8 +4,8 @@
 #include <Preferences.h>
 #include <cstdio>
 #include <cmath>
+#include <esp_timer.h>
 
-#include "ArduinoCompat.hpp"
 
 Store store;
 
@@ -188,7 +188,7 @@ Command* Store::nextActiveCommand() {
       next = cmd;
   }
 
-  if (!init && next && millis() < next->getLast() + next->getInterval() * 1000)
+  if (!init && next && (uint32_t)(esp_timer_get_time() / 1000ULL) < next->getLast() + next->getInterval() * 1000)
     next = nullptr;
 
   return next;
@@ -213,7 +213,7 @@ std::vector<Command*> Store::updateData(Command* command,
                                         const std::vector<uint8_t>& slave) {
   auto update = [this](Command* cmd, const std::vector<uint8_t>& master,
                        const std::vector<uint8_t>& slave) {
-    cmd->setLast(millis());
+    cmd->setLast((uint32_t)(esp_timer_get_time() / 1000ULL));
     if (cmd->getMaster())
       cmd->setData(
           ebus::range(master, 4 + cmd->getPosition(), cmd->getLength()));
@@ -268,7 +268,7 @@ const std::string Store::getValueFullJson(const Command* command) {
 
   cJSON_AddStringToObject(doc, "unit", command->getUnit().c_str());
   cJSON_AddNumberToObject(
-      doc, "age", static_cast<uint32_t>((millis() - command->getLast()) / 1000));
+      doc, "age", static_cast<uint32_t>(((uint32_t)(esp_timer_get_time() / 1000ULL) - command->getLast()) / 1000));
   cJSON_AddBoolToObject(doc, "write", !command->getWriteCmd().empty());
   cJSON_AddBoolToObject(doc, "active", command->getActive());
 

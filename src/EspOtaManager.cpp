@@ -6,6 +6,9 @@
 #include <esp_err.h>
 #include <esp_ota_ops.h>
 #include <esp_system.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <lwip/inet.h>
 #include <lwip/sockets.h>
 #include <unistd.h>
@@ -16,7 +19,6 @@
 #undef INADDR_NONE
 #endif
 
-#include "ArduinoCompat.hpp"
 #include "Logger.hpp"
 #include "main.hpp"
 
@@ -203,13 +205,13 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
   size_t totalReceived = 0;
   bool checkedMagic = false;
   int nextProgressPercent = 10;
-  uint32_t transferDeadline = millis() + kEspOtaTransferTimeoutMs;
+  uint32_t transferDeadline = (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
 
   while (totalReceived < expectedSize) {
     int bytesRead = recv(tcpSock, buffer, sizeof(buffer), 0);
     wdt_feed();
     if (bytesRead <= 0) {
-      if (bytesRead == 0 || millis() > transferDeadline) {
+      if (bytesRead == 0 || (uint32_t)(esp_timer_get_time() / 1000ULL) > transferDeadline) {
         esp_ota_abort(handle);
         fail("transfer timeout/disconnect");
         const char* msg = "ERROR[3]: timeout";
@@ -218,7 +220,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
         return false;
       }
       if (errno == EWOULDBLOCK || errno == EAGAIN) {
-        delay(1);
+        vTaskDelay(pdMS_TO_TICKS(1));
         continue;
       }
       esp_ota_abort(handle);
@@ -229,7 +231,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
       return false;
     }
 
-    transferDeadline = millis() + kEspOtaTransferTimeoutMs;
+    transferDeadline = (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
 
     if (!checkedMagic) {
       checkedMagic = true;
@@ -294,7 +296,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
               " bytes, rebooting");
   send(tcpSock, "OK", 2, 0);
   close(tcpSock);
-  delay(1000);
+  vTaskDelay(pdMS_TO_TICKS(1000));
   esp_restart();
   return true;
 }

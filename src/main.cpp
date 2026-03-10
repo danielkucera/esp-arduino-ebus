@@ -3,8 +3,8 @@
 #include <WiFi.h>
 #include <cJSON.h>
 #include <esp_efuse.h>
+#include <esp_timer.h>
 
-#include "ArduinoCompat.hpp"
 #include "Logger.hpp"
 
 #if defined(EBUS_INTERNAL)
@@ -183,20 +183,20 @@ void restart() {
 void check_reset() {
   // check if RESET_PIN being hold low and reset
   pinMode(RESET_PIN, INPUT_PULLUP);
-  uint32_t resetStart = millis();
+  uint32_t resetStart = (uint32_t)(esp_timer_get_time() / 1000ULL);
   while (digitalRead(RESET_PIN) == 0) {
-    if (millis() > resetStart + RESET_MS) {
+    if ((uint32_t)(esp_timer_get_time() / 1000ULL) > resetStart + RESET_MS) {
       configManager.resetConfig();
       restart();
     }
   }
 }
 
-void updateLastComms() { last_comms = millis(); }
+void updateLastComms() { last_comms = (uint32_t)(esp_timer_get_time() / 1000ULL); }
 
 void loop_duration() {
   static uint32_t lastTime = 0;
-  uint32_t now = micros();
+  uint32_t now = (uint32_t)(esp_timer_get_time());
   uint32_t delta = now - lastTime;
   float alpha = 0.3;
 
@@ -372,7 +372,7 @@ char* status_string() {
                   getCpuFrequencyMhz());
   pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %u Hz\n",
                   getApbFrequency());
-  pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", millis());
+  pos += snprintf(status + pos, bufferSize - pos, "uptime: %ld ms\n", (uint32_t)(esp_timer_get_time() / 1000ULL));
   pos += snprintf(status + pos, bufferSize - pos, "last_connect_time: %u ms\n",
                   wifiNetworkManager.getLastConnect());
   pos += snprintf(status + pos, bufferSize - pos, "reconnect_count: %d \n",
@@ -729,7 +729,7 @@ void setup() {
   espOtaManager.begin();
   wdt_start();
 
-  last_comms = millis();
+  last_comms = (uint32_t)(esp_timer_get_time() / 1000ULL);
   enableTX();
 
 #if defined(EBUS_INTERNAL)
@@ -770,7 +770,7 @@ void loop() {
 #if defined(EBUS_INTERNAL)
   if (mqtt.isEnabled()) {
     if (mqtt.isConnected()) {
-      uint32_t currentMillis = millis();
+      uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
       if (currentMillis > lastMqttUpdate + 10 * 1000) {
         lastMqttUpdate = currentMillis;
 
@@ -785,10 +785,10 @@ void loop() {
 
 #endif
 
-  uptime = millis();
+  uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
   free_heap = ESP.getFreeHeap();
 
-  if (millis() > last_comms + 200 * 1000) {
+  if ((uint32_t)(esp_timer_get_time() / 1000ULL) > last_comms + 200 * 1000) {
     restart();
   }
 

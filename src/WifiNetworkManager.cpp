@@ -4,11 +4,13 @@
 #include <cctype>
 #include <cstring>
 #include <esp_wifi.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include <algorithm>
 #include <string>
 
-#include "ArduinoCompat.hpp"
 #include "ConfigManager.hpp"
 #include "Logger.hpp"
 
@@ -235,7 +237,7 @@ void WifiNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t) {
   if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
     staConnected_ = true;
     setStatusLedMode(StatusLedMode::SolidOn);
-    lastConnect_ = millis();
+    lastConnect_ = (uint32_t)(esp_timer_get_time() / 1000ULL);
     ++reconnectCount_;
     logger.info("STA connected, IP: " +
                 std::string(WiFi.localIP().toString().c_str()));

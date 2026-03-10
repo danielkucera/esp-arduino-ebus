@@ -1,9 +1,9 @@
 #if defined(EBUS_INTERNAL)
 #include "Mqtt.hpp"
 
+#include <esp_timer.h>
 #include <functional>
 
-#include "ArduinoCompat.hpp"
 #include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "MqttHA.hpp"
@@ -373,8 +373,8 @@ void Mqtt::handleWrite(const cJSON* doc) {
 }
 
 void Mqtt::checkIncomingQueue() {
-  if (!incomingQueue.empty() && millis() > lastIncoming + incomingInterval) {
-    lastIncoming = millis();
+  if (!incomingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) > lastIncoming + incomingInterval) {
+    lastIncoming = (uint32_t)(esp_timer_get_time() / 1000ULL);
     IncomingAction action = incomingQueue.front();
     incomingQueue.pop();
 
@@ -400,8 +400,8 @@ void Mqtt::checkIncomingQueue() {
 }
 
 void Mqtt::checkOutgoingQueue() {
-  if (!outgoingQueue.empty() && millis() > lastOutgoing + outgoingInterval) {
-    lastOutgoing = millis();
+  if (!outgoingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) > lastOutgoing + outgoingInterval) {
+    lastOutgoing = (uint32_t)(esp_timer_get_time() / 1000ULL);
     OutgoingAction action = outgoingQueue.front();
     outgoingQueue.pop();
 

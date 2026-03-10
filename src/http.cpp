@@ -1,6 +1,8 @@
 #include "http.hpp"
 
 #include <cJSON.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <string>
 
 #include "DeviceManager.hpp"

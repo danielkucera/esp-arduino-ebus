@@ -1,8 +1,11 @@
 #include "BusType.hpp"
 
+#include <esp_rom_sys.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <queue>
 
-#include "ArduinoCompat.hpp"
 // For ESP's based on FreeRTOS we can optimize the arbitration timing.
 // With SoftwareSerial we get notified with an callback that the
 // signal has changed. SoftwareSerial itself can and does know the
@@ -120,7 +123,7 @@ void BusType::readDataFromSoftwareSerial(void* args) {
       // byte available
       int avail = mySerial.available();
       if (!avail && r == 1) {
-        // avoid this busy wait: delayMicroseconds(1+ MAX_FRAMEBITS * 1000000 /
+        // avoid this busy wait: esp_rom_delay_us(1+ MAX_FRAMEBITS * 1000000 /
         // BAUD_RATE);
 
         // Need to wait for 1000000 / BAUD_RATE, rounded to the next upper
@@ -144,33 +147,33 @@ void BusType::readDataFromSoftwareSerial(void* args) {
         // Wait for 500 micros using busy wait with delayMicroseconds 2) Wait
         // the rest of the timeslice, which will be about 500 micros, using
         // vTaskDelay
-        uint32_t begin = micros();
+        uint32_t begin = (uint32_t)(esp_timer_get_time());
         vTaskDelay(pdMS_TO_TICKS(1));
         avail = mySerial.available();
 
         // How was the delay until now?
-        uint32_t delayed = micros() - begin;
+        uint32_t delayed = (uint32_t)(esp_timer_get_time()) - begin;
 
         // Loop till the maximum duration of 1 byte (4167 micros from begin)
         // and check every 500 micros, using combination of
-        // delayMicroseconds(500) and vTaskDelay(pdMS_TO_TICKS(1)) . The
+        // esp_rom_delay_us(500) and vTaskDelay(pdMS_TO_TICKS(1)) . The
         // vTaskDelay will wait till the end of the current timeslice, which is
         // typically about 500 micros away, because the previous vTaskDelay
         // makes sure the code is already synced to this tick Assumption: time
         // needed for mySerial.available() is less than 500 micros.
         while (delayed < 4167 && !avail) {
           if (4167 - delayed > 1000) {  // Need to wait more than 1000 micros?
-            delayMicroseconds(500);
+            esp_rom_delay_us(500);
             avail = mySerial.available();
             if (!avail) {
               vTaskDelay(pdMS_TO_TICKS(1));
             }
           } else {  // Otherwise spend the remaining wait with delayMicroseconds
             uint32_t delay = 4167 - delayed < 500 ? 4167 - delayed : 500;
-            delayMicroseconds(delay);
+            esp_rom_delay_us(delay);
           }
           avail = mySerial.available();
-          delayed = micros() - begin;
+          delayed = (uint32_t)(esp_timer_get_time()) - begin;
         }
       }
       if (avail) {
@@ -238,7 +241,7 @@ bool BusType::read(data& d) {
 #else
   if (BusSer.available()) {
     uint8_t symbol = BusSer.read();
-    receive(symbol, micros());
+    receive(symbol, (uint32_t)(esp_timer_get_time()));
   }
 #endif
   if (_queue.size() > 0) {
