@@ -790,7 +790,7 @@ void setup() {
   statusServer.begin();
 
   espOtaManager.begin();
-  wdt_start();
+  //wdt_start();
 
   last_comms = (uint32_t)(esp_timer_get_time() / 1000ULL);
   enableTX();
@@ -828,7 +828,6 @@ void setup() {
 }
 
 void loop() {
-  wdt_feed();
 
 #if defined(EBUS_INTERNAL)
   if (mqtt.isEnabled()) {
