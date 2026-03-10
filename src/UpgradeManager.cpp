@@ -70,21 +70,22 @@ void UpgradeManager::begin(httpd_handle_t server) {
   httpd_uri_t statusUri = {};
   statusUri.uri = "/api/v1/upgrade/status";
   statusUri.method = HTTP_GET;
-  statusUri.handler = &UpgradeManager::handleStatusTrampoline;
+  statusUri.handler = &HttpUtils::Trampoline<UpgradeManager, &UpgradeManager::handleStatus>;
   statusUri.user_ctx = this;
   HttpUtils::registerRoute(server_, statusUri);
 
   httpd_uri_t httpUri = {};
   httpUri.uri = "/api/v1/upgrade/http";
   httpUri.method = HTTP_POST;
-  httpUri.handler = &UpgradeManager::handleHttpUpgradeTrampoline;
+  httpUri.handler =
+      &HttpUtils::Trampoline<UpgradeManager, &UpgradeManager::handleHttpUpgrade>;
   httpUri.user_ctx = this;
   HttpUtils::registerRoute(server_, httpUri);
 
   httpd_uri_t uploadUri = {};
   uploadUri.uri = "/api/v1/upgrade/upload";
   uploadUri.method = HTTP_POST;
-  uploadUri.handler = &UpgradeManager::handleUploadTrampoline;
+  uploadUri.handler = &HttpUtils::Trampoline<UpgradeManager, &UpgradeManager::handleUpload>;
   uploadUri.user_ctx = this;
   HttpUtils::registerRoute(server_, uploadUri);
 }
@@ -106,10 +107,6 @@ void UpgradeManager::resetUploadState() {
   preUpgradeDone_ = false;
   uploadBytesReceived_ = 0;
   uploadNextProgressPercent_ = 10;
-}
-
-esp_err_t UpgradeManager::handleUploadTrampoline(httpd_req_t* req) {
-  return static_cast<UpgradeManager*>(req->user_ctx)->handleUpload(req);
 }
 
 esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
@@ -283,10 +280,6 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   return ESP_OK;
 }
 
-esp_err_t UpgradeManager::handleStatusTrampoline(httpd_req_t* req) {
-  return static_cast<UpgradeManager*>(req->user_ctx)->handleStatus(req);
-}
-
 esp_err_t UpgradeManager::handleStatus(httpd_req_t* req) {
   cJSON* doc = cJSON_CreateObject();
   cJSON_AddBoolToObject(doc, "ready", true);
@@ -449,10 +442,6 @@ bool UpgradeManager::performHttpUpgrade(const String& url, String& error) {
 
   logger.info("HTTP upgrade download completed: " + String(totalWritten) + " bytes");
   return true;
-}
-
-esp_err_t UpgradeManager::handleHttpUpgradeTrampoline(httpd_req_t* req) {
-  return static_cast<UpgradeManager*>(req->user_ctx)->handleHttpUpgrade(req);
 }
 
 esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {

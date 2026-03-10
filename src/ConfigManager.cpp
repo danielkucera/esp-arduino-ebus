@@ -222,21 +222,21 @@ void ConfigManager::begin(httpd_handle_t server) {
   httpd_uri_t getUri = {};
   getUri.uri = "/api/v1/config";
   getUri.method = HTTP_GET;
-  getUri.handler = &ConfigManager::handleGetTrampoline;
+  getUri.handler = &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleGet>;
   getUri.user_ctx = this;
   HttpUtils::registerRoute(server_, getUri);
 
   httpd_uri_t setUri = {};
   setUri.uri = "/api/v1/config";
   setUri.method = HTTP_POST;
-  setUri.handler = &ConfigManager::handleSetTrampoline;
+  setUri.handler = &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleSet>;
   setUri.user_ctx = this;
   HttpUtils::registerRoute(server_, setUri);
 
   httpd_uri_t resetUri = {};
   resetUri.uri = "/api/v1/config/reset";
   resetUri.method = HTTP_POST;
-  resetUri.handler = &ConfigManager::handleResetTrampoline;
+  resetUri.handler = &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleReset>;
   resetUri.user_ctx = this;
   HttpUtils::registerRoute(server_, resetUri);
 }
@@ -294,18 +294,6 @@ bool ConfigManager::writeConfigJson(const String& body, String& error) {
   cJSON_Delete(bodyDoc);
   nvs_close(handle);
   return true;
-}
-
-esp_err_t ConfigManager::handleGetTrampoline(httpd_req_t* req) {
-  return static_cast<ConfigManager*>(req->user_ctx)->handleGet(req);
-}
-
-esp_err_t ConfigManager::handleSetTrampoline(httpd_req_t* req) {
-  return static_cast<ConfigManager*>(req->user_ctx)->handleSet(req);
-}
-
-esp_err_t ConfigManager::handleResetTrampoline(httpd_req_t* req) {
-  return static_cast<ConfigManager*>(req->user_ctx)->handleReset(req);
 }
 
 esp_err_t ConfigManager::handleGet(httpd_req_t* req) {

@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <esp_http_server.h>
 
+#include "HttpUtils.hpp"
+
 class ConfigManager {
  public:
   void begin(httpd_handle_t server);
@@ -16,13 +18,12 @@ class ConfigManager {
   String readConfigJson();
   bool writeConfigJson(const String& body, String& error);
 
-  static esp_err_t handleGetTrampoline(httpd_req_t* req);
-  static esp_err_t handleSetTrampoline(httpd_req_t* req);
-  static esp_err_t handleResetTrampoline(httpd_req_t* req);
-
   esp_err_t handleGet(httpd_req_t* req);
   esp_err_t handleSet(httpd_req_t* req);
   esp_err_t handleReset(httpd_req_t* req);
+
+  template <typename T, esp_err_t (T::*Method)(httpd_req_t*)>
+  friend esp_err_t HttpUtils::Trampoline(httpd_req_t* req);
 
   httpd_handle_t server_ = nullptr;
 };
