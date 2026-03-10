@@ -1,9 +1,14 @@
 #include "main.hpp"
 
-#include <WiFi.h>
+#include "WiFi.h"
 #include <cJSON.h>
+#include <driver/gpio.h>
+#include <driver/ledc.h>
 #include <esp_efuse.h>
 #include <esp_timer.h>
+#include <esp_idf_version.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include "Logger.hpp"
 
@@ -27,6 +32,7 @@
 #include "EspOtaManager.hpp"
 #include "UpgradeManager.hpp"
 #include "WifiNetworkManager.hpp"
+#include "esp_compat.hpp"
 #include "esp32c3/rom/rtc.h"
 #include "esp_sntp.h"
 #include "http.hpp"
@@ -52,6 +58,55 @@ WifiNetworkManager wifiNetworkManager;
 #define DEFAULT_SNTP_TIMEZONE "UTC0"
 
 char unique_id[7]{};
+
+namespace {
+
+constexpr ledc_channel_t kPwmChannel = LEDC_CHANNEL_0;
+constexpr ledc_timer_t kPwmTimer = LEDC_TIMER_0;
+constexpr ledc_mode_t kPwmSpeedMode = LEDC_LOW_SPEED_MODE;
+
+void configureGpioOutput(int pin) {
+  gpio_config_t config{};
+  config.pin_bit_mask = 1ULL << pin;
+  config.mode = GPIO_MODE_OUTPUT;
+  config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  config.pull_up_en = GPIO_PULLUP_DISABLE;
+  config.intr_type = GPIO_INTR_DISABLE;
+  gpio_config(&config);
+}
+
+void configureGpioInputPullup(int pin) {
+  gpio_config_t config{};
+  config.pin_bit_mask = 1ULL << pin;
+  config.mode = GPIO_MODE_INPUT;
+  config.pull_up_en = GPIO_PULLUP_ENABLE;
+  config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  config.intr_type = GPIO_INTR_DISABLE;
+  gpio_config(&config);
+}
+
+void initPwm() {
+#if defined(PWM_PIN)
+  ledc_timer_config_t timer{};
+  timer.speed_mode = kPwmSpeedMode;
+  timer.timer_num = kPwmTimer;
+  timer.duty_resolution = LEDC_TIMER_8_BIT;
+  timer.freq_hz = PWM_FREQ;
+  timer.clk_cfg = LEDC_AUTO_CLK;
+  ledc_timer_config(&timer);
+
+  ledc_channel_config_t channel{};
+  channel.speed_mode = kPwmSpeedMode;
+  channel.channel = kPwmChannel;
+  channel.timer_sel = kPwmTimer;
+  channel.gpio_num = PWM_PIN;
+  channel.duty = 0;
+  channel.hpoint = 0;
+  ledc_channel_config(&channel);
+#endif
+}
+
+}  // namespace
 
 #if !defined(EBUS_INTERNAL)
 WiFiServer wifiServer(3333);
@@ -96,7 +151,15 @@ uint8_t adapterHwVersionRaw = 0xEE;
 std::string adapterHwVersion = "unread";
 
 void wdt_start() {
+#if ESP_IDF_VERSION_MAJOR >= 5
+  esp_task_wdt_config_t config{};
+  config.timeout_ms = 60000;
+  config.idle_core_mask = 0;
+  config.trigger_panic = true;
+  esp_task_wdt_init(&config);
+#else
   esp_task_wdt_init(60, true);
+#endif
   esp_task_wdt_add(NULL);
 }
 
@@ -104,21 +167,22 @@ void wdt_feed() { esp_task_wdt_reset(); }
 
 inline void disableTX() {
 #if defined(TX_DISABLE_PIN)
-  pinMode(TX_DISABLE_PIN, OUTPUT);
-  digitalWrite(TX_DISABLE_PIN, HIGH);
+  configureGpioOutput(TX_DISABLE_PIN);
+  gpio_set_level(static_cast<gpio_num_t>(TX_DISABLE_PIN), 1);
 #endif
 }
 
 inline void enableTX() {
 #if defined(TX_DISABLE_PIN)
-  digitalWrite(TX_DISABLE_PIN, LOW);
+  gpio_set_level(static_cast<gpio_num_t>(TX_DISABLE_PIN), 0);
 #endif
 }
 
 void set_pwm() {
   int value = configManager.readInt("pwmValue", 130);
 #if defined(PWM_PIN)
-  ledcWrite(PWM_CHANNEL, value);
+  ledc_set_duty(kPwmSpeedMode, kPwmChannel, value);
+  ledc_update_duty(kPwmSpeedMode, kPwmChannel);
 #if defined(EBUS_INTERNAL)
   schedule.resetCounter();
   schedule.resetTiming();
@@ -128,7 +192,7 @@ void set_pwm() {
 
 uint32_t get_pwm() {
 #if defined(PWM_PIN)
-  return ledcRead(PWM_CHANNEL);
+  return ledc_get_duty(kPwmSpeedMode, kPwmChannel);
 #else
   return 0;
 #endif
@@ -182,9 +246,9 @@ void restart() {
 
 void check_reset() {
   // check if RESET_PIN being hold low and reset
-  pinMode(RESET_PIN, INPUT_PULLUP);
+  configureGpioInputPullup(RESET_PIN);
   uint32_t resetStart = (uint32_t)(esp_timer_get_time() / 1000ULL);
-  while (digitalRead(RESET_PIN) == 0) {
+  while (gpio_get_level(static_cast<gpio_num_t>(RESET_PIN)) == 0) {
     if ((uint32_t)(esp_timer_get_time() / 1000ULL) > resetStart + RESET_MS) {
       configManager.resetConfig();
       restart();
@@ -648,8 +712,7 @@ void setup() {
   disableTX();
 
 #if defined(PWM_PIN)
-  ledcSetup(PWM_CHANNEL, PWM_FREQ, PWM_RESOLUTION);
-  ledcAttachPin(PWM_PIN, PWM_CHANNEL);
+  initPwm();
 #endif
 
   wifiNetworkManager.begin(&configManager);
@@ -810,4 +873,12 @@ void loop() {
   handleNewClient(&wifiServerEnhanced, wifiClientsEnhanced);
   handleNewClient(&wifiServerReadOnly, wifiClientsReadOnly);
 #endif
+}
+
+extern "C" void app_main(void) {
+  setup();
+  while (true) {
+    loop();
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
 }

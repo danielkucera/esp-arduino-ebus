@@ -1,12 +1,14 @@
 #include "WifiNetworkManager.hpp"
 
-#include <ESPmDNS.h>
 #include <cctype>
 #include <cstring>
+#include <cstdlib>
+#include <driver/gpio.h>
 #include <esp_wifi.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <mdns.h>
 
 #include <algorithm>
 #include <string>
@@ -79,7 +81,10 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   WiFi.setAutoReconnect(true);
   WiFi.setHostname(hostname.c_str());
   WiFi.mode(WIFI_AP_STA);
-  if (MDNS.begin(hostname.c_str())) {
+  esp_err_t mdnsResult = mdns_init();
+  if (mdnsResult == ESP_OK || mdnsResult == ESP_ERR_INVALID_STATE) {
+    mdns_hostname_set(hostname.c_str());
+    mdns_instance_name_set(hostname.c_str());
     logger.info("Hostname/mDNS: " + hostname + ".local");
   } else {
     logger.warn("mDNS start failed");
@@ -173,13 +178,13 @@ void WifiNetworkManager::statusLedTaskLoop() {
   bool ledOn = false;
   while (true) {
     if (statusLedMode_ == StatusLedMode::SolidOn) {
-      digitalWrite(STATUS_LED_PIN, HIGH);
+      gpio_set_level(static_cast<gpio_num_t>(STATUS_LED_PIN), 1);
       vTaskDelay(pdMS_TO_TICKS(200));
       continue;
     }
 
     ledOn = !ledOn;
-    digitalWrite(STATUS_LED_PIN, ledOn ? HIGH : LOW);
+    gpio_set_level(static_cast<gpio_num_t>(STATUS_LED_PIN), ledOn ? 1 : 0);
     vTaskDelay(pdMS_TO_TICKS(700));
   }
 #else
@@ -191,8 +196,14 @@ void WifiNetworkManager::statusLedTaskLoop() {
 
 void WifiNetworkManager::initStatusLed() {
 #if defined(STATUS_LED_PIN)
-  pinMode(STATUS_LED_PIN, OUTPUT);
-  digitalWrite(STATUS_LED_PIN, LOW);
+  gpio_config_t config{};
+  config.pin_bit_mask = 1ULL << STATUS_LED_PIN;
+  config.mode = GPIO_MODE_OUTPUT;
+  config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  config.pull_up_en = GPIO_PULLUP_DISABLE;
+  config.intr_type = GPIO_INTR_DISABLE;
+  gpio_config(&config);
+  gpio_set_level(static_cast<gpio_num_t>(STATUS_LED_PIN), 0);
   if (statusLedTaskHandle_ == nullptr) {
     xTaskCreate(statusLedTaskEntry, "status_led_task", 2048, this, 1,
                 &statusLedTaskHandle_);

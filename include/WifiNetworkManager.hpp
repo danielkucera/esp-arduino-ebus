@@ -1,7 +1,7 @@
 #pragma once
 
-#include <DNSServer.h>
-#include <WiFi.h>
+#include "DNSServer.h"
+#include "WiFi.h"
 
 #include <string>
 

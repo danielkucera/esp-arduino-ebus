@@ -1,5 +1,6 @@
 #include "BusType.hpp"
 
+#include <driver/uart.h>
 #include <esp_rom_sys.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
@@ -196,7 +197,7 @@ void BusType::begin() {
                  RXBUFFERSIZE);  // used for reading
 #else
   BusSer.setRxBufferSize(RXBUFFERSIZE);
-  BusSer.begin(2400, SERIAL_8N1, UART_RX, UART_TX);  // used for writing
+  BusSer.begin(2400, UART_DATA_8_BITS, UART_RX, UART_TX);  // used for writing
   BusSer.setRxFIFOFull(1);
 #endif
 
