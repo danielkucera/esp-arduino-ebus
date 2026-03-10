@@ -7,29 +7,23 @@
 
 #include <functional>
 
-#include "HttpUtils.hpp"
-
 class UpgradeManager {
  public:
   using PreUpgradeHook = std::function<void(void)>;
 
-  void begin(httpd_handle_t server);
+  void begin();
   void setPreUpgradeHook(PreUpgradeHook hook);
 
- private:
   esp_err_t handleUpload(httpd_req_t* req);
   esp_err_t handleHttpUpgrade(httpd_req_t* req);
   esp_err_t handleStatus(httpd_req_t* req);
 
-  template <typename T, esp_err_t (T::*Method)(httpd_req_t*)>
-  friend esp_err_t HttpUtils::Trampoline(httpd_req_t* req);
-
+ private:
   bool performHttpUpgrade(const String& url, String& error);
   void prepareForUpgrade();
   void sendAndRestart(httpd_req_t* req, const char* message);
   void resetUploadState();
 
-  httpd_handle_t server_ = nullptr;
   PreUpgradeHook preUpgradeHook_;
 
   const esp_partition_t* uploadPartition_ = nullptr;

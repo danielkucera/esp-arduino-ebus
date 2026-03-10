@@ -10,6 +10,8 @@
 #include "HttpUtils.hpp"
 #include "http.hpp"
 
+extern ConfigManager configManager;
+
 namespace {
 
 constexpr const char* kNvsNamespace = "esp-ebus";
@@ -213,16 +215,24 @@ void ConfigManager::resetConfig() {
   nvs_close(handle);
 }
 
+namespace {
+esp_err_t handleConfigGet(httpd_req_t* req) {
+  return configManager.handleGet(req);
+}
+
+esp_err_t handleConfigSet(httpd_req_t* req) {
+  return configManager.handleSet(req);
+}
+
+esp_err_t handleConfigReset(httpd_req_t* req) {
+  return configManager.handleReset(req);
+}
+}  // namespace
+
 void ConfigManager::begin() {
-  RegisterUri("/api/v1/config", HTTP_GET,
-              &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleGet>,
-              this);
-  RegisterUri("/api/v1/config", HTTP_POST,
-              &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleSet>,
-              this);
-  RegisterUri("/api/v1/config/reset", HTTP_POST,
-              &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleReset>,
-              this);
+  RegisterUri("/api/v1/config", HTTP_GET, handleConfigGet);
+  RegisterUri("/api/v1/config", HTTP_POST, handleConfigSet);
+  RegisterUri("/api/v1/config/reset", HTTP_POST, handleConfigReset);
 }
 
 String ConfigManager::readConfigJson() {

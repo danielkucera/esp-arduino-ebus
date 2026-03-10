@@ -13,6 +13,9 @@
 #include "HttpUtils.hpp"
 #include "Logger.hpp"
 #include "main.hpp"
+#include "http.hpp"
+
+extern UpgradeManager upgradeManager;
 
 namespace {
 constexpr size_t kOtaBufferSize = 1024;
@@ -60,34 +63,24 @@ bool extractMultipartBoundary(const String& contentType, std::string& boundary) 
 }
 }  // namespace
 
-void UpgradeManager::begin(httpd_handle_t server) {
-  server_ = server;
-  if (server_ == nullptr) {
-    logger.error("UpgradeManager: HTTP server handle is null");
-    return;
-  }
+namespace {
+esp_err_t handleUpgradeStatus(httpd_req_t* req) {
+  return upgradeManager.handleStatus(req);
+}
 
-  httpd_uri_t statusUri = {};
-  statusUri.uri = "/api/v1/upgrade/status";
-  statusUri.method = HTTP_GET;
-  statusUri.handler = &HttpUtils::Trampoline<UpgradeManager, &UpgradeManager::handleStatus>;
-  statusUri.user_ctx = this;
-  HttpUtils::registerRoute(server_, statusUri);
+esp_err_t handleUpgradeHttp(httpd_req_t* req) {
+  return upgradeManager.handleHttpUpgrade(req);
+}
 
-  httpd_uri_t httpUri = {};
-  httpUri.uri = "/api/v1/upgrade/http";
-  httpUri.method = HTTP_POST;
-  httpUri.handler =
-      &HttpUtils::Trampoline<UpgradeManager, &UpgradeManager::handleHttpUpgrade>;
-  httpUri.user_ctx = this;
-  HttpUtils::registerRoute(server_, httpUri);
+esp_err_t handleUpgradeUpload(httpd_req_t* req) {
+  return upgradeManager.handleUpload(req);
+}
+}  // namespace
 
-  httpd_uri_t uploadUri = {};
-  uploadUri.uri = "/api/v1/upgrade/upload";
-  uploadUri.method = HTTP_POST;
-  uploadUri.handler = &HttpUtils::Trampoline<UpgradeManager, &UpgradeManager::handleUpload>;
-  uploadUri.user_ctx = this;
-  HttpUtils::registerRoute(server_, uploadUri);
+void UpgradeManager::begin() {
+  RegisterUri("/api/v1/upgrade/status", HTTP_GET, handleUpgradeStatus);
+  RegisterUri("/api/v1/upgrade/http", HTTP_POST, handleUpgradeHttp);
+  RegisterUri("/api/v1/upgrade/upload", HTTP_POST, handleUpgradeUpload);
 }
 
 void UpgradeManager::setPreUpgradeHook(PreUpgradeHook hook) {

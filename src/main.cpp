@@ -652,7 +652,7 @@ void setup() {
   wifiNetworkManager.begin(&configManager);
   SetupHttpHandlers();
   configManager.begin();
-  upgradeManager.begin(GetHttpServer());
+  upgradeManager.begin();
   SetupHttpFallbackHandlers();
   upgradeManager.setPreUpgradeHook([]() {
 #if defined(EBUS_INTERNAL)
