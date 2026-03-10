@@ -29,7 +29,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/.platformio
-        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+        key: ${{ runner.os }}-idf-${{ hashFiles('**/lockfiles') }}
     - name: Set up Python
       uses: actions/setup-python@v2
     - name: Install PlatformIO
