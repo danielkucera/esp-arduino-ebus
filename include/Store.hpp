@@ -19,8 +19,7 @@
 using DataUpdatedCallback =
     std::function<void(const std::string& name, const std::string& valueJson)>;
 
-using DataUpdatedLogCallback =
-    std::function<void(const std::string& message)>;
+using DataUpdatedLogCallback = std::function<void(const std::string& message)>;
 
 class Store {
  public:
@@ -39,10 +38,10 @@ class Store {
 
   const std::vector<Command*> getCommands();
 
-  const size_t getActiveCommands() const;
-  const size_t getPassiveCommands() const;
+  size_t getActiveCommands() const;
+  size_t getPassiveCommands() const;
 
-  const bool active() const;
+  bool active() const;
 
   Command* nextActiveCommand();
   std::vector<Command*> findPassiveCommands(const std::vector<uint8_t>& master);

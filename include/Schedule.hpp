@@ -42,13 +42,13 @@ class Schedule {
   void handleForwardFilter(const std::vector<std::string>& filters);
 
   void setPublishCounter(bool enable);
-  const bool getPublishCounter() const;
+  bool getPublishCounter() const;
   void resetCounter();
   void publishCounter();
   const std::string getCounterJson();
 
   void setPublishTiming(bool enable);
-  const bool getPublishTiming() const;
+  bool getPublishTiming() const;
   void resetTiming();
   void publishTiming();
   const std::string getTimingJson();

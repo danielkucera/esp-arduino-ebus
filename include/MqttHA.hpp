@@ -13,7 +13,7 @@ class MqttHA {
   void setWillTopic(const std::string& topic);
 
   void setEnabled(const bool enable);
-  const bool isEnabled() const;
+  bool isEnabled() const;
 
   void setThingName(const std::string& name);
   void setThingModel(const std::string& model);

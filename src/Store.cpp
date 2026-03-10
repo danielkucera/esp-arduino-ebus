@@ -1,11 +1,11 @@
 #if defined(EBUS_INTERNAL)
 #include "Store.hpp"
 
-#include <cmath>
-#include <cstdio>
 #include <esp_timer.h>
 #include <nvs.h>
 
+#include <cmath>
+#include <cstdio>
 
 Store store;
 
@@ -161,7 +161,7 @@ const std::vector<Command*> Store::getCommands() {
   return result;
 }
 
-const size_t Store::getActiveCommands() const {
+size_t Store::getActiveCommands() const {
   size_t count = 0;
   for (const auto& kv : commands) {
     if (kv.second.getActive()) count++;
@@ -169,7 +169,7 @@ const size_t Store::getActiveCommands() const {
   return count;
 }
 
-const size_t Store::getPassiveCommands() const {
+size_t Store::getPassiveCommands() const {
   size_t count = 0;
   for (const auto& kv : commands) {
     if (!kv.second.getActive()) count++;
@@ -177,7 +177,7 @@ const size_t Store::getPassiveCommands() const {
   return count;
 }
 
-const bool Store::active() const {
+bool Store::active() const {
   for (const auto& kv : commands) {
     if (kv.second.getActive()) return true;
   }
@@ -201,7 +201,9 @@ Command* Store::nextActiveCommand() {
       next = cmd;
   }
 
-  if (!init && next && (uint32_t)(esp_timer_get_time() / 1000ULL) < next->getLast() + next->getInterval() * 1000)
+  if (!init && next &&
+      (uint32_t)(esp_timer_get_time() / 1000ULL) <
+          next->getLast() + next->getInterval() * 1000)
     next = nullptr;
 
   return next;
@@ -237,8 +239,9 @@ std::vector<Command*> Store::updateData(Command* command,
     if (dataUpdatedCallback) dataUpdatedCallback(cmd->getName(), valueJson);
 
     cJSON* valueDoc = cJSON_Parse(valueJson.c_str());
-    cJSON* valueNode =
-        valueDoc ? cJSON_GetObjectItemCaseSensitive(valueDoc, "value") : nullptr;
+    cJSON* valueNode = valueDoc
+                           ? cJSON_GetObjectItemCaseSensitive(valueDoc, "value")
+                           : nullptr;
 
     std::string payload = " '" + ebus::to_string(cmd->getReadCmd()) + "' [" +
                           cmd->getName() + "] " +
@@ -281,7 +284,10 @@ const std::string Store::getValueFullJson(const Command* command) {
 
   cJSON_AddStringToObject(doc, "unit", command->getUnit().c_str());
   cJSON_AddNumberToObject(
-      doc, "age", static_cast<uint32_t>(((uint32_t)(esp_timer_get_time() / 1000ULL) - command->getLast()) / 1000));
+      doc, "age",
+      static_cast<uint32_t>(
+          ((uint32_t)(esp_timer_get_time() / 1000ULL) - command->getLast()) /
+          1000));
   cJSON_AddBoolToObject(doc, "write", !command->getWriteCmd().empty());
   cJSON_AddBoolToObject(doc, "active", command->getActive());
 

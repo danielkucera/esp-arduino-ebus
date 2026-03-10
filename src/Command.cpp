@@ -410,7 +410,7 @@ const std::string Command::isKeyValueMapValid(const cJSON* ha_key_value_map) {
   return "";
 }
 
-const double Command::getDoubleFromVector() const {
+double Command::getDoubleFromVector() const {
   double value = 0;
 
   switch (datatype) {

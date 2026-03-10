@@ -142,7 +142,7 @@ void Schedule::handleForwardFilter(const std::vector<std::string>& filters) {
 
 void Schedule::setPublishCounter(bool enable) { counterEnabled = enable; }
 
-const bool Schedule::getPublishCounter() const { return counterEnabled; }
+bool Schedule::getPublishCounter() const { return counterEnabled; }
 
 void Schedule::resetCounter() {
   deviceManager.resetAddresses();
@@ -291,7 +291,7 @@ const std::string Schedule::getCounterJson() {
 
 void Schedule::setPublishTiming(bool enable) { timingEnabled = enable; }
 
-const bool Schedule::getPublishTiming() const { return timingEnabled; }
+bool Schedule::getPublishTiming() const { return timingEnabled; }
 
 void Schedule::resetTiming() {
   if (ebusBus) ebusBus->resetTiming();

@@ -72,9 +72,9 @@ class Mqtt {
   void setCredentials(const char* username, const char* password = nullptr);
 
   void setEnabled(const bool enable);
-  const bool isEnabled() const;
+  bool isEnabled() const;
 
-  const bool isConnected() const;
+  bool isConnected() const;
 
   const std::string& getUniqueId() const;
   const std::string& getRootTopic() const;

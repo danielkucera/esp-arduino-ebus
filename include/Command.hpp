@@ -1,8 +1,8 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <cJSON.h>
 #include <Ebus.h>
+#include <cJSON.h>
 
 #include <map>
 #include <string>
@@ -158,7 +158,7 @@ class Command {
 
   static const std::string isKeyValueMapValid(const cJSON* ha_key_value_map);
 
-  const double getDoubleFromVector() const;
+  double getDoubleFromVector() const;
   const std::string getStringFromVector() const;
 
   const std::vector<uint8_t> getVectorFromDouble(double value) const;

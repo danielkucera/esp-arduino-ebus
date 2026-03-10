@@ -2,6 +2,7 @@
 #include "Mqtt.hpp"
 
 #include <esp_timer.h>
+
 #include <functional>
 
 #include "DeviceManager.hpp"
@@ -94,9 +95,9 @@ void Mqtt::setCredentials(const char* username, const char* password) {
 
 void Mqtt::setEnabled(const bool enable) { enabled = enable; }
 
-const bool Mqtt::isEnabled() const { return enabled; }
+bool Mqtt::isEnabled() const { return enabled; }
 
-const bool Mqtt::isConnected() const { return connected; }
+bool Mqtt::isConnected() const { return connected; }
 
 const std::string& Mqtt::getUniqueId() const { return uniqueId; }
 
@@ -190,9 +191,10 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       }
 
       cJSON* idNode = cJSON_GetObjectItemCaseSensitive(doc, "id");
-      std::string id = (cJSON_IsString(idNode) && idNode->valuestring != nullptr)
-                           ? idNode->valuestring
-                           : "";
+      std::string id =
+          (cJSON_IsString(idNode) && idNode->valuestring != nullptr)
+              ? idNode->valuestring
+              : "";
 
       auto it = mqtt.commandHandlers.find(id);
       if (it != mqtt.commandHandlers.end()) {
@@ -220,7 +222,8 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
 void Mqtt::handleRestart(const cJSON* doc) { restart(); }
 
 void Mqtt::handleInsert(const cJSON* doc) {
-  cJSON* commands = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "commands");
+  cJSON* commands =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "commands");
   if (!cJSON_IsArray(commands)) return;
 
   cJSON* command = nullptr;
@@ -284,8 +287,10 @@ void Mqtt::handleWipe(const cJSON* doc) {
 }
 
 void Mqtt::handleScan(const cJSON* doc) {
-  cJSON* fullNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "full");
-  cJSON* vendorNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "vendor");
+  cJSON* fullNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "full");
+  cJSON* vendorNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "vendor");
   bool full = cJSON_IsTrue(fullNode);
   bool vendor = cJSON_IsTrue(vendorNode);
 
@@ -323,7 +328,8 @@ void Mqtt::handleForward(const cJSON* doc) {
       getStringArray(const_cast<cJSON*>(doc), "filters");
   if (!filters.empty()) schedule.handleForwardFilter(filters);
 
-  cJSON* enableNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "enable");
+  cJSON* enableNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "enable");
   schedule.toggleForward(cJSON_IsTrue(enableNode));
 }
 
@@ -334,7 +340,8 @@ void Mqtt::handleReset(const cJSON* doc) {
 }
 
 void Mqtt::handleRead(const cJSON* doc) {
-  cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
+  cJSON* keyNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
   std::string key = (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
                         ? keyNode->valuestring
                         : "";
@@ -350,7 +357,8 @@ void Mqtt::handleRead(const cJSON* doc) {
 }
 
 void Mqtt::handleWrite(const cJSON* doc) {
-  cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
+  cJSON* keyNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
   std::string key = (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
                         ? keyNode->valuestring
                         : "";
@@ -374,7 +382,8 @@ void Mqtt::handleWrite(const cJSON* doc) {
 }
 
 void Mqtt::checkIncomingQueue() {
-  if (!incomingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) > lastIncoming + incomingInterval) {
+  if (!incomingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) >
+                                    lastIncoming + incomingInterval) {
     lastIncoming = (uint32_t)(esp_timer_get_time() / 1000ULL);
     IncomingAction action = incomingQueue.front();
     incomingQueue.pop();
@@ -401,7 +410,8 @@ void Mqtt::checkIncomingQueue() {
 }
 
 void Mqtt::checkOutgoingQueue() {
-  if (!outgoingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) > lastOutgoing + outgoingInterval) {
+  if (!outgoingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) >
+                                    lastOutgoing + outgoingInterval) {
     lastOutgoing = (uint32_t)(esp_timer_get_time() / 1000ULL);
     OutgoingAction action = outgoingQueue.front();
     outgoingQueue.pop();
