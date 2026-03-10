@@ -1,10 +1,10 @@
 #if defined(EBUS_INTERNAL)
 #include "Store.hpp"
 
-#include <Preferences.h>
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
 #include <esp_timer.h>
+#include <nvs.h>
 
 
 Store store;
@@ -68,55 +68,68 @@ Command* Store::findCommand(const std::string& key) {
 }
 
 int64_t Store::loadCommands() {
-  Preferences preferences;
-  preferences.begin("commands", true);
+  nvs_handle_t handle = 0;
+  if (nvs_open("commands", NVS_READONLY, &handle) != ESP_OK) return -1;
 
-  int64_t bytes = preferences.getBytesLength("ebus");
-  if (bytes > 2) {  // 2 = empty json array "[]"
-    std::vector<char> buffer(bytes);
-    bytes = preferences.getBytes("ebus", buffer.data(), bytes);
-    if (bytes > 0) {
-      std::string payload(buffer.begin(), buffer.end());
-      deserializeCommands(payload.c_str());
-    } else {
-      bytes = -1;
-    }
-  } else {
-    bytes = 0;
+  size_t size = 0;
+  esp_err_t err = nvs_get_blob(handle, "ebus", nullptr, &size);
+  if (err == ESP_ERR_NVS_NOT_FOUND || size <= 2) {
+    nvs_close(handle);
+    return 0;
+  }
+  if (err != ESP_OK || size == 0) {
+    nvs_close(handle);
+    return -1;
   }
 
-  preferences.end();
-  return bytes;
+  std::vector<char> buffer(size);
+  err = nvs_get_blob(handle, "ebus", buffer.data(), &size);
+  nvs_close(handle);
+  if (err != ESP_OK || size == 0) return -1;
+
+  std::string payload(buffer.begin(), buffer.end());
+  deserializeCommands(payload.c_str());
+  return static_cast<int64_t>(size);
 }
 
 int64_t Store::saveCommands() const {
-  Preferences preferences;
-  preferences.begin("commands", false);
+  nvs_handle_t handle = 0;
+  if (nvs_open("commands", NVS_READWRITE, &handle) != ESP_OK) return -1;
 
   std::string payload = serializeCommands();
-  int64_t bytes = payload.size();
-  if (bytes > 2) {  // 2 = empty json array "[]"
-    bytes = preferences.putBytes("ebus", payload.data(), bytes);
-    if (bytes == 0) bytes = -1;
-  } else {
-    bytes = 0;
+  size_t size = payload.size();
+  if (size <= 2) {  // 2 = empty json array "[]"
+    nvs_close(handle);
+    return 0;
   }
 
-  preferences.end();
-  return bytes;
+  esp_err_t err = nvs_set_blob(handle, "ebus", payload.data(), size);
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  if (err != ESP_OK) return -1;
+  return static_cast<int64_t>(size);
 }
 
 int64_t Store::wipeCommands() {
-  Preferences preferences;
-  preferences.begin("commands", false);
+  nvs_handle_t handle = 0;
+  if (nvs_open("commands", NVS_READWRITE, &handle) != ESP_OK) return -1;
 
-  int64_t bytes = preferences.getBytesLength("ebus");
-  if (bytes > 0) {
-    if (!preferences.remove("ebus")) bytes = -1;
+  size_t size = 0;
+  esp_err_t err = nvs_get_blob(handle, "ebus", nullptr, &size);
+  if (err == ESP_ERR_NVS_NOT_FOUND || size == 0) {
+    nvs_close(handle);
+    return 0;
+  }
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return -1;
   }
 
-  preferences.end();
-  return bytes;
+  err = nvs_erase_key(handle, "ebus");
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  if (err != ESP_OK) return -1;
+  return static_cast<int64_t>(size);
 }
 
 const std::string Store::getCommandsJson() const {
