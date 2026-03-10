@@ -1,6 +1,7 @@
 #include "Logger.hpp"
 
 #include <cJSON.h>
+#include <inttypes.h>
 #include <ctime>
 #include <cstring>
 #include <esp_timer.h>
@@ -75,8 +76,10 @@ const std::string Logger::timestamp() {
 
   char timestamp[40];
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", &timeinfo);
+  const uint32_t millis =
+      static_cast<uint32_t>((esp_timer_get_time() / 1000ULL) % 1000ULL);
   snprintf(timestamp + strlen(timestamp), sizeof(timestamp) - strlen(timestamp),
-           ".%03uZ", (uint32_t)(esp_timer_get_time() / 1000ULL) % 1000);
+           ".%03" PRIu32 "Z", millis);
 
   return std::string(timestamp);
 }
