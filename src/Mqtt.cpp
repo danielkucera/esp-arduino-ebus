@@ -3,6 +3,7 @@
 
 #include <functional>
 
+#include "ArduinoCompat.hpp"
 #include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "MqttHA.hpp"
@@ -170,7 +171,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       self->connected = false;
     } break;
     case MQTT_EVENT_SUBSCRIBED: {
-      logger.debug(String(self->requestTopic.c_str()) + " subscribed");
+      logger.debug(self->requestTopic + " subscribed");
     } break;
     case MQTT_EVENT_UNSUBSCRIBED:
     case MQTT_EVENT_PUBLISHED:
@@ -209,7 +210,8 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       logger.error("MQTT Error occured");
     } break;
     default: {
-      logger.warn(String("Unhandled event id: ") + event->event_id);
+      logger.warn(std::string("Unhandled event id: ") +
+                  std::to_string(event->event_id));
     } break;
   }
 }
@@ -338,8 +340,8 @@ void Mqtt::handleRead(const cJSON* doc) {
 
   const Command* command = store.findCommand(key);
   if (command != nullptr) {
-    String s = "{\"id\":\"read\",";
-    s += store.getValueFullJson(command).substr(1).c_str();
+    std::string s = "{\"id\":\"read\",";
+    s += store.getValueFullJson(command).substr(1);
     publish("response", 0, false, s.c_str());
   } else {
     mqtt.publishResponse("read", "key '" + key + "' not found");

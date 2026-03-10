@@ -1,8 +1,11 @@
 #if defined(EBUS_INTERNAL)
 #include "Store.hpp"
 
-#include <Arduino.h>
 #include <Preferences.h>
+#include <cstdio>
+#include <cmath>
+
+#include "ArduinoCompat.hpp"
 
 Store store;
 
@@ -14,16 +17,21 @@ std::string printJson(cJSON* node, const char* fallback) {
   return out;
 }
 
+std::string formatDouble(double value, int precision) {
+  char buffer[64];
+  std::snprintf(buffer, sizeof(buffer), "%.*f", precision, value);
+  std::string s(buffer);
+  while (!s.empty() && s.back() == '0') s.pop_back();
+  if (!s.empty() && s.back() == '.') s.pop_back();
+  return s.empty() ? "0" : s;
+}
+
 std::string jsonValueToString(cJSON* value) {
   if (cJSON_IsString(value) && value->valuestring != nullptr)
     return value->valuestring;
   if (cJSON_IsBool(value)) return cJSON_IsTrue(value) ? "true" : "false";
   if (cJSON_IsNumber(value)) {
-    String tmp(value->valuedouble, 6);
-    std::string s = tmp.c_str();
-    while (!s.empty() && s.back() == '0') s.pop_back();
-    if (!s.empty() && s.back() == '.') s.pop_back();
-    return s.empty() ? "0" : s;
+    return formatDouble(value->valuedouble, 6);
   }
   return printJson(value, "null");
 }
@@ -226,7 +234,7 @@ std::vector<Command*> Store::updateData(Command* command,
 
     if (valueDoc) cJSON_Delete(valueDoc);
 
-    if (dataUpdatedLogCallback) dataUpdatedLogCallback(payload.c_str());
+    if (dataUpdatedLogCallback) dataUpdatedLogCallback(payload);
   };
 
   if (command) {

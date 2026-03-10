@@ -3,6 +3,8 @@
 #include <DNSServer.h>
 #include <WiFi.h>
 
+#include <string>
+
 class ConfigManager;
 
 class WifiNetworkManager {
@@ -14,11 +16,11 @@ class WifiNetworkManager {
   bool isStaConnected() const;
   bool isCaptivePortalActive() const;
   bool isStaticIpEnabled() const;
-  String getConfiguredIpAddress() const;
-  String getConfiguredGateway() const;
-  String getConfiguredNetmask() const;
-  String getConfiguredDns1() const;
-  String getConfiguredDns2() const;
+  std::string getConfiguredIpAddress() const;
+  std::string getConfiguredGateway() const;
+  std::string getConfiguredNetmask() const;
+  std::string getConfiguredDns1() const;
+  std::string getConfiguredDns2() const;
 
  private:
   enum class StatusLedMode : uint8_t { SlowBlink = 0, SolidOn = 1 };

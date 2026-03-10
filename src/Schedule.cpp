@@ -1,11 +1,11 @@
 #if defined(EBUS_INTERNAL)
 #include "Schedule.hpp"
 
-#include <Arduino.h>
 #include <algorithm>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
+#include "ArduinoCompat.hpp"
 #include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "Mqtt.hpp"

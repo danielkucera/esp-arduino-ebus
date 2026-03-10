@@ -4,6 +4,7 @@
 #include <cJSON.h>
 #include <esp_efuse.h>
 
+#include "ArduinoCompat.hpp"
 #include "Logger.hpp"
 
 #if defined(EBUS_INTERNAL)
@@ -254,11 +255,11 @@ void data_loop(void* pvParameters) {
 #if defined(EBUS_INTERNAL)
 void time_sync_notification_cb(struct timeval* tv) {
   const char* activeServer = esp_sntp_getservername(0);
-  logger.info("SNTP synchronized to " +
-              String(activeServer != nullptr ? activeServer : "unknown"));
+  logger.info(std::string("SNTP synchronized to ") +
+              (activeServer != nullptr ? activeServer : "unknown"));
 }
 
-static String sntpServerStorage = DEFAULT_SNTP_SERVER;
+static std::string sntpServerStorage = DEFAULT_SNTP_SERVER;
 
 void initSNTP(const char* server) {
   if (server != nullptr && strlen(server) > 0) {
@@ -279,7 +280,7 @@ void initSNTP(const char* server) {
 
 void setTimezone(const char* timezone) {
   if (strlen(timezone) > 0) {
-    logger.info("Timezone set to " + String(timezone));
+    logger.info(std::string("Timezone set to ") + timezone);
     setenv("TZ", timezone, 1);
     tzset();
   }
@@ -305,7 +306,7 @@ void saveParamsCallback() {
   set_pwm();
 
 #if defined(EBUS_INTERNAL)
-  String ebusAddress = configManager.readString("ebusAddress", "ff");
+  std::string ebusAddress = configManager.readString("ebusAddress", "ff");
   ebus::handler->setSourceAddress(
       uint8_t(std::strtoul(ebusAddress.c_str(), nullptr, 16)));
   ebus::setBusIsrWindow(configManager.readInt("busisrWindow", 4300));
@@ -313,8 +314,10 @@ void saveParamsCallback() {
 
   if (configManager.readBool("sntpEnabled")) {
     esp_sntp_stop();
-    initSNTP(configManager.readString("sntpServer", DEFAULT_SNTP_SERVER).c_str());
-    setTimezone(configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE).c_str());
+    initSNTP(
+        configManager.readString("sntpServer", DEFAULT_SNTP_SERVER).c_str());
+    setTimezone(
+        configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE).c_str());
   } else {
     esp_sntp_stop();
   }
@@ -325,9 +328,9 @@ void saveParamsCallback() {
   schedule.setFirstCommandAfterStart(
       configManager.readInt("firstCmdAfterSt", 10));
 
-  String mqttServerValue = configManager.readString("mqttServer");
-  String mqttUserValue = configManager.readString("mqttUser");
-  String mqttPassValue = configManager.readString("mqttPass");
+  std::string mqttServerValue = configManager.readString("mqttServer");
+  std::string mqttUserValue = configManager.readString("mqttUser");
+  std::string mqttPassValue = configManager.readString("mqttPass");
   mqtt.setEnabled(configManager.readBool("mqttEnabled"));
   mqtt.setServer(mqttServerValue.c_str(), 1883);
   mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
@@ -394,7 +397,7 @@ char* status_string() {
                   "adapter_hw_version_raw: 0x%02X\r\n", adapterHwVersionRaw);
 
 #if defined(EBUS_INTERNAL)
-  String sntpTimezoneValue =
+  std::string sntpTimezoneValue =
       configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
   pos += snprintf(status + pos, bufferSize - pos, "sntpEnabled: %s\r\n",
                   configManager.readBool("sntpEnabled") ? "true" : "false");
@@ -409,7 +412,7 @@ char* status_string() {
       snprintf(status + pos, bufferSize - pos, "pwm_value: %u\r\n", get_pwm());
 
 #if defined(EBUS_INTERNAL)
-  String ebusAddress = configManager.readString("ebusAddress", "ff");
+  std::string ebusAddress = configManager.readString("ebusAddress", "ff");
   pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
                   ebusAddress.c_str());
   pos += snprintf(status + pos, bufferSize - pos, "busisr_window: %i us\r\n",
@@ -435,8 +438,8 @@ char* status_string() {
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
                   mqtt.isConnected() ? "true" : "false");
 
-  String mqttServerValue = configManager.readString("mqttServer");
-  String mqttUserValue = configManager.readString("mqttUser");
+  std::string mqttServerValue = configManager.readString("mqttServer");
+  std::string mqttUserValue = configManager.readString("mqttUser");
   pos += snprintf(status + pos, bufferSize - pos, "mqtt_server: %s\r\n",
                   mqttServerValue.c_str());
   pos +=
@@ -683,16 +686,17 @@ void setup() {
 
 #if defined(EBUS_INTERNAL)
   if (configManager.readBool("sntpEnabled")) {
-    String sntpServerValue = configManager.readString("sntpServer", DEFAULT_SNTP_SERVER);
-    String sntpTimezoneValue =
+    std::string sntpServerValue =
+        configManager.readString("sntpServer", DEFAULT_SNTP_SERVER);
+    std::string sntpTimezoneValue =
         configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
     initSNTP(sntpServerValue.c_str());
     setTimezone(sntpTimezoneValue.c_str());
   }
 
-  String mqttServerValue = configManager.readString("mqttServer");
-  String mqttUserValue = configManager.readString("mqttUser");
-  String mqttPassValue = configManager.readString("mqttPass");
+  std::string mqttServerValue = configManager.readString("mqttServer");
+  std::string mqttUserValue = configManager.readString("mqttUser");
+  std::string mqttPassValue = configManager.readString("mqttPass");
   mqtt.setEnabled(configManager.readBool("mqttEnabled"));
   mqtt.setup(unique_id);
   mqtt.setServer(mqttServerValue.c_str(), 1883);
@@ -729,7 +733,7 @@ void setup() {
   enableTX();
 
 #if defined(EBUS_INTERNAL)
-  String ebusAddress = configManager.readString("ebusAddress", "ff");
+  std::string ebusAddress = configManager.readString("ebusAddress", "ff");
   ebus::handler->setSourceAddress(
       uint8_t(std::strtoul(ebusAddress.c_str(), nullptr, 16)));
   ebus::setBusIsrWindow(configManager.readInt("busisrWindow", 4300));
@@ -752,7 +756,7 @@ void setup() {
 
   store.setDataUpdatedCallback(Mqtt::publishValue);
   store.setDataUpdatedLogCallback(
-      [](const String& message) { logger.debug(message); });
+      [](const std::string& message) { logger.debug(message); });
   store.loadCommands();  // install saved commands
   mqttha.publishComponents();
 #else

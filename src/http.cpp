@@ -1,6 +1,8 @@
 #include "http.hpp"
 
 #include <cJSON.h>
+#include <esp_log.h>
+#include <string>
 
 #include "DeviceManager.hpp"
 #include "HttpUtils.hpp"
@@ -14,6 +16,7 @@ static httpd_handle_t configServer = nullptr;
 static bool fallbackHandlersRegistered = false;
 
 namespace {
+constexpr const char* kLogTag = "http";
 extern const char common_css_start[] asm("_binary_static_common_css_start");
 extern const char common_js_start[] asm("_binary_static_common_js_start");
 
@@ -30,7 +33,7 @@ extern const char statistics_html_start[] asm(
 extern const char logs_html_start[] asm("_binary_static_logs_html_start");
 
 void sendStatic(httpd_req_t* req, const char* contentType, const char* data) {
-  HttpUtils::sendResponse(req, "200 OK", contentType, String(data));
+  HttpUtils::sendResponse(req, "200 OK", contentType, std::string(data));
 }
 
 esp_err_t handleRoot(httpd_req_t* req) {
@@ -45,7 +48,7 @@ esp_err_t handleStatusPage(httpd_req_t* req) {
 
 esp_err_t handleStatusApi(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          getStatusJson().c_str());
+                          getStatusJson());
   return ESP_OK;
 }
 
@@ -84,7 +87,7 @@ esp_err_t handleCommandsPage(httpd_req_t* req) {
 
 esp_err_t handleCommands(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          store.getCommandsJson().c_str());
+                          store.getCommandsJson());
   return ESP_OK;
 }
 
@@ -165,7 +168,8 @@ esp_err_t handleCommandsRemove(httpd_req_t* req) {
 esp_err_t handleCommandsLoad(httpd_req_t* req) {
   int64_t bytes = store.loadCommands();
   if (bytes > 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html", String(bytes) + " bytes loaded");
+    HttpUtils::sendResponse(req, "200 OK", "text/html",
+                            std::to_string(bytes) + " bytes loaded");
   else if (bytes < 0)
     HttpUtils::sendResponse(req, "200 OK", "text/html", "Loading failed");
   else
@@ -178,7 +182,8 @@ esp_err_t handleCommandsLoad(httpd_req_t* req) {
 esp_err_t handleCommandsSave(httpd_req_t* req) {
   int64_t bytes = store.saveCommands();
   if (bytes > 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html", String(bytes) + " bytes saved");
+    HttpUtils::sendResponse(req, "200 OK", "text/html",
+                            std::to_string(bytes) + " bytes saved");
   else if (bytes < 0)
     HttpUtils::sendResponse(req, "200 OK", "text/html", "Saving failed");
   else
@@ -189,7 +194,8 @@ esp_err_t handleCommandsSave(httpd_req_t* req) {
 esp_err_t handleCommandsWipe(httpd_req_t* req) {
   int64_t bytes = store.wipeCommands();
   if (bytes > 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html", String(bytes) + " bytes wiped");
+    HttpUtils::sendResponse(req, "200 OK", "text/html",
+                            std::to_string(bytes) + " bytes wiped");
   else if (bytes < 0)
     HttpUtils::sendResponse(req, "200 OK", "text/html", "Wiping failed");
   else
@@ -204,7 +210,7 @@ esp_err_t handleValuesPage(httpd_req_t* req) {
 
 esp_err_t handleValues(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-               store.getValuesJson().c_str());
+                          store.getValuesJson());
   return ESP_OK;
 }
 
@@ -227,12 +233,14 @@ esp_err_t handleValuesWrite(httpd_req_t* req) {
         schedule.handleWrite(writeCmd);
         HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
       } else {
-        HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
-                     String("Invalid value for key '") + key.c_str());
+        HttpUtils::sendResponse(
+            req, "403 Forbidden", "text/html",
+            std::string("Invalid value for key '") + key + "'");
       }
     } else {
-      HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
-                   String("Key '") + key.c_str() + "' not found");
+      HttpUtils::sendResponse(
+          req, "403 Forbidden", "text/html",
+          std::string("Key '") + key + "' not found");
     }
   }
   if (doc) cJSON_Delete(doc);
@@ -290,7 +298,7 @@ esp_err_t handleDevicesPage(httpd_req_t* req) {
 
 esp_err_t handleDevices(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-               deviceManager.getDevicesJson().c_str());
+                          deviceManager.getDevicesJson());
   return ESP_OK;
 }
 
@@ -319,13 +327,13 @@ esp_err_t handleStatisticsPage(httpd_req_t* req) {
 
 esp_err_t handleStatisticsCounter(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-               schedule.getCounterJson().c_str());
+                          schedule.getCounterJson());
   return ESP_OK;
 }
 
 esp_err_t handleStatisticsTiming(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-               schedule.getTimingJson().c_str());
+                          schedule.getTimingJson());
   return ESP_OK;
 }
 
@@ -368,7 +376,7 @@ httpd_handle_t GetHttpServer() { return configServer; }
 bool RegisterUri(const char* uri, httpd_method_t method,
                  esp_err_t (*handler)(httpd_req_t*)) {
   if (configServer == nullptr) {
-    log_e("HTTP server not started; cannot register %s", uri);
+    ESP_LOGE(kLogTag, "HTTP server not started; cannot register %s", uri);
     return false;
   }
   return HttpUtils::registerRoute(configServer, uri, method, handler);

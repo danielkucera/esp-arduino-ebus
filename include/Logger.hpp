@@ -1,9 +1,10 @@
 #pragma once
 
-#include <WString.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+
+#include <string>
 
 // Simple circular buffer logger
 
@@ -15,15 +16,15 @@ class Logger {
   Logger(const Logger& other) = delete;             // Prevent copying
   Logger& operator=(const Logger& other) = delete;  // Prevent assignment
 
-  void error(String message);
-  void warn(String message);
-  void info(String message);
-  void debug(String message);
+  void error(std::string message);
+  void warn(std::string message);
+  void info(std::string message);
+  void debug(std::string message);
 
-  const String getLogs() const;
+  const std::string getLogs() const;
 
  private:
-  String* buffer;
+  std::string* buffer;
   size_t maxEntries;
   size_t index;
   size_t entries;
@@ -31,11 +32,11 @@ class Logger {
   enum class LogLevel { DEBUG, INFO, WARN, ERROR };
   static const char* logLevelText(LogLevel logLevel);
 
-  static const String timestamp();
+  static const std::string timestamp();
   static void printTaskEntry(void* arg);
   void printTaskLoop();
 
-  void log(LogLevel level, String message);
+  void log(LogLevel level, std::string message);
 
   mutable portMUX_TYPE mux;  // Mutex for thread safety
   QueueHandle_t printQueue;

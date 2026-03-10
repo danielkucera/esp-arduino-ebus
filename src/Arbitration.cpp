@@ -2,6 +2,8 @@
 
 #include "BusType.hpp"
 
+#include "ArduinoCompat.hpp"
+
 // arbitration is timing sensitive. avoid communicating with WifiClient during
 // arbitration according
 // https://ebus-wiki.org/lib/exe/fetch.php/ebus/spec_test_1_v1_1_1.pdf

@@ -1,11 +1,11 @@
 #pragma once
 
-#include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <lwip/sockets.h>
 
 #include <functional>
+#include <string>
 
 class EspOtaManager {
  public:
@@ -19,7 +19,7 @@ class EspOtaManager {
   bool handleInvitation();
   bool performTransfer(const sockaddr_in& hostAddr, uint16_t hostPort,
                        size_t expectedSize);
-  void fail(const String& reason);
+  void fail(const std::string& reason);
   static void taskEntry(void* param);
   void taskLoop();
 

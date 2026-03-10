@@ -5,6 +5,7 @@
 #include <cJSON.h>
 #include <esp_err.h>
 #include <nvs.h>
+#include <string>
 #include <vector>
 
 #include "HttpUtils.hpp"
@@ -16,35 +17,37 @@ namespace {
 
 constexpr const char* kNvsNamespace = "esp-ebus";
 
-String readString(nvs_handle_t handle, const char* key, const char* fallback = "") {
+std::string readString(nvs_handle_t handle, const char* key,
+                       const char* fallback = "") {
   size_t required = 0;
   esp_err_t err = nvs_get_str(handle, key, nullptr, &required);
-  if (err == ESP_ERR_NVS_NOT_FOUND) return String(fallback);
-  if (err != ESP_OK || required == 0) return String(fallback);
+  if (err == ESP_ERR_NVS_NOT_FOUND) return std::string(fallback);
+  if (err != ESP_OK || required == 0) return std::string(fallback);
 
   std::vector<char> buffer(required, '\0');
   err = nvs_get_str(handle, key, buffer.data(), &required);
-  if (err != ESP_OK) return String(fallback);
-  return String(buffer.data());
+  if (err != ESP_OK) return std::string(fallback);
+  return std::string(buffer.data());
 }
 
-bool writeString(nvs_handle_t handle, const char* key, const String& value,
-                 String& error) {
+bool writeString(nvs_handle_t handle, const char* key,
+                 const std::string& value, std::string& error) {
   const esp_err_t err = nvs_set_str(handle, key, value.c_str());
   if (err != ESP_OK) {
-    error = String("Failed to write key '") + key + "': " + esp_err_to_name(err);
+    error = std::string("Failed to write key '") + key + "': " +
+            esp_err_to_name(err);
     return false;
   }
   return true;
 }
 
-bool parseStoredBool(const String& value) {
+bool parseStoredBool(const std::string& value) {
   return value == "selected" || value == "true" || value == "1" ||
          value == "on";
 }
 
 bool readEntryValueAsString(nvs_handle_t handle, const nvs_entry_info_t& info,
-                            String& out) {
+                            std::string& out) {
   switch (info.type) {
     case NVS_TYPE_STR: {
       out = readString(handle, info.key);
@@ -53,54 +56,49 @@ bool readEntryValueAsString(nvs_handle_t handle, const nvs_entry_info_t& info,
     case NVS_TYPE_I8: {
       int8_t value = 0;
       if (nvs_get_i8(handle, info.key, &value) != ESP_OK) return false;
-      out = String(value);
+      out = std::to_string(value);
       return true;
     }
     case NVS_TYPE_U8: {
       uint8_t value = 0;
       if (nvs_get_u8(handle, info.key, &value) != ESP_OK) return false;
-      out = String(value);
+      out = std::to_string(value);
       return true;
     }
     case NVS_TYPE_I16: {
       int16_t value = 0;
       if (nvs_get_i16(handle, info.key, &value) != ESP_OK) return false;
-      out = String(value);
+      out = std::to_string(value);
       return true;
     }
     case NVS_TYPE_U16: {
       uint16_t value = 0;
       if (nvs_get_u16(handle, info.key, &value) != ESP_OK) return false;
-      out = String(value);
+      out = std::to_string(value);
       return true;
     }
     case NVS_TYPE_I32: {
       int32_t value = 0;
       if (nvs_get_i32(handle, info.key, &value) != ESP_OK) return false;
-      out = String(value);
+      out = std::to_string(value);
       return true;
     }
     case NVS_TYPE_U32: {
       uint32_t value = 0;
       if (nvs_get_u32(handle, info.key, &value) != ESP_OK) return false;
-      out = String(value);
+      out = std::to_string(value);
       return true;
     }
     case NVS_TYPE_I64: {
       int64_t value = 0;
       if (nvs_get_i64(handle, info.key, &value) != ESP_OK) return false;
-      char buffer[32];
-      snprintf(buffer, sizeof(buffer), "%lld", static_cast<long long>(value));
-      out = String(buffer);
+      out = std::to_string(static_cast<long long>(value));
       return true;
     }
     case NVS_TYPE_U64: {
       uint64_t value = 0;
       if (nvs_get_u64(handle, info.key, &value) != ESP_OK) return false;
-      char buffer[32];
-      snprintf(buffer, sizeof(buffer), "%llu",
-               static_cast<unsigned long long>(value));
-      out = String(buffer);
+      out = std::to_string(static_cast<unsigned long long>(value));
       return true;
     }
     default:
@@ -114,7 +112,7 @@ void fillJsonFromNvs(cJSON* configNode, nvs_handle_t handle) {
     nvs_entry_info_t info{};
     nvs_entry_info(it, &info);
 
-    String value;
+    std::string value;
     if (readEntryValueAsString(handle, info, value)) {
       cJSON_AddStringToObject(configNode, info.key, value.c_str());
     }
@@ -124,8 +122,8 @@ void fillJsonFromNvs(cJSON* configNode, nvs_handle_t handle) {
   nvs_release_iterator(it);
 }
 
-bool writeFromFlatPayload(cJSON* bodyDoc, nvs_handle_t handle, String& error,
-                          bool& dirty) {
+bool writeFromFlatPayload(cJSON* bodyDoc, nvs_handle_t handle,
+                          std::string& error, bool& dirty) {
   if (!cJSON_IsObject(bodyDoc)) {
     error = "JSON root must be an object";
     return false;
@@ -133,12 +131,14 @@ bool writeFromFlatPayload(cJSON* bodyDoc, nvs_handle_t handle, String& error,
 
   for (cJSON* item = bodyDoc->child; item != nullptr; item = item->next) {
     if (cJSON_IsString(item) && item->valuestring != nullptr) {
-      if (!writeString(handle, item->string, String(item->valuestring), error)) {
+      if (!writeString(handle, item->string,
+                       std::string(item->valuestring), error)) {
         return false;
       }
       dirty = true;
     } else {
-      error = String("Unsupported value type for key '") + item->string + "'";
+      error = std::string("Unsupported value type for key '") + item->string +
+              "'";
       return false;
     }
   }
@@ -148,12 +148,12 @@ bool writeFromFlatPayload(cJSON* bodyDoc, nvs_handle_t handle, String& error,
 
 }  // namespace
 
-String ConfigManager::readString(const char* key, const char* fallback) {
+std::string ConfigManager::readString(const char* key, const char* fallback) {
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
-  if (openErr != ESP_OK) return String(fallback);
+  if (openErr != ESP_OK) return std::string(fallback);
 
-  String value = ::readString(handle, key, fallback);
+  std::string value = ::readString(handle, key, fallback);
   nvs_close(handle);
   return value;
 }
@@ -171,9 +171,9 @@ int32_t ConfigManager::readInt(const char* key, int32_t fallback) {
   }
 
   // Backward compatibility for values stored as strings.
-  String strValue = ::readString(handle, key);
+  std::string strValue = ::readString(handle, key);
   nvs_close(handle);
-  if (strValue.isEmpty()) return fallback;
+  if (strValue.empty()) return fallback;
 
   char* end = nullptr;
   const long parsed = std::strtol(strValue.c_str(), &end, 10);
@@ -185,12 +185,12 @@ bool ConfigManager::readBool(const char* key, bool fallback) {
   return parseStoredBool(readString(key, fallback ? "selected" : ""));
 }
 
-bool ConfigManager::writeString(const char* key, const String& value) {
+bool ConfigManager::writeString(const char* key, const std::string& value) {
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
   if (openErr != ESP_OK) return false;
 
-  String error;
+  std::string error;
   const bool ok = ::writeString(handle, key, value, error);
   if (!ok) {
     nvs_close(handle);
@@ -235,7 +235,7 @@ void ConfigManager::begin() {
   RegisterUri("/api/v1/config/reset", HTTP_POST, handleConfigReset);
 }
 
-String ConfigManager::readConfigJson() {
+std::string ConfigManager::readConfigJson() {
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
   if (openErr != ESP_OK) return "{}";
@@ -246,17 +246,19 @@ String ConfigManager::readConfigJson() {
   nvs_close(handle);
 
   char* printed = cJSON_PrintUnformatted(root);
-  String payload = printed != nullptr ? String(printed) : String("{}");
+  std::string payload = printed != nullptr ? printed : "{}";
   if (printed != nullptr) cJSON_free(printed);
   cJSON_Delete(root);
   return payload;
 }
 
-bool ConfigManager::writeConfigJson(const String& body, String& error) {
+bool ConfigManager::writeConfigJson(const std::string& body,
+                                    std::string& error) {
   cJSON* bodyDoc = cJSON_Parse(body.c_str());
   if (bodyDoc == nullptr) {
     const char* parseError = cJSON_GetErrorPtr();
-    error = String("Invalid JSON: ") + (parseError != nullptr ? parseError : "");
+    error =
+        std::string("Invalid JSON: ") + (parseError != nullptr ? parseError : "");
     return false;
   }
 
@@ -264,7 +266,7 @@ bool ConfigManager::writeConfigJson(const String& body, String& error) {
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
   if (openErr != ESP_OK) {
     cJSON_Delete(bodyDoc);
-    error = String("Failed to open NVS: ") + esp_err_to_name(openErr);
+    error = std::string("Failed to open NVS: ") + esp_err_to_name(openErr);
     return false;
   }
 
@@ -281,7 +283,7 @@ bool ConfigManager::writeConfigJson(const String& body, String& error) {
     if (commitErr != ESP_OK) {
       cJSON_Delete(bodyDoc);
       nvs_close(handle);
-      error = String("Failed to commit NVS: ") + esp_err_to_name(commitErr);
+      error = std::string("Failed to commit NVS: ") + esp_err_to_name(commitErr);
       return false;
     }
   }
@@ -291,13 +293,14 @@ bool ConfigManager::writeConfigJson(const String& body, String& error) {
 }
 
 esp_err_t ConfigManager::handleGet(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", readConfigJson());
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                          readConfigJson());
   return ESP_OK;
 }
 
 esp_err_t ConfigManager::handleSet(httpd_req_t* req) {
-  String error;
-  const String body = HttpUtils::readBody(req);
+  std::string error;
+  const std::string body = HttpUtils::readBody(req);
   if (!writeConfigJson(body, error)) {
     HttpUtils::sendResponse(req, "400 Bad Request", "text/plain", error);
     return ESP_OK;

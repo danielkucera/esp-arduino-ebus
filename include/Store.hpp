@@ -1,7 +1,6 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <Arduino.h>
 #include <Ebus.h>
 #include <cJSON.h>
 
@@ -20,7 +19,8 @@
 using DataUpdatedCallback =
     std::function<void(const std::string& name, const std::string& valueJson)>;
 
-using DataUpdatedLogCallback = std::function<void(const String& message)>;
+using DataUpdatedLogCallback =
+    std::function<void(const std::string& message)>;
 
 class Store {
  public:
