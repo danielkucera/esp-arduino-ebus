@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "HttpUtils.hpp"
+#include "http.hpp"
 
 namespace {
 
@@ -212,33 +213,16 @@ void ConfigManager::resetConfig() {
   nvs_close(handle);
 }
 
-void ConfigManager::begin(httpd_handle_t server) {
-  server_ = server;
-  if (server_ == nullptr) {
-    log_e("ConfigManager: HTTP server handle is null");
-    return;
-  }
-
-  httpd_uri_t getUri = {};
-  getUri.uri = "/api/v1/config";
-  getUri.method = HTTP_GET;
-  getUri.handler = &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleGet>;
-  getUri.user_ctx = this;
-  HttpUtils::registerRoute(server_, getUri);
-
-  httpd_uri_t setUri = {};
-  setUri.uri = "/api/v1/config";
-  setUri.method = HTTP_POST;
-  setUri.handler = &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleSet>;
-  setUri.user_ctx = this;
-  HttpUtils::registerRoute(server_, setUri);
-
-  httpd_uri_t resetUri = {};
-  resetUri.uri = "/api/v1/config/reset";
-  resetUri.method = HTTP_POST;
-  resetUri.handler = &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleReset>;
-  resetUri.user_ctx = this;
-  HttpUtils::registerRoute(server_, resetUri);
+void ConfigManager::begin() {
+  RegisterUri("/api/v1/config", HTTP_GET,
+              &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleGet>,
+              this);
+  RegisterUri("/api/v1/config", HTTP_POST,
+              &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleSet>,
+              this);
+  RegisterUri("/api/v1/config/reset", HTTP_POST,
+              &HttpUtils::Trampoline<ConfigManager, &ConfigManager::handleReset>,
+              this);
 }
 
 String ConfigManager::readConfigJson() {

@@ -651,7 +651,7 @@ void setup() {
 
   wifiNetworkManager.begin(&configManager);
   SetupHttpHandlers();
-  configManager.begin(GetHttpServer());
+  configManager.begin();
   upgradeManager.begin(GetHttpServer());
   SetupHttpFallbackHandlers();
   upgradeManager.setPreUpgradeHook([]() {

@@ -10,10 +10,10 @@
 #include "Store.hpp"
 #include "main.hpp"
 
-namespace {
-httpd_handle_t configServer = nullptr;
-bool fallbackHandlersRegistered = false;
+static httpd_handle_t configServer = nullptr;
+static bool fallbackHandlersRegistered = false;
 
+namespace {
 extern const char common_css_start[] asm("_binary_static_common_css_start");
 extern const char common_js_start[] asm("_binary_static_common_js_start");
 
@@ -360,14 +360,18 @@ esp_err_t handleNotFound(httpd_req_t* req) {
   return ESP_OK;
 }
 
-void registerUri(const char* uri, httpd_method_t method,
-                 esp_err_t (*handler)(httpd_req_t*)) {
-  HttpUtils::registerRoute(configServer, uri, method, handler);
-}
-
 }  // namespace
 
 httpd_handle_t GetHttpServer() { return configServer; }
+
+bool RegisterUri(const char* uri, httpd_method_t method,
+                 esp_err_t (*handler)(httpd_req_t*), void* user_ctx) {
+  if (configServer == nullptr) {
+    log_e("HTTP server not started; cannot register %s", uri);
+    return false;
+  }
+  return HttpUtils::registerRoute(configServer, uri, method, handler, user_ctx);
+}
 
 void SetupHttpHandlers() {
   if (configServer != nullptr) return;
@@ -383,50 +387,50 @@ void SetupHttpHandlers() {
     return;
   }
 
-  registerUri("/common.css", HTTP_GET, handleCommonCss);
-  registerUri("/common.js", HTTP_GET, handleCommonJs);
-  registerUri("/", HTTP_GET, handleRoot);
-  registerUri("/config", HTTP_GET, handleConfigPage);
-  registerUri("/status", HTTP_GET, handleStatusPage);
-  registerUri("/api/v1/status", HTTP_GET, handleStatusApi);
-  registerUri("/upgrade", HTTP_GET, handleUpgradePage);
+  RegisterUri("/common.css", HTTP_GET, handleCommonCss);
+  RegisterUri("/common.js", HTTP_GET, handleCommonJs);
+  RegisterUri("/", HTTP_GET, handleRoot);
+  RegisterUri("/config", HTTP_GET, handleConfigPage);
+  RegisterUri("/status", HTTP_GET, handleStatusPage);
+  RegisterUri("/api/v1/status", HTTP_GET, handleStatusApi);
+  RegisterUri("/upgrade", HTTP_GET, handleUpgradePage);
 
 #if defined(EBUS_INTERNAL)
-  registerUri("/commands", HTTP_GET, handleCommandsPage);
-  registerUri("/api/v1/commands", HTTP_GET, handleCommands);
-  registerUri("/api/v1/commands/evaluate", HTTP_POST, handleCommandsEvaluate);
-  registerUri("/api/v1/commands/insert", HTTP_POST, handleCommandsInsert);
-  registerUri("/api/v1/commands/remove", HTTP_POST, handleCommandsRemove);
-  registerUri("/api/v1/commands/load", HTTP_POST, handleCommandsLoad);
-  registerUri("/api/v1/commands/save", HTTP_POST, handleCommandsSave);
-  registerUri("/api/v1/commands/wipe", HTTP_POST, handleCommandsWipe);
+  RegisterUri("/commands", HTTP_GET, handleCommandsPage);
+  RegisterUri("/api/v1/commands", HTTP_GET, handleCommands);
+  RegisterUri("/api/v1/commands/evaluate", HTTP_POST, handleCommandsEvaluate);
+  RegisterUri("/api/v1/commands/insert", HTTP_POST, handleCommandsInsert);
+  RegisterUri("/api/v1/commands/remove", HTTP_POST, handleCommandsRemove);
+  RegisterUri("/api/v1/commands/load", HTTP_POST, handleCommandsLoad);
+  RegisterUri("/api/v1/commands/save", HTTP_POST, handleCommandsSave);
+  RegisterUri("/api/v1/commands/wipe", HTTP_POST, handleCommandsWipe);
 
-  registerUri("/values", HTTP_GET, handleValuesPage);
-  registerUri("/api/v1/values", HTTP_GET, handleValues);
-  registerUri("/api/v1/values/write", HTTP_POST, handleValuesWrite);
-  registerUri("/api/v1/values/read", HTTP_POST, handleValuesRead);
+  RegisterUri("/values", HTTP_GET, handleValuesPage);
+  RegisterUri("/api/v1/values", HTTP_GET, handleValues);
+  RegisterUri("/api/v1/values/write", HTTP_POST, handleValuesWrite);
+  RegisterUri("/api/v1/values/read", HTTP_POST, handleValuesRead);
 
-  registerUri("/devices", HTTP_GET, handleDevicesPage);
-  registerUri("/api/v1/devices", HTTP_GET, handleDevices);
-  registerUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
-  registerUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
-  registerUri("/api/v1/devices/scan/vendor", HTTP_POST, handleDevicesScanVendor);
+  RegisterUri("/devices", HTTP_GET, handleDevicesPage);
+  RegisterUri("/api/v1/devices", HTTP_GET, handleDevices);
+  RegisterUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
+  RegisterUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
+  RegisterUri("/api/v1/devices/scan/vendor", HTTP_POST, handleDevicesScanVendor);
 
-  registerUri("/statistics", HTTP_GET, handleStatisticsPage);
-  registerUri("/api/v1/statistics/counter", HTTP_GET, handleStatisticsCounter);
-  registerUri("/api/v1/statistics/timing", HTTP_GET, handleStatisticsTiming);
-  registerUri("/api/v1/statistics/reset", HTTP_POST, handleStatisticsReset);
+  RegisterUri("/statistics", HTTP_GET, handleStatisticsPage);
+  RegisterUri("/api/v1/statistics/counter", HTTP_GET, handleStatisticsCounter);
+  RegisterUri("/api/v1/statistics/timing", HTTP_GET, handleStatisticsTiming);
+  RegisterUri("/api/v1/statistics/reset", HTTP_POST, handleStatisticsReset);
 
-  registerUri("/logs", HTTP_GET, handleLogsPage);
-  registerUri("/api/v1/logs", HTTP_GET, handleLogs);
+  RegisterUri("/logs", HTTP_GET, handleLogsPage);
+  RegisterUri("/api/v1/logs", HTTP_GET, handleLogs);
 #endif
 
-  registerUri("/restart", HTTP_POST, handleRestart);
+  RegisterUri("/restart", HTTP_POST, handleRestart);
 }
 
 void SetupHttpFallbackHandlers() {
   if (configServer == nullptr || fallbackHandlersRegistered) return;
-  registerUri("/*", HTTP_GET, handleNotFound);
-  registerUri("/*", HTTP_POST, handleNotFound);
+  RegisterUri("/*", HTTP_GET, handleNotFound);
+  RegisterUri("/*", HTTP_POST, handleNotFound);
   fallbackHandlersRegistered = true;
 }
