@@ -93,10 +93,6 @@ jobs:
       needs: build
       runs-on: ubuntu-latest
       steps:
-        - name: Checkout gh-pages branch
-          uses: actions/checkout@v4
-          with:
-            ref: gh-pages
             
         - name: Download artifacts
           uses: actions/download-artifact@v4
