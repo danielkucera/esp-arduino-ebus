@@ -3,3 +3,4 @@
 .piolibdeps
 .vscode/
 .wiki/
+sdkconfig.esp32*
