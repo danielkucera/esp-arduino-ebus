@@ -1,9 +1,10 @@
 #if defined(EBUS_INTERNAL)
 #include "ClientManager.hpp"
 
-#include <algorithm>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+#include <algorithm>
 
 // C++11 compatible make_unique
 template <class T, class... Args>
@@ -20,20 +21,21 @@ void ClientManager::setLastCommsCallback(LastCommsCallback callback) {
   lastCommsCallback = std::move(callback);
 }
 
-void ClientManager::start(ebus::Bus* bus, ebus::Request* request,
-                          ebus::ServiceRunnerFreeRtos* serviceRunner) {
+void ClientManager::start(ebus::Bus* bus, ebus::BusHandler* busHandler,
+                          ebus::Request* request) {
   readonlyServer.begin();
   regularServer.begin();
   enhancedServer.begin();
 
+  this->bus = bus;
+  this->busHandler = busHandler;
   this->request = request;
-  this->serviceRunner = serviceRunner;
 
   clientByteQueue = new ebus::Queue<uint8_t>();
 
   request->setExternalBusRequestedCallback([this]() { busRequested = true; });
 
-  serviceRunner->addByteListener(
+  busHandler->addByteListener(
       [this](const uint8_t& byte) { clientByteQueue->try_push(byte); });
 
   // Start the clientManagerRunner task
@@ -61,7 +63,7 @@ void ClientManager::taskFunc(void* arg) {
       activeClient = nullptr;
       busState = BusState::Idle;
       self->busRequested = false;
-      ebus::request->reset();
+      self->request->reset();
     }
 
     // Select new active client if idle
@@ -80,17 +82,17 @@ void ClientManager::taskFunc(void* arg) {
 
     // Request bus access
     if (activeClient && busState == BusState::Request) {
-      if (ebus::request->busAvailable()) {
+      if (self->request->busAvailable()) {
         uint8_t firstByte = 0;
         if (activeClient->readByte(firstByte)) {
-          ebus::request->requestBus(firstByte, true);
+          self->request->requestBus(firstByte, true);
           busState = BusState::Response;
         } else {
           // Client initialized or error
           activeClient = nullptr;
           busState = BusState::Idle;
           self->busRequested = false;
-          ebus::request->reset();
+          self->request->reset();
         }
       }
     }
@@ -99,7 +101,7 @@ void ClientManager::taskFunc(void* arg) {
     if (activeClient && busState == BusState::Transmit) {
       uint8_t sendByte = 0;
       if (activeClient->readByte(sendByte)) {
-        ebus::bus->writeByte(sendByte);
+        self->bus->writeByte(sendByte);
         busState = BusState::Response;
       }
     }
@@ -120,7 +122,7 @@ void ClientManager::taskFunc(void* arg) {
             activeClient = nullptr;
             busState = BusState::Idle;
             self->busRequested = false;
-            ebus::request->reset();
+            self->request->reset();
           }
         }
       }

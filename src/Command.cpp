@@ -114,8 +114,7 @@ const std::string Command::toJson() const {
   cJSON_AddStringToObject(doc, "key", key.c_str());
   cJSON_AddStringToObject(doc, "name", name.c_str());
   cJSON_AddStringToObject(doc, "read_cmd", ebus::to_string(read_cmd).c_str());
-  cJSON_AddStringToObject(doc, "write_cmd",
-                          ebus::to_string(write_cmd).c_str());
+  cJSON_AddStringToObject(doc, "write_cmd", ebus::to_string(write_cmd).c_str());
   cJSON_AddBoolToObject(doc, "active", active);
   cJSON_AddNumberToObject(doc, "interval", interval);
 
@@ -133,7 +132,8 @@ const std::string Command::toJson() const {
   cJSON_AddBoolToObject(doc, "ha", ha);
   cJSON_AddStringToObject(doc, "ha_component", ha_component.c_str());
   cJSON_AddStringToObject(doc, "ha_device_class", ha_device_class.c_str());
-  cJSON_AddStringToObject(doc, "ha_entity_category", ha_entity_category.c_str());
+  cJSON_AddStringToObject(doc, "ha_entity_category",
+                          ha_entity_category.c_str());
   cJSON_AddStringToObject(doc, "ha_mode", ha_mode.c_str());
 
   cJSON* haMap = cJSON_AddObjectToObject(doc, "ha_key_value_map");
@@ -207,10 +207,12 @@ Command Command::fromJson(const cJSON* doc) {
     command.divider = static_cast<float>(dividerNode->valuedouble);
 
   cJSON* minNode = cJSON_GetObjectItemCaseSensitive(doc, "min");
-  if (cJSON_IsNumber(minNode)) command.min = static_cast<float>(minNode->valuedouble);
+  if (cJSON_IsNumber(minNode))
+    command.min = static_cast<float>(minNode->valuedouble);
 
   cJSON* maxNode = cJSON_GetObjectItemCaseSensitive(doc, "max");
-  if (cJSON_IsNumber(maxNode)) command.max = static_cast<float>(maxNode->valuedouble);
+  if (cJSON_IsNumber(maxNode))
+    command.max = static_cast<float>(maxNode->valuedouble);
 
   cJSON* digitsNode = cJSON_GetObjectItemCaseSensitive(doc, "digits");
   if (cJSON_IsNumber(digitsNode) && digitsNode->valuedouble >= 0)
@@ -239,19 +241,24 @@ Command Command::fromJson(const cJSON* doc) {
       }
     }
 
-    cJSON* defaultKeyNode = cJSON_GetObjectItemCaseSensitive(doc, "ha_default_key");
+    cJSON* defaultKeyNode =
+        cJSON_GetObjectItemCaseSensitive(doc, "ha_default_key");
     if (cJSON_IsNumber(defaultKeyNode))
       command.ha_default_key = static_cast<int>(defaultKeyNode->valuedouble);
 
-    cJSON* payloadOnNode = cJSON_GetObjectItemCaseSensitive(doc, "ha_payload_on");
+    cJSON* payloadOnNode =
+        cJSON_GetObjectItemCaseSensitive(doc, "ha_payload_on");
     if (cJSON_IsNumber(payloadOnNode) && payloadOnNode->valuedouble >= 0)
       command.ha_payload_on = static_cast<uint8_t>(payloadOnNode->valuedouble);
 
-    cJSON* payloadOffNode = cJSON_GetObjectItemCaseSensitive(doc, "ha_payload_off");
+    cJSON* payloadOffNode =
+        cJSON_GetObjectItemCaseSensitive(doc, "ha_payload_off");
     if (cJSON_IsNumber(payloadOffNode) && payloadOffNode->valuedouble >= 0)
-      command.ha_payload_off = static_cast<uint8_t>(payloadOffNode->valuedouble);
+      command.ha_payload_off =
+          static_cast<uint8_t>(payloadOffNode->valuedouble);
 
-    command.ha_state_class = getString("ha_state_class", command.ha_state_class);
+    command.ha_state_class =
+        getString("ha_state_class", command.ha_state_class);
 
     cJSON* stepNode = cJSON_GetObjectItemCaseSensitive(doc, "ha_step");
     if (cJSON_IsNumber(stepNode) && stepNode->valuedouble > 0)
@@ -263,34 +270,33 @@ Command Command::fromJson(const cJSON* doc) {
 
 const std::string Command::evaluate(const cJSON* doc) {
   // Define the fields to evaluate
-  const FieldEvaluation fields[] = {
-      {"key", true, FT_String},
-      {"name", true, FT_String},
-      {"read_cmd", true, FT_HexString},
-      {"write_cmd", false, FT_HexString},
-      {"active", true, FT_Bool},
-      {"interval", false, FT_Uint32T},
-      // Data Fields
-      {"master", true, FT_Bool},
-      {"position", true, FT_SizeT},
-      {"datatype", true, FT_DataType},
-      {"divider", false, FT_Float},
-      {"min", false, FT_Float},
-      {"max", false, FT_Float},
-      {"digits", false, FT_Uint8T},
-      {"unit", false, FT_String},
-      // Home Assistant
-      {"ha", false, FT_Bool},
-      {"ha_component", false, FT_String},
-      {"ha_device_class", false, FT_String},
-      {"ha_entity_category", false, FT_String},
-      {"ha_mode", false, FT_String},
-      {"ha_key_value_map", false, FT_KeyValueMap},
-      {"ha_default_key", false, FT_Int},
-      {"ha_payload_on", false, FT_Uint8T},
-      {"ha_payload_off", false, FT_Uint8T},
-      {"ha_state_class", false, FT_String},
-      {"ha_step", false, FT_Float}};
+  const FieldEvaluation fields[] = {{"key", true, FT_String},
+                                    {"name", true, FT_String},
+                                    {"read_cmd", true, FT_HexString},
+                                    {"write_cmd", false, FT_HexString},
+                                    {"active", true, FT_Bool},
+                                    {"interval", false, FT_Uint32T},
+                                    // Data Fields
+                                    {"master", true, FT_Bool},
+                                    {"position", true, FT_SizeT},
+                                    {"datatype", true, FT_DataType},
+                                    {"divider", false, FT_Float},
+                                    {"min", false, FT_Float},
+                                    {"max", false, FT_Float},
+                                    {"digits", false, FT_Uint8T},
+                                    {"unit", false, FT_String},
+                                    // Home Assistant
+                                    {"ha", false, FT_Bool},
+                                    {"ha_component", false, FT_String},
+                                    {"ha_device_class", false, FT_String},
+                                    {"ha_entity_category", false, FT_String},
+                                    {"ha_mode", false, FT_String},
+                                    {"ha_key_value_map", false, FT_KeyValueMap},
+                                    {"ha_default_key", false, FT_Int},
+                                    {"ha_payload_on", false, FT_Uint8T},
+                                    {"ha_payload_off", false, FT_Uint8T},
+                                    {"ha_state_class", false, FT_String},
+                                    {"ha_step", false, FT_Float}};
 
   // Evaluate each field in a loop
   for (const auto& field : fields) {
@@ -315,9 +321,7 @@ const std::string Command::isFieldValid(const cJSON* doc,
   // Skip type checking if the field is not present and not required
   if (v == nullptr || cJSON_IsNull(v)) return "";
 
-  auto isInteger = [](double value) {
-    return std::floor(value) == value;
-  };
+  auto isInteger = [](double value) { return std::floor(value) == value; };
 
   switch (type) {
     case FT_String: {
@@ -363,7 +367,8 @@ const std::string Command::isFieldValid(const cJSON* doc,
       if (!cJSON_IsNumber(v) || !isInteger(v->valuedouble))
         return "Invalid type for field: " + field;
       if (v->valuedouble < 0 ||
-          v->valuedouble > static_cast<double>(std::numeric_limits<size_t>::max()))
+          v->valuedouble >
+              static_cast<double>(std::numeric_limits<size_t>::max()))
         return "Out of range for field: " + field;
     } break;
     case FT_DataType: {
@@ -418,32 +423,53 @@ const double Command::getDoubleFromVector() const {
     case ebus::DataType::INT8:
       value = ebus::byte_2_int8(data);
       break;
-    case ebus::DataType::UINT16:
-      value = ebus::byte_2_uint16(data);
-      break;
-    case ebus::DataType::INT16:
-      value = ebus::byte_2_int16(data);
-      break;
-    case ebus::DataType::UINT32:
-      value = ebus::byte_2_uint32(data);
-      break;
-    case ebus::DataType::INT32:
-      value = ebus::byte_2_int32(data);
-      break;
     case ebus::DataType::DATA1B:
       value = ebus::byte_2_data1b(data);
       break;
     case ebus::DataType::DATA1C:
       value = ebus::byte_2_data1c(data);
       break;
+    case ebus::DataType::UINT16:
+      value = ebus::byte_2_uint16(data, ebus::Endian::Little);
+      break;
+    case ebus::DataType::UINT16R:
+      value = ebus::byte_2_uint16(data, ebus::Endian::Big);
+      break;
+    case ebus::DataType::INT16:
+      value = ebus::byte_2_int16(data, ebus::Endian::Little);
+      break;
+    case ebus::DataType::INT16R:
+      value = ebus::byte_2_int16(data, ebus::Endian::Big);
+      break;
     case ebus::DataType::DATA2B:
-      value = ebus::byte_2_data2b(data);
+      value = ebus::byte_2_data2b(data, ebus::Endian::Little);
+      break;
+    case ebus::DataType::DATA2BR:
+      value = ebus::byte_2_data2b(data, ebus::Endian::Big);
       break;
     case ebus::DataType::DATA2C:
-      value = ebus::byte_2_data2c(data);
+      value = ebus::byte_2_data2c(data, ebus::Endian::Little);
+      break;
+    case ebus::DataType::DATA2CR:
+      value = ebus::byte_2_data2c(data, ebus::Endian::Big);
+      break;
+    case ebus::DataType::UINT32:
+      value = ebus::byte_2_uint32(data, ebus::Endian::Little);
+      break;
+    case ebus::DataType::UINT32R:
+      value = ebus::byte_2_uint32(data, ebus::Endian::Big);
+      break;
+    case ebus::DataType::INT32:
+      value = ebus::byte_2_int32(data, ebus::Endian::Little);
+      break;
+    case ebus::DataType::INT32R:
+      value = ebus::byte_2_int32(data, ebus::Endian::Big);
       break;
     case ebus::DataType::FLOAT:
-      value = ebus::byte_2_float(data);
+      value = ebus::byte_2_float(data, ebus::Endian::Little);
+      break;
+    case ebus::DataType::FLOATR:
+      value = ebus::byte_2_float(data, ebus::Endian::Big);
       break;
     default:
       break;
@@ -502,32 +528,53 @@ const std::vector<uint8_t> Command::getVectorFromDouble(double value) const {
     case ebus::DataType::INT8:
       result = ebus::int8_2_byte(value);
       break;
-    case ebus::DataType::UINT16:
-      result = ebus::uint16_2_byte(value);
-      break;
-    case ebus::DataType::INT16:
-      result = ebus::int16_2_byte(value);
-      break;
-    case ebus::DataType::UINT32:
-      result = ebus::uint32_2_byte(value);
-      break;
-    case ebus::DataType::INT32:
-      result = ebus::int32_2_byte(value);
-      break;
     case ebus::DataType::DATA1B:
       result = ebus::data1b_2_byte(value);
       break;
     case ebus::DataType::DATA1C:
       result = ebus::data1c_2_byte(value);
       break;
+    case ebus::DataType::UINT16:
+      result = ebus::uint16_2_byte(value, ebus::Endian::Little);
+      break;
+    case ebus::DataType::UINT16R:
+      result = ebus::uint16_2_byte(value, ebus::Endian::Big);
+      break;
+    case ebus::DataType::INT16:
+      result = ebus::int16_2_byte(value, ebus::Endian::Little);
+      break;
+    case ebus::DataType::INT16R:
+      result = ebus::int16_2_byte(value, ebus::Endian::Big);
+      break;
     case ebus::DataType::DATA2B:
-      result = ebus::data2b_2_byte(value);
+      result = ebus::data2b_2_byte(value, ebus::Endian::Little);
+      break;
+    case ebus::DataType::DATA2BR:
+      result = ebus::data2b_2_byte(value, ebus::Endian::Big);
       break;
     case ebus::DataType::DATA2C:
-      result = ebus::data2c_2_byte(value);
+      result = ebus::data2c_2_byte(value, ebus::Endian::Little);
+      break;
+    case ebus::DataType::DATA2CR:
+      result = ebus::data2c_2_byte(value, ebus::Endian::Big);
+      break;
+    case ebus::DataType::UINT32:
+      result = ebus::uint32_2_byte(value, ebus::Endian::Little);
+      break;
+    case ebus::DataType::UINT32R:
+      result = ebus::uint32_2_byte(value, ebus::Endian::Big);
+      break;
+    case ebus::DataType::INT32:
+      result = ebus::int32_2_byte(value, ebus::Endian::Little);
+      break;
+    case ebus::DataType::INT32R:
+      result = ebus::int32_2_byte(value, ebus::Endian::Big);
       break;
     case ebus::DataType::FLOAT:
-      result = ebus::float_2_byte(value);
+      result = ebus::float_2_byte(value, ebus::Endian::Little);
+      break;
+    case ebus::DataType::FLOATR:
+      result = ebus::float_2_byte(value, ebus::Endian::Big);
       break;
     default:
       break;

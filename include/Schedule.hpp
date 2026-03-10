@@ -22,7 +22,7 @@ class Schedule {
  public:
   Schedule() = default;
 
-  void start(ebus::Request* request, ebus::Handler* handler);
+  void start(ebus::Bus* bus, ebus::Request* request, ebus::Handler* handler);
   void stop();
 
   void setSendInquiryOfExistence(const bool enable);
@@ -54,6 +54,7 @@ class Schedule {
   const std::string getTimingJson();
 
  private:
+  ebus::Bus* ebusBus = nullptr;
   ebus::Request* ebusRequest = nullptr;
   ebus::Handler* ebusHandler = nullptr;
 
