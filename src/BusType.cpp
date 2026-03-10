@@ -149,7 +149,7 @@ void BusType::readDataFromSoftwareSerial(void* args) {
         // the rest of the timeslice, which will be about 500 micros, using
         // vTaskDelay
         uint32_t begin = (uint32_t)(esp_timer_get_time());
-        vTaskDelay(pdMS_TO_TICKS(1));
+        vTaskDelay(1);
         avail = mySerial.available();
 
         // How was the delay until now?
@@ -167,7 +167,7 @@ void BusType::readDataFromSoftwareSerial(void* args) {
             esp_rom_delay_us(500);
             avail = mySerial.available();
             if (!avail) {
-              vTaskDelay(pdMS_TO_TICKS(1));
+              vTaskDelay(1);
             }
           } else {  // Otherwise spend the remaining wait with delayMicroseconds
             uint32_t delay = 4167 - delayed < 500 ? 4167 - delayed : 500;

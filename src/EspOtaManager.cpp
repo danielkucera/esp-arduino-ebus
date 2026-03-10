@@ -220,7 +220,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
         return false;
       }
       if (errno == EWOULDBLOCK || errno == EAGAIN) {
-        vTaskDelay(pdMS_TO_TICKS(1));
+        vTaskDelay(1);
         continue;
       }
       esp_ota_abort(handle);

@@ -134,7 +134,7 @@ void ClientManager::taskFunc(void* arg) {
       }
     }
 
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(1);
   }
 }
 

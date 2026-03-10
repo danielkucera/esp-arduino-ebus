@@ -878,6 +878,6 @@ extern "C" void app_main(void) {
   setup();
   while (true) {
     loop();
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(1);
   }
 }

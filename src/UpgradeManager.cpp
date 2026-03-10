@@ -323,7 +323,7 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
         nextProgressBytes += kProgressStepBytes;
       }
     }
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(1);
   }
 
   if (ok && contentLength > 0 && static_cast<int>(totalWritten) != contentLength) {

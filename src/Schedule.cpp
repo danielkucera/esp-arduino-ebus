@@ -427,7 +427,7 @@ void Schedule::taskFunc(void* arg) {
     if (self->stopRunner) vTaskDelete(NULL);
     self->handleEventQueue();
     self->handleCommandQueue();
-    vTaskDelay(pdMS_TO_TICKS(1));  // short delay to yield CPU
+    vTaskDelay(1);  // short delay to yield CPU
   }
 }
 
