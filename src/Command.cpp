@@ -3,10 +3,11 @@
 
 #include <Ebus.h>
 
+#include <cerrno>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
 #include <regex>
-#include <stdexcept>
 
 const uint32_t& Command::getLast() const { return last; }
 
@@ -386,11 +387,14 @@ const std::string Command::isKeyValueMapValid(const cJSON* ha_key_value_map) {
     if (kv->string == nullptr) return "Invalid key in map";
 
     // Check if the key can be converted to an integer
-    try {
-      std::stoi(kv->string);
-    } catch (const std::invalid_argument&) {
+    char* endptr = nullptr;
+    errno = 0;
+    long long keyValue = std::strtoll(kv->string, &endptr, 10);
+    if (endptr == kv->string || *endptr != '\0' || errno == ERANGE) {
       return "Invalid key: " + std::string(kv->string);
-    } catch (const std::out_of_range&) {
+    }
+    if (keyValue < std::numeric_limits<int>::min() ||
+        keyValue > std::numeric_limits<int>::max()) {
       return "Key out of range: " + std::string(kv->string);
     }
 
