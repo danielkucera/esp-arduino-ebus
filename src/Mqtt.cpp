@@ -1,6 +1,7 @@
 #if defined(EBUS_INTERNAL)
 #include "Mqtt.hpp"
 
+#include <esp_timer.h>
 #include <functional>
 
 #include "DeviceManager.hpp"
@@ -170,7 +171,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       self->connected = false;
     } break;
     case MQTT_EVENT_SUBSCRIBED: {
-      logger.debug(String(self->requestTopic.c_str()) + " subscribed");
+      logger.debug(self->requestTopic + " subscribed");
     } break;
     case MQTT_EVENT_UNSUBSCRIBED:
     case MQTT_EVENT_PUBLISHED:
@@ -209,7 +210,8 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       logger.error("MQTT Error occured");
     } break;
     default: {
-      logger.warn(String("Unhandled event id: ") + event->event_id);
+      logger.warn(std::string("Unhandled event id: ") +
+                  std::to_string(event->event_id));
     } break;
   }
 }
@@ -338,8 +340,8 @@ void Mqtt::handleRead(const cJSON* doc) {
 
   const Command* command = store.findCommand(key);
   if (command != nullptr) {
-    String s = "{\"id\":\"read\",";
-    s += store.getValueFullJson(command).substr(1).c_str();
+    std::string s = "{\"id\":\"read\",";
+    s += store.getValueFullJson(command).substr(1);
     publish("response", 0, false, s.c_str());
   } else {
     mqtt.publishResponse("read", "key '" + key + "' not found");
@@ -371,8 +373,8 @@ void Mqtt::handleWrite(const cJSON* doc) {
 }
 
 void Mqtt::checkIncomingQueue() {
-  if (!incomingQueue.empty() && millis() > lastIncoming + incomingInterval) {
-    lastIncoming = millis();
+  if (!incomingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) > lastIncoming + incomingInterval) {
+    lastIncoming = (uint32_t)(esp_timer_get_time() / 1000ULL);
     IncomingAction action = incomingQueue.front();
     incomingQueue.pop();
 
@@ -398,8 +400,8 @@ void Mqtt::checkIncomingQueue() {
 }
 
 void Mqtt::checkOutgoingQueue() {
-  if (!outgoingQueue.empty() && millis() > lastOutgoing + outgoingInterval) {
-    lastOutgoing = millis();
+  if (!outgoingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) > lastOutgoing + outgoingInterval) {
+    lastOutgoing = (uint32_t)(esp_timer_get_time() / 1000ULL);
     OutgoingAction action = outgoingQueue.front();
     outgoingQueue.pop();
 

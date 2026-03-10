@@ -1,14 +1,17 @@
 #pragma once
 
-#include <Arduino.h>
 #include <esp_http_server.h>
+
+#include <string>
 
 namespace HttpUtils {
 
 void sendResponse(httpd_req_t* req, const char* status, const char* type,
-                  const String& body);
+                  const std::string& body);
+void sendResponse(httpd_req_t* req, const char* status, const char* type,
+                  const char* body);
 
-String readBody(httpd_req_t* req);
+std::string readBody(httpd_req_t* req);
 
 bool registerRoute(httpd_handle_t server, const httpd_uri_t& route);
 

@@ -1,8 +1,8 @@
 #if defined(EBUS_INTERNAL)
 #include "Schedule.hpp"
 
-#include <Arduino.h>
 #include <algorithm>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
@@ -509,7 +509,7 @@ void Schedule::handleEventQueue() {
 }
 
 void Schedule::handleCommandQueue() {
-  uint32_t currentMillis = millis();
+  uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
 
   // Check if activeCommand is stuck
   if (activeCommand && activeCommand->setTime > 0) {
@@ -598,7 +598,7 @@ void Schedule::enqueueScheduleCommand() {
 }
 
 void Schedule::enqueueStartupScanCommands() {
-  uint32_t currentMillis = millis();
+  uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
   if (deviceManager.hasNextStartupScan() &&
       currentMillis > lastScan + distanceScans) {
     lastScan = currentMillis;
@@ -610,8 +610,8 @@ void Schedule::enqueueStartupScanCommands() {
 }
 
 void Schedule::enqueueFullScanCommand() {
-  if (millis() > lastFullScan + distanceFullScans) {
-    lastFullScan = millis();
+  if ((uint32_t)(esp_timer_get_time() / 1000ULL) > lastFullScan + distanceFullScans) {
+    lastFullScan = (uint32_t)(esp_timer_get_time() / 1000ULL);
     if (deviceManager.hasNextFullScan()) {
       const auto cmd = deviceManager.nextFullScanCommand();
       if (!cmd.empty()) {

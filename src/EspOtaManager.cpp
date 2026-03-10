@@ -1,13 +1,23 @@
 #include "EspOtaManager.hpp"
 
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <esp_err.h>
 #include <esp_ota_ops.h>
 #include <esp_system.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <lwip/inet.h>
 #include <lwip/sockets.h>
 #include <unistd.h>
+
+#include <string>
+
+#ifdef INADDR_NONE
+#undef INADDR_NONE
+#endif
 
 #include "Logger.hpp"
 #include "main.hpp"
@@ -19,6 +29,12 @@ constexpr int kEspOtaFlashCommand = 0;
 constexpr uint32_t kEspOtaTransferTimeoutMs = 60000;
 constexpr uint32_t kEspOtaTaskDelayMs = 10;
 constexpr uint32_t kEspOtaTaskStackSize = 8192;
+
+std::string toHexByte(uint8_t value) {
+  char buffer[8];
+  std::snprintf(buffer, sizeof(buffer), "%02x", value);
+  return std::string(buffer);
+}
 }  // namespace
 
 void EspOtaManager::begin(uint16_t port) {
@@ -44,14 +60,14 @@ void EspOtaManager::begin(uint16_t port) {
   addr.sin_port = htons(port_);
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
   if (bind(udpSock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
-    logger.error("ESPOTA: failed to bind UDP port " + String(port_) +
-                 " errno=" + String(errno));
+    logger.error("ESPOTA: failed to bind UDP port " +
+                 std::to_string(port_) + " errno=" + std::to_string(errno));
     close(udpSock_);
     udpSock_ = -1;
     return;
   }
 
-  logger.info("ESPOTA: listening on UDP port " + String(port_));
+  logger.info("ESPOTA: listening on UDP port " + std::to_string(port_));
 
   if (taskHandle_ == nullptr) {
     BaseType_t taskResult =
@@ -130,9 +146,9 @@ bool EspOtaManager::handleInvitation() {
 
   char remoteIp[INET_ADDRSTRLEN] = {0};
   inet_ntop(AF_INET, &remoteAddr.sin_addr, remoteIp, sizeof(remoteIp));
-  logger.info("ESPOTA: invitation from " + String(remoteIp) + ":" +
-              String(hostPort) + " size=" + String(expectedSize) + " md5=" +
-              String(md5));
+  logger.info("ESPOTA: invitation from " + std::string(remoteIp) + ":" +
+              std::to_string(hostPort) + " size=" +
+              std::to_string(expectedSize) + " md5=" + std::string(md5));
 
   const char* ok = "OK";
   sendto(udpSock_, ok, strlen(ok), 0,
@@ -156,7 +172,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
   tcpAddr.sin_port = htons(hostPort);
   if (connect(tcpSock, reinterpret_cast<sockaddr*>(&tcpAddr), sizeof(tcpAddr)) <
       0) {
-    fail(String("connect failed errno=") + String(errno));
+    fail(std::string("connect failed errno=") + std::to_string(errno));
     close(tcpSock);
     return false;
   }
@@ -178,7 +194,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
   esp_ota_handle_t handle = 0;
   esp_err_t beginResult = esp_ota_begin(partition, expectedSize, &handle);
   if (beginResult != ESP_OK) {
-    fail(String("esp_ota_begin failed: ") + esp_err_to_name(beginResult));
+    fail(std::string("esp_ota_begin failed: ") + esp_err_to_name(beginResult));
     const char* msg = "ERROR[2]: begin";
     send(tcpSock, msg, strlen(msg), 0);
     close(tcpSock);
@@ -189,13 +205,13 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
   size_t totalReceived = 0;
   bool checkedMagic = false;
   int nextProgressPercent = 10;
-  uint32_t transferDeadline = millis() + kEspOtaTransferTimeoutMs;
+  uint32_t transferDeadline = (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
 
   while (totalReceived < expectedSize) {
     int bytesRead = recv(tcpSock, buffer, sizeof(buffer), 0);
     wdt_feed();
     if (bytesRead <= 0) {
-      if (bytesRead == 0 || millis() > transferDeadline) {
+      if (bytesRead == 0 || (uint32_t)(esp_timer_get_time() / 1000ULL) > transferDeadline) {
         esp_ota_abort(handle);
         fail("transfer timeout/disconnect");
         const char* msg = "ERROR[3]: timeout";
@@ -204,24 +220,24 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
         return false;
       }
       if (errno == EWOULDBLOCK || errno == EAGAIN) {
-        delay(1);
+        vTaskDelay(pdMS_TO_TICKS(1));
         continue;
       }
       esp_ota_abort(handle);
-      fail(String("recv failed errno=") + String(errno));
+      fail(std::string("recv failed errno=") + std::to_string(errno));
       const char* msg = "ERROR[3]: timeout";
       send(tcpSock, msg, strlen(msg), 0);
       close(tcpSock);
       return false;
     }
 
-    transferDeadline = millis() + kEspOtaTransferTimeoutMs;
+    transferDeadline = (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
 
     if (!checkedMagic) {
       checkedMagic = true;
       if (buffer[0] != kEspImageMagic) {
         esp_ota_abort(handle);
-        fail(String("invalid firmware magic 0x") + String(buffer[0], HEX));
+        fail(std::string("invalid firmware magic 0x") + toHexByte(buffer[0]));
         const char* msg = "ERROR[4]: bad image";
         send(tcpSock, msg, strlen(msg), 0);
         close(tcpSock);
@@ -233,7 +249,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
     wdt_feed();
     if (writeResult != ESP_OK) {
       esp_ota_abort(handle);
-      fail(String("esp_ota_write failed: ") + esp_err_to_name(writeResult));
+      fail(std::string("esp_ota_write failed: ") + esp_err_to_name(writeResult));
       const char* msg = "ERROR[5]: write";
       send(tcpSock, msg, strlen(msg), 0);
       close(tcpSock);
@@ -243,8 +259,9 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
     totalReceived += static_cast<size_t>(bytesRead);
     int percent = static_cast<int>((totalReceived * 100) / expectedSize);
     if (percent >= nextProgressPercent) {
-      logger.info("ESPOTA progress " + String(percent) + "% (" +
-                  String(totalReceived) + "/" + String(expectedSize) + " bytes)");
+      logger.info("ESPOTA progress " + std::to_string(percent) + "% (" +
+                  std::to_string(totalReceived) + "/" +
+                  std::to_string(expectedSize) + " bytes)");
       while (percent >= nextProgressPercent && nextProgressPercent < 100) {
         nextProgressPercent += 10;
       }
@@ -258,7 +275,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
 
   esp_err_t endResult = esp_ota_end(handle);
   if (endResult != ESP_OK) {
-    fail(String("esp_ota_end failed: ") + esp_err_to_name(endResult));
+    fail(std::string("esp_ota_end failed: ") + esp_err_to_name(endResult));
     const char* msg = "ERROR[6]: end";
     send(tcpSock, msg, strlen(msg), 0);
     close(tcpSock);
@@ -267,7 +284,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
 
   esp_err_t bootResult = esp_ota_set_boot_partition(partition);
   if (bootResult != ESP_OK) {
-    fail(String("esp_ota_set_boot_partition failed: ") +
+    fail(std::string("esp_ota_set_boot_partition failed: ") +
          esp_err_to_name(bootResult));
     const char* msg = "ERROR[7]: boot";
     send(tcpSock, msg, strlen(msg), 0);
@@ -275,14 +292,15 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
     return false;
   }
 
-  logger.info("ESPOTA: received " + String(totalReceived) + " bytes, rebooting");
+  logger.info("ESPOTA: received " + std::to_string(totalReceived) +
+              " bytes, rebooting");
   send(tcpSock, "OK", 2, 0);
   close(tcpSock);
-  delay(1000);
+  vTaskDelay(pdMS_TO_TICKS(1000));
   esp_restart();
   return true;
 }
 
-void EspOtaManager::fail(const String& reason) {
+void EspOtaManager::fail(const std::string& reason) {
   logger.error("ESPOTA failure: " + reason);
 }

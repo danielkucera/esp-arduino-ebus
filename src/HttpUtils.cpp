@@ -2,17 +2,29 @@
 
 #include <esp_err.h>
 
+#include <cstring>
+
+#include "Logger.hpp"
+
 namespace HttpUtils {
 
 void sendResponse(httpd_req_t* req, const char* status, const char* type,
-                  const String& body) {
+                  const std::string& body) {
   httpd_resp_set_status(req, status);
   httpd_resp_set_type(req, type);
-  httpd_resp_send(req, body.c_str(), body.length());
+  httpd_resp_send(req, body.c_str(), body.size());
 }
 
-String readBody(httpd_req_t* req) {
-  String out;
+void sendResponse(httpd_req_t* req, const char* status, const char* type,
+                  const char* body) {
+  httpd_resp_set_status(req, status);
+  httpd_resp_set_type(req, type);
+  const size_t len = body != nullptr ? std::strlen(body) : 0;
+  httpd_resp_send(req, body != nullptr ? body : "", len);
+}
+
+std::string readBody(httpd_req_t* req) {
+  std::string out;
   int remaining = req->content_len;
   char buffer[512];
 
@@ -22,7 +34,7 @@ String readBody(httpd_req_t* req) {
                      : remaining;
     int received = httpd_req_recv(req, buffer, toRead);
     if (received <= 0) return "";
-    out.concat(buffer, received);
+    out.append(buffer, received);
     remaining -= received;
   }
 
@@ -32,7 +44,8 @@ String readBody(httpd_req_t* req) {
 bool registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
   const esp_err_t err = httpd_register_uri_handler(server, &route);
   if (err != ESP_OK) {
-    log_e("HTTP route register failed: %s (%s)", route.uri, esp_err_to_name(err));
+    logger.error(std::string("HTTP route register failed: ") + route.uri +
+                 " (" + esp_err_to_name(err) + ")");
     return false;
   }
   return true;

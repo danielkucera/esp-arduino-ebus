@@ -1,11 +1,11 @@
 #pragma once
 
-#include <Arduino.h>
 #include <esp_http_server.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 
 #include <functional>
+#include <string>
 
 class UpgradeManager {
  public:
@@ -19,7 +19,7 @@ class UpgradeManager {
   esp_err_t handleStatus(httpd_req_t* req);
 
  private:
-  bool performHttpUpgrade(const String& url, String& error);
+  bool performHttpUpgrade(const std::string& url, std::string& error);
   void prepareForUpgrade();
   void sendAndRestart(httpd_req_t* req, const char* message);
   void resetUploadState();

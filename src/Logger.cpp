@@ -1,9 +1,10 @@
 #include "Logger.hpp"
 
-#include <Arduino.h>
 #include <cJSON.h>
 #include <ctime>
 #include <cstring>
+#include <esp_timer.h>
+
 
 namespace {
 constexpr size_t kPrintQueueLen = 32;
@@ -19,7 +20,7 @@ Logger::Logger(size_t maxEntries)
       mux(portMUX_INITIALIZER_UNLOCKED),
       printQueue(nullptr),
       printTask(nullptr) {
-  buffer = new String[maxEntries];
+  buffer = new std::string[maxEntries];
   printQueue = xQueueCreate(kPrintQueueLen, kPrintMsgMaxLen);
   if (printQueue != nullptr) {
     xTaskCreate(Logger::printTaskEntry, "logger_print", 4096, this, 1,
@@ -39,16 +40,16 @@ Logger::~Logger() {
   delete[] buffer;
 }
 
-void Logger::error(String message) { log(LogLevel::ERROR, message); }
+void Logger::error(std::string message) { log(LogLevel::ERROR, message); }
 
-void Logger::warn(String message) { log(LogLevel::WARN, message); }
+void Logger::warn(std::string message) { log(LogLevel::WARN, message); }
 
-void Logger::info(String message) { log(LogLevel::INFO, message); }
+void Logger::info(std::string message) { log(LogLevel::INFO, message); }
 
-void Logger::debug(String message) { log(LogLevel::DEBUG, message); }
+void Logger::debug(std::string message) { log(LogLevel::DEBUG, message); }
 
-const String Logger::getLogs() const {
-  String response = "[";
+const std::string Logger::getLogs() const {
+  std::string response = "[";
 
   portENTER_CRITICAL(&mux);
   for (size_t i = 0; i < entries; i++) {
@@ -67,7 +68,7 @@ const char* Logger::logLevelText(LogLevel logLevel) {
   return values[static_cast<int>(logLevel)];
 }
 
-const String Logger::timestamp() {
+const std::string Logger::timestamp() {
   time_t now = time(nullptr);
   struct tm timeinfo;
   localtime_r(&now, &timeinfo);
@@ -75,18 +76,18 @@ const String Logger::timestamp() {
   char timestamp[40];
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", &timeinfo);
   snprintf(timestamp + strlen(timestamp), sizeof(timestamp) - strlen(timestamp),
-           ".%03uZ", millis() % 1000);
+           ".%03uZ", (uint32_t)(esp_timer_get_time() / 1000ULL) % 1000);
 
-  return String(timestamp);
+  return std::string(timestamp);
 }
 
-void Logger::log(LogLevel level, String message) {
+void Logger::log(LogLevel level, std::string message) {
   cJSON* doc = cJSON_CreateObject();
   cJSON_AddStringToObject(doc, "timestamp", timestamp().c_str());
   cJSON_AddStringToObject(doc, "level", logLevelText(level));
   cJSON_AddStringToObject(doc, "message", message.c_str());
   char* printed = cJSON_PrintUnformatted(doc);
-  String payload = printed != nullptr ? String(printed) : String("{}");
+  std::string payload = printed != nullptr ? printed : "{}";
   if (printed != nullptr) cJSON_free(printed);
   cJSON_Delete(doc);
 

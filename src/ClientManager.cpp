@@ -2,6 +2,8 @@
 #include "ClientManager.hpp"
 
 #include <algorithm>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 // C++11 compatible make_unique
 template <class T, class... Args>

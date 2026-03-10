@@ -2,6 +2,10 @@
 
 #include "BusType.hpp"
 
+#include <esp_rom_sys.h>
+#include <esp_timer.h>
+
+
 // arbitration is timing sensitive. avoid communicating with WifiClient during
 // arbitration according
 // https://ebus-wiki.org/lib/exe/fetch.php/ebus/spec_test_1_v1_1_1.pdf
@@ -24,7 +28,7 @@ Arbitration::result Arbitration::start(const BusState& busstate, uint8_t master,
   }
 
   // too late if we don't have enough time to send our symbol
-  uint32_t now = micros();
+  uint32_t now = (uint32_t)(esp_timer_get_time());
   uint32_t microsSinceLastSyn = busstate.microsSinceLastSyn();
   uint32_t timeSinceStartBit = now - startBitTime;
   if (timeSinceStartBit > 4456 || Bus.available()) {
@@ -41,7 +45,7 @@ Arbitration::result Arbitration::start(const BusState& busstate, uint8_t master,
   // requires about 700 micros on the esp32-c3.
   int delay = 4300 - timeSinceStartBit - 700;
   if (delay > 0) {
-    delayMicroseconds(delay);
+    esp_rom_delay_us(delay);
   }
 #endif
   Bus.write(master);
@@ -125,10 +129,10 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol,
         // subtract time from the wait to allow the uart to put the byte on the
         // bus. Testing has shown this requires about 700 micros on the
         // esp32-c3.
-        uint32_t timeSinceStartBit = micros() - startBitTime;
+        uint32_t timeSinceStartBit = (uint32_t)(esp_timer_get_time()) - startBitTime;
         int delay = 4300 - timeSinceStartBit - 700;
         if (delay > 0) {
-          delayMicroseconds(delay);
+          esp_rom_delay_us(delay);
         }
 #endif
         // Do logging of the ARB START message after writing the symbol, so

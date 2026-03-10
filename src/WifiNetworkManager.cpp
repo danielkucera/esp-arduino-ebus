@@ -4,6 +4,12 @@
 #include <cctype>
 #include <cstring>
 #include <esp_wifi.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+#include <algorithm>
+#include <string>
 
 #include "ConfigManager.hpp"
 #include "Logger.hpp"
@@ -12,14 +18,20 @@ WifiNetworkManager* WifiNetworkManager::instance_ = nullptr;
 
 namespace {
 
-String buildHostname(const String& source, const char* fallback) {
-  String hostname = source;
-  hostname.trim();
-  if (hostname.isEmpty()) hostname = fallback;
+std::string trimCopy(const std::string& value) {
+  const auto start = value.find_first_not_of(" \t\r\n");
+  if (start == std::string::npos) return "";
+  const auto end = value.find_last_not_of(" \t\r\n");
+  return value.substr(start, end - start + 1);
+}
 
-  String sanitized;
-  sanitized.reserve(hostname.length());
-  for (size_t i = 0; i < hostname.length(); ++i) {
+std::string buildHostname(const std::string& source, const char* fallback) {
+  std::string hostname = trimCopy(source);
+  if (hostname.empty()) hostname = fallback;
+
+  std::string sanitized;
+  sanitized.reserve(hostname.size());
+  for (size_t i = 0; i < hostname.size(); ++i) {
     const char c = hostname[i];
     if (std::isalnum(static_cast<unsigned char>(c))) {
       sanitized += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -28,11 +40,13 @@ String buildHostname(const String& source, const char* fallback) {
     }
   }
 
-  while (sanitized.startsWith("-")) sanitized.remove(0, 1);
-  while (sanitized.endsWith("-")) sanitized.remove(sanitized.length() - 1, 1);
+  while (!sanitized.empty() && sanitized.front() == '-') {
+    sanitized.erase(sanitized.begin());
+  }
+  while (!sanitized.empty() && sanitized.back() == '-') sanitized.pop_back();
 
-  if (sanitized.isEmpty()) sanitized = "esp-ebus";
-  if (sanitized.length() > 63) sanitized.remove(63);
+  if (sanitized.empty()) sanitized = "esp-ebus";
+  if (sanitized.size() > 63) sanitized.erase(63);
   return sanitized;
 }
 
@@ -48,16 +62,17 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   initStatusLed();
   setStatusLedMode(StatusLedMode::SlowBlink);
 
-  String apPassword = configManager_ != nullptr
-                          ? configManager_->readString("apModePassword",
-                                                       kDefaultApPassword)
-                          : String(kDefaultApPassword);
-  if (apPassword.isEmpty()) apPassword = kDefaultApPassword;
-  const String configuredThingName =
+  std::string apPassword = configManager_ != nullptr
+                               ? configManager_->readString("apModePassword",
+                                                            kDefaultApPassword)
+                               : std::string(kDefaultApPassword);
+  if (apPassword.empty()) apPassword = kDefaultApPassword;
+  const std::string configuredThingName =
       configManager_ != nullptr
           ? configManager_->readString("thingName", kDefaultHostname)
-          : String(kDefaultHostname);
-  const String hostname = buildHostname(configuredThingName, kDefaultHostname);
+          : std::string(kDefaultHostname);
+  const std::string hostname =
+      buildHostname(configuredThingName, kDefaultHostname);
 
   WiFi.onEvent(onWiFiEventStatic);
   WiFi.persistent(false);
@@ -79,12 +94,12 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   apConfig.ap.max_connection = 4;
   apConfig.ap.channel = rand() % 13 + 1;
   apConfig.ap.authmode = WIFI_AUTH_WPA2_PSK;
-  if (apPassword.length() < 8) apConfig.ap.authmode = WIFI_AUTH_OPEN;
+  if (apPassword.size() < 8) apConfig.ap.authmode = WIFI_AUTH_OPEN;
   if (esp_wifi_set_config(WIFI_IF_AP, &apConfig) != ESP_OK) {
     logger.error("AP config apply failed");
   } else {
-    logger.info("AP ready: " + String(kDefaultApSsid) + " (" +
-                String(apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2") +
+    logger.info(std::string("AP ready: ") + kDefaultApSsid + " (" +
+                (apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2") +
                 ")");
   }
   dnsServer_.start(53, "*", WiFi.softAPIP());
@@ -93,13 +108,15 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
     logger.info("Captive DNS task started");
   }
 
-  String staSsid = configManager_ != nullptr
-                       ? configManager_->readString("wifiSsid", "ebus-test")
-                       : String("ebus-test");
-  String staPass = configManager_ != nullptr
-                       ? configManager_->readString("wifiPassword", "lectronz")
-                       : String("lectronz");
-  staConfigured_ = staSsid.length() > 0;
+  std::string staSsid =
+      configManager_ != nullptr
+          ? configManager_->readString("wifiSsid", "ebus-test")
+          : std::string("ebus-test");
+  std::string staPass =
+      configManager_ != nullptr
+          ? configManager_->readString("wifiPassword", "lectronz")
+          : std::string("lectronz");
+  staConfigured_ = !staSsid.empty();
 
   if (!staConfigured_) {
     logger.warn("STA credentials missing, AP-only mode");
@@ -191,23 +208,23 @@ bool WifiNetworkManager::isStaticIpEnabled() const {
   return configManager_ != nullptr && configManager_->readBool("staticIPEnabled");
 }
 
-String WifiNetworkManager::getConfiguredIpAddress() const {
+std::string WifiNetworkManager::getConfiguredIpAddress() const {
   return configManager_ != nullptr ? configManager_->readString("ipAddress") : "";
 }
 
-String WifiNetworkManager::getConfiguredGateway() const {
+std::string WifiNetworkManager::getConfiguredGateway() const {
   return configManager_ != nullptr ? configManager_->readString("gateway") : "";
 }
 
-String WifiNetworkManager::getConfiguredNetmask() const {
+std::string WifiNetworkManager::getConfiguredNetmask() const {
   return configManager_ != nullptr ? configManager_->readString("netmask") : "";
 }
 
-String WifiNetworkManager::getConfiguredDns1() const {
+std::string WifiNetworkManager::getConfiguredDns1() const {
   return configManager_ != nullptr ? configManager_->readString("dns1") : "";
 }
 
-String WifiNetworkManager::getConfiguredDns2() const {
+std::string WifiNetworkManager::getConfiguredDns2() const {
   return configManager_ != nullptr ? configManager_->readString("dns2") : "";
 }
 
@@ -220,9 +237,10 @@ void WifiNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t) {
   if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
     staConnected_ = true;
     setStatusLedMode(StatusLedMode::SolidOn);
-    lastConnect_ = millis();
+    lastConnect_ = (uint32_t)(esp_timer_get_time() / 1000ULL);
     ++reconnectCount_;
-    logger.info("STA connected, IP: " + WiFi.localIP().toString());
+    logger.info("STA connected, IP: " +
+                std::string(WiFi.localIP().toString().c_str()));
     dnsServer_.stop();
     logger.info("Captive DNS stopped");
     if (WiFi.getMode() != WIFI_MODE_STA) {
@@ -250,39 +268,47 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
     return;
   }
 
-  const String gatewayValue = getConfiguredGateway();
-  const String dns1Value = getConfiguredDns1();
-  const String dns2Value = getConfiguredDns2();
+  const std::string gatewayValue = getConfiguredGateway();
+  const std::string dns1Value = getConfiguredDns1();
+  const std::string dns2Value = getConfiguredDns2();
 
-  const bool valid = ipAddress_.fromString(getConfiguredIpAddress()) &&
-                     netmask_.fromString(getConfiguredNetmask());
+  const bool valid =
+      ipAddress_.fromString(getConfiguredIpAddress().c_str()) &&
+      netmask_.fromString(getConfiguredNetmask().c_str());
   if (valid) {
-    if (!gatewayValue.isEmpty() && !gateway_.fromString(gatewayValue)) {
+    if (!gatewayValue.empty() &&
+        !gateway_.fromString(gatewayValue.c_str())) {
       logger.warn("Invalid gateway configured, using 0.0.0.0");
       gateway_ = IPAddress(0, 0, 0, 0);
-    } else if (gatewayValue.isEmpty()) {
+    } else if (gatewayValue.empty()) {
       gateway_ = IPAddress(0, 0, 0, 0);
     }
 
     bool dns1IsValid = true;
-    if (!dns1Value.isEmpty()) dns1IsValid = dns1_.fromString(dns1Value);
+    if (!dns1Value.empty())
+      dns1IsValid = dns1_.fromString(dns1Value.c_str());
     if (!dns1IsValid) logger.warn("Invalid DNS1 configured, ignoring");
 
     bool dns2IsValid = true;
-    if (!dns2Value.isEmpty()) dns2IsValid = dns2_.fromString(dns2Value);
+    if (!dns2Value.empty())
+      dns2IsValid = dns2_.fromString(dns2Value.c_str());
     if (!dns2IsValid) logger.warn("Invalid DNS2 configured, ignoring");
 
     const IPAddress dns1 =
-        (dns1Value.isEmpty() || !dns1IsValid)
-            ? (gatewayValue.isEmpty() ? IPAddress(0, 0, 0, 0) : gateway_)
+        (dns1Value.empty() || !dns1IsValid)
+            ? (gatewayValue.empty() ? IPAddress(0, 0, 0, 0) : gateway_)
             : dns1_;
     const IPAddress dns2 =
-        (dns2Value.isEmpty() || !dns2IsValid) ? IPAddress(0, 0, 0, 0) : dns2_;
+        (dns2Value.empty() || !dns2IsValid) ? IPAddress(0, 0, 0, 0) : dns2_;
     WiFi.config(ipAddress_, gateway_, netmask_, dns1, dns2);
-    logger.info("Static IP configured: " + ipAddress_.toString() +
-                ", Gateway: " + gateway_.toString() +
-                ", DNS1: " + dns1.toString() +
-                (dns2Value.isEmpty() ? "" : ", DNS2: " + dns2.toString()));
+    logger.info(
+        std::string("Static IP configured: ") +
+        std::string(ipAddress_.toString().c_str()) + ", Gateway: " +
+        std::string(gateway_.toString().c_str()) + ", DNS1: " +
+        std::string(dns1.toString().c_str()) +
+        (dns2Value.empty()
+             ? ""
+             : ", DNS2: " + std::string(dns2.toString().c_str())));
   } else {
     logger.warn("Invalid static IP/netmask config, falling back to DHCP");
   }
