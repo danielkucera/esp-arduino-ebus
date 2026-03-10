@@ -71,6 +71,7 @@ esp_err_t handleCommonJs(httpd_req_t* req) {
 
 esp_err_t handleRestart(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "200 OK", "text/html", "Restarting...");
+  vTaskDelay(pdMS_TO_TICKS(500));
   restart();
   return ESP_OK;
 }
@@ -425,7 +426,7 @@ void SetupHttpHandlers() {
   RegisterUri("/api/v1/logs", HTTP_GET, handleLogs);
 #endif
 
-  RegisterUri("/restart", HTTP_POST, handleRestart);
+  RegisterUri("/restart", HTTP_GET, handleRestart);
 }
 
 void SetupHttpFallbackHandlers() {
