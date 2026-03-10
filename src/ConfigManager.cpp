@@ -107,7 +107,10 @@ bool readEntryValueAsString(nvs_handle_t handle, const nvs_entry_info_t& info,
 }
 
 void fillJsonFromNvs(cJSON* configNode, nvs_handle_t handle) {
-  nvs_iterator_t it = nvs_entry_find("nvs", kNvsNamespace, NVS_TYPE_ANY);
+  nvs_iterator_t it = nullptr;
+  if (nvs_entry_find("nvs", kNvsNamespace, NVS_TYPE_ANY, &it) != ESP_OK) {
+    return;
+  }
   while (it != nullptr) {
     nvs_entry_info_t info{};
     nvs_entry_info(it, &info);
@@ -117,7 +120,9 @@ void fillJsonFromNvs(cJSON* configNode, nvs_handle_t handle) {
       cJSON_AddStringToObject(configNode, info.key, value.c_str());
     }
 
-    it = nvs_entry_next(it);
+    if (nvs_entry_next(&it) != ESP_OK) {
+      break;
+    }
   }
   nvs_release_iterator(it);
 }
