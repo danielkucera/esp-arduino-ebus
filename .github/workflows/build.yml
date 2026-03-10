@@ -19,14 +19,14 @@ jobs:
         fetch-depth: 0
         fetch-tags: true
     - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.platformio/.cache
-          key: ${{ runner.os }}-pio
+      with:
+        path: |
+          ~/.cache/pip
+          ~/.platformio/.cache
+        key: ${{ runner.os }}-pio
     - uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
+      with:
+        python-version: '3.11'
     - name: Install PlatformIO Core
         run: pip install --upgrade platformio
     - name: Prepare release dir
