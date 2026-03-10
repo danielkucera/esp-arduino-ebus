@@ -1,7 +1,6 @@
 #include "http.hpp"
 
 #include <cJSON.h>
-#include <esp_log.h>
 #include <string>
 
 #include "DeviceManager.hpp"
@@ -16,7 +15,6 @@ static httpd_handle_t configServer = nullptr;
 static bool fallbackHandlersRegistered = false;
 
 namespace {
-constexpr const char* kLogTag = "http";
 extern const char common_css_start[] asm("_binary_static_common_css_start");
 extern const char common_js_start[] asm("_binary_static_common_js_start");
 
@@ -376,7 +374,7 @@ httpd_handle_t GetHttpServer() { return configServer; }
 bool RegisterUri(const char* uri, httpd_method_t method,
                  esp_err_t (*handler)(httpd_req_t*)) {
   if (configServer == nullptr) {
-    ESP_LOGE(kLogTag, "HTTP server not started; cannot register %s", uri);
+    logger.error(std::string("HTTP server not started; cannot register ") + uri);
     return false;
   }
   return HttpUtils::registerRoute(configServer, uri, method, handler);

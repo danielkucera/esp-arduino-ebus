@@ -1,13 +1,10 @@
 #include "HttpUtils.hpp"
 
 #include <esp_err.h>
-#include <esp_log.h>
 
 #include <cstring>
 
-namespace {
-constexpr const char* kLogTag = "HttpUtils";
-}
+#include "Logger.hpp"
 
 namespace HttpUtils {
 
@@ -47,8 +44,8 @@ std::string readBody(httpd_req_t* req) {
 bool registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
   const esp_err_t err = httpd_register_uri_handler(server, &route);
   if (err != ESP_OK) {
-    ESP_LOGE(kLogTag, "HTTP route register failed: %s (%s)", route.uri,
-             esp_err_to_name(err));
+    logger.error(std::string("HTTP route register failed: ") + route.uri +
+                 " (" + esp_err_to_name(err) + ")");
     return false;
   }
   return true;
