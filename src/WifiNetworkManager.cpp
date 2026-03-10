@@ -8,7 +8,6 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <mdns.h>
 
 #include <algorithm>
 #include <string>
@@ -81,14 +80,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   WiFi.setAutoReconnect(true);
   WiFi.setHostname(hostname.c_str());
   WiFi.mode(WIFI_AP_STA);
-  esp_err_t mdnsResult = mdns_init();
-  if (mdnsResult == ESP_OK || mdnsResult == ESP_ERR_INVALID_STATE) {
-    mdns_hostname_set(hostname.c_str());
-    mdns_instance_name_set(hostname.c_str());
-    logger.info("Hostname/mDNS: " + hostname + ".local");
-  } else {
-    logger.warn("mDNS start failed");
-  }
+  logger.info("mDNS disabled in ESP-IDF build");
 
   wifi_config_t apConfig{};
   std::strncpy(reinterpret_cast<char*>(apConfig.ap.ssid), kDefaultApSsid,
