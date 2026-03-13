@@ -5,6 +5,7 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
 #include <queue>
 
 // For ESP's based on FreeRTOS we can optimize the arbitration timing.
@@ -293,6 +294,7 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
             break;
           case Arbitration::late:
             _nbrLate++;
+            [[fallthrough]];
           case Arbitration::not_started:
             DEBUG_LOG("BUS START WAIT 0x%02x %lu us\n", symbol,
                       _busState.microsSinceLastSyn());

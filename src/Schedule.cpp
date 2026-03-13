@@ -486,6 +486,7 @@ void Schedule::handleEventQueue() {
               schedule.processActive(event->mode,
                                      std::vector<uint8_t>(event->data.master),
                                      std::vector<uint8_t>(event->data.slave));
+              [[fallthrough]];
               // break;
               // To process fields of active messages with passive definitions.
             case ebus::MessageType::passive:
