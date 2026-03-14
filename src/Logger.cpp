@@ -1,6 +1,5 @@
 #include "Logger.hpp"
 
-#include <cJSON.h>
 #include <inttypes.h>
 #include <ctime>
 #include <cstring>
@@ -10,6 +9,34 @@
 namespace {
 constexpr size_t kPrintQueueLen = 32;
 constexpr size_t kPrintMsgMaxLen = 384;
+
+std::string jsonEscape(const std::string& input) {
+  std::string escaped;
+  escaped.reserve(input.size() + 8);
+  for (char c : input) {
+    switch (c) {
+      case '\\':
+        escaped += "\\\\";
+        break;
+      case '"':
+        escaped += "\\\"";
+        break;
+      case '\n':
+        escaped += "\\n";
+        break;
+      case '\r':
+        escaped += "\\r";
+        break;
+      case '\t':
+        escaped += "\\t";
+        break;
+      default:
+        escaped += c;
+        break;
+    }
+  }
+  return escaped;
+}
 }  // namespace
 
 Logger logger;
@@ -85,14 +112,17 @@ const std::string Logger::timestamp() {
 }
 
 void Logger::log(LogLevel level, std::string message) {
-  cJSON* doc = cJSON_CreateObject();
-  cJSON_AddStringToObject(doc, "timestamp", timestamp().c_str());
-  cJSON_AddStringToObject(doc, "level", logLevelText(level));
-  cJSON_AddStringToObject(doc, "message", message.c_str());
-  char* printed = cJSON_PrintUnformatted(doc);
-  std::string payload = printed != nullptr ? printed : "{}";
-  if (printed != nullptr) cJSON_free(printed);
-  cJSON_Delete(doc);
+  const std::string ts = timestamp();
+  const std::string escapedMessage = jsonEscape(message);
+  std::string payload;
+  payload.reserve(ts.size() + escapedMessage.size() + 64);
+  payload += "{\"timestamp\":\"";
+  payload += ts;
+  payload += "\",\"level\":\"";
+  payload += logLevelText(level);
+  payload += "\",\"message\":\"";
+  payload += escapedMessage;
+  payload += "\"}";
 
   if (printQueue != nullptr) {
     char msg[kPrintMsgMaxLen]{};
