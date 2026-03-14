@@ -1,16 +1,16 @@
 #pragma once
 
 #include <cstdint>
+#include <esp_netif_types.h>
 #include <string>
-
-#include "IPAddress.h"
 
 class DNSServer {
  public:
   DNSServer();
   ~DNSServer();
 
-  bool start(uint16_t port, const char* domainName, const IPAddress& resolvedIp);
+  bool start(uint16_t port, const char* domainName,
+             const esp_ip4_addr_t& resolvedIp);
   void processNextRequest();
   void stop();
 
@@ -18,5 +18,5 @@ class DNSServer {
   int socketFd_ = -1;
   uint16_t port_ = 0;
   std::string domain_;
-  IPAddress resolvedIp_;
+  esp_ip4_addr_t resolvedIp_{};
 };

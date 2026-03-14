@@ -4,6 +4,7 @@
 
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <lwip/ip4_addr.h>
 #include <lwip/sockets.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -18,7 +19,7 @@ DNSServer::DNSServer() = default;
 DNSServer::~DNSServer() { stop(); }
 
 bool DNSServer::start(uint16_t port, const char* domainName,
-                      const IPAddress& resolvedIp) {
+                      const esp_ip4_addr_t& resolvedIp) {
   stop();
   port_ = port;
   domain_ = domainName != nullptr ? domainName : "*";
@@ -90,11 +91,11 @@ void DNSServer::processNextRequest() {
   response[responseLen++] = 0x00;
   response[responseLen++] = 0x04;
 
-  uint32_t ip = resolvedIp_.toU32();
-  response[responseLen++] = (ip >> 24) & 0xFF;
-  response[responseLen++] = (ip >> 16) & 0xFF;
-  response[responseLen++] = (ip >> 8) & 0xFF;
-  response[responseLen++] = ip & 0xFF;
+  const ip4_addr_t* ip = reinterpret_cast<const ip4_addr_t*>(&resolvedIp_);
+  response[responseLen++] = ip4_addr1_16(ip);
+  response[responseLen++] = ip4_addr2_16(ip);
+  response[responseLen++] = ip4_addr3_16(ip);
+  response[responseLen++] = ip4_addr4_16(ip);
 
   sendto(socketFd_, response, responseLen, 0,
          reinterpret_cast<sockaddr*>(&client), clientLen);

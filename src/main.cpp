@@ -544,15 +544,30 @@ const std::string getStatusJson() {
     cJSON_AddStringToObject(wifi, "DNS2",
                             WifiNetworkManager::getConfiguredDns2().c_str());
   } else {
+    esp_netif_ip_info_t staIpInfo{};
+    const bool hasStaIp = WifiNetworkManager::getStaIpInfo(&staIpInfo);
+    esp_ip4_addr_t dnsMain{};
+    const bool hasDnsMain = WifiNetworkManager::getDnsIp(0, &dnsMain);
+    esp_ip4_addr_t dnsBackup{};
+    const bool hasDnsBackup = WifiNetworkManager::getDnsIp(1, &dnsBackup);
+
     cJSON_AddBoolToObject(wifi, "Static_IP", false);
-    cJSON_AddStringToObject(wifi, "IP_Address",
-                            WifiNetworkManager::localIP().toString().c_str());
-    cJSON_AddStringToObject(wifi, "Gateway",
-                            WifiNetworkManager::gatewayIP().toString().c_str());
-    cJSON_AddStringToObject(wifi, "Netmask",
-                            WifiNetworkManager::subnetMask().toString().c_str());
-    cJSON_AddStringToObject(wifi, "DNS1", WifiNetworkManager::dnsIP(0).toString().c_str());
-    cJSON_AddStringToObject(wifi, "DNS2", WifiNetworkManager::dnsIP(1).toString().c_str());
+    cJSON_AddStringToObject(
+      wifi, "IP_Address",
+      hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.ip).c_str() : "");
+    cJSON_AddStringToObject(
+      wifi, "Gateway",
+      hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.gw).c_str() : "");
+    cJSON_AddStringToObject(
+      wifi, "Netmask",
+      hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.netmask).c_str()
+           : "");
+    cJSON_AddStringToObject(
+      wifi, "DNS1",
+      hasDnsMain ? WifiNetworkManager::ipToString(dnsMain).c_str() : "");
+    cJSON_AddStringToObject(
+      wifi, "DNS2",
+      hasDnsBackup ? WifiNetworkManager::ipToString(dnsBackup).c_str() : "");
   }
   cJSON_AddStringToObject(wifi, "SSID", WifiNetworkManager::SSID().c_str());
   cJSON_AddStringToObject(wifi, "BSSID", WifiNetworkManager::BSSIDstr().c_str());

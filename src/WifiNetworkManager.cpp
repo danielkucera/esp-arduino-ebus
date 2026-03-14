@@ -9,6 +9,7 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <lwip/ip4_addr.h>
 #include <nvs_flash.h>
 
 #include <algorithm>
@@ -20,11 +21,11 @@
 
 DNSServer WifiNetworkManager::dnsServer_;
 ConfigManager* WifiNetworkManager::configManager_ = nullptr;
-IPAddress WifiNetworkManager::ipAddress_;
-IPAddress WifiNetworkManager::gateway_;
-IPAddress WifiNetworkManager::netmask_;
-IPAddress WifiNetworkManager::dns1_;
-IPAddress WifiNetworkManager::dns2_;
+esp_ip4_addr_t WifiNetworkManager::ipAddress_{};
+esp_ip4_addr_t WifiNetworkManager::gateway_{};
+esp_ip4_addr_t WifiNetworkManager::netmask_{};
+esp_ip4_addr_t WifiNetworkManager::dns1_{};
+esp_ip4_addr_t WifiNetworkManager::dns2_{};
 uint32_t WifiNetworkManager::lastConnect_ = 0;
 int WifiNetworkManager::reconnectCount_ = 0;
 bool WifiNetworkManager::staConnected_ = false;
@@ -68,18 +69,6 @@ std::string buildHostname(const std::string& source, const char* fallback) {
   if (sanitized.empty()) sanitized = "esp-ebus";
   if (sanitized.size() > 63) sanitized.erase(63);
   return sanitized;
-}
-
-IPAddress toIPAddress(const esp_ip4_addr_t& ip4) {
-  IPAddress address;
-  address.fromU32(ip4.addr);
-  return address;
-}
-
-esp_ip4_addr_t toIp4(const IPAddress& address) {
-  esp_ip4_addr_t ip4{};
-  ip4.addr = address.toU32();
-  return ip4;
 }
 
 }  // namespace
@@ -187,7 +176,8 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
                 (apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2") +
                 ")");
   }
-  dnsServer_.start(53, "*", IPAddress(0, 0, 0, 0));
+  const esp_ip4_addr_t captiveDnsIp{.addr = 0};
+  dnsServer_.start(53, "*", captiveDnsIp);
   if (dnsTaskHandle_ == nullptr) {
     xTaskCreate(dnsTaskEntry, "dns_task", 4096, nullptr, 1, &dnsTaskHandle_);
     logger.info("Captive DNS task started");
@@ -240,34 +230,32 @@ bool WifiNetworkManager::isCaptivePortalActive() {
   return !staConnected_ && getMode() != WIFI_MODE_STA;
 }
 
-IPAddress WifiNetworkManager::localIP() {
-  if (staNetif_ == nullptr) return IPAddress();
+bool WifiNetworkManager::getStaIpInfo(esp_netif_ip_info_t* outInfo) {
+  if (outInfo == nullptr || staNetif_ == nullptr) return false;
   esp_netif_ip_info_t info{};
-  if (esp_netif_get_ip_info(staNetif_, &info) != ESP_OK) return IPAddress();
-  return toIPAddress(info.ip);
+  if (esp_netif_get_ip_info(staNetif_, &info) != ESP_OK) return false;
+  *outInfo = info;
+  return true;
 }
 
-IPAddress WifiNetworkManager::gatewayIP() {
-  if (staNetif_ == nullptr) return IPAddress();
-  esp_netif_ip_info_t info{};
-  if (esp_netif_get_ip_info(staNetif_, &info) != ESP_OK) return IPAddress();
-  return toIPAddress(info.gw);
-}
-
-IPAddress WifiNetworkManager::subnetMask() {
-  if (staNetif_ == nullptr) return IPAddress();
-  esp_netif_ip_info_t info{};
-  if (esp_netif_get_ip_info(staNetif_, &info) != ESP_OK) return IPAddress();
-  return toIPAddress(info.netmask);
-}
-
-IPAddress WifiNetworkManager::dnsIP(uint8_t index) {
-  if (staNetif_ == nullptr) return IPAddress();
+bool WifiNetworkManager::getDnsIp(uint8_t index, esp_ip4_addr_t* outIp) {
+  if (outIp == nullptr || staNetif_ == nullptr) return false;
   esp_netif_dns_info_t info{};
   const esp_netif_dns_type_t type =
       index == 0 ? ESP_NETIF_DNS_MAIN : ESP_NETIF_DNS_BACKUP;
-  if (esp_netif_get_dns_info(staNetif_, type, &info) != ESP_OK) return IPAddress();
-  return toIPAddress(info.ip.u_addr.ip4);
+  if (esp_netif_get_dns_info(staNetif_, type, &info) != ESP_OK) return false;
+  if (info.ip.type != ESP_IPADDR_TYPE_V4) return false;
+  *outIp = info.ip.u_addr.ip4;
+  return true;
+}
+
+std::string WifiNetworkManager::ipToString(const esp_ip4_addr_t& ip) {
+  char buffer[16]{};
+  if (ip4addr_ntoa_r(reinterpret_cast<const ip4_addr_t*>(&ip), buffer,
+                     sizeof(buffer)) == nullptr) {
+    return "";
+  }
+  return buffer;
 }
 
 int32_t WifiNetworkManager::RSSI() {
@@ -428,7 +416,8 @@ void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
     setStatusLedMode(StatusLedMode::SlowBlink);
     logger.warn("STA disconnected, reconnecting");
     if (getMode() != WIFI_MODE_STA) {
-      dnsServer_.start(53, "*", IPAddress(0, 0, 0, 0));
+      const esp_ip4_addr_t captiveDnsIp{.addr = 0};
+      dnsServer_.start(53, "*", captiveDnsIp);
       logger.info("Captive DNS started");
     }
     if (staConfigured_) esp_wifi_connect();
@@ -446,15 +435,15 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
   const std::string dns2Value = getConfiguredDns2();
 
   const bool valid =
-      ipAddress_.fromString(getConfiguredIpAddress().c_str()) &&
-      netmask_.fromString(getConfiguredNetmask().c_str());
+      esp_netif_str_to_ip4(getConfiguredIpAddress().c_str(), &ipAddress_) &&
+      esp_netif_str_to_ip4(getConfiguredNetmask().c_str(), &netmask_);
   if (valid) {
     if (!gatewayValue.empty() &&
-        !gateway_.fromString(gatewayValue.c_str())) {
+        !esp_netif_str_to_ip4(gatewayValue.c_str(), &gateway_)) {
       logger.warn("Invalid gateway configured, using 0.0.0.0");
-      gateway_ = IPAddress(0, 0, 0, 0);
+      gateway_.addr = 0;
     } else if (gatewayValue.empty()) {
-      gateway_ = IPAddress(0, 0, 0, 0);
+      gateway_.addr = 0;
     }
 
     //WiFi.config(ipAddress_, gateway_, netmask_, dns1, dns2);
@@ -462,43 +451,42 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
     esp_netif_dhcpc_stop(staNetif_);
 
     esp_netif_ip_info_t info{};
-    info.ip = toIp4(ipAddress_);
-    info.gw = toIp4(gateway_);
-    info.netmask = toIp4(netmask_);
+    info.ip = ipAddress_;
+    info.gw = gateway_;
+    info.netmask = netmask_;
     if (esp_netif_set_ip_info(staNetif_, &info) != ESP_OK) {
       logger.error("Failed to set static IP info");
       return;
     }
     bool dns1IsValid = true;
     if (!dns1Value.empty())
-      dns1IsValid = dns1_.fromString(dns1Value.c_str());
+      dns1IsValid = esp_netif_str_to_ip4(dns1Value.c_str(), &dns1_);
     if (!dns1IsValid) logger.warn("Invalid DNS1 configured, ignoring");
     else {
       esp_netif_dns_info_t dns{};
-      dns.ip.u_addr.ip4 = toIp4(dns1_);
+      dns.ip.u_addr.ip4 = dns1_;
       dns.ip.type = ESP_IPADDR_TYPE_V4;
       esp_netif_set_dns_info(staNetif_, ESP_NETIF_DNS_MAIN, &dns);  
     }
 
     bool dns2IsValid = true;
     if (!dns2Value.empty())
-      dns2IsValid = dns2_.fromString(dns2Value.c_str());
+      dns2IsValid = esp_netif_str_to_ip4(dns2Value.c_str(), &dns2_);
     if (!dns2IsValid) logger.warn("Invalid DNS2 configured, ignoring");
     else {
        esp_netif_dns_info_t dns{};
-       dns.ip.u_addr.ip4 = toIp4(dns2_);
+       dns.ip.u_addr.ip4 = dns2_;
        dns.ip.type = ESP_IPADDR_TYPE_V4;
        esp_netif_set_dns_info(staNetif_, ESP_NETIF_DNS_BACKUP, &dns);  
     }
 
     logger.info(
         std::string("Static IP configured: ") +
-        std::string(ipAddress_.toString().c_str()) + ", Gateway: " +
-        std::string(gateway_.toString().c_str()) + ", DNS1: " +
-        std::string(dns1_.toString().c_str()) +
+        ipToString(ipAddress_) + ", Gateway: " + ipToString(gateway_) +
+        ", DNS1: " + ipToString(dns1_) +
         (dns2Value.empty()
              ? ""
-             : ", DNS2: " + std::string(dns2_.toString().c_str())));
+             : ", DNS2: " + ipToString(dns2_)));
   } else {
     logger.warn("Invalid static IP/netmask config, falling back to DHCP");
   }

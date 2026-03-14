@@ -2,6 +2,7 @@
 
 #include "DNSServer.h"
 
+#include <esp_netif_types.h>
 #include <string>
 #include <esp_wifi.h>
 
@@ -26,10 +27,9 @@ class WifiNetworkManager {
   static std::string getConfiguredDns1();
   static std::string getConfiguredDns2();
 
-  static IPAddress localIP();
-  static IPAddress gatewayIP();
-  static IPAddress subnetMask();
-  static IPAddress dnsIP(uint8_t index);
+  static bool getStaIpInfo(esp_netif_ip_info_t* outInfo);
+  static bool getDnsIp(uint8_t index, esp_ip4_addr_t* outIp);
+  static std::string ipToString(const esp_ip4_addr_t& ip);
 
   static int32_t RSSI();
   static std::string SSID();
@@ -54,11 +54,11 @@ class WifiNetworkManager {
 
   static DNSServer dnsServer_;
   static ConfigManager* configManager_;
-  static IPAddress ipAddress_;
-  static IPAddress gateway_;
-  static IPAddress netmask_;
-  static IPAddress dns1_;
-  static IPAddress dns2_;
+  static esp_ip4_addr_t ipAddress_;
+  static esp_ip4_addr_t gateway_;
+  static esp_ip4_addr_t netmask_;
+  static esp_ip4_addr_t dns1_;
+  static esp_ip4_addr_t dns2_;
   static uint32_t lastConnect_;
   static int reconnectCount_;
   static bool staConnected_;
