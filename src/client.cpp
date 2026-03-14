@@ -3,6 +3,9 @@
 #include <cerrno>
 #include <cstring>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #include <lwip/sockets.h>
 #include <lwip/tcp.h>
 
@@ -15,6 +18,23 @@
 enum requests { CMD_INIT = 0, CMD_SEND, CMD_START, CMD_INFO };
 
 namespace {
+
+TaskHandle_t clientAcceptTaskHandle = nullptr;
+int acceptServerFd = -1;
+int* acceptClients = nullptr;
+int acceptEnhancedServerFd = -1;
+int* acceptEnhancedClients = nullptr;
+int acceptReadOnlyServerFd = -1;
+int* acceptReadOnlyClients = nullptr;
+
+void clientAcceptTask(void* arg) {
+  for (;;) {
+    handleNewClient(acceptServerFd, acceptClients);
+    handleNewClient(acceptEnhancedServerFd, acceptEnhancedClients);
+    handleNewClient(acceptReadOnlyServerFd, acceptReadOnlyClients);
+    vTaskDelay(1);
+  }
+}
 
 bool isSocketConnected(int clientFd) {
   if (clientFd < 0) return false;
@@ -72,6 +92,29 @@ int socketAvailableForWrite(int clientFd) {
 }
 
 }  // namespace
+
+bool startClientAcceptTask(int serverFd, int clients[], int enhancedServerFd,
+                           int enhancedClients[], int readOnlyServerFd,
+                           int readOnlyClients[]) {
+  if (clientAcceptTaskHandle != nullptr) return true;
+
+  acceptServerFd = serverFd;
+  acceptClients = clients;
+  acceptEnhancedServerFd = enhancedServerFd;
+  acceptEnhancedClients = enhancedClients;
+  acceptReadOnlyServerFd = readOnlyServerFd;
+  acceptReadOnlyClients = readOnlyClients;
+
+  return xTaskCreate(clientAcceptTask, "client_accept", 4096, nullptr, 1,
+                     &clientAcceptTaskHandle) == pdPASS;
+}
+
+void stopClientAcceptTask() {
+  if (clientAcceptTaskHandle != nullptr) {
+    vTaskDelete(clientAcceptTaskHandle);
+    clientAcceptTaskHandle = nullptr;
+  }
+}
 
 bool handleNewClient(int serverFd, int clients[]) {
   sockaddr_in addr{};

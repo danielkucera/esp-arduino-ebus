@@ -59,6 +59,22 @@ void Mqtt::change() {
   start();
 }
 
+void Mqtt::startTask() {
+  if (taskHandle != nullptr) return;
+  xTaskCreate(&Mqtt::taskFunc, "mqtt_loop", 6144, this, 1, &taskHandle);
+}
+
+void Mqtt::stopTask() {
+  if (taskHandle != nullptr) {
+    vTaskDelete(taskHandle);
+    taskHandle = nullptr;
+  }
+}
+
+void Mqtt::setStatusProvider(const std::function<std::string()>& provider) {
+  statusProvider = provider;
+}
+
 void Mqtt::setup(const char* id) {
   uniqueId = id;
   clientId = "ebus-" + uniqueId;
@@ -148,6 +164,26 @@ void Mqtt::publishValue(const std::string& name, const std::string& valueJson) {
 void Mqtt::doLoop() {
   checkIncomingQueue();
   checkOutgoingQueue();
+}
+
+void Mqtt::taskFunc(void* arg) {
+  Mqtt* self = static_cast<Mqtt*>(arg);
+  for (;;) {
+    if (self->enabled && self->connected) {
+      uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
+      if (currentMillis > self->lastStatusPublish + self->statusPublishIntervalMs) {
+        self->lastStatusPublish = currentMillis;
+        if (self->statusProvider) {
+          const std::string payload = self->statusProvider();
+          self->publish("state", 0, false, payload.c_str());
+        }
+        schedule.publishCounter();
+        schedule.publishTiming();
+      }
+      self->doLoop();
+    }
+    vTaskDelay(1);
+  }
 }
 
 void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,

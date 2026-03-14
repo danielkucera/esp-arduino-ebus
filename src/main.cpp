@@ -174,15 +174,6 @@ int wifiClientsReadOnly[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 
 // status
 uint32_t reset_code = 0;
-uint32_t uptime = 0;
-uint32_t free_heap = 0;
-uint32_t loopDuration = 0;
-uint32_t maxLoopDuration;
-
-#if defined(EBUS_INTERNAL)
-// mqtt
-uint32_t lastMqttUpdate = 0;
-#endif
 
 enum class AdapterHwVersionEfuse : uint8_t {
   PRE_7_0 = 0x00,
@@ -291,23 +282,8 @@ void check_reset() {
   }
 }
 
-void loop_duration() {
-  static uint32_t lastTime = 0;
-  uint32_t now = (uint32_t)(esp_timer_get_time());
-  uint32_t delta = now - lastTime;
-  float alpha = 0.3;
-
-  lastTime = now;
-
-  loopDuration = ((1 - alpha) * loopDuration + (alpha * delta));
-
-  if (delta > maxLoopDuration) maxLoopDuration = delta;
-}
-
 #if !defined(EBUS_INTERNAL)
 void data_process() {
-  loop_duration();
-
   // check clients for data
   for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
     handleClient(&wifiClients[i]);
@@ -376,11 +352,13 @@ void setTimezone(const char* timezone) {
 }
 
 const std::string getMqttStatusJson() {
+  const uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
+  const uint32_t free_heap = esp_get_free_heap_size();
+
   cJSON* doc = cJSON_CreateObject();
   cJSON_AddNumberToObject(doc, "reset_code", reset_code);
   cJSON_AddNumberToObject(doc, "uptime", uptime);
   cJSON_AddNumberToObject(doc, "free_heap", free_heap);
-  cJSON_AddNumberToObject(doc, "loop_duration", loopDuration);
   cJSON_AddNumberToObject(doc, "rssi", WifiNetworkManager::RSSI());
 
   char* printed = cJSON_PrintUnformatted(doc);
@@ -435,13 +413,14 @@ void saveParamsCallback() {
 }
 
 const std::string getStatusJson() {
+  const uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
+  const uint32_t free_heap = esp_get_free_heap_size();
+
   cJSON* doc = cJSON_CreateObject();
   cJSON* status = cJSON_AddObjectToObject(doc, "Status");
   cJSON_AddNumberToObject(status, "Reset_Code", reset_code);
   cJSON_AddNumberToObject(status, "Uptime", uptime);
   cJSON_AddNumberToObject(status, "Free_Heap", free_heap);
-  cJSON_AddNumberToObject(status, "Loop_Duration", loopDuration);
-  cJSON_AddNumberToObject(status, "Loop_Duration_Max", maxLoopDuration);
 
 #if !defined(EBUS_INTERNAL)
   // Arbitration
@@ -614,7 +593,7 @@ bool isCaptivePortalActive() {
   return WifiNetworkManager::isCaptivePortalActive();
 }
 
-void setup() {
+extern "C" void app_main(void) {
   DebugSer.begin(115200);
   DebugSer.setDebugOutput(true);
 
@@ -644,10 +623,12 @@ void setup() {
   SetupHttpFallbackHandlers();
   upgradeManager.setPreUpgradeHook([]() {
 #if defined(EBUS_INTERNAL)
+    mqtt.stopTask();
     ebusController.stop();
     schedule.stop();
     clientManager.stop();
 #else
+    stopClientAcceptTask();
     if (Task1 != nullptr) {
       vTaskDelete(Task1);
       Task1 = nullptr;
@@ -656,10 +637,12 @@ void setup() {
   });
   espOtaManager.setPreUpgradeHook([]() {
 #if defined(EBUS_INTERNAL)
+    mqtt.stopTask();
     ebusController.stop();
     schedule.stop();
     clientManager.stop();
 #else
+    stopClientAcceptTask();
     if (Task1 != nullptr) {
       vTaskDelete(Task1);
       Task1 = nullptr;
@@ -687,6 +670,7 @@ void setup() {
   mqtt.setServer(mqttServerValue.c_str(), 1883);
   mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
   mqtt.start();
+  mqtt.setStatusProvider([]() { return getMqttStatusJson(); });
 
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
@@ -751,47 +735,12 @@ void setup() {
   }
   store.loadCommands();  // install saved commands
   mqttha.publishComponents();
+  mqtt.startTask();
 #else
   xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
+  startClientAcceptTask(wifiServerFd, wifiClients, wifiServerEnhancedFd,
+                        wifiClientsEnhanced, wifiServerReadOnlyFd,
+                        wifiClientsReadOnly);
 #endif
-}
-
-void loop() {
-#if defined(EBUS_INTERNAL)
-  if (mqtt.isEnabled()) {
-    if (mqtt.isConnected()) {
-      uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
-      if (currentMillis > lastMqttUpdate + 10 * 1000) {
-        lastMqttUpdate = currentMillis;
-
-        mqtt.publish("state", 0, false, getMqttStatusJson().c_str());
-
-        schedule.publishCounter();
-        schedule.publishTiming();
-      }
-      mqtt.doLoop();
-    }
-  }
-
-#endif
-
-  uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
-  free_heap = esp_get_free_heap_size();
-
-  // Check if there are any new clients on the eBUS servers
-#if defined(EBUS_INTERNAL)
-  loop_duration();
-#else
-  handleNewClient(wifiServerFd, wifiClients);
-  handleNewClient(wifiServerEnhancedFd, wifiClientsEnhanced);
-  handleNewClient(wifiServerReadOnlyFd, wifiClientsReadOnly);
-#endif
-}
-
-extern "C" void app_main(void) {
-  setup();
-  while (true) {
-    loop();
-    vTaskDelay(1);
-  }
+  vTaskDelete(nullptr);
 }
