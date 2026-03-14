@@ -1,15 +1,42 @@
 #if defined(EBUS_INTERNAL)
 #include "Store.hpp"
 
+#include <esp_littlefs.h>
 #include <esp_timer.h>
-#include <nvs.h>
 
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <sys/stat.h>
 
 Store store;
 
 namespace {
+constexpr const char* kLittlefsBasePath = "/littlefs";
+constexpr const char* kLittlefsPartitionLabel = "littlefs";
+constexpr const char* kCommandsFilePath = "/littlefs/commands.json";
+
+bool ensureLittlefsMounted() {
+  static bool mounted = false;
+  if (mounted) return true;
+
+  esp_vfs_littlefs_conf_t conf = {
+      .base_path = kLittlefsBasePath,
+      .partition_label = kLittlefsPartitionLabel,
+      .format_if_mount_failed = true,
+      .dont_mount = false,
+  };
+
+  esp_err_t err = esp_vfs_littlefs_register(&conf);
+  if (err == ESP_OK || err == ESP_ERR_INVALID_STATE) {
+    mounted = true;
+    return true;
+  }
+
+  return false;
+}
+
 std::string printJson(cJSON* node, const char* fallback) {
   char* printed = cJSON_PrintUnformatted(node);
   std::string out = printed != nullptr ? printed : fallback;
@@ -36,6 +63,8 @@ std::string jsonValueToString(cJSON* value) {
   return printJson(value, "null");
 }
 }  // namespace
+
+bool Store::initFileSystem() { return ensureLittlefsMounted(); }
 
 void Store::setDataUpdatedCallback(DataUpdatedCallback callback) {
   dataUpdatedCallback = std::move(callback);
@@ -68,68 +97,78 @@ Command* Store::findCommand(const std::string& key) {
 }
 
 int64_t Store::loadCommands() {
-  nvs_handle_t handle = 0;
-  if (nvs_open("commands", NVS_READONLY, &handle) != ESP_OK) return -1;
+  if (!ensureLittlefsMounted()) return -1;
 
-  size_t size = 0;
-  esp_err_t err = nvs_get_blob(handle, "ebus", nullptr, &size);
-  if (err == ESP_ERR_NVS_NOT_FOUND || size <= 2) {
-    nvs_close(handle);
-    return 0;
-  }
-  if (err != ESP_OK || size == 0) {
-    nvs_close(handle);
+  FILE* file = std::fopen(kCommandsFilePath, "rb");
+  if (file == nullptr) {
+    if (errno == ENOENT) return 0;
     return -1;
   }
 
-  std::vector<char> buffer(size);
-  err = nvs_get_blob(handle, "ebus", buffer.data(), &size);
-  nvs_close(handle);
-  if (err != ESP_OK || size == 0) return -1;
+  if (std::fseek(file, 0, SEEK_END) != 0) {
+    std::fclose(file);
+    return -1;
+  }
 
-  std::string payload(buffer.begin(), buffer.end());
+  long size = std::ftell(file);
+  if (size <= 2) {
+    std::fclose(file);
+    return 0;
+  }
+
+  if (size <= 0 || std::fseek(file, 0, SEEK_SET) != 0) {
+    std::fclose(file);
+    return -1;
+  }
+
+  std::string payload;
+  payload.resize(static_cast<size_t>(size));
+  size_t bytesRead = std::fread(payload.data(), 1, payload.size(), file);
+  std::fclose(file);
+  if (bytesRead != payload.size()) return -1;
+
   deserializeCommands(payload.c_str());
-  return static_cast<int64_t>(size);
+  return static_cast<int64_t>(payload.size());
 }
 
 int64_t Store::saveCommands() const {
-  nvs_handle_t handle = 0;
-  if (nvs_open("commands", NVS_READWRITE, &handle) != ESP_OK) return -1;
+  if (!ensureLittlefsMounted()) return -1;
 
   std::string payload = serializeCommands();
   size_t size = payload.size();
   if (size <= 2) {  // 2 = empty json array "[]"
-    nvs_close(handle);
     return 0;
   }
 
-  esp_err_t err = nvs_set_blob(handle, "ebus", payload.data(), size);
-  if (err == ESP_OK) err = nvs_commit(handle);
-  nvs_close(handle);
-  if (err != ESP_OK) return -1;
+  FILE* file = std::fopen(kCommandsFilePath, "wb");
+  if (file == nullptr) return -1;
+
+  size_t bytesWritten = std::fwrite(payload.data(), 1, size, file);
+  std::fclose(file);
+  if (bytesWritten != size) return -1;
+
   return static_cast<int64_t>(size);
 }
 
 int64_t Store::wipeCommands() {
-  nvs_handle_t handle = 0;
-  if (nvs_open("commands", NVS_READWRITE, &handle) != ESP_OK) return -1;
+  if (!ensureLittlefsMounted()) return -1;
 
-  size_t size = 0;
-  esp_err_t err = nvs_get_blob(handle, "ebus", nullptr, &size);
-  if (err == ESP_ERR_NVS_NOT_FOUND || size == 0) {
-    nvs_close(handle);
-    return 0;
-  }
-  if (err != ESP_OK) {
-    nvs_close(handle);
+  struct stat fileStat {};
+  if (stat(kCommandsFilePath, &fileStat) != 0) {
+    if (errno == ENOENT) return 0;
     return -1;
   }
 
-  err = nvs_erase_key(handle, "ebus");
-  if (err == ESP_OK) err = nvs_commit(handle);
-  nvs_close(handle);
-  if (err != ESP_OK) return -1;
-  return static_cast<int64_t>(size);
+  if (std::remove(kCommandsFilePath) != 0) {
+    if (errno == ENOENT) return 0;
+    return -1;
+  }
+
+  if (fileStat.st_size <= 0) {
+    return 0;
+  }
+
+  return static_cast<int64_t>(fileStat.st_size);
 }
 
 const std::string Store::getCommandsJson() const {

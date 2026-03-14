@@ -37,14 +37,14 @@ async function fetchJson(path, onData, fetchingMsg = 'Fetching...') {
 }
 
 /**
- * Performs a simple GET or POST request to an API endpoint and updates the status message.
+ * Performs a simple POST request to an API endpoint and updates the status message.
  * @param {string} path - API endpoint.
  * @param {string} [processingMsg='Processing...'] - Status message while processing.
  */
 async function postSimple(path, processingMsg = 'Processing...') {
     setStatus(processingMsg);
     try {
-        const res = await fetch(path);
+        const res = await fetch(path, { method: 'POST' });
         const text = await res.text();
         setStatus(text || (res.ok ? 'OK' : 'Error'));
     } catch (err) {

@@ -936,6 +936,9 @@ void setup() {
   store.setDataUpdatedCallback(Mqtt::publishValue);
   store.setDataUpdatedLogCallback(
       [](const std::string& message) { logger.debug(message); });
+  if (!store.initFileSystem()) {
+    logger.error("LittleFS initialization failed");
+  }
   store.loadCommands();  // install saved commands
   mqttha.publishComponents();
 #else
