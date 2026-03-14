@@ -116,55 +116,6 @@ bool createListenSocket(int& listenFd, uint16_t port) {
   return true;
 }
 
-void closeSocketFd(int& socketFd) {
-  if (socketFd >= 0) {
-    shutdown(socketFd, SHUT_RDWR);
-    close(socketFd);
-    socketFd = -1;
-  }
-}
-
-int acceptClient(int listenFd) {
-  sockaddr_in addr{};
-  socklen_t addrLen = sizeof(addr);
-  const int clientFd =
-      accept(listenFd, reinterpret_cast<sockaddr*>(&addr), &addrLen);
-  if (clientFd < 0) {
-    if (errno == EWOULDBLOCK || errno == EAGAIN) return -1;
-    return -1;
-  }
-
-  int noDelay = 1;
-  setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &noDelay, sizeof(noDelay));
-  return clientFd;
-}
-
-int socketAvailable(int socketFd) {
-  if (socketFd < 0) return 0;
-  int pending = 0;
-  if (lwip_ioctl(socketFd, FIONREAD, &pending) == 0) {
-    return pending;
-  }
-  return 0;
-}
-
-bool socketConnected(int socketFd) {
-  if (socketFd < 0) return false;
-  char buffer = 0;
-  const int result = recv(socketFd, &buffer, 1, MSG_PEEK | MSG_DONTWAIT);
-  if (result > 0) return true;
-  if (result == 0) return false;
-  return errno == EWOULDBLOCK || errno == EAGAIN;
-}
-
-size_t socketWrite(int socketFd, const char* message) {
-  if (socketFd < 0 || message == nullptr) return 0;
-  const size_t size = strlen(message);
-  const int sent = send(socketFd, message, size, 0);
-  if (sent < 0) return 0;
-  return static_cast<size_t>(sent);
-}
-
 constexpr ledc_channel_t kPwmChannel = LEDC_CHANNEL_0;
 constexpr ledc_timer_t kPwmTimer = LEDC_TIMER_0;
 constexpr ledc_mode_t kPwmSpeedMode = LEDC_LOW_SPEED_MODE;
@@ -222,8 +173,6 @@ int wifiClientsEnhanced[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 int wifiServerReadOnlyFd = -1;
 int wifiClientsReadOnly[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 #endif
-
-int statusServerFd = -1;
 
 volatile uint32_t last_comms = 0;
 
@@ -516,125 +465,6 @@ void saveParamsCallback() {
 #endif
 }
 
-char* status_string() {
-  const size_t bufferSize = 1024;
-  static char status[bufferSize];
-
-  size_t pos = 0;
-
-#if !defined(EBUS_INTERNAL)
-  pos += snprintf(status + pos, bufferSize - pos, "async_mode: %s\n",
-                  USE_ASYNCHRONOUS ? "true" : "false");
-  pos += snprintf(status + pos, bufferSize - pos, "software_serial_mode: %s\n",
-                  USE_SOFTWARE_SERIAL ? "true" : "false");
-#endif
-  pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
-  esp_chip_info_t chip_info{};
-  esp_chip_info(&chip_info);
-  uint32_t flash_size = 0;
-  if (esp_flash_default_chip != nullptr) {
-    esp_flash_get_size(esp_flash_default_chip, &flash_size);
-  }
-  pos += snprintf(status + pos, bufferSize - pos,
-              "chip_revision: %" PRIu32 "\n", static_cast<uint32_t>(chip_info.revision));
-  pos += snprintf(status + pos, bufferSize - pos,
-              "flash_chip_size: %" PRIu32 " B\n", static_cast<uint32_t>(flash_size));
-  pos += snprintf(status + pos, bufferSize - pos,
-                  "clock_speed: %" PRIu32 " Mhz\n", static_cast<uint32_t>(esp_clk_cpu_freq()) / 1000000U);
-  pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %" PRIu32 " Hz\n",
-                  static_cast<uint32_t>(esp_clk_apb_freq()));
-  pos += snprintf(status + pos, bufferSize - pos, "uptime: %" PRIu32 " ms\n",
-                  static_cast<uint32_t>(esp_timer_get_time() / 1000ULL));
-  pos += snprintf(status + pos, bufferSize - pos,
-                  "last_connect_time: %" PRIu32 " ms\n",
-                  WifiNetworkManager::getLastConnect());
-  pos += snprintf(status + pos, bufferSize - pos, "reconnect_count: %d \n",
-                  WifiNetworkManager::getReconnectCount());
-  pos += snprintf(status + pos, bufferSize - pos, "rssi: %" PRId32 " dBm\n",
-                  WifiNetworkManager::RSSI());
-  pos += snprintf(status + pos, bufferSize - pos, "bssid: %s\n",
-                  WifiNetworkManager::BSSIDstr().c_str());
-  pos += snprintf(status + pos, bufferSize - pos, "free_heap: %" PRIu32 " B\n",
-                  free_heap);
-  pos += snprintf(status + pos, bufferSize - pos, "reset_code: %" PRIu32 "\n",
-                  reset_code);
-  pos += snprintf(status + pos, bufferSize - pos,
-                  "loop_duration: %" PRIu32 " us\r\n", loopDuration);
-  pos += snprintf(status + pos, bufferSize - pos,
-                  "max_loop_duration: %" PRIu32 " us\r\n", maxLoopDuration);
-  pos +=
-      snprintf(status + pos, bufferSize - pos, "version: %s\r\n", AUTO_VERSION);
-  pos += snprintf(status + pos, bufferSize - pos, "adapter_hw_version: %s\r\n",
-                  adapterHwVersion.c_str());
-  pos += snprintf(status + pos, bufferSize - pos,
-                  "adapter_hw_version_raw: 0x%02X\r\n", adapterHwVersionRaw);
-
-#if defined(EBUS_INTERNAL)
-  std::string sntpTimezoneValue =
-      configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
-  pos += snprintf(status + pos, bufferSize - pos, "sntpEnabled: %s\r\n",
-                  configManager.readBool("sntpEnabled") ? "true" : "false");
-  const char* activeSntpServer = esp_sntp_getservername(0);
-  pos += snprintf(status + pos, bufferSize - pos, "sntpServer: %s\r\n",
-                  activeSntpServer != nullptr ? activeSntpServer : "");
-  pos += snprintf(status + pos, bufferSize - pos, "sntpTimezone: %s\r\n",
-                  sntpTimezoneValue.c_str());
-#endif
-
-  pos += snprintf(status + pos, bufferSize - pos, "pwm_value: %" PRIu32 "\r\n",
-                  get_pwm());
-
-#if defined(EBUS_INTERNAL)
-  std::string ebusAddress = configManager.readString("ebusAddress", "ff");
-  pos += snprintf(status + pos, bufferSize - pos, "ebus_address: %s\r\n",
-                  ebusAddress.c_str());
-  pos += snprintf(
-      status + pos, bufferSize - pos, "busisr_window: %" PRId32 " us\r\n",
-      static_cast<int32_t>(configManager.readInt("busisrWindow", 4300)));
-  pos += snprintf(
-      status + pos, bufferSize - pos, "busisr_offset: %" PRId32 " us\r\n",
-      static_cast<int32_t>(configManager.readInt("busisrOffset", 80)));
-
-  pos +=
-      snprintf(status + pos, bufferSize - pos, "inquiry_of_existence: %s\r\n",
-               configManager.readBool("inquiryExistPrm") ? "true" : "false");
-  pos += snprintf(status + pos, bufferSize - pos, "scan_on_startup: %s\r\n",
-                  configManager.readBool("scanOnStartPrm") ? "true" : "false");
-  pos += snprintf(
-      status + pos, bufferSize - pos,
-      "first_command_after_start: %" PRId32 "\r\n",
-      static_cast<int32_t>(configManager.readInt("firstCmdAfterSt", 10)));
-  pos += snprintf(status + pos, bufferSize - pos, "active_commands: %zu\r\n",
-                  store.getActiveCommands());
-  pos += snprintf(status + pos, bufferSize - pos, "passive_commands: %zu\r\n",
-                  store.getPassiveCommands());
-
-  pos += snprintf(status + pos, bufferSize - pos, "mqtt_enabled: %s\r\n",
-                  mqtt.isEnabled() ? "true" : "false");
-  pos += snprintf(status + pos, bufferSize - pos, "mqtt_connected: %s\r\n",
-                  mqtt.isConnected() ? "true" : "false");
-
-  std::string mqttServerValue = configManager.readString("mqttServer");
-  std::string mqttUserValue = configManager.readString("mqttUser");
-  pos += snprintf(status + pos, bufferSize - pos, "mqtt_server: %s\r\n",
-                  mqttServerValue.c_str());
-  pos += snprintf(status + pos, bufferSize - pos, "mqtt_user: %s\r\n",
-                  mqttUserValue.c_str());
-  pos +=
-      snprintf(status + pos, bufferSize - pos, "mqtt_publish_counter: %s\r\n",
-               schedule.getPublishCounter() ? "true" : "false");
-  pos += snprintf(status + pos, bufferSize - pos, "mqtt_publish_timing: %s\r\n",
-                  schedule.getPublishTiming() ? "true" : "false");
-
-  pos += snprintf(status + pos, bufferSize - pos, "ha_enabled: %s\r\n",
-                  mqttha.isEnabled() ? "true" : "false");
-#endif
-
-  if (pos >= bufferSize) status[bufferSize - 1] = '\0';
-
-  return status;
-}
-
 const std::string getStatusJson() {
   cJSON* doc = cJSON_CreateObject();
   cJSON* status = cJSON_AddObjectToObject(doc, "Status");
@@ -800,20 +630,6 @@ bool isCaptivePortalActive() {
   return WifiNetworkManager::isCaptivePortalActive();
 }
 
-bool handleStatusServerRequests() {
-  if (statusServerFd < 0) return false;
-
-  const int clientFd = acceptClient(statusServerFd);
-  if (clientFd < 0) return false;
-
-  if (socketConnected(clientFd) && socketAvailable(clientFd) >= AVAILABLE_THRESHOLD) {
-    socketWrite(clientFd, status_string());
-  }
-  int closingFd = clientFd;
-  closeSocketFd(closingFd);
-  return true;
-}
-
 void setup() {
   DebugSer.begin(115200);
   DebugSer.setDebugOutput(true);
@@ -909,8 +725,6 @@ void setup() {
   createListenSocket(wifiServerReadOnlyFd, 3334);
 #endif
 
-  createListenSocket(statusServerFd, 5555);
-
   espOtaManager.begin();
   // wdt_start();
 
@@ -986,16 +800,6 @@ void loop() {
 
   if ((uint32_t)(esp_timer_get_time() / 1000ULL) > last_comms + 200 * 1000) {
     restart();
-  }
-
-  // Check if new client on the status server
-  if (handleStatusServerRequests()) {
-#if !defined(EBUS_INTERNAL)
-    // exclude handleStatusServerRequests from maxLoopDuration calculation
-    // as it skews the typical loop duration and set maxLoopDuration to 0
-    loop_duration();
-    maxLoopDuration = 0;
-#endif
   }
 
   // Check if there are any new clients on the eBUS servers
