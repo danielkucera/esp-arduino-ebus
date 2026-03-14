@@ -37,8 +37,6 @@
 #include "client.hpp"
 #endif
 
-#include <esp_task_wdt.h>
-
 #include "ConfigManager.hpp"
 #include "EspOtaManager.hpp"
 #include "UpgradeManager.hpp"
@@ -174,8 +172,6 @@ int wifiServerReadOnlyFd = -1;
 int wifiClientsReadOnly[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 #endif
 
-volatile uint32_t last_comms = 0;
-
 // status
 uint32_t reset_code = 0;
 uint32_t uptime = 0;
@@ -203,21 +199,6 @@ static const esp_efuse_desc_t* ADAPTER_HW_VERSION_EFUSE_FIELD[] = {
     &ADAPTER_HW_VERSION_EFUSE_DESC, nullptr};
 uint8_t adapterHwVersionRaw = 0xEE;
 std::string adapterHwVersion = "unread";
-
-void wdt_start() {
-#if ESP_IDF_VERSION_MAJOR >= 5
-  esp_task_wdt_config_t config{};
-  config.timeout_ms = 60000;
-  config.idle_core_mask = 0;
-  config.trigger_panic = true;
-  esp_task_wdt_init(&config);
-#else
-  esp_task_wdt_init(60, true);
-#endif
-  esp_task_wdt_add(NULL);
-}
-
-void wdt_feed() { esp_task_wdt_reset(); }
 
 inline void disableTX() {
 #if defined(TX_DISABLE_PIN)
@@ -310,10 +291,6 @@ void check_reset() {
   }
 }
 
-void updateLastComms() {
-  last_comms = (uint32_t)(esp_timer_get_time() / 1000ULL);
-}
-
 void loop_duration() {
   static uint32_t lastTime = 0;
   uint32_t now = (uint32_t)(esp_timer_get_time());
@@ -343,22 +320,14 @@ void data_process() {
     for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
       if (d._enhanced) {
         if (d._clientFd == wifiClientsEnhanced[i]) {
-          if (pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d, true)) {
-            updateLastComms();
-          }
+          pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d, true);
         }
       } else {
-        if (pushClient(&wifiClients[i], d._d)) {
-          updateLastComms();
-        }
-        if (pushClient(&wifiClientsReadOnly[i], d._d)) {
-          updateLastComms();
-        }
+        pushClient(&wifiClients[i], d._d);
+        pushClient(&wifiClientsReadOnly[i], d._d);
         if (d._clientFd != wifiClientsEnhanced[i]) {
-          if (pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d,
-                                 d._logToClientFd == wifiClientsEnhanced[i])) {
-            updateLastComms();
-          }
+          pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d,
+                             d._logToClientFd == wifiClientsEnhanced[i]);
         }
       }
     }
@@ -741,9 +710,6 @@ void setup() {
 #endif
 
   espOtaManager.begin();
-  // wdt_start();
-
-  last_comms = (uint32_t)(esp_timer_get_time() / 1000ULL);
   enableTX();
 
 #if defined(EBUS_INTERNAL)
@@ -774,7 +740,6 @@ void setup() {
   schedule.start(ebusController.getBus(), ebusController.getRequest(),
                  ebusController.getHandler());
 
-  clientManager.setLastCommsCallback(updateLastComms);
   clientManager.start(ebusController.getBus(), ebusController.getBusHandler(),
                       ebusController.getRequest());
 
@@ -812,10 +777,6 @@ void loop() {
 
   uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
   free_heap = esp_get_free_heap_size();
-
-  if ((uint32_t)(esp_timer_get_time() / 1000ULL) > last_comms + 200 * 1000) {
-    restart();
-  }
 
   // Check if there are any new clients on the eBUS servers
 #if defined(EBUS_INTERNAL)

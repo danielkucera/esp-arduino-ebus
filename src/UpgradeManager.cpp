@@ -75,7 +75,6 @@ void UpgradeManager::resetUploadState() {
 }
 
 esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
-  wdt_feed();
   resetUploadState();
   prepareForUpgrade();
 
@@ -129,7 +128,6 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
 
     uploadBytesReceived_ += len;
     esp_err_t writeResult = esp_ota_write(uploadHandle_, data, len);
-    wdt_feed();
     if (writeResult != ESP_OK) {
       writeError = 2;
       return false;
@@ -175,7 +173,6 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   }
 
   esp_err_t endResult = esp_ota_end(uploadHandle_);
-  wdt_feed();
   if (endResult != ESP_OK) {
     HttpUtils::sendResponse(
         req, "500 Internal Server Error", "text/plain",
@@ -212,7 +209,6 @@ esp_err_t UpgradeManager::handleStatus(httpd_req_t* req) {
 
 bool UpgradeManager::performHttpUpgrade(const std::string& url,
                                         std::string& error) {
-  wdt_feed();
   const esp_partition_t* partition = esp_ota_get_next_update_partition(nullptr);
   if (partition == nullptr) {
     error = "No OTA partition available";
@@ -277,7 +273,6 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
   while (true) {
     int bytesRead = esp_http_client_read(client, reinterpret_cast<char*>(buffer),
                                          sizeof(buffer));
-    wdt_feed();
     if (bytesRead < 0) {
       error = "esp_http_client_read failed";
       ok = false;
@@ -299,7 +294,6 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
     }
 
     esp_err_t writeResult = esp_ota_write(handle, buffer, bytesRead);
-    wdt_feed();
     if (writeResult != ESP_OK) {
       error = std::string("esp_ota_write failed: ") + esp_err_to_name(writeResult);
       ok = false;
@@ -352,7 +346,6 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
   }
 
   esp_err_t endResult = esp_ota_end(handle);
-  wdt_feed();
   if (endResult != ESP_OK) {
     error = std::string("esp_ota_end failed: ") + esp_err_to_name(endResult);
     return false;

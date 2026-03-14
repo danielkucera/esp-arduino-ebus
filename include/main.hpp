@@ -19,6 +19,5 @@ int DEBUG_LOG_IMPL(const char* format, ...);
 // #define DEBUG_LOG DEBUG_LOG_IMPL
 
 void restart();
-void wdt_feed();
 const std::string getStatusJson();
 bool isCaptivePortalActive();
