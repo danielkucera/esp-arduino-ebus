@@ -339,55 +339,55 @@ const std::string Schedule::getTimingJson() {
   cJSON* callbackTelegram = cJSON_AddObjectToObject(callback, "Telegram");
   cJSON* callbackError = cJSON_AddObjectToObject(callback, "Error");
 
-  addTiming(busDelay, busTiming.busDelayLast, busTiming.busDelayMean,
-            busTiming.busDelayStdDev, busTiming.busDelayCount);
+  addTiming(busDelay, busTiming.busDelay_Last, busTiming.busDelay_Mean,
+            busTiming.busDelay_StdDev, busTiming.busDelay_Count);
 
-  addTiming(busWindow, busTiming.busWindowLast, busTiming.busWindowMean,
-            busTiming.busWindowStdDev, busTiming.busWindowCount);
+  addTiming(busWindow, busTiming.busWindow_Last, busTiming.busWindow_Mean,
+            busTiming.busWindow_StdDev, busTiming.busWindow_Count);
 
-  addTiming(write, handlerTiming.writeLast, handlerTiming.writeMean,
-            handlerTiming.writeStdDev, handlerTiming.writeCount);
+  addTiming(write, handlerTiming.write_Last, handlerTiming.write_Mean,
+            handlerTiming.write_StdDev, handlerTiming.write_Count);
 
-  addTiming(activeFirst, handlerTiming.activeFirstLast,
-            handlerTiming.activeFirstMean, handlerTiming.activeFirstStdDev,
-            handlerTiming.activeFirstCount);
+  addTiming(activeFirst, handlerTiming.activeFirst_Last,
+            handlerTiming.activeFirst_Mean, handlerTiming.activeFirst_StdDev,
+            handlerTiming.activeFirst_Count);
 
-  addTiming(activeData, handlerTiming.activeDataLast,
-            handlerTiming.activeDataMean, handlerTiming.activeDataStdDev,
-            handlerTiming.activeDataCount);
+  addTiming(activeData, handlerTiming.activeData_Last,
+            handlerTiming.activeData_Mean, handlerTiming.activeData_StdDev,
+            handlerTiming.activeData_Count);
 
-  addTiming(passiveFirst, handlerTiming.passiveFirstLast,
-            handlerTiming.passiveFirstMean, handlerTiming.passiveFirstStdDev,
-            handlerTiming.passiveFirstCount);
+  addTiming(passiveFirst, handlerTiming.passiveFirst_Last,
+            handlerTiming.passiveFirst_Mean, handlerTiming.passiveFirst_StdDev,
+            handlerTiming.passiveFirst_Count);
 
-  addTiming(passiveData, handlerTiming.passiveDataLast,
-            handlerTiming.passiveDataMean, handlerTiming.passiveDataStdDev,
-            handlerTiming.passiveDataCount);
+  addTiming(passiveData, handlerTiming.passiveData_Last,
+            handlerTiming.passiveData_Mean, handlerTiming.passiveData_StdDev,
+            handlerTiming.passiveData_Count);
 
-  addTiming(sync, handlerTiming.syncLast, handlerTiming.syncMean,
-            handlerTiming.syncStdDev, handlerTiming.syncCount);
+  addTiming(sync, handlerTiming.sync_Last, handlerTiming.sync_Mean,
+            handlerTiming.sync_StdDev, handlerTiming.sync_Count);
 
-  addTiming(callbackWon, handlerTiming.callbackWonLast,
-            handlerTiming.callbackWonMean, handlerTiming.callbackWonStdDev,
-            handlerTiming.callbackWonCount);
+  addTiming(callbackWon, handlerTiming.callbackWon_Last,
+            handlerTiming.callbackWon_Mean, handlerTiming.callbackWon_StdDev,
+            handlerTiming.callbackWon_Count);
 
-  addTiming(callbackLost, handlerTiming.callbackLostLast,
-            handlerTiming.callbackLostMean, handlerTiming.callbackLostStdDev,
-            handlerTiming.callbackLostCount);
+  addTiming(callbackLost, handlerTiming.callbackLost_Last,
+            handlerTiming.callbackLost_Mean, handlerTiming.callbackLost_StdDev,
+            handlerTiming.callbackLost_Count);
 
-  addTiming(callbackReactive, handlerTiming.callbackReactiveLast,
-            handlerTiming.callbackReactiveMean,
-            handlerTiming.callbackReactiveStdDev,
-            handlerTiming.callbackReactiveCount);
+  addTiming(callbackReactive, handlerTiming.callbackReactive_Last,
+            handlerTiming.callbackReactive_Mean,
+            handlerTiming.callbackReactive_StdDev,
+            handlerTiming.callbackReactive_Count);
 
-  addTiming(callbackTelegram, handlerTiming.callbackTelegramLast,
-            handlerTiming.callbackTelegramMean,
-            handlerTiming.callbackTelegramStdDev,
-            handlerTiming.callbackTelegramCount);
+  addTiming(callbackTelegram, handlerTiming.callbackTelegram_Last,
+            handlerTiming.callbackTelegram_Mean,
+            handlerTiming.callbackTelegram_StdDev,
+            handlerTiming.callbackTelegram_Count);
 
-  addTiming(callbackError, handlerTiming.callbackErrorLast,
-            handlerTiming.callbackErrorMean, handlerTiming.callbackErrorStdDev,
-            handlerTiming.callbackErrorCount);
+  addTiming(callbackError, handlerTiming.callbackError_Last,
+            handlerTiming.callbackError_Mean, handlerTiming.callbackError_StdDev,
+            handlerTiming.callbackError_Count);
 
   ebus::Handler::StateTiming stateTiming = ebusHandler->getStateTiming();
 
