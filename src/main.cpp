@@ -11,7 +11,6 @@
 #include <inttypes.h>
 
 #include "Logger.hpp"
-#include "WiFi.h"
 
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
@@ -48,7 +47,6 @@ TaskHandle_t Task1;
 ConfigManager configManager;
 UpgradeManager upgradeManager;
 EspOtaManager espOtaManager;
-WifiNetworkManager wifiNetworkManager;
 
 // minimum time of reset pin
 #define RESET_MS 1000
@@ -363,7 +361,7 @@ const std::string getMqttStatusJson() {
   cJSON_AddNumberToObject(doc, "uptime", uptime);
   cJSON_AddNumberToObject(doc, "free_heap", free_heap);
   cJSON_AddNumberToObject(doc, "loop_duration", loopDuration);
-  cJSON_AddNumberToObject(doc, "rssi", WiFi.RSSI());
+  cJSON_AddNumberToObject(doc, "rssi", WifiNetworkManager::RSSI());
 
   char* printed = cJSON_PrintUnformatted(doc);
   std::string payload = printed != nullptr ? printed : "{}";
@@ -448,13 +446,13 @@ char* status_string() {
                   static_cast<uint32_t>(esp_timer_get_time() / 1000ULL));
   pos += snprintf(status + pos, bufferSize - pos,
                   "last_connect_time: %" PRIu32 " ms\n",
-                  wifiNetworkManager.getLastConnect());
+                  WifiNetworkManager::getLastConnect());
   pos += snprintf(status + pos, bufferSize - pos, "reconnect_count: %d \n",
-                  wifiNetworkManager.getReconnectCount());
+                  WifiNetworkManager::getReconnectCount());
   pos += snprintf(status + pos, bufferSize - pos, "rssi: %" PRId32 " dBm\n",
-                  WiFi.RSSI());
+                  WifiNetworkManager::RSSI());
   pos += snprintf(status + pos, bufferSize - pos, "bssid: %s\n",
-                  WiFi.BSSIDstr().c_str());
+                  WifiNetworkManager::BSSIDstr().c_str());
   pos += snprintf(status + pos, bufferSize - pos, "free_heap: %" PRIu32 " B\n",
                   free_heap);
   pos += snprintf(status + pos, bufferSize - pos, "reset_code: %" PRIu32 "\n",
@@ -593,40 +591,40 @@ const std::string getStatusJson() {
   // WIFI
   cJSON* wifi = cJSON_AddObjectToObject(doc, "WIFI");
   cJSON_AddNumberToObject(wifi, "Last_Connect",
-                          wifiNetworkManager.getLastConnect());
+                          WifiNetworkManager::getLastConnect());
   cJSON_AddNumberToObject(wifi, "Reconnect_Count",
-                          wifiNetworkManager.getReconnectCount());
-  cJSON_AddNumberToObject(wifi, "RSSI", WiFi.RSSI());
+                          WifiNetworkManager::getReconnectCount());
+  cJSON_AddNumberToObject(wifi, "RSSI", WifiNetworkManager::RSSI());
 
-  if (wifiNetworkManager.isStaticIpEnabled()) {
+  if (WifiNetworkManager::isStaticIpEnabled()) {
     cJSON_AddBoolToObject(wifi, "Static_IP", true);
     cJSON_AddStringToObject(
         wifi, "IP_Address",
-        wifiNetworkManager.getConfiguredIpAddress().c_str());
+        WifiNetworkManager::getConfiguredIpAddress().c_str());
     cJSON_AddStringToObject(wifi, "Gateway",
-                            wifiNetworkManager.getConfiguredGateway().c_str());
+                            WifiNetworkManager::getConfiguredGateway().c_str());
     cJSON_AddStringToObject(wifi, "Netmask",
-                            wifiNetworkManager.getConfiguredNetmask().c_str());
+                            WifiNetworkManager::getConfiguredNetmask().c_str());
     cJSON_AddStringToObject(wifi, "DNS1",
-                            wifiNetworkManager.getConfiguredDns1().c_str());
+                            WifiNetworkManager::getConfiguredDns1().c_str());
     cJSON_AddStringToObject(wifi, "DNS2",
-                            wifiNetworkManager.getConfiguredDns2().c_str());
+                            WifiNetworkManager::getConfiguredDns2().c_str());
   } else {
     cJSON_AddBoolToObject(wifi, "Static_IP", false);
     cJSON_AddStringToObject(wifi, "IP_Address",
-                            WiFi.localIP().toString().c_str());
+                            WifiNetworkManager::localIP().toString().c_str());
     cJSON_AddStringToObject(wifi, "Gateway",
-                            WiFi.gatewayIP().toString().c_str());
+                            WifiNetworkManager::gatewayIP().toString().c_str());
     cJSON_AddStringToObject(wifi, "Netmask",
-                            WiFi.subnetMask().toString().c_str());
-    cJSON_AddStringToObject(wifi, "DNS1", WiFi.dnsIP(0).toString().c_str());
-    cJSON_AddStringToObject(wifi, "DNS2", WiFi.dnsIP(1).toString().c_str());
+                            WifiNetworkManager::subnetMask().toString().c_str());
+    cJSON_AddStringToObject(wifi, "DNS1", WifiNetworkManager::dnsIP(0).toString().c_str());
+    cJSON_AddStringToObject(wifi, "DNS2", WifiNetworkManager::dnsIP(1).toString().c_str());
   }
-  cJSON_AddStringToObject(wifi, "SSID", WiFi.SSID().c_str());
-  cJSON_AddStringToObject(wifi, "BSSID", WiFi.BSSIDstr().c_str());
-  cJSON_AddNumberToObject(wifi, "Channel", WiFi.channel());
-  cJSON_AddStringToObject(wifi, "Hostname", WiFi.getHostname());
-  cJSON_AddStringToObject(wifi, "MAC_Address", WiFi.macAddress().c_str());
+  cJSON_AddStringToObject(wifi, "SSID", WifiNetworkManager::SSID().c_str());
+  cJSON_AddStringToObject(wifi, "BSSID", WifiNetworkManager::BSSIDstr().c_str());
+  cJSON_AddNumberToObject(wifi, "Channel", WifiNetworkManager::channel());
+  cJSON_AddStringToObject(wifi, "Hostname", WifiNetworkManager::getHostname());
+  cJSON_AddStringToObject(wifi, "MAC_Address", WifiNetworkManager::macAddress().c_str());
 
 // SNTP
 #if defined(EBUS_INTERNAL)
@@ -695,7 +693,7 @@ const std::string getStatusJson() {
 }
 
 bool isCaptivePortalActive() {
-  return wifiNetworkManager.isCaptivePortalActive();
+  return WifiNetworkManager::isCaptivePortalActive();
 }
 
 bool handleStatusServerRequests() {
@@ -734,7 +732,7 @@ void setup() {
   initPwm();
 #endif
 
-  wifiNetworkManager.begin(&configManager);
+  WifiNetworkManager::begin(&configManager);
   SetupHttpHandlers();
   configManager.begin();
   upgradeManager.begin();

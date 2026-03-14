@@ -1,53 +1,71 @@
 #pragma once
 
 #include "DNSServer.h"
-#include "WiFi.h"
 
 #include <string>
+#include <esp_wifi.h>
+
 
 class ConfigManager;
 
 class WifiNetworkManager {
  public:
-  void begin(ConfigManager* configManager);
+  WifiNetworkManager() = delete;
 
-  uint32_t getLastConnect() const;
-  int getReconnectCount() const;
-  bool isStaConnected() const;
-  bool isCaptivePortalActive() const;
-  bool isStaticIpEnabled() const;
-  std::string getConfiguredIpAddress() const;
-  std::string getConfiguredGateway() const;
-  std::string getConfiguredNetmask() const;
-  std::string getConfiguredDns1() const;
-  std::string getConfiguredDns2() const;
+  static void begin(ConfigManager* configManager);
+
+  static uint32_t getLastConnect();
+  static int getReconnectCount();
+  static wifi_mode_t getMode();
+  static bool isStaConnected();
+  static bool isCaptivePortalActive();
+  static bool isStaticIpEnabled();
+  static std::string getConfiguredIpAddress();
+  static std::string getConfiguredGateway();
+  static std::string getConfiguredNetmask();
+  static std::string getConfiguredDns1();
+  static std::string getConfiguredDns2();
+
+  static IPAddress localIP();
+  static IPAddress gatewayIP();
+  static IPAddress subnetMask();
+  static IPAddress dnsIP(uint8_t index);
+
+  static int32_t RSSI();
+  static std::string SSID();
+  static std::string BSSIDstr();
+  static int32_t channel();
+  static const char* getHostname();
+  static std::string macAddress();
+
+  static void handle_event(void* arg, esp_event_base_t event_base,
+                                int32_t event_id, void* event_data);
 
  private:
   enum class StatusLedMode : uint8_t { SlowBlink = 0, SolidOn = 1 };
 
-  static WifiNetworkManager* instance_;
   static void dnsTaskEntry(void* arg);
-  void dnsTaskLoop();
+  static void dnsTaskLoop();
   static void statusLedTaskEntry(void* arg);
-  void statusLedTaskLoop();
-  void initStatusLed();
-  void setStatusLedMode(StatusLedMode mode);
-  static void onWiFiEventStatic(WiFiEvent_t event, WiFiEventInfo_t info);
-  void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info);
-  void configureStaticIpIfEnabled();
+  static void statusLedTaskLoop();
+  static void initStatusLed();
+  static void setStatusLedMode(StatusLedMode mode);
+  static void configureStaticIpIfEnabled();
 
-  DNSServer dnsServer_;
-  ConfigManager* configManager_ = nullptr;
-  IPAddress ipAddress_;
-  IPAddress gateway_;
-  IPAddress netmask_;
-  IPAddress dns1_;
-  IPAddress dns2_;
-  uint32_t lastConnect_ = 0;
-  int reconnectCount_ = 0;
-  bool staConnected_ = false;
-  bool staConfigured_ = false;
-  TaskHandle_t dnsTaskHandle_ = nullptr;
-  TaskHandle_t statusLedTaskHandle_ = nullptr;
-  volatile StatusLedMode statusLedMode_ = StatusLedMode::SlowBlink;
+  static DNSServer dnsServer_;
+  static ConfigManager* configManager_;
+  static IPAddress ipAddress_;
+  static IPAddress gateway_;
+  static IPAddress netmask_;
+  static IPAddress dns1_;
+  static IPAddress dns2_;
+  static uint32_t lastConnect_;
+  static int reconnectCount_;
+  static bool staConnected_;
+  static bool staConfigured_;
+  static TaskHandle_t dnsTaskHandle_;
+  static TaskHandle_t statusLedTaskHandle_;
+  static volatile StatusLedMode statusLedMode_;
+  static esp_netif_t* staNetif_;
+  static esp_netif_t* apNetif_;
 };
