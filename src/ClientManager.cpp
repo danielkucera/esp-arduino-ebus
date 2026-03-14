@@ -4,6 +4,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include <cerrno>
+#include <fcntl.h>
+#include <lwip/sockets.h>
+#include <lwip/tcp.h>
+
 #include <algorithm>
 
 // C++11 compatible make_unique
@@ -14,8 +19,7 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 
 ClientManager clientManager;
 
-ClientManager::ClientManager()
-    : readonlyServer(3334), regularServer(3333), enhancedServer(3335) {}
+ClientManager::ClientManager() = default;
 
 void ClientManager::setLastCommsCallback(LastCommsCallback callback) {
   lastCommsCallback = std::move(callback);
@@ -23,9 +27,9 @@ void ClientManager::setLastCommsCallback(LastCommsCallback callback) {
 
 void ClientManager::start(ebus::Bus* bus, ebus::BusHandler* busHandler,
                           ebus::Request* request) {
-  readonlyServer.begin();
-  regularServer.begin();
-  enhancedServer.begin();
+  createListenSocket(readonlyServer);
+  createListenSocket(regularServer);
+  createListenSocket(enhancedServer);
 
   this->bus = bus;
   this->busHandler = busHandler;
@@ -44,6 +48,59 @@ void ClientManager::start(ebus::Bus* bus, ebus::BusHandler* busHandler,
 }
 
 void ClientManager::stop() { stopRunner = true; }
+
+bool ClientManager::createListenSocket(ServerSocket& server) {
+  if (server.listenFd >= 0) return true;
+
+  server.listenFd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+  if (server.listenFd < 0) return false;
+
+  int enable = 1;
+  setsockopt(server.listenFd, SOL_SOCKET, SO_REUSEADDR, &enable,
+             sizeof(enable));
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(server.port);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  if (bind(server.listenFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) !=
+      0) {
+    close(server.listenFd);
+    server.listenFd = -1;
+    return false;
+  }
+
+  if (listen(server.listenFd, 4) != 0) {
+    close(server.listenFd);
+    server.listenFd = -1;
+    return false;
+  }
+
+  int flags = fcntl(server.listenFd, F_GETFL, 0);
+  if (flags >= 0) {
+    fcntl(server.listenFd, F_SETFL, flags | O_NONBLOCK);
+  }
+
+  return true;
+}
+
+int ClientManager::acceptClient(ServerSocket& server) {
+  if (server.listenFd < 0 && !createListenSocket(server)) return -1;
+
+  sockaddr_in addr{};
+  socklen_t addrLen = sizeof(addr);
+  const int clientFd =
+      accept(server.listenFd, reinterpret_cast<sockaddr*>(&addr), &addrLen);
+  if (clientFd < 0) {
+    if (errno == EWOULDBLOCK || errno == EAGAIN) return -1;
+    return -1;
+  }
+
+  int flag = 1;
+  setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+
+  return clientFd;
+}
 
 void ClientManager::taskFunc(void* arg) {
   ClientManager* self = static_cast<ClientManager*>(arg);
@@ -142,24 +199,24 @@ void ClientManager::taskFunc(void* arg) {
 
 void ClientManager::acceptClients() {
   // Accept read-only clients
-  while (readonlyServer.hasClient()) {
-    WiFiClient* client = new WiFiClient(readonlyServer.accept());
-    client->setNoDelay(true);
-    clients.push_back(make_unique<ReadOnlyClient>(client, request));
+  for (;;) {
+    const int clientFd = acceptClient(readonlyServer);
+    if (clientFd < 0) break;
+    clients.push_back(make_unique<ReadOnlyClient>(clientFd, request));
   }
 
   // Accept regular clients
-  while (regularServer.hasClient()) {
-    WiFiClient* client = new WiFiClient(regularServer.accept());
-    client->setNoDelay(true);
-    clients.push_back(make_unique<RegularClient>(client, request));
+  for (;;) {
+    const int clientFd = acceptClient(regularServer);
+    if (clientFd < 0) break;
+    clients.push_back(make_unique<RegularClient>(clientFd, request));
   }
 
   // Accept enhanced clients
-  while (enhancedServer.hasClient()) {
-    WiFiClient* client = new WiFiClient(enhancedServer.accept());
-    client->setNoDelay(true);
-    clients.push_back(make_unique<EnhancedClient>(client, request));
+  for (;;) {
+    const int clientFd = acceptClient(enhancedServer);
+    if (clientFd < 0) break;
+    clients.push_back(make_unique<EnhancedClient>(clientFd, request));
   }
 
   // Clean up disconnected clients

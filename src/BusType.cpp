@@ -54,32 +54,32 @@ SemaphoreHandle_t getMutex() {
 #define ENH_MUTEX_UNLOCK()
 #endif
 
-WiFiClient* _arbitration_client = NULL;
+int _arbitration_client = -1;
 int _arbitration_address = -1;
 
-void getArbitrationClient(WiFiClient*& client, uint8_t& address) {
+void getArbitrationClient(int& clientFd, uint8_t& address) {
   ENH_MUTEX_LOCK();
-  client = _arbitration_client;
+  clientFd = _arbitration_client;
   address = _arbitration_address;
   ENH_MUTEX_UNLOCK();
 }
 
 void clearArbitrationClient() {
   ENH_MUTEX_LOCK();
-  _arbitration_client = 0;
+  _arbitration_client = -1;
   _arbitration_address = -1;
   ENH_MUTEX_UNLOCK();
 }
 
-bool setArbitrationClient(WiFiClient*& client, uint8_t& address) {
+bool setArbitrationClient(int& clientFd, uint8_t& address) {
   bool result = true;
   ENH_MUTEX_LOCK();
-  if (_arbitration_client == NULL) {
-    _arbitration_client = client;
+  if (_arbitration_client < 0) {
+    _arbitration_client = clientFd;
     _arbitration_address = address;
   } else {
     result = false;
-    client = _arbitration_client;
+    clientFd = _arbitration_client;
     address = _arbitration_address;
   }
   ENH_MUTEX_UNLOCK();
@@ -88,10 +88,10 @@ bool setArbitrationClient(WiFiClient*& client, uint8_t& address) {
 
 void arbitrationDone() { clearArbitrationClient(); }
 
-WiFiClient* arbitrationRequested(uint8_t& address) {
-  WiFiClient* client = NULL;
-  getArbitrationClient(client, address);
-  return client;
+int arbitrationRequested(uint8_t& address) {
+  int clientFd = -1;
+  getArbitrationClient(clientFd, address);
+  return clientFd;
 }
 
 BusType::BusType()
@@ -104,7 +104,7 @@ BusType::BusType()
       _nbrWon2(0),
       _nbrErrors(0),
       _nbrLate(0),
-      _client(0) {}
+      _clientFd(-1) {}
 
 BusType::~BusType() { end(); }
 
@@ -284,8 +284,8 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
     case Arbitration::none:
     NONE:
       uint8_t address;
-      _client = arbitrationRequested(address);
-      if (_client) {
+      _clientFd = arbitrationRequested(address);
+      if (_clientFd >= 0) {
         switch (_arbitration.start(_busState, address, startBitTime)) {
           case Arbitration::started:
             _nbrArbitrations++;
@@ -301,13 +301,13 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
         }
       }
       // send to everybody. ebusd needs the SYN to get in the right mood
-      push({false, RECEIVED, symbol, 0, _client});
+      push({false, RECEIVED, symbol, -1, _clientFd});
       break;
     case Arbitration::arbitrating:
       DEBUG_LOG("BUS ARBITRATIN 0x%02x %lu us\n", symbol,
                 _busState.microsSinceLastSyn());
       // do not send to arbitration client
-      push({false, RECEIVED, symbol, _client, _client});
+      push({false, RECEIVED, symbol, _clientFd, _clientFd});
       break;
     case Arbitration::won1:
       _nbrWon1++;
@@ -319,10 +319,10 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
       DEBUG_LOG("BUS SEND WON   0x%02x %lu us\n", _busState._master,
                 _busState.microsSinceLastSyn());
       // send only to the arbitrating client
-      push({true, STARTED, _busState._master, _client, _client});
+      push({true, STARTED, _busState._master, _clientFd, _clientFd});
       // do not send to arbitrating client
-      push({false, RECEIVED, symbol, _client, _client});
-      _client = 0;
+      push({false, RECEIVED, symbol, _clientFd, _clientFd});
+      _clientFd = -1;
       break;
     case Arbitration::lost1:
       _nbrLost1++;
@@ -334,19 +334,19 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
       DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %lu us\n", _busState._master,
                 _busState._symbol, _busState.microsSinceLastSyn());
       // send only to the arbitrating client
-      push({true, FAILED, _busState._master, _client, _client});
+      push({true, FAILED, _busState._master, _clientFd, _clientFd});
       // send to everybody
-      push({false, RECEIVED, symbol, 0, _client});
-      _client = 0;
+      push({false, RECEIVED, symbol, -1, _clientFd});
+      _clientFd = -1;
       break;
     case Arbitration::error:
       _nbrErrors++;
       arbitrationDone();
       // send only to the arbitrating client
-      push({true, ERROR_EBUS, ERR_FRAMING, _client, _client});
+      push({true, ERROR_EBUS, ERR_FRAMING, _clientFd, _clientFd});
       // send to everybody
-      push({false, RECEIVED, symbol, 0, _client});
-      _client = 0;
+      push({false, RECEIVED, symbol, -1, _clientFd});
+      _clientFd = -1;
       break;
   }
 }

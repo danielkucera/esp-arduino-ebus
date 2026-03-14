@@ -10,6 +10,12 @@
 #include <freertos/task.h>
 #include <inttypes.h>
 
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <lwip/sockets.h>
+#include <lwip/tcp.h>
+
 #include "Logger.hpp"
 
 #if defined(EBUS_INTERNAL)
@@ -63,6 +69,88 @@ char unique_id[7]{};
 
 namespace {
 
+bool createListenSocket(int& listenFd, uint16_t port) {
+  if (listenFd >= 0) return true;
+
+  listenFd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+  if (listenFd < 0) return false;
+
+  int enable = 1;
+  setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  if (bind(listenFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+    close(listenFd);
+    listenFd = -1;
+    return false;
+  }
+
+  if (listen(listenFd, 4) != 0) {
+    close(listenFd);
+    listenFd = -1;
+    return false;
+  }
+
+  int flags = fcntl(listenFd, F_GETFL, 0);
+  if (flags >= 0) {
+    fcntl(listenFd, F_SETFL, flags | O_NONBLOCK);
+  }
+
+  return true;
+}
+
+void closeSocketFd(int& socketFd) {
+  if (socketFd >= 0) {
+    shutdown(socketFd, SHUT_RDWR);
+    close(socketFd);
+    socketFd = -1;
+  }
+}
+
+int acceptClient(int listenFd) {
+  sockaddr_in addr{};
+  socklen_t addrLen = sizeof(addr);
+  const int clientFd =
+      accept(listenFd, reinterpret_cast<sockaddr*>(&addr), &addrLen);
+  if (clientFd < 0) {
+    if (errno == EWOULDBLOCK || errno == EAGAIN) return -1;
+    return -1;
+  }
+
+  int noDelay = 1;
+  setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &noDelay, sizeof(noDelay));
+  return clientFd;
+}
+
+int socketAvailable(int socketFd) {
+  if (socketFd < 0) return 0;
+  int pending = 0;
+  if (lwip_ioctl(socketFd, FIONREAD, &pending) == 0) {
+    return pending;
+  }
+  return 0;
+}
+
+bool socketConnected(int socketFd) {
+  if (socketFd < 0) return false;
+  char buffer = 0;
+  const int result = recv(socketFd, &buffer, 1, MSG_PEEK | MSG_DONTWAIT);
+  if (result > 0) return true;
+  if (result == 0) return false;
+  return errno == EWOULDBLOCK || errno == EAGAIN;
+}
+
+size_t socketWrite(int socketFd, const char* message) {
+  if (socketFd < 0 || message == nullptr) return 0;
+  const size_t size = strlen(message);
+  const int sent = send(socketFd, message, size, 0);
+  if (sent < 0) return 0;
+  return static_cast<size_t>(sent);
+}
+
 constexpr ledc_channel_t kPwmChannel = LEDC_CHANNEL_0;
 constexpr ledc_timer_t kPwmTimer = LEDC_TIMER_0;
 constexpr ledc_mode_t kPwmSpeedMode = LEDC_LOW_SPEED_MODE;
@@ -111,17 +199,17 @@ void initPwm() {
 }  // namespace
 
 #if !defined(EBUS_INTERNAL)
-WiFiServer wifiServer(3333);
-WiFiClient wifiClients[MAX_WIFI_CLIENTS];
+int wifiServerFd = -1;
+int wifiClients[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 
-WiFiServer wifiServerEnhanced(3335);
-WiFiClient wifiClientsEnhanced[MAX_WIFI_CLIENTS];
+int wifiServerEnhancedFd = -1;
+int wifiClientsEnhanced[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 
-WiFiServer wifiServerReadOnly(3334);
-WiFiClient wifiClientsReadOnly[MAX_WIFI_CLIENTS];
+int wifiServerReadOnlyFd = -1;
+int wifiClientsReadOnly[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 #endif
 
-WiFiServer statusServer(5555);
+int statusServerFd = -1;
 
 volatile uint32_t last_comms = 0;
 
@@ -291,7 +379,7 @@ void data_process() {
   if (Bus.read(d)) {
     for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
       if (d._enhanced) {
-        if (d._client == &wifiClientsEnhanced[i]) {
+        if (d._clientFd == wifiClientsEnhanced[i]) {
           if (pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d, true)) {
             updateLastComms();
           }
@@ -303,9 +391,9 @@ void data_process() {
         if (pushClient(&wifiClientsReadOnly[i], d._d)) {
           updateLastComms();
         }
-        if (d._client != &wifiClientsEnhanced[i]) {
+        if (d._clientFd != wifiClientsEnhanced[i]) {
           if (pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d,
-                                 d._logtoclient == &wifiClientsEnhanced[i])) {
+                                 d._logToClientFd == wifiClientsEnhanced[i])) {
             updateLastComms();
           }
         }
@@ -697,15 +785,16 @@ bool isCaptivePortalActive() {
 }
 
 bool handleStatusServerRequests() {
-  if (!statusServer.hasClient()) return false;
+  if (statusServerFd < 0) return false;
 
-  WiFiClient client = statusServer.accept();
+  const int clientFd = acceptClient(statusServerFd);
+  if (clientFd < 0) return false;
 
-  if (client.availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client.print(status_string());
-    client.flush();
-    client.stop();
+  if (socketConnected(clientFd) && socketAvailable(clientFd) >= AVAILABLE_THRESHOLD) {
+    socketWrite(clientFd, status_string());
   }
+  int closingFd = clientFd;
+  closeSocketFd(closingFd);
   return true;
 }
 
@@ -799,12 +888,12 @@ void setup() {
 #endif
 
 #if !defined(EBUS_INTERNAL)
-  wifiServer.begin();
-  wifiServerEnhanced.begin();
-  wifiServerReadOnly.begin();
+  createListenSocket(wifiServerFd, 3333);
+  createListenSocket(wifiServerEnhancedFd, 3335);
+  createListenSocket(wifiServerReadOnlyFd, 3334);
 #endif
 
-  statusServer.begin();
+  createListenSocket(statusServerFd, 5555);
 
   espOtaManager.begin();
   // wdt_start();
@@ -894,9 +983,9 @@ void loop() {
 #if defined(EBUS_INTERNAL)
   loop_duration();
 #else
-  handleNewClient(&wifiServer, wifiClients);
-  handleNewClient(&wifiServerEnhanced, wifiClientsEnhanced);
-  handleNewClient(&wifiServerReadOnly, wifiClientsReadOnly);
+  handleNewClient(wifiServerFd, wifiClients);
+  handleNewClient(wifiServerEnhancedFd, wifiClientsEnhanced);
+  handleNewClient(wifiServerReadOnlyFd, wifiClientsReadOnly);
 #endif
 }
 

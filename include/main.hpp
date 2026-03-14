@@ -1,8 +1,6 @@
 #pragma once
 
 #include "UartPort.hpp"
-#include "WiFiClient.h"
-#include "WiFiServer.h"
 
 #include <string>
 

@@ -2,12 +2,11 @@
 
 #if defined(EBUS_INTERNAL)
 #include <Ebus.h>
-#include <WiFiClient.h>
 
 // Abstract base class for all client types
 class AbstractClient {
  public:
-  AbstractClient(WiFiClient* client, ebus::Request* request, bool write);
+  AbstractClient(int socketFd, ebus::Request* request, bool write);
 
   virtual bool available() const = 0;
   virtual bool readByte(uint8_t& byte) = 0;
@@ -19,7 +18,7 @@ class AbstractClient {
   void stop();
 
  protected:
-  WiFiClient* client;
+  int socketFd;
   ebus::Request* request;
   bool write;
 };
@@ -27,7 +26,7 @@ class AbstractClient {
 // ReadOnly client: only sends, never receives
 class ReadOnlyClient : public AbstractClient {
  public:
-  ReadOnlyClient(WiFiClient* client, ebus::Request* request);
+  ReadOnlyClient(int socketFd, ebus::Request* request);
 
   bool available() const override;
   bool readByte(uint8_t& byte) override;
@@ -38,7 +37,7 @@ class ReadOnlyClient : public AbstractClient {
 // Regular client: 1 byte per message
 class RegularClient : public AbstractClient {
  public:
-  RegularClient(WiFiClient* client, ebus::Request* request);
+  RegularClient(int socketFd, ebus::Request* request);
 
   bool available() const override;
   bool readByte(uint8_t& byte) override;
@@ -49,7 +48,7 @@ class RegularClient : public AbstractClient {
 // Enhanced client: 1 or 2 bytes per message (protocol encoding/decoding)
 class EnhancedClient : public AbstractClient {
  public:
-  EnhancedClient(WiFiClient* client, ebus::Request* request);
+  EnhancedClient(int socketFd, ebus::Request* request);
 
   bool available() const override;
   bool readByte(uint8_t& byte) override;

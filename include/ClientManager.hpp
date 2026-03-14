@@ -1,7 +1,8 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <WiFiServer.h>
+
+#include <cstdint>
 
 #include <vector>
 
@@ -24,9 +25,14 @@ class ClientManager {
   void stop();
 
  private:
-  WiFiServer readonlyServer;
-  WiFiServer regularServer;
-  WiFiServer enhancedServer;
+    struct ServerSocket {
+      uint16_t port;
+      int listenFd = -1;
+    };
+
+    ServerSocket readonlyServer{3334};
+    ServerSocket regularServer{3333};
+    ServerSocket enhancedServer{3335};
 
   ebus::Queue<uint8_t>* clientByteQueue = nullptr;
   volatile bool stopRunner = false;
@@ -46,6 +52,8 @@ class ClientManager {
 
   static void taskFunc(void* arg);
 
+  static bool createListenSocket(ServerSocket& server);
+  static int acceptClient(ServerSocket& server);
   void acceptClients();
 };
 
