@@ -3,8 +3,13 @@
 #include <cJSON.h>
 #include <driver/gpio.h>
 #include <driver/ledc.h>
+#include <esp_chip_info.h>
 #include <esp_efuse.h>
+#include <esp_flash.h>
 #include <esp_idf_version.h>
+#include <esp_mac.h>
+#include <esp_private/esp_clk.h>
+#include <esp_system.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -39,7 +44,6 @@
 #include "UpgradeManager.hpp"
 #include "WifiNetworkManager.hpp"
 #include "esp32c3/rom/rtc.h"
-#include "esp_compat.hpp"
 #include "esp_sntp.h"
 #include "http.hpp"
 
@@ -68,6 +72,16 @@ EspOtaManager espOtaManager;
 char unique_id[7]{};
 
 namespace {
+
+uint64_t getEfuseMac() {
+  uint8_t mac[6]{};
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  uint64_t value = 0;
+  for (int i = 0; i < 6; ++i) {
+    value = (value << 8) | mac[i];
+  }
+  return value;
+}
 
 bool createListenSocket(int& listenFd, uint16_t port) {
   if (listenFd >= 0) return true;
@@ -292,7 +306,7 @@ uint32_t get_pwm() {
 void calcUniqueId() {
   uint32_t id = 0;
   for (int i = 0; i < 6; ++i) {
-    id |= ((ESP.getEfuseMac() >> (8 * (5 - i))) & 0xff) << (8 * i);
+    id |= ((getEfuseMac() >> (8 * (5 - i))) & 0xff) << (8 * i);
   }
   char tmp[9]{};
   snprintf(tmp, sizeof(tmp), "%08" PRIx32, id);
@@ -332,7 +346,7 @@ void loadAdapterHwVersionFromEfuse() {
 
 void restart() {
   disableTX();
-  ESP.restart();
+  esp_restart();
 }
 
 void check_reset() {
@@ -515,21 +529,20 @@ char* status_string() {
                   USE_SOFTWARE_SERIAL ? "true" : "false");
 #endif
   pos += snprintf(status + pos, bufferSize - pos, "unique_id: %s\n", unique_id);
-  pos += snprintf(status + pos, bufferSize - pos, "chip_model: %s\n",
-                  ESP.getChipModel());
+  esp_chip_info_t chip_info{};
+  esp_chip_info(&chip_info);
+  uint32_t flash_size = 0;
+  if (esp_flash_default_chip != nullptr) {
+    esp_flash_get_size(esp_flash_default_chip, &flash_size);
+  }
   pos += snprintf(status + pos, bufferSize - pos,
-                  "chip_revision: %" PRIu32 "\n", ESP.getChipRevision());
+              "chip_revision: %" PRIu32 "\n", static_cast<uint32_t>(chip_info.revision));
   pos += snprintf(status + pos, bufferSize - pos,
-                  "flash_chip_size: %" PRIu32 " B\n", ESP.getFlashChipSize());
-  pos +=
-      snprintf(status + pos, bufferSize - pos,
-               "flash_chip_speed: %" PRIu32 " Hz\n", ESP.getFlashChipSpeed());
-  pos += snprintf(status + pos, bufferSize - pos, "flash_chip_mode: %u\n",
-                  ESP.getFlashChipMode());
+              "flash_chip_size: %" PRIu32 " B\n", static_cast<uint32_t>(flash_size));
   pos += snprintf(status + pos, bufferSize - pos,
-                  "clock_speed: %" PRIu32 " Mhz\n", getCpuFrequencyMhz());
+                  "clock_speed: %" PRIu32 " Mhz\n", static_cast<uint32_t>(esp_clk_cpu_freq()) / 1000000U);
   pos += snprintf(status + pos, bufferSize - pos, "apb_speed: %" PRIu32 " Hz\n",
-                  getApbFrequency());
+                  static_cast<uint32_t>(esp_clk_apb_freq()));
   pos += snprintf(status + pos, bufferSize - pos, "uptime: %" PRIu32 " ms\n",
                   static_cast<uint32_t>(esp_timer_get_time() / 1000ULL));
   pos += snprintf(status + pos, bufferSize - pos,
@@ -654,7 +667,7 @@ const std::string getStatusJson() {
   // Firmware
   cJSON* firmware = cJSON_AddObjectToObject(doc, "Firmware");
   cJSON_AddStringToObject(firmware, "Version", AUTO_VERSION);
-  cJSON_AddStringToObject(firmware, "SDK", ESP.getSdkVersion());
+  cJSON_AddStringToObject(firmware, "SDK", esp_get_idf_version());
 #if !defined(EBUS_INTERNAL)
   cJSON_AddBoolToObject(firmware, "Async", USE_ASYNCHRONOUS ? true : false);
   cJSON_AddBoolToObject(firmware, "Software_Serial",
@@ -665,16 +678,19 @@ const std::string getStatusJson() {
                           adapterHwVersion.c_str());
   cJSON_AddNumberToObject(firmware, "Adapter_HW_Version_Raw",
                           adapterHwVersionRaw);
-  cJSON_AddNumberToObject(firmware, "Clock_Speed", getCpuFrequencyMhz());
-  cJSON_AddNumberToObject(firmware, "Apb_Speed", getApbFrequency());
+  cJSON_AddNumberToObject(firmware, "Clock_Speed", esp_clk_cpu_freq() / 1000000U);
+  cJSON_AddNumberToObject(firmware, "Apb_Speed", esp_clk_apb_freq());
 
   // Chip
   cJSON* chip = cJSON_AddObjectToObject(doc, "Chip");
-  cJSON_AddStringToObject(chip, "Chip_Model", ESP.getChipModel());
-  cJSON_AddNumberToObject(chip, "Chip_Revision", ESP.getChipRevision());
-  cJSON_AddNumberToObject(chip, "Flash_Chip_Size", ESP.getFlashChipSize());
-  cJSON_AddNumberToObject(chip, "Flash_Chip_Speed", ESP.getFlashChipSpeed());
-  cJSON_AddNumberToObject(chip, "Flash_Chip_Mode", ESP.getFlashChipMode());
+  esp_chip_info_t chip_info_json{};
+  esp_chip_info(&chip_info_json);
+  uint32_t flash_size_json = 0;
+  if (esp_flash_default_chip != nullptr) {
+    esp_flash_get_size(esp_flash_default_chip, &flash_size_json);
+  }
+  cJSON_AddNumberToObject(chip, "Chip_Revision", chip_info_json.revision);
+  cJSON_AddNumberToObject(chip, "Flash_Chip_Size", flash_size_json);
 
   // WIFI
   cJSON* wifi = cJSON_AddObjectToObject(doc, "WIFI");
@@ -880,8 +896,8 @@ void setup() {
   mqttha.setThingName(configManager.readString("thingName", "esp-eBus").c_str()); 
   mqttha.setThingHwVersion(adapterHwVersion);
 /*
-  mqttha.setThingModel(ESP.getChipModel());
-  mqttha.setThingModelId("Revision: " + std::to_string(ESP.getChipRevision()));
+  mqttha.setThingModel(getChipModel());
+  mqttha.setThingModelId("Revision: " + std::to_string(getChipRevision()));
   mqttha.setThingConfigurationUrl(
       "http://" + std::string(WiFi.localIP().toString().c_str()) + "/");
 */
@@ -966,7 +982,7 @@ void loop() {
 #endif
 
   uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
-  free_heap = ESP.getFreeHeap();
+  free_heap = esp_get_free_heap_size();
 
   if ((uint32_t)(esp_timer_get_time() / 1000ULL) > last_comms + 200 * 1000) {
     restart();
