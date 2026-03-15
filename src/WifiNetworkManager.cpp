@@ -30,7 +30,6 @@ uint32_t WifiNetworkManager::lastConnect_ = 0;
 int WifiNetworkManager::reconnectCount_ = 0;
 bool WifiNetworkManager::staConnected_ = false;
 bool WifiNetworkManager::staConfigured_ = false;
-TaskHandle_t WifiNetworkManager::dnsTaskHandle_ = nullptr;
 TaskHandle_t WifiNetworkManager::statusLedTaskHandle_ = nullptr;
 volatile WifiNetworkManager::StatusLedMode WifiNetworkManager::statusLedMode_ =
   WifiNetworkManager::StatusLedMode::SlowBlink;
@@ -177,10 +176,10 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
                 ")");
   }
   const esp_ip4_addr_t captiveDnsIp{.addr = 0};
-  dnsServer_.start(53, "*", captiveDnsIp);
-  if (dnsTaskHandle_ == nullptr) {
-    xTaskCreate(dnsTaskEntry, "dns_task", 4096, nullptr, 1, &dnsTaskHandle_);
+  if (dnsServer_.start(53, "*", captiveDnsIp)) {
     logger.info("Captive DNS task started");
+  } else {
+    logger.warn("Captive DNS start failed");
   }
 
   std::string staSsid =
@@ -304,20 +303,6 @@ std::string WifiNetworkManager::macAddress() {
   return buffer;
 }
 
-void WifiNetworkManager::dnsTaskEntry(void* arg) {
-  (void)arg;
-  dnsTaskLoop();
-}
-
-void WifiNetworkManager::dnsTaskLoop() {
-  while (true) {
-    if (isCaptivePortalActive()) {
-      dnsServer_.processNextRequest();
-    }
-    vTaskDelay(pdMS_TO_TICKS(10));
-  }
-}
-
 void WifiNetworkManager::statusLedTaskEntry(void* arg) {
   (void)arg;
   statusLedTaskLoop();
@@ -416,7 +401,7 @@ void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
     setStatusLedMode(StatusLedMode::SlowBlink);
     logger.warn("STA disconnected, reconnecting");
     if (getMode() != WIFI_MODE_STA) {
-      const esp_ip4_addr_t captiveDnsIp{.addr = 0};
+      const esp_ip4_addr_t captiveDnsIp = { .addr = ESP_IP4TOADDR(192, 168, 4, 1) };
       dnsServer_.start(53, "*", captiveDnsIp);
       logger.info("Captive DNS started");
     }

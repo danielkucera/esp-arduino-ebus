@@ -44,8 +44,6 @@ class WifiNetworkManager {
  private:
   enum class StatusLedMode : uint8_t { SlowBlink = 0, SolidOn = 1 };
 
-  static void dnsTaskEntry(void* arg);
-  static void dnsTaskLoop();
   static void statusLedTaskEntry(void* arg);
   static void statusLedTaskLoop();
   static void initStatusLed();
@@ -63,7 +61,6 @@ class WifiNetworkManager {
   static int reconnectCount_;
   static bool staConnected_;
   static bool staConfigured_;
-  static TaskHandle_t dnsTaskHandle_;
   static TaskHandle_t statusLedTaskHandle_;
   static volatile StatusLedMode statusLedMode_;
   static esp_netif_t* staNetif_;

@@ -1,4 +1,5 @@
 #include "DNSServer.h"
+#include "Logger.hpp"
 
 #include <cstring>
 
@@ -39,7 +40,28 @@ bool DNSServer::start(uint16_t port, const char* domainName,
 
   int flags = fcntl(socketFd_, F_GETFL, 0);
   fcntl(socketFd_, F_SETFL, flags | O_NONBLOCK);
+
+  if (taskHandle_ == nullptr) {
+    xTaskCreate(taskEntry, "dns_task", 4096, this, 1, &taskHandle_);
+  }
+
   return true;
+}
+
+void DNSServer::taskEntry(void* arg) {
+  auto* server = static_cast<DNSServer*>(arg);
+  if (server == nullptr) {
+    vTaskDelete(nullptr);
+    return;
+  }
+  server->taskLoop();
+}
+
+void DNSServer::taskLoop() {
+  while (true) {
+    processNextRequest();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
 }
 
 void DNSServer::processNextRequest() {
@@ -51,6 +73,7 @@ void DNSServer::processNextRequest() {
   int received = recvfrom(socketFd_, buffer, sizeof(buffer), 0,
                           reinterpret_cast<sockaddr*>(&client), &clientLen);
   if (received <= 0) return;
+  logger.debug("Received DNS request from " + std::string(inet_ntoa(client.sin_addr)));
   if (static_cast<size_t>(received) < kDnsHeaderSize) return;
 
   if (buffer[2] & 0x80) return;  // response packet
