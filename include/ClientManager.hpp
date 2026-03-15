@@ -8,16 +8,12 @@
 
 #include "ClientType.hpp"
 
-using LastCommsCallback = std::function<void()>;
-
 // ClientManager handles all connected clients and routes data between them and
 // the eBus It supports ReadOnly, Regular, and Enhanced clients.
 
 class ClientManager {
  public:
   ClientManager();
-
-  void setLastCommsCallback(LastCommsCallback callback);
 
   void start(ebus::Bus* bus, ebus::BusHandler* busHandler,
              ebus::Request* request);
@@ -41,8 +37,6 @@ class ClientManager {
   ebus::Bus* bus = nullptr;
   ebus::BusHandler* busHandler = nullptr;
   ebus::Request* request = nullptr;
-
-  LastCommsCallback lastCommsCallback = nullptr;
 
   std::vector<std::unique_ptr<AbstractClient>> clients;
 

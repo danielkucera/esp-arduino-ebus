@@ -21,10 +21,6 @@ ClientManager clientManager;
 
 ClientManager::ClientManager() = default;
 
-void ClientManager::setLastCommsCallback(LastCommsCallback callback) {
-  lastCommsCallback = std::move(callback);
-}
-
 void ClientManager::start(ebus::Bus* bus, ebus::BusHandler* busHandler,
                           ebus::Request* request) {
   createListenSocket(readonlyServer);
@@ -165,8 +161,6 @@ void ClientManager::taskFunc(void* arg) {
 
     // Process received bytes from bus
     while (self->clientByteQueue->try_pop(receiveByte)) {
-      self->lastCommsCallback();
-
       if (activeClient) {
         if ((busState == BusState::Response ||
              busState == BusState::Transmit) &&
