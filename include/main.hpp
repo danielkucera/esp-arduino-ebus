@@ -12,7 +12,6 @@
 #define USE_SOFTWARE_SERIAL 0
 #define USE_ASYNCHRONOUS 0  // requires USE_SOFTWARE_SERIAL
 #endif
-#define AVAILABLE_THRESHOLD 0  // https://esp32.com/viewtopic.php?t=19788
 
 inline int DEBUG_LOG(const char* format, ...) { return 0; }
 int DEBUG_LOG_IMPL(const char* format, ...);

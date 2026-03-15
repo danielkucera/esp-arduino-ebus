@@ -161,10 +161,6 @@ size_t socketWriteString(int clientFd, const char* message) {
                           strlen(message));
 }
 
-int socketAvailableForWrite(int clientFd) {
-  return isSocketConnected(clientFd) ? 1 : 0;
-}
-
 }  // namespace
 
 bool startClientRuntime() {
@@ -248,7 +244,7 @@ void handleClient(int* clientFd) {
 }
 
 int pushClient(int* clientFd, uint8_t byte) {
-  if (socketAvailableForWrite(*clientFd) >= AVAILABLE_THRESHOLD) {
+  if (isSocketConnected(*clientFd)) {
     socketWriteBytes(*clientFd, &byte, 1);
     return 1;
   }
@@ -371,7 +367,7 @@ int pushClientEnhanced(int* clientFd, uint8_t c, uint8_t d, bool log) {
   if (log) {
     DEBUG_LOG("DATA           0x%02x 0x%02x\n", c, d);
   }
-  if (socketAvailableForWrite(*clientFd) >= AVAILABLE_THRESHOLD) {
+  if (isSocketConnected(*clientFd)) {
     send_res(clientFd, c, d);
     return 1;
   }
