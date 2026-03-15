@@ -123,11 +123,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
                                       &WifiNetworkManager::handle_event, nullptr, nullptr);
 
-  //initialized_ = true;
-
   esp_wifi_set_storage(false ? WIFI_STORAGE_FLASH : WIFI_STORAGE_RAM);
-
-  //esp_wifi_set_auto_connect(true);
 
   esp_netif_set_hostname(staNetif_, hostname.c_str());
 
@@ -369,8 +365,7 @@ void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
     setStatusLedMode(StatusLedMode::SolidOn);
     lastConnect_ = (uint32_t)(esp_timer_get_time() / 1000ULL);
     ++reconnectCount_;
-//    logger.info("STA connected, IP: " +
-//                std::string(WiFi.localIP().toString().c_str()));
+
     if (getMode() != WIFI_MODE_STA) {
       if (esp_wifi_set_mode(WIFI_MODE_STA) == ESP_OK) {
         logger.info("Switched WiFi mode to STA only");
