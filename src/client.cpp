@@ -2,6 +2,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -20,19 +21,96 @@ enum requests { CMD_INIT = 0, CMD_SEND, CMD_START, CMD_INFO };
 namespace {
 
 TaskHandle_t clientAcceptTaskHandle = nullptr;
-int acceptServerFd = -1;
-int* acceptClients = nullptr;
-int acceptEnhancedServerFd = -1;
-int* acceptEnhancedClients = nullptr;
-int acceptReadOnlyServerFd = -1;
-int* acceptReadOnlyClients = nullptr;
+TaskHandle_t dataTaskHandle = nullptr;
+int wifiServerFd = -1;
+int wifiClients[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
+
+int wifiServerEnhancedFd = -1;
+int wifiClientsEnhanced[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
+
+int wifiServerReadOnlyFd = -1;
+int wifiClientsReadOnly[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
+
+constexpr uint16_t kPortDefault = 3333;
+constexpr uint16_t kPortEnhanced = 3335;
+constexpr uint16_t kPortReadOnly = 3334;
+
+bool createListenSocket(int& listenFd, uint16_t port) {
+  if (listenFd >= 0) return true;
+
+  listenFd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+  if (listenFd < 0) return false;
+
+  int enable = 1;
+  setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  if (bind(listenFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+    close(listenFd);
+    listenFd = -1;
+    return false;
+  }
+
+  if (listen(listenFd, 4) != 0) {
+    close(listenFd);
+    listenFd = -1;
+    return false;
+  }
+
+  int flags = fcntl(listenFd, F_GETFL, 0);
+  if (flags >= 0) {
+    fcntl(listenFd, F_SETFL, flags | O_NONBLOCK);
+  }
+
+  return true;
+}
+
+bool createListenSockets() {
+  return createListenSocket(wifiServerFd, kPortDefault) &&
+         createListenSocket(wifiServerEnhancedFd, kPortEnhanced) &&
+         createListenSocket(wifiServerReadOnlyFd, kPortReadOnly);
+}
 
 void clientAcceptTask(void* arg) {
   for (;;) {
-    handleNewClient(acceptServerFd, acceptClients);
-    handleNewClient(acceptEnhancedServerFd, acceptEnhancedClients);
-    handleNewClient(acceptReadOnlyServerFd, acceptReadOnlyClients);
+    handleNewClient(wifiServerFd, wifiClients);
+    handleNewClient(wifiServerEnhancedFd, wifiClientsEnhanced);
+    handleNewClient(wifiServerReadOnlyFd, wifiClientsReadOnly);
     vTaskDelay(1);
+  }
+}
+
+void dataProcess() {
+  for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+    handleClient(&wifiClients[i]);
+    handleClientEnhanced(&wifiClientsEnhanced[i]);
+  }
+
+  BusType::data data;
+  if (Bus.read(data)) {
+    for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+      if (data._enhanced) {
+        if (data._clientFd == wifiClientsEnhanced[i]) {
+          pushClientEnhanced(&wifiClientsEnhanced[i], data._c, data._d, true);
+        }
+      } else {
+        pushClient(&wifiClients[i], data._d);
+        pushClient(&wifiClientsReadOnly[i], data._d);
+        if (data._clientFd != wifiClientsEnhanced[i]) {
+          pushClientEnhanced(&wifiClientsEnhanced[i], data._c, data._d,
+                             data._logToClientFd == wifiClientsEnhanced[i]);
+        }
+      }
+    }
+  }
+}
+
+void dataLoop(void* arg) {
+  for (;;) {
+    dataProcess();
   }
 }
 
@@ -93,26 +171,39 @@ int socketAvailableForWrite(int clientFd) {
 
 }  // namespace
 
-bool startClientAcceptTask(int serverFd, int clients[], int enhancedServerFd,
-                           int enhancedClients[], int readOnlyServerFd,
-                           int readOnlyClients[]) {
-  if (clientAcceptTaskHandle != nullptr) return true;
+bool startClientRuntime() {
+  if (!createListenSockets()) return false;
 
-  acceptServerFd = serverFd;
-  acceptClients = clients;
-  acceptEnhancedServerFd = enhancedServerFd;
-  acceptEnhancedClients = enhancedClients;
-  acceptReadOnlyServerFd = readOnlyServerFd;
-  acceptReadOnlyClients = readOnlyClients;
+  if (dataTaskHandle == nullptr) {
+    if (xTaskCreate(dataLoop, "data_loop", 10000, nullptr, 1,
+                    &dataTaskHandle) != pdPASS) {
+      return false;
+    }
+  }
 
-  return xTaskCreate(clientAcceptTask, "client_accept", 4096, nullptr, 1,
-                     &clientAcceptTaskHandle) == pdPASS;
+  if (clientAcceptTaskHandle == nullptr) {
+    if (xTaskCreate(clientAcceptTask, "client_accept", 4096, nullptr, 1,
+                    &clientAcceptTaskHandle) != pdPASS) {
+      if (dataTaskHandle != nullptr) {
+        vTaskDelete(dataTaskHandle);
+        dataTaskHandle = nullptr;
+      }
+      return false;
+    }
+  }
+
+  return true;
 }
 
-void stopClientAcceptTask() {
+void stopClientRuntime() {
   if (clientAcceptTaskHandle != nullptr) {
     vTaskDelete(clientAcceptTaskHandle);
     clientAcceptTaskHandle = nullptr;
+  }
+
+  if (dataTaskHandle != nullptr) {
+    vTaskDelete(dataTaskHandle);
+    dataTaskHandle = nullptr;
   }
 }
 

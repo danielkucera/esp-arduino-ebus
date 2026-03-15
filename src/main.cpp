@@ -17,9 +17,6 @@
 
 #include <cerrno>
 #include <cstring>
-#include <fcntl.h>
-#include <lwip/sockets.h>
-#include <lwip/tcp.h>
 
 #include "Logger.hpp"
 
@@ -49,8 +46,6 @@
 #if defined(EBUS_INTERNAL)
 ebus::ebusConfig ebusConfig;
 ebus::Controller ebusController;
-#else
-TaskHandle_t Task1;
 #endif
 
 ConfigManager configManager;
@@ -87,39 +82,6 @@ uint64_t getEfuseMac() {
     value = (value << 8) | mac[i];
   }
   return value;
-}
-
-bool createListenSocket(int& listenFd, uint16_t port) {
-  if (listenFd >= 0) return true;
-
-  listenFd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-  if (listenFd < 0) return false;
-
-  int enable = 1;
-  setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
-
-  sockaddr_in addr{};
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(port);
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  if (bind(listenFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
-    close(listenFd);
-    listenFd = -1;
-    return false;
-  }
-
-  if (listen(listenFd, 4) != 0) {
-    close(listenFd);
-    listenFd = -1;
-    return false;
-  }
-
-  int flags = fcntl(listenFd, F_GETFL, 0);
-  if (flags >= 0) {
-    fcntl(listenFd, F_SETFL, flags | O_NONBLOCK);
-  }
-
-  return true;
 }
 
 constexpr ledc_channel_t kPwmChannel = LEDC_CHANNEL_0;
@@ -179,17 +141,6 @@ void startCaptiveDns() {
 }
 
 }  // namespace
-
-#if !defined(EBUS_INTERNAL)
-int wifiServerFd = -1;
-int wifiClients[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
-
-int wifiServerEnhancedFd = -1;
-int wifiClientsEnhanced[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
-
-int wifiServerReadOnlyFd = -1;
-int wifiClientsReadOnly[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
-#endif
 
 // status
 uint32_t reset_code = 0;
@@ -300,41 +251,6 @@ void check_reset() {
     }
   }
 }
-
-#if !defined(EBUS_INTERNAL)
-void data_process() {
-  // check clients for data
-  for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
-    handleClient(&wifiClients[i]);
-    handleClientEnhanced(&wifiClientsEnhanced[i]);
-  }
-
-  // check queue for data
-  BusType::data d;
-  if (Bus.read(d)) {
-    for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
-      if (d._enhanced) {
-        if (d._clientFd == wifiClientsEnhanced[i]) {
-          pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d, true);
-        }
-      } else {
-        pushClient(&wifiClients[i], d._d);
-        pushClient(&wifiClientsReadOnly[i], d._d);
-        if (d._clientFd != wifiClientsEnhanced[i]) {
-          pushClientEnhanced(&wifiClientsEnhanced[i], d._c, d._d,
-                             d._logToClientFd == wifiClientsEnhanced[i]);
-        }
-      }
-    }
-  }
-}
-
-void data_loop(void* pvParameters) {
-  while (1) {
-    data_process();
-  }
-}
-#endif
 
 #if defined(EBUS_INTERNAL)
 void time_sync_notification_cb(struct timeval* tv) {
@@ -649,11 +565,7 @@ extern "C" void app_main(void) {
     schedule.stop();
     clientManager.stop();
 #else
-    stopClientAcceptTask();
-    if (Task1 != nullptr) {
-      vTaskDelete(Task1);
-      Task1 = nullptr;
-    }
+  stopClientRuntime();
 #endif
   });
   espOtaManager.setPreUpgradeHook([]() {
@@ -663,11 +575,7 @@ extern "C" void app_main(void) {
     schedule.stop();
     clientManager.stop();
 #else
-    stopClientAcceptTask();
-    if (Task1 != nullptr) {
-      vTaskDelete(Task1);
-      Task1 = nullptr;
-    }
+  stopClientRuntime();
 #endif
   });
 
@@ -706,12 +614,6 @@ extern "C" void app_main(void) {
   mqttha.setThingConfigurationUrl(
       "http://" + std::string(WiFi.localIP().toString().c_str()) + "/");
 */
-#endif
-
-#if !defined(EBUS_INTERNAL)
-  createListenSocket(wifiServerFd, 3333);
-  createListenSocket(wifiServerEnhancedFd, 3335);
-  createListenSocket(wifiServerReadOnlyFd, 3334);
 #endif
 
   espOtaManager.begin();
@@ -758,10 +660,9 @@ extern "C" void app_main(void) {
   mqttha.publishComponents();
   mqtt.startTask();
 #else
-  xTaskCreate(data_loop, "data_loop", 10000, NULL, 1, &Task1);
-  startClientAcceptTask(wifiServerFd, wifiClients, wifiServerEnhancedFd,
-                        wifiClientsEnhanced, wifiServerReadOnlyFd,
-                        wifiClientsReadOnly);
+  if (!startClientRuntime()) {
+    logger.error("Failed to start client runtime");
+  }
 #endif
   vTaskDelete(nullptr);
 }
