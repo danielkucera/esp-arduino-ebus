@@ -87,16 +87,6 @@ constexpr ledc_channel_t kPwmChannel = LEDC_CHANNEL_0;
 constexpr ledc_timer_t kPwmTimer = LEDC_TIMER_0;
 constexpr ledc_mode_t kPwmSpeedMode = LEDC_LOW_SPEED_MODE;
 
-void configureGpioOutput(int pin) {
-  gpio_config_t config{};
-  config.pin_bit_mask = 1ULL << pin;
-  config.mode = GPIO_MODE_OUTPUT;
-  config.pull_down_en = GPIO_PULLDOWN_DISABLE;
-  config.pull_up_en = GPIO_PULLUP_DISABLE;
-  config.intr_type = GPIO_INTR_DISABLE;
-  gpio_config(&config);
-}
-
 void configureGpioInputPullup(int pin) {
   gpio_config_t config{};
   config.pin_bit_mask = 1ULL << pin;
@@ -160,7 +150,13 @@ std::string adapterHwVersion = "unread";
 
 inline void disableTX() {
 #if defined(TX_DISABLE_PIN)
-  configureGpioOutput(TX_DISABLE_PIN);
+  gpio_config_t config{};
+  config.pin_bit_mask = 1ULL << TX_DISABLE_PIN;
+  config.mode = GPIO_MODE_OUTPUT;
+  config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  config.pull_up_en = GPIO_PULLUP_DISABLE;
+  config.intr_type = GPIO_INTR_DISABLE;
+  gpio_config(&config);
   gpio_set_level(static_cast<gpio_num_t>(TX_DISABLE_PIN), 1);
 #endif
 }

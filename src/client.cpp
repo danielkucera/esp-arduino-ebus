@@ -148,10 +148,6 @@ int socketReadByte(int clientFd, int flags = MSG_DONTWAIT) {
   return byte;
 }
 
-int socketPeekByte(int clientFd) {
-  return socketReadByte(clientFd, MSG_PEEK | MSG_DONTWAIT);
-}
-
 size_t socketWriteBytes(int clientFd, const uint8_t* data, size_t size) {
   if (clientFd < 0 || data == nullptr || size == 0) return 0;
   const int result = send(clientFd, data, size, 0);
