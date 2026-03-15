@@ -10,7 +10,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <lwip/ip4_addr.h>
-#include <nvs_flash.h>
+#include <mdns.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -80,6 +80,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   initStatusLed();
   setStatusLedMode(StatusLedMode::SlowBlink);
 
+
   std::string apPassword = configManager_ != nullptr
                                ? configManager_->readString("apModePassword",
                                                             kDefaultApPassword)
@@ -91,21 +92,6 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
           : std::string(kDefaultHostname);
   const std::string hostname =
       buildHostname(configuredThingName, kDefaultHostname);
-
-  static bool nvsReady = false;
-  if (!nvsReady) {
-    esp_err_t nvsErr = nvs_flash_init();
-    if (nvsErr == ESP_ERR_NVS_NO_FREE_PAGES ||
-        nvsErr == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      nvs_flash_erase();
-      nvsErr = nvs_flash_init();
-    }
-    if (nvsErr != ESP_OK) {
-      logger.error("nvs_flash_init failed");
-      return;
-    }
-    nvsReady = true;
-  }
 
   esp_err_t err = esp_netif_init();
   if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
@@ -154,8 +140,17 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
     logger.error("Failed to start WiFi");
     return;
   }
-  
-  logger.info("mDNS disabled in ESP-IDF build");
+
+  // Initialize mDNS
+  esp_err_t mdnsErr = mdns_init();
+  if (mdnsErr != ESP_OK) {
+    logger.warn("mdns_init failed: " + std::to_string(mdnsErr));
+  } else {
+    mdns_hostname_set(hostname.c_str());
+    mdns_instance_name_set(hostname.c_str());
+    mdns_service_add(nullptr, "_http", "_tcp", 80, nullptr, 0);
+    logger.info("mDNS started: " + hostname + ".local");
+  }
 
   wifi_config_t apConfig{};
   std::strncpy(reinterpret_cast<char*>(apConfig.ap.ssid), kDefaultApSsid,

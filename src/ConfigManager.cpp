@@ -5,6 +5,7 @@
 #include <cJSON.h>
 #include <esp_err.h>
 #include <nvs.h>
+#include <nvs_flash.h>
 #include <string>
 #include <vector>
 
@@ -16,6 +17,22 @@ extern ConfigManager configManager;
 namespace {
 
 constexpr const char* kNvsNamespace = "esp-ebus";
+
+bool ensureNvsReady() {
+  static bool nvsReady = false;
+  if (nvsReady) return true;
+
+  esp_err_t err = nvs_flash_init();
+  if (err == ESP_ERR_NVS_NO_FREE_PAGES ||
+      err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    nvs_flash_erase();
+    err = nvs_flash_init();
+  }
+  if (err != ESP_OK) return false;
+
+  nvsReady = true;
+  return true;
+}
 
 std::string readString(nvs_handle_t handle, const char* key,
                        const char* fallback = "") {
@@ -154,6 +171,8 @@ bool writeFromFlatPayload(cJSON* bodyDoc, nvs_handle_t handle,
 }  // namespace
 
 std::string ConfigManager::readString(const char* key, const char* fallback) {
+  if (!ensureNvsReady()) return std::string(fallback);
+
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
   if (openErr != ESP_OK) return std::string(fallback);
@@ -164,6 +183,8 @@ std::string ConfigManager::readString(const char* key, const char* fallback) {
 }
 
 int32_t ConfigManager::readInt(const char* key, int32_t fallback) {
+  if (!ensureNvsReady()) return fallback;
+
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
   if (openErr != ESP_OK) return fallback;
@@ -191,6 +212,8 @@ bool ConfigManager::readBool(const char* key, bool fallback) {
 }
 
 bool ConfigManager::writeString(const char* key, const std::string& value) {
+  if (!ensureNvsReady()) return false;
+
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
   if (openErr != ESP_OK) return false;
@@ -208,6 +231,8 @@ bool ConfigManager::writeString(const char* key, const std::string& value) {
 }
 
 void ConfigManager::resetConfig() {
+  if (!ensureNvsReady()) return;
+
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
   if (openErr != ESP_OK) return;
@@ -235,12 +260,16 @@ esp_err_t handleConfigReset(httpd_req_t* req) {
 }  // namespace
 
 void ConfigManager::begin() {
+  ensureNvsReady();
+
   RegisterUri("/api/v1/config", HTTP_GET, handleConfigGet);
   RegisterUri("/api/v1/config", HTTP_POST, handleConfigSet);
   RegisterUri("/api/v1/config/reset", HTTP_POST, handleConfigReset);
 }
 
 std::string ConfigManager::readConfigJson() {
+  if (!ensureNvsReady()) return "{}";
+
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
   if (openErr != ESP_OK) return "{}";
@@ -259,6 +288,11 @@ std::string ConfigManager::readConfigJson() {
 
 bool ConfigManager::writeConfigJson(const std::string& body,
                                     std::string& error) {
+  if (!ensureNvsReady()) {
+    error = "Failed to initialize NVS";
+    return false;
+  }
+
   cJSON* bodyDoc = cJSON_Parse(body.c_str());
   if (bodyDoc == nullptr) {
     const char* parseError = cJSON_GetErrorPtr();
