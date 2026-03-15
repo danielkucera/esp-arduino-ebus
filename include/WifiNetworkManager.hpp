@@ -17,6 +17,8 @@ class WifiNetworkManager {
   static int getReconnectCount();
   static wifi_mode_t getMode();
   static bool isStaConnected();
+  static std::string getIpAddress();
+  static void setStaIpAssignedCallback(void (*callback)(const std::string& ipAddress));
   static bool isStaticIpEnabled();
   static std::string getConfiguredIpAddress();
   static std::string getConfiguredGateway();
@@ -59,6 +61,7 @@ class WifiNetworkManager {
   static bool staConfigured_;
   static TaskHandle_t statusLedTaskHandle_;
   static volatile StatusLedMode statusLedMode_;
+  static void (*staIpAssignedCallback_)(const std::string& ipAddress);
   static esp_netif_t* staNetif_;
   static esp_netif_t* apNetif_;
 };

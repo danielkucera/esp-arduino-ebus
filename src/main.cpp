@@ -596,12 +596,17 @@ extern "C" void app_main(void) {
 
   mqttha.setThingName(configManager.readString("thingName", "esp-eBus").c_str()); 
   mqttha.setThingHwVersion(adapterHwVersion);
-/*
-  mqttha.setThingModel(getChipModel());
-  mqttha.setThingModelId("Revision: " + std::to_string(getChipRevision()));
-  mqttha.setThingConfigurationUrl(
-      "http://" + std::string(WiFi.localIP().toString().c_str()) + "/");
-*/
+  mqttha.setThingModel("esp-eBus Adapter");
+  mqttha.setThingModelId("esp-ebus-adapter");
+  WifiNetworkManager::setStaIpAssignedCallback([](const std::string& ipAddress) {
+    if (ipAddress.empty()) return;
+
+    mqttha.setThingConfigurationUrl("http://" + ipAddress + "/");
+
+    if (mqttha.isEnabled()) {
+      mqttha.publishDeviceInfo();
+    }
+  });
 #endif
 
   espOtaManager.begin();

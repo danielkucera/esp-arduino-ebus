@@ -32,6 +32,7 @@ bool WifiNetworkManager::staConfigured_ = false;
 TaskHandle_t WifiNetworkManager::statusLedTaskHandle_ = nullptr;
 volatile WifiNetworkManager::StatusLedMode WifiNetworkManager::statusLedMode_ =
   WifiNetworkManager::StatusLedMode::SlowBlink;
+void (*WifiNetworkManager::staIpAssignedCallback_)(const std::string& ipAddress) = nullptr;
 esp_netif_t* WifiNetworkManager::staNetif_ = nullptr;
 esp_netif_t* WifiNetworkManager::apNetif_ = nullptr;
 
@@ -203,6 +204,31 @@ int WifiNetworkManager::getReconnectCount() { return reconnectCount_; }
 
 bool WifiNetworkManager::isStaConnected() { return staConnected_; }
 
+std::string WifiNetworkManager::getIpAddress() {
+  if (ipAddress_.addr != 0) return ipToString(ipAddress_);
+
+  esp_netif_ip_info_t info{};
+  if (getStaIpInfo(&info)) {
+    ipAddress_ = info.ip;
+    gateway_ = info.gw;
+    netmask_ = info.netmask;
+    return ipToString(ipAddress_);
+  }
+  return "";
+}
+
+void WifiNetworkManager::setStaIpAssignedCallback(
+    void (*callback)(const std::string& ipAddress)) {
+  staIpAssignedCallback_ = callback;
+
+  if (staIpAssignedCallback_ == nullptr) return;
+
+  const std::string ipAddress = getIpAddress();
+  if (!ipAddress.empty()) {
+    staIpAssignedCallback_(ipAddress);
+  }
+}
+
 wifi_mode_t WifiNetworkManager::getMode() {
   wifi_mode_t mode = WIFI_MODE_NULL;
   if (esp_wifi_get_mode(&mode) != ESP_OK) return WIFI_MODE_NULL;
@@ -358,9 +384,23 @@ void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data) {
   (void)arg;
   (void)event_base;
-  (void)event_data;
 
   if (event_id == IP_EVENT_STA_GOT_IP) {
+    if (event_data != nullptr) {
+      const auto* gotIpEvent =
+          static_cast<const ip_event_got_ip_t*>(event_data);
+      ipAddress_ = gotIpEvent->ip_info.ip;
+      gateway_ = gotIpEvent->ip_info.gw;
+      netmask_ = gotIpEvent->ip_info.netmask;
+    }
+
+    if (staIpAssignedCallback_ != nullptr) {
+      const std::string ipAddress = ipToString(ipAddress_);
+      if (!ipAddress.empty()) {
+        staIpAssignedCallback_(ipAddress);
+      }
+    }
+
     staConnected_ = true;
     setStatusLedMode(StatusLedMode::SolidOn);
     lastConnect_ = (uint32_t)(esp_timer_get_time() / 1000ULL);
@@ -402,8 +442,6 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
     } else if (gatewayValue.empty()) {
       gateway_.addr = 0;
     }
-
-    //WiFi.config(ipAddress_, gateway_, netmask_, dns1, dns2);
 
     esp_netif_dhcpc_stop(staNetif_);
 

@@ -43,7 +43,7 @@ class MqttHA {
   std::string thingManufacturer = "danman.eu";
   std::string thingSwVersion = AUTO_VERSION;
   std::string thingHwVersion;
-  std::string thingConfigurationUrl;
+  std::string thingConfigurationUrl = "http://esp-ebus.local/";
 
   struct Component {
     // Mandatory Home Assistant config fields
