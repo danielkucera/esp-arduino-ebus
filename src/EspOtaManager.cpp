@@ -209,7 +209,6 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
 
   while (totalReceived < expectedSize) {
     int bytesRead = recv(tcpSock, buffer, sizeof(buffer), 0);
-    wdt_feed();
     if (bytesRead <= 0) {
       if (bytesRead == 0 || (uint32_t)(esp_timer_get_time() / 1000ULL) > transferDeadline) {
         esp_ota_abort(handle);
@@ -220,7 +219,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
         return false;
       }
       if (errno == EWOULDBLOCK || errno == EAGAIN) {
-        vTaskDelay(pdMS_TO_TICKS(1));
+        vTaskDelay(1);
         continue;
       }
       esp_ota_abort(handle);
@@ -246,7 +245,6 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
     }
 
     esp_err_t writeResult = esp_ota_write(handle, buffer, bytesRead);
-    wdt_feed();
     if (writeResult != ESP_OK) {
       esp_ota_abort(handle);
       fail(std::string("esp_ota_write failed: ") + esp_err_to_name(writeResult));
@@ -270,7 +268,6 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
     int ackLen = snprintf(ack, sizeof(ack), "%u",
                           static_cast<unsigned int>(totalReceived));
     send(tcpSock, ack, ackLen, 0);
-    wdt_feed();
   }
 
   esp_err_t endResult = esp_ota_end(handle);

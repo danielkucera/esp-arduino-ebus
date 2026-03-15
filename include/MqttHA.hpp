@@ -13,13 +13,11 @@ class MqttHA {
   void setWillTopic(const std::string& topic);
 
   void setEnabled(const bool enable);
-  const bool isEnabled() const;
+  bool isEnabled() const;
 
   void setThingName(const std::string& name);
   void setThingModel(const std::string& model);
   void setThingModelId(const std::string& modelId);
-  void setThingManufacturer(const std::string& manufacturer);
-  void setThingSwVersion(const std::string& swVersion);
   void setThingHwVersion(const std::string& hwVersion);
   void setThingConfigurationUrl(const std::string& configurationUrl);
 
@@ -42,8 +40,8 @@ class MqttHA {
   std::string thingName;
   std::string thingModel;
   std::string thingModelId;
-  std::string thingManufacturer;
-  std::string thingSwVersion;
+  std::string thingManufacturer = "danman.eu";
+  std::string thingSwVersion = AUTO_VERSION;
   std::string thingHwVersion;
   std::string thingConfigurationUrl;
 

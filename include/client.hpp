@@ -1,13 +1,15 @@
 #pragma once
 
-#include <WiFiClient.h>
-#include <WiFiServer.h>
+#include <cstdint>
 
-bool handleNewClient(WiFiServer* server, WiFiClient clients[]);
+bool handleNewClient(int serverFd, int clients[]);
 
-void handleClient(WiFiClient* client);
-int pushClient(WiFiClient* client, uint8_t byte);
+bool startClientRuntime();
+void stopClientRuntime();
 
-void handleClientEnhanced(WiFiClient* client);
-int pushClientEnhanced(WiFiClient* client, uint8_t c, uint8_t d, bool log);
+void handleClient(int* clientFd);
+int pushClient(int* clientFd, uint8_t byte);
+
+void handleClientEnhanced(int* clientFd);
+int pushClientEnhanced(int* clientFd, uint8_t c, uint8_t d, bool log);
 

@@ -1,15 +1,42 @@
 #if defined(EBUS_INTERNAL)
 #include "Store.hpp"
 
-#include <Preferences.h>
-#include <cstdio>
-#include <cmath>
+#include <esp_littlefs.h>
 #include <esp_timer.h>
 
+#include <cerrno>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <sys/stat.h>
 
 Store store;
 
 namespace {
+constexpr const char* kLittlefsBasePath = "/littlefs";
+constexpr const char* kLittlefsPartitionLabel = "littlefs";
+constexpr const char* kCommandsFilePath = "/littlefs/commands.json";
+
+bool ensureLittlefsMounted() {
+  static bool mounted = false;
+  if (mounted) return true;
+
+  esp_vfs_littlefs_conf_t conf = {
+      .base_path = kLittlefsBasePath,
+      .partition_label = kLittlefsPartitionLabel,
+      .format_if_mount_failed = true,
+      .dont_mount = false,
+  };
+
+  esp_err_t err = esp_vfs_littlefs_register(&conf);
+  if (err == ESP_OK || err == ESP_ERR_INVALID_STATE) {
+    mounted = true;
+    return true;
+  }
+
+  return false;
+}
+
 std::string printJson(cJSON* node, const char* fallback) {
   char* printed = cJSON_PrintUnformatted(node);
   std::string out = printed != nullptr ? printed : fallback;
@@ -36,6 +63,8 @@ std::string jsonValueToString(cJSON* value) {
   return printJson(value, "null");
 }
 }  // namespace
+
+bool Store::initFileSystem() { return ensureLittlefsMounted(); }
 
 void Store::setDataUpdatedCallback(DataUpdatedCallback callback) {
   dataUpdatedCallback = std::move(callback);
@@ -68,55 +97,78 @@ Command* Store::findCommand(const std::string& key) {
 }
 
 int64_t Store::loadCommands() {
-  Preferences preferences;
-  preferences.begin("commands", true);
+  if (!ensureLittlefsMounted()) return -1;
 
-  int64_t bytes = preferences.getBytesLength("ebus");
-  if (bytes > 2) {  // 2 = empty json array "[]"
-    std::vector<char> buffer(bytes);
-    bytes = preferences.getBytes("ebus", buffer.data(), bytes);
-    if (bytes > 0) {
-      std::string payload(buffer.begin(), buffer.end());
-      deserializeCommands(payload.c_str());
-    } else {
-      bytes = -1;
-    }
-  } else {
-    bytes = 0;
+  FILE* file = std::fopen(kCommandsFilePath, "rb");
+  if (file == nullptr) {
+    if (errno == ENOENT) return 0;
+    return -1;
   }
 
-  preferences.end();
-  return bytes;
+  if (std::fseek(file, 0, SEEK_END) != 0) {
+    std::fclose(file);
+    return -1;
+  }
+
+  long size = std::ftell(file);
+  if (size <= 2) {
+    std::fclose(file);
+    return 0;
+  }
+
+  if (size <= 0 || std::fseek(file, 0, SEEK_SET) != 0) {
+    std::fclose(file);
+    return -1;
+  }
+
+  std::string payload;
+  payload.resize(static_cast<size_t>(size));
+  size_t bytesRead = std::fread(payload.data(), 1, payload.size(), file);
+  std::fclose(file);
+  if (bytesRead != payload.size()) return -1;
+
+  deserializeCommands(payload.c_str());
+  return static_cast<int64_t>(payload.size());
 }
 
 int64_t Store::saveCommands() const {
-  Preferences preferences;
-  preferences.begin("commands", false);
+  if (!ensureLittlefsMounted()) return -1;
 
   std::string payload = serializeCommands();
-  int64_t bytes = payload.size();
-  if (bytes > 2) {  // 2 = empty json array "[]"
-    bytes = preferences.putBytes("ebus", payload.data(), bytes);
-    if (bytes == 0) bytes = -1;
-  } else {
-    bytes = 0;
+  size_t size = payload.size();
+  if (size <= 2) {  // 2 = empty json array "[]"
+    return 0;
   }
 
-  preferences.end();
-  return bytes;
+  FILE* file = std::fopen(kCommandsFilePath, "wb");
+  if (file == nullptr) return -1;
+
+  size_t bytesWritten = std::fwrite(payload.data(), 1, size, file);
+  std::fclose(file);
+  if (bytesWritten != size) return -1;
+
+  return static_cast<int64_t>(size);
 }
 
 int64_t Store::wipeCommands() {
-  Preferences preferences;
-  preferences.begin("commands", false);
+  if (!ensureLittlefsMounted()) return -1;
 
-  int64_t bytes = preferences.getBytesLength("ebus");
-  if (bytes > 0) {
-    if (!preferences.remove("ebus")) bytes = -1;
+  struct stat fileStat {};
+  if (stat(kCommandsFilePath, &fileStat) != 0) {
+    if (errno == ENOENT) return 0;
+    return -1;
   }
 
-  preferences.end();
-  return bytes;
+  if (std::remove(kCommandsFilePath) != 0) {
+    if (errno == ENOENT) return 0;
+    return -1;
+  }
+
+  if (fileStat.st_size <= 0) {
+    return 0;
+  }
+
+  return static_cast<int64_t>(fileStat.st_size);
 }
 
 const std::string Store::getCommandsJson() const {
@@ -148,7 +200,7 @@ const std::vector<Command*> Store::getCommands() {
   return result;
 }
 
-const size_t Store::getActiveCommands() const {
+size_t Store::getActiveCommands() const {
   size_t count = 0;
   for (const auto& kv : commands) {
     if (kv.second.getActive()) count++;
@@ -156,7 +208,7 @@ const size_t Store::getActiveCommands() const {
   return count;
 }
 
-const size_t Store::getPassiveCommands() const {
+size_t Store::getPassiveCommands() const {
   size_t count = 0;
   for (const auto& kv : commands) {
     if (!kv.second.getActive()) count++;
@@ -164,7 +216,7 @@ const size_t Store::getPassiveCommands() const {
   return count;
 }
 
-const bool Store::active() const {
+bool Store::active() const {
   for (const auto& kv : commands) {
     if (kv.second.getActive()) return true;
   }
@@ -188,7 +240,9 @@ Command* Store::nextActiveCommand() {
       next = cmd;
   }
 
-  if (!init && next && (uint32_t)(esp_timer_get_time() / 1000ULL) < next->getLast() + next->getInterval() * 1000)
+  if (!init && next &&
+      (uint32_t)(esp_timer_get_time() / 1000ULL) <
+          next->getLast() + next->getInterval() * 1000)
     next = nullptr;
 
   return next;
@@ -224,8 +278,9 @@ std::vector<Command*> Store::updateData(Command* command,
     if (dataUpdatedCallback) dataUpdatedCallback(cmd->getName(), valueJson);
 
     cJSON* valueDoc = cJSON_Parse(valueJson.c_str());
-    cJSON* valueNode =
-        valueDoc ? cJSON_GetObjectItemCaseSensitive(valueDoc, "value") : nullptr;
+    cJSON* valueNode = valueDoc
+                           ? cJSON_GetObjectItemCaseSensitive(valueDoc, "value")
+                           : nullptr;
 
     std::string payload = " '" + ebus::to_string(cmd->getReadCmd()) + "' [" +
                           cmd->getName() + "] " +
@@ -268,7 +323,10 @@ const std::string Store::getValueFullJson(const Command* command) {
 
   cJSON_AddStringToObject(doc, "unit", command->getUnit().c_str());
   cJSON_AddNumberToObject(
-      doc, "age", static_cast<uint32_t>(((uint32_t)(esp_timer_get_time() / 1000ULL) - command->getLast()) / 1000));
+      doc, "age",
+      static_cast<uint32_t>(
+          ((uint32_t)(esp_timer_get_time() / 1000ULL) - command->getLast()) /
+          1000));
   cJSON_AddBoolToObject(doc, "write", !command->getWriteCmd().empty());
   cJSON_AddBoolToObject(doc, "active", command->getActive());
 

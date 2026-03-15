@@ -22,7 +22,7 @@ class Schedule {
  public:
   Schedule() = default;
 
-  void start(ebus::Request* request, ebus::Handler* handler);
+  void start(ebus::Bus* bus, ebus::Request* request, ebus::Handler* handler);
   void stop();
 
   void setSendInquiryOfExistence(const bool enable);
@@ -42,18 +42,19 @@ class Schedule {
   void handleForwardFilter(const std::vector<std::string>& filters);
 
   void setPublishCounter(bool enable);
-  const bool getPublishCounter() const;
+  bool getPublishCounter() const;
   void resetCounter();
   void publishCounter();
   const std::string getCounterJson();
 
   void setPublishTiming(bool enable);
-  const bool getPublishTiming() const;
+  bool getPublishTiming() const;
   void resetTiming();
   void publishTiming();
   const std::string getTimingJson();
 
  private:
+  ebus::Bus* ebusBus = nullptr;
   ebus::Request* ebusRequest = nullptr;
   ebus::Handler* ebusHandler = nullptr;
 

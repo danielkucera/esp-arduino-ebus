@@ -1,6 +1,63 @@
 #if defined(EBUS_INTERNAL)
 #include "ClientType.hpp"
 
+#include <cerrno>
+
+#include <lwip/sockets.h>
+#include <unistd.h>
+
+namespace {
+
+bool isSocketConnected(int socketFd) {
+  if (socketFd < 0) return false;
+  char buffer = 0;
+  const int result = recv(socketFd, &buffer, 1, MSG_PEEK | MSG_DONTWAIT);
+  if (result > 0) return true;
+  if (result == 0) return false;
+  return errno == EWOULDBLOCK || errno == EAGAIN;
+}
+
+int socketAvailable(int socketFd) {
+  if (socketFd < 0) return 0;
+  int pending = 0;
+  if (lwip_ioctl(socketFd, FIONREAD, &pending) == 0) {
+    return pending;
+  }
+  return 0;
+}
+
+int socketReadByte(int socketFd) {
+  if (socketFd < 0) return -1;
+  uint8_t byte = 0;
+  const int result = recv(socketFd, &byte, 1, MSG_DONTWAIT);
+  if (result <= 0) return -1;
+  return byte;
+}
+
+int socketPeekByte(int socketFd) {
+  if (socketFd < 0) return -1;
+  uint8_t byte = 0;
+  const int result = recv(socketFd, &byte, 1, MSG_PEEK | MSG_DONTWAIT);
+  if (result <= 0) return -1;
+  return byte;
+}
+
+void closeSocket(int& socketFd) {
+  if (socketFd >= 0) {
+    shutdown(socketFd, SHUT_RDWR);
+    close(socketFd);
+    socketFd = -1;
+  }
+}
+
+bool socketWrite(int socketFd, const uint8_t* data, size_t size) {
+  if (socketFd < 0 || data == nullptr || size == 0) return false;
+  const int result = send(socketFd, data, size, 0);
+  return result > 0;
+}
+
+}  // namespace
+
 enum requests { CMD_INIT = 0, CMD_SEND, CMD_START, CMD_INFO };
 
 enum responses {
@@ -15,22 +72,19 @@ enum responses {
 
 enum errors { ERR_FRAMING = 0x00, ERR_OVERRUN = 0x01 };
 
-AbstractClient::AbstractClient(WiFiClient* client, ebus::Request* request,
-                               bool write)
-    : client(client), request(request), write(write) {}
+AbstractClient::AbstractClient(int socketFd, ebus::Request* request, bool write)
+  : socketFd(socketFd), request(request), write(write) {}
 
 bool AbstractClient::isWriteCapable() const { return write; }
 
-bool AbstractClient::isConnected() const {
-  return client && client->connected();
-}
+bool AbstractClient::isConnected() const { return isSocketConnected(socketFd); }
 
 void AbstractClient::stop() {
-  if (client) client->stop();
+  closeSocket(socketFd);
 }
 
-ReadOnlyClient::ReadOnlyClient(WiFiClient* client, ebus::Request* request)
-    : AbstractClient(client, request, false) {}
+ReadOnlyClient::ReadOnlyClient(int socketFd, ebus::Request* request)
+    : AbstractClient(socketFd, request, false) {}
 
 bool ReadOnlyClient::available() const { return false; }
 
@@ -39,21 +93,24 @@ bool ReadOnlyClient::readByte(uint8_t& byte) { return false; }
 bool ReadOnlyClient::writeBytes(const std::vector<uint8_t>& bytes) {
   if (!isConnected() || bytes.empty()) return false;
 
-  client->write(bytes.data(), bytes.size());
+  socketWrite(socketFd, bytes.data(), bytes.size());
   return true;
 }
 
 bool ReadOnlyClient::handleBusData(const uint8_t& byte) { return false; }
 
-RegularClient::RegularClient(WiFiClient* client, ebus::Request* request)
-    : AbstractClient(client, request, true) {}
+RegularClient::RegularClient(int socketFd, ebus::Request* request)
+    : AbstractClient(socketFd, request, true) {}
 
-bool RegularClient::available() const { return client && client->available(); }
+bool RegularClient::available() const { return socketAvailable(socketFd) > 0; }
 
 bool RegularClient::readByte(uint8_t& byte) {
   if (available()) {
-    byte = client->read();
-    return true;
+    const int value = socketReadByte(socketFd);
+    if (value >= 0) {
+      byte = static_cast<uint8_t>(value);
+      return true;
+    }
   }
   return false;
 }
@@ -61,7 +118,7 @@ bool RegularClient::readByte(uint8_t& byte) {
 bool RegularClient::writeBytes(const std::vector<uint8_t>& bytes) {
   if (!isConnected() || bytes.empty()) return false;
 
-  client->write(bytes.data(), bytes.size());
+  socketWrite(socketFd, bytes.data(), bytes.size());
   return true;
 }
 
@@ -89,31 +146,33 @@ bool RegularClient::handleBusData(const uint8_t& byte) {
   return false;
 }
 
-EnhancedClient::EnhancedClient(WiFiClient* client, ebus::Request* request)
-    : AbstractClient(client, request, true) {}
+EnhancedClient::EnhancedClient(int socketFd, ebus::Request* request)
+    : AbstractClient(socketFd, request, true) {}
 
-bool EnhancedClient::available() const { return client && client->available(); }
+bool EnhancedClient::available() const { return socketAvailable(socketFd) > 0; }
 
 bool EnhancedClient::readByte(uint8_t& byte) {
-  int b1 = client->peek();
+  int b1 = socketPeekByte(socketFd);
   if (b1 < 0) return false;
 
   if (b1 < 0x80) {
     // Short form: just a data byte, no prefix
-    byte = client->read();
+    const int value = socketReadByte(socketFd);
+    if (value < 0) return false;
+    byte = static_cast<uint8_t>(value);
     return true;
   }
 
   // Full enhanced protocol: need two bytes
-  if (client->available() < 2) return false;
-  b1 = client->read();
-  int b2 = client->read();
+  if (socketAvailable(socketFd) < 2) return false;
+  b1 = socketReadByte(socketFd);
+  int b2 = socketReadByte(socketFd);
 
   // Check signatures
   if ((b1 & 0xc0) != 0xc0 || (b2 & 0xc0) != 0x80) {
     // Invalid signature, protocol error
     writeBytes({ERROR_HOST, ERR_FRAMING});
-    client->stop();
+    stop();
     return false;
   }
 
@@ -155,12 +214,12 @@ bool EnhancedClient::writeBytes(const std::vector<uint8_t>& bytes) {
 
   // Short form for data < 0x80
   if (bytes.size() == 1 && data < 0x80) {
-    client->write(data);
+    socketWrite(socketFd, &data, 1);
   } else {
     uint8_t out[2];
     out[0] = 0xc0 | (cmd << 2) | (data >> 6);
     out[1] = 0x80 | (data & 0x3f);
-    client->write(out, 2);
+    socketWrite(socketFd, out, 2);
   }
   return true;
 }

@@ -1,10 +1,11 @@
 #if defined(EBUS_INTERNAL)
 #include "Schedule.hpp"
 
-#include <algorithm>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+
+#include <algorithm>
 
 #include "DeviceManager.hpp"
 #include "Logger.hpp"
@@ -30,7 +31,9 @@ portMUX_TYPE commandMux = portMUX_INITIALIZER_UNLOCKED;
 
 Schedule schedule;
 
-void Schedule::start(ebus::Request* request, ebus::Handler* handler) {
+void Schedule::start(ebus::Bus* bus, ebus::Request* request,
+                     ebus::Handler* handler) {
+  ebusBus = bus;
   ebusRequest = request;
   ebusHandler = handler;
 
@@ -121,7 +124,8 @@ void Schedule::handleSend(const std::vector<uint8_t>& command) {
 }
 
 void Schedule::handleSend(const std::vector<std::string>& commands) {
-  for (const std::string& command : commands) handleSend(ebus::to_vector(command));
+  for (const std::string& command : commands)
+    handleSend(ebus::to_vector(command));
 }
 
 void Schedule::handleWrite(const std::vector<uint8_t>& command) {
@@ -138,7 +142,7 @@ void Schedule::handleForwardFilter(const std::vector<std::string>& filters) {
 
 void Schedule::setPublishCounter(bool enable) { counterEnabled = enable; }
 
-const bool Schedule::getPublishCounter() const { return counterEnabled; }
+bool Schedule::getPublishCounter() const { return counterEnabled; }
 
 void Schedule::resetCounter() {
   deviceManager.resetAddresses();
@@ -175,8 +179,9 @@ const std::string Schedule::getCounterJson() {
   cJSON_AddNumberToObject(failed, "Sending", sendingFailed);
 
   // Counter
-  ebus::Handler::Counter handlerCounter = ebusHandler->getCounter();
+  ebus::Bus::Counter busCounter = ebusBus->getCounter();
   ebus::Request::Counter requestCounter = ebusRequest->getCounter();
+  ebus::Handler::Counter handlerCounter = ebusHandler->getCounter();
 
   // Messages
   cJSON* messages = cJSON_AddObjectToObject(doc, "Messages");
@@ -198,21 +203,28 @@ const std::string Schedule::getCounterJson() {
   cJSON_AddNumberToObject(messages, "Active_Broadcast",
                           handlerCounter.messagesActiveBroadcast);
 
+  // Bus
+  cJSON* bus = cJSON_AddObjectToObject(doc, "Bus");
+  cJSON_AddNumberToObject(bus, "StartBit", busCounter.busStartBit);
+
   // Requests
   cJSON* requests = cJSON_AddObjectToObject(doc, "Requests");
-  cJSON_AddNumberToObject(requests, "StartBit", requestCounter.requestsStartBit);
-  cJSON_AddNumberToObject(requests, "FirstSyn", requestCounter.requestsFirstSyn);
-  cJSON_AddNumberToObject(requests, "FirstWon", requestCounter.requestsFirstWon);
+  cJSON_AddNumberToObject(requests, "FirstSyn",
+                          requestCounter.requestsFirstSyn);
+  cJSON_AddNumberToObject(requests, "FirstWon",
+                          requestCounter.requestsFirstWon);
   cJSON_AddNumberToObject(requests, "FirstRetry",
                           requestCounter.requestsFirstRetry);
   cJSON_AddNumberToObject(requests, "FirstLost",
                           requestCounter.requestsFirstLost);
   cJSON_AddNumberToObject(requests, "FirstError",
                           requestCounter.requestsFirstError);
-  cJSON_AddNumberToObject(requests, "RetrySyn", requestCounter.requestsRetrySyn);
+  cJSON_AddNumberToObject(requests, "RetrySyn",
+                          requestCounter.requestsRetrySyn);
   cJSON_AddNumberToObject(requests, "RetryError",
                           requestCounter.requestsRetryError);
-  cJSON_AddNumberToObject(requests, "SecondWon", requestCounter.requestsSecondWon);
+  cJSON_AddNumberToObject(requests, "SecondWon",
+                          requestCounter.requestsSecondWon);
   cJSON_AddNumberToObject(requests, "SecondLost",
                           requestCounter.requestsSecondLost);
   cJSON_AddNumberToObject(requests, "SecondError",
@@ -222,7 +234,8 @@ const std::string Schedule::getCounterJson() {
   cJSON* reset = cJSON_AddObjectToObject(doc, "Reset");
   cJSON_AddNumberToObject(reset, "Total", handlerCounter.resetTotal);
   cJSON_AddNumberToObject(reset, "Passive_00", handlerCounter.resetPassive00);
-  cJSON_AddNumberToObject(reset, "Passive_0704", handlerCounter.resetPassive0704);
+  cJSON_AddNumberToObject(reset, "Passive_0704",
+                          handlerCounter.resetPassive0704);
   cJSON_AddNumberToObject(reset, "Passive", handlerCounter.resetPassive);
   cJSON_AddNumberToObject(reset, "Active_00", handlerCounter.resetActive00);
   cJSON_AddNumberToObject(reset, "Active_0704", handlerCounter.resetActive0704);
@@ -235,10 +248,12 @@ const std::string Schedule::getCounterJson() {
   // Error Passive
   cJSON* errorPassive = cJSON_AddObjectToObject(error, "Passive");
   cJSON_AddNumberToObject(errorPassive, "Total", handlerCounter.errorPassive);
-  cJSON_AddNumberToObject(errorPassive, "Master", handlerCounter.errorPassiveMaster);
+  cJSON_AddNumberToObject(errorPassive, "Master",
+                          handlerCounter.errorPassiveMaster);
   cJSON_AddNumberToObject(errorPassive, "Master_ACK",
                           handlerCounter.errorPassiveMasterACK);
-  cJSON_AddNumberToObject(errorPassive, "Slave", handlerCounter.errorPassiveSlave);
+  cJSON_AddNumberToObject(errorPassive, "Slave",
+                          handlerCounter.errorPassiveSlave);
   cJSON_AddNumberToObject(errorPassive, "Slave_ACK",
                           handlerCounter.errorPassiveSlaveACK);
 
@@ -249,17 +264,20 @@ const std::string Schedule::getCounterJson() {
                           handlerCounter.errorReactiveMaster);
   cJSON_AddNumberToObject(errorReactive, "Master_ACK",
                           handlerCounter.errorReactiveMasterACK);
-  cJSON_AddNumberToObject(errorReactive, "Slave", handlerCounter.errorReactiveSlave);
+  cJSON_AddNumberToObject(errorReactive, "Slave",
+                          handlerCounter.errorReactiveSlave);
   cJSON_AddNumberToObject(errorReactive, "Slave_ACK",
                           handlerCounter.errorReactiveSlaveACK);
 
   // Error Active
   cJSON* errorActive = cJSON_AddObjectToObject(error, "Active");
   cJSON_AddNumberToObject(errorActive, "Total", handlerCounter.errorActive);
-  cJSON_AddNumberToObject(errorActive, "Master", handlerCounter.errorActiveMaster);
+  cJSON_AddNumberToObject(errorActive, "Master",
+                          handlerCounter.errorActiveMaster);
   cJSON_AddNumberToObject(errorActive, "Master_ACK",
                           handlerCounter.errorActiveMasterACK);
-  cJSON_AddNumberToObject(errorActive, "Slave", handlerCounter.errorActiveSlave);
+  cJSON_AddNumberToObject(errorActive, "Slave",
+                          handlerCounter.errorActiveSlave);
   cJSON_AddNumberToObject(errorActive, "Slave_ACK",
                           handlerCounter.errorActiveSlaveACK);
 
@@ -273,10 +291,10 @@ const std::string Schedule::getCounterJson() {
 
 void Schedule::setPublishTiming(bool enable) { timingEnabled = enable; }
 
-const bool Schedule::getPublishTiming() const { return timingEnabled; }
+bool Schedule::getPublishTiming() const { return timingEnabled; }
 
 void Schedule::resetTiming() {
-  if (ebusRequest) ebusRequest->resetTiming();
+  if (ebusBus) ebusBus->resetTiming();
   if (ebusHandler) ebusHandler->resetTiming();
 }
 
@@ -291,21 +309,21 @@ const std::string Schedule::getTimingJson() {
   cJSON* doc = cJSON_CreateObject();
 
   // Timing
-  ebus::Request::Timing requestTiming = ebusRequest->getTiming();
+  ebus::Bus::Timing busTiming = ebusBus->getTiming();
   ebus::Handler::Timing handlerTiming = ebusHandler->getTiming();
 
   // Helper lambda to add timing stats to a JsonObject
-  auto addTiming = [](cJSON* obj, int64_t last, int64_t mean,
-                      int64_t stddev, uint64_t count) {
+  auto addTiming = [](cJSON* obj, int64_t last, int64_t mean, int64_t stddev,
+                      uint64_t count) {
     cJSON_AddNumberToObject(obj, "Last", static_cast<double>(last));
     cJSON_AddNumberToObject(obj, "Mean", static_cast<double>(mean));
     cJSON_AddNumberToObject(obj, "StdDev", static_cast<double>(stddev));
     cJSON_AddNumberToObject(obj, "Count", static_cast<double>(count));
   };
 
-  cJSON* busIsr = cJSON_AddObjectToObject(doc, "BusIsr");
-  cJSON* busIsrDelay = cJSON_AddObjectToObject(busIsr, "Delay");
-  cJSON* busIsrWindow = cJSON_AddObjectToObject(busIsr, "Window");
+  cJSON* bus = cJSON_AddObjectToObject(doc, "BusIsr");
+  cJSON* busDelay = cJSON_AddObjectToObject(bus, "Delay");
+  cJSON* busWindow = cJSON_AddObjectToObject(bus, "Window");
   cJSON* write = cJSON_AddObjectToObject(doc, "Write");
   cJSON* active = cJSON_AddObjectToObject(doc, "Active");
   cJSON* activeFirst = cJSON_AddObjectToObject(active, "First");
@@ -321,55 +339,55 @@ const std::string Schedule::getTimingJson() {
   cJSON* callbackTelegram = cJSON_AddObjectToObject(callback, "Telegram");
   cJSON* callbackError = cJSON_AddObjectToObject(callback, "Error");
 
-  addTiming(busIsrDelay, requestTiming.busIsrDelayLast,
-            requestTiming.busIsrDelayMean, requestTiming.busIsrDelayStdDev,
-            requestTiming.busIsrDelayCount);
+  addTiming(busDelay, busTiming.busDelay_Last, busTiming.busDelay_Mean,
+            busTiming.busDelay_StdDev, busTiming.busDelay_Count);
 
-  addTiming(busIsrWindow, requestTiming.busIsrWindowLast,
-            requestTiming.busIsrWindowMean, requestTiming.busIsrWindowStdDev,
-            requestTiming.busIsrWindowCount);
+  addTiming(busWindow, busTiming.busWindow_Last, busTiming.busWindow_Mean,
+            busTiming.busWindow_StdDev, busTiming.busWindow_Count);
 
-  addTiming(write, handlerTiming.writeLast, handlerTiming.writeMean,
-            handlerTiming.writeStdDev, handlerTiming.writeCount);
+  addTiming(write, handlerTiming.write_Last, handlerTiming.write_Mean,
+            handlerTiming.write_StdDev, handlerTiming.write_Count);
 
-  addTiming(activeFirst, handlerTiming.activeFirstLast, handlerTiming.activeFirstMean,
-            handlerTiming.activeFirstStdDev, handlerTiming.activeFirstCount);
+  addTiming(activeFirst, handlerTiming.activeFirst_Last,
+            handlerTiming.activeFirst_Mean, handlerTiming.activeFirst_StdDev,
+            handlerTiming.activeFirst_Count);
 
-  addTiming(activeData, handlerTiming.activeDataLast, handlerTiming.activeDataMean,
-            handlerTiming.activeDataStdDev, handlerTiming.activeDataCount);
+  addTiming(activeData, handlerTiming.activeData_Last,
+            handlerTiming.activeData_Mean, handlerTiming.activeData_StdDev,
+            handlerTiming.activeData_Count);
 
-  addTiming(passiveFirst, handlerTiming.passiveFirstLast,
-            handlerTiming.passiveFirstMean, handlerTiming.passiveFirstStdDev,
-            handlerTiming.passiveFirstCount);
+  addTiming(passiveFirst, handlerTiming.passiveFirst_Last,
+            handlerTiming.passiveFirst_Mean, handlerTiming.passiveFirst_StdDev,
+            handlerTiming.passiveFirst_Count);
 
-  addTiming(passiveData, handlerTiming.passiveDataLast,
-            handlerTiming.passiveDataMean, handlerTiming.passiveDataStdDev,
-            handlerTiming.passiveDataCount);
+  addTiming(passiveData, handlerTiming.passiveData_Last,
+            handlerTiming.passiveData_Mean, handlerTiming.passiveData_StdDev,
+            handlerTiming.passiveData_Count);
 
-  addTiming(sync, handlerTiming.syncLast, handlerTiming.syncMean,
-            handlerTiming.syncStdDev, handlerTiming.syncCount);
+  addTiming(sync, handlerTiming.sync_Last, handlerTiming.sync_Mean,
+            handlerTiming.sync_StdDev, handlerTiming.sync_Count);
 
-  addTiming(callbackWon, handlerTiming.callbackWonLast,
-            handlerTiming.callbackWonMean, handlerTiming.callbackWonStdDev,
-            handlerTiming.callbackWonCount);
+  addTiming(callbackWon, handlerTiming.callbackWon_Last,
+            handlerTiming.callbackWon_Mean, handlerTiming.callbackWon_StdDev,
+            handlerTiming.callbackWon_Count);
 
-  addTiming(callbackLost, handlerTiming.callbackLostLast,
-            handlerTiming.callbackLostMean, handlerTiming.callbackLostStdDev,
-            handlerTiming.callbackLostCount);
+  addTiming(callbackLost, handlerTiming.callbackLost_Last,
+            handlerTiming.callbackLost_Mean, handlerTiming.callbackLost_StdDev,
+            handlerTiming.callbackLost_Count);
 
-  addTiming(callbackReactive, handlerTiming.callbackReactiveLast,
-            handlerTiming.callbackReactiveMean,
-            handlerTiming.callbackReactiveStdDev,
-            handlerTiming.callbackReactiveCount);
+  addTiming(callbackReactive, handlerTiming.callbackReactive_Last,
+            handlerTiming.callbackReactive_Mean,
+            handlerTiming.callbackReactive_StdDev,
+            handlerTiming.callbackReactive_Count);
 
-  addTiming(callbackTelegram, handlerTiming.callbackTelegramLast,
-            handlerTiming.callbackTelegramMean,
-            handlerTiming.callbackTelegramStdDev,
-            handlerTiming.callbackTelegramCount);
+  addTiming(callbackTelegram, handlerTiming.callbackTelegram_Last,
+            handlerTiming.callbackTelegram_Mean,
+            handlerTiming.callbackTelegram_StdDev,
+            handlerTiming.callbackTelegram_Count);
 
-  addTiming(callbackError, handlerTiming.callbackErrorLast,
-            handlerTiming.callbackErrorMean, handlerTiming.callbackErrorStdDev,
-            handlerTiming.callbackErrorCount);
+  addTiming(callbackError, handlerTiming.callbackError_Last,
+            handlerTiming.callbackError_Mean, handlerTiming.callbackError_StdDev,
+            handlerTiming.callbackError_Count);
 
   ebus::Handler::StateTiming stateTiming = ebusHandler->getStateTiming();
 
@@ -427,7 +445,7 @@ void Schedule::taskFunc(void* arg) {
     if (self->stopRunner) vTaskDelete(NULL);
     self->handleEventQueue();
     self->handleCommandQueue();
-    vTaskDelay(pdMS_TO_TICKS(1));  // short delay to yield CPU
+    vTaskDelay(1);  // short delay to yield CPU
   }
 }
 
@@ -468,12 +486,16 @@ void Schedule::handleEventQueue() {
               schedule.processActive(event->mode,
                                      std::vector<uint8_t>(event->data.master),
                                      std::vector<uint8_t>(event->data.slave));
+              [[fallthrough]];
               // break;
               // To process fields of active messages with passive definitions.
             case ebus::MessageType::passive:
             case ebus::MessageType::reactive:
               schedule.processPassive(std::vector<uint8_t>(event->data.master),
                                       std::vector<uint8_t>(event->data.slave));
+              break;
+            case ebus::MessageType::undefined:
+            default:
               break;
           }
         } break;
@@ -610,7 +632,8 @@ void Schedule::enqueueStartupScanCommands() {
 }
 
 void Schedule::enqueueFullScanCommand() {
-  if ((uint32_t)(esp_timer_get_time() / 1000ULL) > lastFullScan + distanceFullScans) {
+  if ((uint32_t)(esp_timer_get_time() / 1000ULL) >
+      lastFullScan + distanceFullScans) {
     lastFullScan = (uint32_t)(esp_timer_get_time() / 1000ULL);
     if (deviceManager.hasNextFullScan()) {
       const auto cmd = deviceManager.nextFullScanCommand();

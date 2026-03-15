@@ -1,6 +1,6 @@
 #include "Logger.hpp"
 
-#include <cJSON.h>
+#include <inttypes.h>
 #include <ctime>
 #include <cstring>
 #include <esp_timer.h>
@@ -9,6 +9,34 @@
 namespace {
 constexpr size_t kPrintQueueLen = 32;
 constexpr size_t kPrintMsgMaxLen = 384;
+
+std::string jsonEscape(const std::string& input) {
+  std::string escaped;
+  escaped.reserve(input.size() + 8);
+  for (char c : input) {
+    switch (c) {
+      case '\\':
+        escaped += "\\\\";
+        break;
+      case '"':
+        escaped += "\\\"";
+        break;
+      case '\n':
+        escaped += "\\n";
+        break;
+      case '\r':
+        escaped += "\\r";
+        break;
+      case '\t':
+        escaped += "\\t";
+        break;
+      default:
+        escaped += c;
+        break;
+    }
+  }
+  return escaped;
+}
 }  // namespace
 
 Logger logger;
@@ -75,21 +103,26 @@ const std::string Logger::timestamp() {
 
   char timestamp[40];
   strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", &timeinfo);
+  const uint32_t millis =
+      static_cast<uint32_t>((esp_timer_get_time() / 1000ULL) % 1000ULL);
   snprintf(timestamp + strlen(timestamp), sizeof(timestamp) - strlen(timestamp),
-           ".%03uZ", (uint32_t)(esp_timer_get_time() / 1000ULL) % 1000);
+           ".%03" PRIu32 "Z", millis);
 
   return std::string(timestamp);
 }
 
 void Logger::log(LogLevel level, std::string message) {
-  cJSON* doc = cJSON_CreateObject();
-  cJSON_AddStringToObject(doc, "timestamp", timestamp().c_str());
-  cJSON_AddStringToObject(doc, "level", logLevelText(level));
-  cJSON_AddStringToObject(doc, "message", message.c_str());
-  char* printed = cJSON_PrintUnformatted(doc);
-  std::string payload = printed != nullptr ? printed : "{}";
-  if (printed != nullptr) cJSON_free(printed);
-  cJSON_Delete(doc);
+  const std::string ts = timestamp();
+  const std::string escapedMessage = jsonEscape(message);
+  std::string payload;
+  payload.reserve(ts.size() + escapedMessage.size() + 64);
+  payload += "{\"timestamp\":\"";
+  payload += ts;
+  payload += "\",\"level\":\"";
+  payload += logLevelText(level);
+  payload += "\",\"message\":\"";
+  payload += escapedMessage;
+  payload += "\"}";
 
   if (printQueue != nullptr) {
     char msg[kPrintMsgMaxLen]{};

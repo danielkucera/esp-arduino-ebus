@@ -12,18 +12,20 @@
 #include "Command.hpp"
 
 // This Store class stores both active and passive eBUS commands. For permanent
-// storage (NVS), functions for saving, loading, and deleting commands are
+// storage (SPIFFS JSON file), functions for saving, loading, and deleting
+// commands are
 // available. Permanently stored commands are automatically loaded when the
 // device is restarted.
 
 using DataUpdatedCallback =
     std::function<void(const std::string& name, const std::string& valueJson)>;
 
-using DataUpdatedLogCallback =
-    std::function<void(const std::string& message)>;
+using DataUpdatedLogCallback = std::function<void(const std::string& message)>;
 
 class Store {
  public:
+  bool initFileSystem();
+
   void setDataUpdatedCallback(DataUpdatedCallback callback);
   void setDataUpdatedLogCallback(DataUpdatedLogCallback callback);
 
@@ -39,10 +41,10 @@ class Store {
 
   const std::vector<Command*> getCommands();
 
-  const size_t getActiveCommands() const;
-  const size_t getPassiveCommands() const;
+  size_t getActiveCommands() const;
+  size_t getPassiveCommands() const;
 
-  const bool active() const;
+  bool active() const;
 
   Command* nextActiveCommand();
   std::vector<Command*> findPassiveCommands(const std::vector<uint8_t>& master);

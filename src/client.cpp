@@ -1,5 +1,15 @@
 #include "client.hpp"
 
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+#include <lwip/sockets.h>
+#include <lwip/tcp.h>
+
 #include "BusType.hpp"
 #include "main.hpp"
 
@@ -8,41 +18,238 @@
 
 enum requests { CMD_INIT = 0, CMD_SEND, CMD_START, CMD_INFO };
 
-bool handleNewClient(WiFiServer* server, WiFiClient clients[]) {
-  if (!server->hasClient()) return false;
+namespace {
+
+TaskHandle_t clientAcceptTaskHandle = nullptr;
+TaskHandle_t dataTaskHandle = nullptr;
+int wifiServerFd = -1;
+int wifiClients[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
+
+int wifiServerEnhancedFd = -1;
+int wifiClientsEnhanced[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
+
+int wifiServerReadOnlyFd = -1;
+int wifiClientsReadOnly[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
+
+constexpr uint16_t kPortDefault = 3333;
+constexpr uint16_t kPortEnhanced = 3335;
+constexpr uint16_t kPortReadOnly = 3334;
+
+bool createListenSocket(int& listenFd, uint16_t port) {
+  if (listenFd >= 0) return true;
+
+  listenFd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+  if (listenFd < 0) return false;
+
+  int enable = 1;
+  setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  if (bind(listenFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+    close(listenFd);
+    listenFd = -1;
+    return false;
+  }
+
+  if (listen(listenFd, 4) != 0) {
+    close(listenFd);
+    listenFd = -1;
+    return false;
+  }
+
+  int flags = fcntl(listenFd, F_GETFL, 0);
+  if (flags >= 0) {
+    fcntl(listenFd, F_SETFL, flags | O_NONBLOCK);
+  }
+
+  return true;
+}
+
+bool createListenSockets() {
+  return createListenSocket(wifiServerFd, kPortDefault) &&
+         createListenSocket(wifiServerEnhancedFd, kPortEnhanced) &&
+         createListenSocket(wifiServerReadOnlyFd, kPortReadOnly);
+}
+
+void clientAcceptTask(void* arg) {
+  for (;;) {
+    handleNewClient(wifiServerFd, wifiClients);
+    handleNewClient(wifiServerEnhancedFd, wifiClientsEnhanced);
+    handleNewClient(wifiServerReadOnlyFd, wifiClientsReadOnly);
+    vTaskDelay(1);
+  }
+}
+
+void dataProcess() {
+  for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+    handleClient(&wifiClients[i]);
+    handleClientEnhanced(&wifiClientsEnhanced[i]);
+  }
+
+  BusType::data data;
+  if (Bus.read(data)) {
+    for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
+      if (data._enhanced) {
+        if (data._clientFd == wifiClientsEnhanced[i]) {
+          pushClientEnhanced(&wifiClientsEnhanced[i], data._c, data._d, true);
+        }
+      } else {
+        pushClient(&wifiClients[i], data._d);
+        pushClient(&wifiClientsReadOnly[i], data._d);
+        if (data._clientFd != wifiClientsEnhanced[i]) {
+          pushClientEnhanced(&wifiClientsEnhanced[i], data._c, data._d,
+                             data._logToClientFd == wifiClientsEnhanced[i]);
+        }
+      }
+    }
+  }
+}
+
+void dataLoop(void* arg) {
+  for (;;) {
+    dataProcess();
+  }
+}
+
+bool isSocketConnected(int clientFd) {
+  if (clientFd < 0) return false;
+  char buffer = 0;
+  const int result = recv(clientFd, &buffer, 1, MSG_PEEK | MSG_DONTWAIT);
+  if (result > 0) return true;
+  if (result == 0) return false;
+  return errno == EWOULDBLOCK || errno == EAGAIN;
+}
+
+void closeSocket(int& clientFd) {
+  if (clientFd >= 0) {
+    shutdown(clientFd, SHUT_RDWR);
+    close(clientFd);
+    clientFd = -1;
+  }
+}
+
+int socketAvailable(int clientFd) {
+  if (clientFd < 0) return 0;
+  int pending = 0;
+  if (lwip_ioctl(clientFd, FIONREAD, &pending) == 0) {
+    return pending;
+  }
+  return 0;
+}
+
+int socketReadByte(int clientFd, int flags = MSG_DONTWAIT) {
+  if (clientFd < 0) return -1;
+  uint8_t byte = 0;
+  const int result = recv(clientFd, &byte, 1, flags);
+  if (result <= 0) return -1;
+  return byte;
+}
+
+size_t socketWriteBytes(int clientFd, const uint8_t* data, size_t size) {
+  if (clientFd < 0 || data == nullptr || size == 0) return 0;
+  const int result = send(clientFd, data, size, 0);
+  if (result < 0) return 0;
+  return static_cast<size_t>(result);
+}
+
+size_t socketWriteString(int clientFd, const char* message) {
+  if (message == nullptr) return 0;
+  return socketWriteBytes(clientFd, reinterpret_cast<const uint8_t*>(message),
+                          strlen(message));
+}
+
+int socketAvailableForWrite(int clientFd) {
+  return isSocketConnected(clientFd) ? 1 : 0;
+}
+
+}  // namespace
+
+bool startClientRuntime() {
+  if (!createListenSockets()) return false;
+
+  if (dataTaskHandle == nullptr) {
+    if (xTaskCreate(dataLoop, "data_loop", 10000, nullptr, 1,
+                    &dataTaskHandle) != pdPASS) {
+      return false;
+    }
+  }
+
+  if (clientAcceptTaskHandle == nullptr) {
+    if (xTaskCreate(clientAcceptTask, "client_accept", 4096, nullptr, 1,
+                    &clientAcceptTaskHandle) != pdPASS) {
+      if (dataTaskHandle != nullptr) {
+        vTaskDelete(dataTaskHandle);
+        dataTaskHandle = nullptr;
+      }
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void stopClientRuntime() {
+  if (clientAcceptTaskHandle != nullptr) {
+    vTaskDelete(clientAcceptTaskHandle);
+    clientAcceptTaskHandle = nullptr;
+  }
+
+  if (dataTaskHandle != nullptr) {
+    vTaskDelete(dataTaskHandle);
+    dataTaskHandle = nullptr;
+  }
+}
+
+bool handleNewClient(int serverFd, int clients[]) {
+  sockaddr_in addr{};
+  socklen_t addrLen = sizeof(addr);
+  const int clientFd =
+      accept(serverFd, reinterpret_cast<sockaddr*>(&addr), &addrLen);
+  if (clientFd < 0) {
+    if (errno == EWOULDBLOCK || errno == EAGAIN) return false;
+    return false;
+  }
 
   // Find free/disconnected slot
   int i;
   for (i = 0; i < MAX_WIFI_CLIENTS; i++) {
-    if (!clients[i]) {  // equivalent to !clients[i].connected()
-      clients[i] = server->accept();
-      clients[i].setNoDelay(true);
+    if (!isSocketConnected(clients[i])) {
+      closeSocket(clients[i]);
+      clients[i] = clientFd;
+      int noDelay = 1;
+      setsockopt(clients[i], IPPROTO_TCP, TCP_NODELAY, &noDelay,
+                 sizeof(noDelay));
       break;
     }
   }
 
   // No free/disconnected slot so reject
   if (i == MAX_WIFI_CLIENTS) {
-    server->accept().println("busy");
-    // hints: server.available() is a WiFiClient with short-term scope
-    // when out of scope, a WiFiClient will
-    // - flush() - all data will be sent
-    // - stop() - automatically too
+    static const char busyMessage[] = "busy\r\n";
+    socketWriteBytes(clientFd, reinterpret_cast<const uint8_t*>(busyMessage),
+                     sizeof(busyMessage) - 1);
+    int rejectFd = clientFd;
+    closeSocket(rejectFd);
   }
 
   return true;
 }
 
-void handleClient(WiFiClient* client) {
-  while (client->available() && Bus.availableForWrite() > 0) {
+void handleClient(int* clientFd) {
+  while (socketAvailable(*clientFd) && Bus.availableForWrite() > 0) {
     // working char by char is not very efficient
-    Bus.write(client->read());
+    const int value = socketReadByte(*clientFd);
+    if (value < 0) break;
+    Bus.write(static_cast<uint8_t>(value));
   }
 }
 
-int pushClient(WiFiClient* client, uint8_t byte) {
-  if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
-    client->write(byte);
+int pushClient(int* clientFd, uint8_t byte) {
+  if (socketAvailableForWrite(*clientFd) >= AVAILABLE_THRESHOLD) {
+    socketWriteBytes(*clientFd, &byte, 1);
     return 1;
   }
   return 0;
@@ -58,15 +265,15 @@ void encode(uint8_t c, uint8_t d, uint8_t (&data)[2]) {
   data[1] = M2 | (d & 0b00111111);
 }
 
-void send_res(WiFiClient* client, uint8_t c, uint8_t d) {
+void send_res(int* clientFd, uint8_t c, uint8_t d) {
   uint8_t data[2];
   encode(c, d, data);
-  client->write(data, 2);
+  socketWriteBytes(*clientFd, data, 2);
 }
 
-void process_cmd(WiFiClient* client, uint8_t c, uint8_t d) {
+void process_cmd(int* clientFd, uint8_t c, uint8_t d) {
   if (c == CMD_INIT) {
-    send_res(client, RESETTED, 0x0);
+    send_res(clientFd, RESETTED, 0x0);
     return;
   }
   if (c == CMD_START) {
@@ -76,13 +283,14 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d) {
       return;
     } else {
       // start arbitration
-      WiFiClient* cl = client;
+      int cl = *clientFd;
       uint8_t ad = d;
-      if (!setArbitrationClient(client, d)) {
-        if (cl != client) {
+      int arbitrationClientFd = *clientFd;
+      if (!setArbitrationClient(arbitrationClientFd, d)) {
+        if (cl != arbitrationClientFd) {
           // only one client can be in arbitration
           DEBUG_LOG("CMD_START ONGOING 0x%02 0x%02x\n", ad, d);
-          send_res(client, ERROR_HOST, ERR_FRAMING);
+          send_res(clientFd, ERROR_HOST, ERR_FRAMING);
           return;
         } else {
           DEBUG_LOG("CMD_START REPEAT 0x%02x\n", d);
@@ -90,7 +298,6 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d) {
       } else {
         DEBUG_LOG("CMD_START 0x%02x\n", d);
       }
-      setArbitrationClient(client, d);
       return;
     }
   }
@@ -105,10 +312,10 @@ void process_cmd(WiFiClient* client, uint8_t c, uint8_t d) {
   }
 }
 
-bool read_cmd(WiFiClient* client, uint8_t (&data)[2]) {
+bool read_cmd(int* clientFd, uint8_t (&data)[2]) {
   int b, b2;
 
-  b = client->read();
+  b = socketReadByte(*clientFd);
 
   if (b < 0) {
     // available and read -1 ???
@@ -123,27 +330,27 @@ bool read_cmd(WiFiClient* client, uint8_t (&data)[2]) {
 
   if (b < 0b11000000) {
     DEBUG_LOG("first command signature error\n");
-    client->write("first command signature error");
+    socketWriteString(*clientFd, "first command signature error");
     // first command signature error
-    client->stop();
+    closeSocket(*clientFd);
     return false;
   }
 
-  b2 = client->read();
+  b2 = socketReadByte(*clientFd);
 
   if (b2 < 0) {
     // second command missing
     DEBUG_LOG("second command missing\n");
-    client->write("second command missing");
-    client->stop();
+    socketWriteString(*clientFd, "second command missing");
+    closeSocket(*clientFd);
     return false;
   }
 
   if ((b2 & 0b11000000) != 0b10000000) {
     // second command signature error
     DEBUG_LOG("second command signature error\n");
-    client->write("second command signature error");
-    client->stop();
+    socketWriteString(*clientFd, "second command signature error");
+    closeSocket(*clientFd);
     return false;
   }
 
@@ -151,21 +358,21 @@ bool read_cmd(WiFiClient* client, uint8_t (&data)[2]) {
   return true;
 }
 
-void handleClientEnhanced(WiFiClient* client) {
-  while (client->available()) {
+void handleClientEnhanced(int* clientFd) {
+  while (socketAvailable(*clientFd)) {
     uint8_t data[2];
-    if (read_cmd(client, data)) {
-      process_cmd(client, data[0], data[1]);
+    if (read_cmd(clientFd, data)) {
+      process_cmd(clientFd, data[0], data[1]);
     }
   }
 }
 
-int pushClientEnhanced(WiFiClient* client, uint8_t c, uint8_t d, bool log) {
+int pushClientEnhanced(int* clientFd, uint8_t c, uint8_t d, bool log) {
   if (log) {
     DEBUG_LOG("DATA           0x%02x 0x%02x\n", c, d);
   }
-  if (client->availableForWrite() >= AVAILABLE_THRESHOLD) {
-    send_res(client, c, d);
+  if (socketAvailableForWrite(*clientFd) >= AVAILABLE_THRESHOLD) {
+    send_res(clientFd, c, d);
     return 1;
   }
   return 0;
