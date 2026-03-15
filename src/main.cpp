@@ -72,7 +72,6 @@ constexpr const char* kCaptiveDnsIpString = "192.168.4.1";
 const esp_ip4_addr_t kCaptiveDnsIp = {.addr = ESP_IP4TOADDR(192, 168, 4, 1)};
 
 DNSServer captiveDnsServer;
-bool captiveDnsStarted = false;
 
 uint64_t getEfuseMac() {
   uint8_t mac[6]{};
@@ -130,9 +129,7 @@ void initPwm() {
 }
 
 void startCaptiveDns() {
-  captiveDnsStarted =
-      captiveDnsServer.start(kCaptiveDnsPort, "*", kCaptiveDnsIp);
-  if (captiveDnsStarted) {
+  if (captiveDnsServer.start(kCaptiveDnsPort, "*", kCaptiveDnsIp)) {
     logger.info(std::string("Captive DNS started on ") + kCaptiveDnsIpString);
     return;
   }
@@ -525,7 +522,7 @@ const std::string getStatusJson() {
 }
 
 bool isCaptivePortalActive() {
-  return captiveDnsStarted && !WifiNetworkManager::isStaConnected() &&
+  return !WifiNetworkManager::isStaConnected() &&
          WifiNetworkManager::getMode() != WIFI_MODE_STA;
 }
 
