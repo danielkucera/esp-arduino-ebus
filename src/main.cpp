@@ -38,6 +38,7 @@
 #endif
 
 #include "ConfigManager.hpp"
+#include "DNSServer.h"
 #include "EspOtaManager.hpp"
 #include "UpgradeManager.hpp"
 #include "WifiNetworkManager.hpp"
@@ -70,6 +71,13 @@ EspOtaManager espOtaManager;
 char unique_id[7]{};
 
 namespace {
+
+constexpr uint16_t kCaptiveDnsPort = 53;
+constexpr const char* kCaptiveDnsIpString = "192.168.4.1";
+const esp_ip4_addr_t kCaptiveDnsIp = {.addr = ESP_IP4TOADDR(192, 168, 4, 1)};
+
+DNSServer captiveDnsServer;
+bool captiveDnsStarted = false;
 
 uint64_t getEfuseMac() {
   uint8_t mac[6]{};
@@ -157,6 +165,17 @@ void initPwm() {
   channel.hpoint = 0;
   ledc_channel_config(&channel);
 #endif
+}
+
+void startCaptiveDns() {
+  captiveDnsStarted =
+      captiveDnsServer.start(kCaptiveDnsPort, "*", kCaptiveDnsIp);
+  if (captiveDnsStarted) {
+    logger.info(std::string("Captive DNS started on ") + kCaptiveDnsIpString);
+    return;
+  }
+
+  logger.warn("Captive DNS start failed");
 }
 
 }  // namespace
@@ -590,7 +609,8 @@ const std::string getStatusJson() {
 }
 
 bool isCaptivePortalActive() {
-  return WifiNetworkManager::isCaptivePortalActive();
+  return captiveDnsStarted && !WifiNetworkManager::isStaConnected() &&
+         WifiNetworkManager::getMode() != WIFI_MODE_STA;
 }
 
 extern "C" void app_main(void) {
@@ -617,6 +637,7 @@ extern "C" void app_main(void) {
 #endif
 
   WifiNetworkManager::begin(&configManager);
+  startCaptiveDns();
   SetupHttpHandlers();
   configManager.begin();
   upgradeManager.begin();

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "DNSServer.h"
-
 #include <esp_netif_types.h>
 #include <string>
 #include <esp_wifi.h>
@@ -19,7 +17,6 @@ class WifiNetworkManager {
   static int getReconnectCount();
   static wifi_mode_t getMode();
   static bool isStaConnected();
-  static bool isCaptivePortalActive();
   static bool isStaticIpEnabled();
   static std::string getConfiguredIpAddress();
   static std::string getConfiguredGateway();
@@ -50,7 +47,6 @@ class WifiNetworkManager {
   static void setStatusLedMode(StatusLedMode mode);
   static void configureStaticIpIfEnabled();
 
-  static DNSServer dnsServer_;
   static ConfigManager* configManager_;
   static esp_ip4_addr_t ipAddress_;
   static esp_ip4_addr_t gateway_;

@@ -19,7 +19,6 @@
 #include "ConfigManager.hpp"
 #include "Logger.hpp"
 
-DNSServer WifiNetworkManager::dnsServer_;
 ConfigManager* WifiNetworkManager::configManager_ = nullptr;
 esp_ip4_addr_t WifiNetworkManager::ipAddress_{};
 esp_ip4_addr_t WifiNetworkManager::gateway_{};
@@ -175,12 +174,6 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
                 (apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2") +
                 ")");
   }
-  const esp_ip4_addr_t captiveDnsIp{.addr = 0};
-  if (dnsServer_.start(53, "*", captiveDnsIp)) {
-    logger.info("Captive DNS task started");
-  } else {
-    logger.warn("Captive DNS start failed");
-  }
 
   std::string staSsid =
       configManager_ != nullptr
@@ -223,10 +216,6 @@ wifi_mode_t WifiNetworkManager::getMode() {
   wifi_mode_t mode = WIFI_MODE_NULL;
   if (esp_wifi_get_mode(&mode) != ESP_OK) return WIFI_MODE_NULL;
   return mode;
-}
-
-bool WifiNetworkManager::isCaptivePortalActive() {
-  return !staConnected_ && getMode() != WIFI_MODE_STA;
 }
 
 bool WifiNetworkManager::getStaIpInfo(esp_netif_ip_info_t* outInfo) {
@@ -387,8 +376,6 @@ void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
     ++reconnectCount_;
 //    logger.info("STA connected, IP: " +
 //                std::string(WiFi.localIP().toString().c_str()));
-    dnsServer_.stop();
-    logger.info("Captive DNS stopped");
     if (getMode() != WIFI_MODE_STA) {
       if (esp_wifi_set_mode(WIFI_MODE_STA) == ESP_OK) {
         logger.info("Switched WiFi mode to STA only");
@@ -400,11 +387,6 @@ void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
     staConnected_ = false;
     setStatusLedMode(StatusLedMode::SlowBlink);
     logger.warn("STA disconnected, reconnecting");
-    if (getMode() != WIFI_MODE_STA) {
-      const esp_ip4_addr_t captiveDnsIp = { .addr = ESP_IP4TOADDR(192, 168, 4, 1) };
-      dnsServer_.start(53, "*", captiveDnsIp);
-      logger.info("Captive DNS started");
-    }
     if (staConfigured_) esp_wifi_connect();
   }
 }
