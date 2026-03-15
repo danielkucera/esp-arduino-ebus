@@ -11,6 +11,7 @@
 #include "MqttHA.hpp"
 #include "Schedule.hpp"
 #include "Store.hpp"
+#include "WifiNetworkManager.hpp"
 #include "main.hpp"
 
 static httpd_handle_t configServer = nullptr;
@@ -355,7 +356,8 @@ esp_err_t handleLogs(httpd_req_t* req) {
 #endif
 
 esp_err_t handleNotFound(httpd_req_t* req) {
-  if (isCaptivePortalActive()) {
+  if (!WifiNetworkManager::isStaConnected() &&
+      WifiNetworkManager::getMode() != WIFI_MODE_STA) {
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_type(req, "text/plain");
     httpd_resp_set_hdr(req, "Location", "/config");

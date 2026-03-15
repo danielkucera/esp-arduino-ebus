@@ -521,11 +521,6 @@ const std::string getStatusJson() {
   return payload;
 }
 
-bool isCaptivePortalActive() {
-  return !WifiNetworkManager::isStaConnected() &&
-         WifiNetworkManager::getMode() != WIFI_MODE_STA;
-}
-
 extern "C" void app_main(void) {
   DebugSer.begin(115200);
   DebugSer.setDebugOutput(true);
