@@ -21,12 +21,14 @@ bool ensureLittlefsMounted() {
   static bool mounted = false;
   if (mounted) return true;
 
-  esp_vfs_littlefs_conf_t conf = {
-      .base_path = kLittlefsBasePath,
-      .partition_label = kLittlefsPartitionLabel,
-      .format_if_mount_failed = true,
-      .dont_mount = false,
-  };
+  esp_vfs_littlefs_conf_t conf = {};
+  conf.base_path = kLittlefsBasePath;
+  conf.partition_label = kLittlefsPartitionLabel;
+  conf.partition = nullptr;
+  conf.format_if_mount_failed = true;
+  conf.read_only = false;
+  conf.dont_mount = false;
+  conf.grow_on_mount = false;
 
   esp_err_t err = esp_vfs_littlefs_register(&conf);
   if (err == ESP_OK || err == ESP_ERR_INVALID_STATE) {
