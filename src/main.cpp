@@ -188,13 +188,8 @@ uint32_t get_pwm() {
 }
 
 void calcUniqueId() {
-  uint32_t id = 0;
-  for (int i = 0; i < 6; ++i) {
-    id |= ((getEfuseMac() >> (8 * (5 - i))) & 0xff) << (8 * i);
-  }
-  char tmp[9]{};
-  snprintf(tmp, sizeof(tmp), "%08" PRIx32, id);
-  strncpy(unique_id, &tmp[2], 6);
+  const uint32_t id = static_cast<uint32_t>(getEfuseMac() & 0xFFFFFFULL);
+  snprintf(unique_id, sizeof(unique_id), "%06" PRIx32, id);
 }
 
 std::string formatAdapterHwVersion(const uint8_t raw) {
