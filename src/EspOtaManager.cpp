@@ -102,6 +102,8 @@ void EspOtaManager::taskLoop() {
   while (true) {
     if (udpSock_ >= 0) {
       handleInvitation();
+    } else if (port_ > 0) {
+      begin(port_);
     }
     vTaskDelay(pdMS_TO_TICKS(kEspOtaTaskDelayMs));
   }
@@ -162,9 +164,15 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
                                     size_t expectedSize) {
   prepareForUpgrade();
 
-  int tcpSock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+  if (udpSock_ >= 0) {
+    close(udpSock_);
+    udpSock_ = -1;
+  }
+
+  int tcpSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (tcpSock < 0) {
-    fail("cannot create TCP socket");
+    fail(std::string("cannot create TCP socket errno=") +
+         std::to_string(errno));
     return false;
   }
 
