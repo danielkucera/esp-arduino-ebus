@@ -1,7 +1,8 @@
 #if defined(EBUS_INTERNAL)
+#include <cJSON.h>
+
 #include <Mqtt.hpp>
 #include <MqttHA.hpp>
-#include <cJSON.h>
 #include <algorithm>
 
 #include "Store.hpp"
@@ -22,7 +23,7 @@ void MqttHA::setWillTopic(const std::string& topic) { willTopic = topic; }
 
 void MqttHA::setEnabled(const bool enable) { enabled = enable; }
 
-const bool MqttHA::isEnabled() const { return enabled; }
+bool MqttHA::isEnabled() const { return enabled; }
 
 void MqttHA::setThingName(const std::string& name) { thingName = name; }
 
@@ -30,14 +31,6 @@ void MqttHA::setThingModel(const std::string& model) { thingModel = model; }
 
 void MqttHA::setThingModelId(const std::string& modelId) {
   thingModelId = modelId;
-}
-
-void MqttHA::setThingManufacturer(const std::string& manufacturer) {
-  thingManufacturer = manufacturer;
-}
-
-void MqttHA::setThingSwVersion(const std::string& swVersion) {
-  thingSwVersion = swVersion;
 }
 
 void MqttHA::setThingHwVersion(const std::string& hwVersion) {

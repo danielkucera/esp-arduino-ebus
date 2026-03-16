@@ -2,6 +2,7 @@
 #include "Mqtt.hpp"
 
 #include <esp_timer.h>
+
 #include <functional>
 
 #include "DeviceManager.hpp"
@@ -58,6 +59,22 @@ void Mqtt::change() {
   start();
 }
 
+void Mqtt::startTask() {
+  if (taskHandle != nullptr) return;
+  xTaskCreate(&Mqtt::taskFunc, "mqtt_loop", 6144, this, 1, &taskHandle);
+}
+
+void Mqtt::stopTask() {
+  if (taskHandle != nullptr) {
+    vTaskDelete(taskHandle);
+    taskHandle = nullptr;
+  }
+}
+
+void Mqtt::setStatusProvider(const std::function<std::string()>& provider) {
+  statusProvider = provider;
+}
+
 void Mqtt::setup(const char* id) {
   uniqueId = id;
   clientId = "ebus-" + uniqueId;
@@ -65,14 +82,15 @@ void Mqtt::setup(const char* id) {
   willTopic = mqtt.rootTopic + "available";
   requestTopic = mqtt.rootTopic + "request";
 
-  mqtt_cfg.client_id = clientId.c_str();
+  mqtt_cfg.credentials.client_id = clientId.c_str();
   // Last Will
-  mqtt_cfg.lwt_topic = willTopic.c_str();
-  mqtt_cfg.lwt_msg = "{ \"value\": \"offline\" }";
-  mqtt_cfg.lwt_qos = 1;
-  mqtt_cfg.lwt_retain = 1;
+  mqtt_cfg.session.last_will.topic = willTopic.c_str();
+  mqtt_cfg.session.last_will.msg = "{ \"value\": \"offline\" }";
+  mqtt_cfg.session.last_will.msg_len = 0;
+  mqtt_cfg.session.last_will.qos = 1;
+  mqtt_cfg.session.last_will.retain = 1;
   // Keep-alive interval in seconds
-  mqtt_cfg.keepalive = 60;
+  mqtt_cfg.session.keepalive = 60;
 }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
@@ -83,19 +101,19 @@ void Mqtt::setServer(const char* host, uint16_t port) {
   uri = "mqtt://" + hostname;
   if (port > 0) uri += ":" + std::to_string(port);
 
-  mqtt_cfg.uri = uri.c_str();
+  mqtt_cfg.broker.address.uri = uri.c_str();
 }
 
 void Mqtt::setCredentials(const char* username, const char* password) {
-  mqtt_cfg.username = username;
-  mqtt_cfg.password = password;
+  mqtt_cfg.credentials.username = username;
+  mqtt_cfg.credentials.authentication.password = password;
 }
 
 void Mqtt::setEnabled(const bool enable) { enabled = enable; }
 
-const bool Mqtt::isEnabled() const { return enabled; }
+bool Mqtt::isEnabled() const { return enabled; }
 
-const bool Mqtt::isConnected() const { return connected; }
+bool Mqtt::isConnected() const { return connected; }
 
 const std::string& Mqtt::getUniqueId() const { return uniqueId; }
 
@@ -148,6 +166,26 @@ void Mqtt::doLoop() {
   checkOutgoingQueue();
 }
 
+void Mqtt::taskFunc(void* arg) {
+  Mqtt* self = static_cast<Mqtt*>(arg);
+  for (;;) {
+    if (self->enabled && self->connected) {
+      uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
+      if (currentMillis > self->lastStatusPublish + self->statusPublishIntervalMs) {
+        self->lastStatusPublish = currentMillis;
+        if (self->statusProvider) {
+          const std::string payload = self->statusProvider();
+          self->publish("state", 0, false, payload.c_str());
+        }
+        schedule.publishCounter();
+        schedule.publishTiming();
+      }
+      self->doLoop();
+    }
+    vTaskDelay(1);
+  }
+}
+
 void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
                         int32_t event_id, void* event_data) {
   Mqtt* self = static_cast<Mqtt*>(handler_args);
@@ -189,9 +227,10 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       }
 
       cJSON* idNode = cJSON_GetObjectItemCaseSensitive(doc, "id");
-      std::string id = (cJSON_IsString(idNode) && idNode->valuestring != nullptr)
-                           ? idNode->valuestring
-                           : "";
+      std::string id =
+          (cJSON_IsString(idNode) && idNode->valuestring != nullptr)
+              ? idNode->valuestring
+              : "";
 
       auto it = mqtt.commandHandlers.find(id);
       if (it != mqtt.commandHandlers.end()) {
@@ -219,7 +258,8 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
 void Mqtt::handleRestart(const cJSON* doc) { restart(); }
 
 void Mqtt::handleInsert(const cJSON* doc) {
-  cJSON* commands = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "commands");
+  cJSON* commands =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "commands");
   if (!cJSON_IsArray(commands)) return;
 
   cJSON* command = nullptr;
@@ -283,8 +323,10 @@ void Mqtt::handleWipe(const cJSON* doc) {
 }
 
 void Mqtt::handleScan(const cJSON* doc) {
-  cJSON* fullNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "full");
-  cJSON* vendorNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "vendor");
+  cJSON* fullNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "full");
+  cJSON* vendorNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "vendor");
   bool full = cJSON_IsTrue(fullNode);
   bool vendor = cJSON_IsTrue(vendorNode);
 
@@ -322,7 +364,8 @@ void Mqtt::handleForward(const cJSON* doc) {
       getStringArray(const_cast<cJSON*>(doc), "filters");
   if (!filters.empty()) schedule.handleForwardFilter(filters);
 
-  cJSON* enableNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "enable");
+  cJSON* enableNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "enable");
   schedule.toggleForward(cJSON_IsTrue(enableNode));
 }
 
@@ -333,7 +376,8 @@ void Mqtt::handleReset(const cJSON* doc) {
 }
 
 void Mqtt::handleRead(const cJSON* doc) {
-  cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
+  cJSON* keyNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
   std::string key = (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
                         ? keyNode->valuestring
                         : "";
@@ -349,7 +393,8 @@ void Mqtt::handleRead(const cJSON* doc) {
 }
 
 void Mqtt::handleWrite(const cJSON* doc) {
-  cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
+  cJSON* keyNode =
+      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "key");
   std::string key = (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
                         ? keyNode->valuestring
                         : "";
@@ -373,7 +418,8 @@ void Mqtt::handleWrite(const cJSON* doc) {
 }
 
 void Mqtt::checkIncomingQueue() {
-  if (!incomingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) > lastIncoming + incomingInterval) {
+  if (!incomingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) >
+                                    lastIncoming + incomingInterval) {
     lastIncoming = (uint32_t)(esp_timer_get_time() / 1000ULL);
     IncomingAction action = incomingQueue.front();
     incomingQueue.pop();
@@ -400,7 +446,8 @@ void Mqtt::checkIncomingQueue() {
 }
 
 void Mqtt::checkOutgoingQueue() {
-  if (!outgoingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) > lastOutgoing + outgoingInterval) {
+  if (!outgoingQueue.empty() && (uint32_t)(esp_timer_get_time() / 1000ULL) >
+                                    lastOutgoing + outgoingInterval) {
     lastOutgoing = (uint32_t)(esp_timer_get_time() / 1000ULL);
     OutgoingAction action = outgoingQueue.front();
     outgoingQueue.pop();

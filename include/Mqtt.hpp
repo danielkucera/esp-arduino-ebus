@@ -2,6 +2,8 @@
 
 #if defined(EBUS_INTERNAL)
 #include <cJSON.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <mqtt_client.h>
 
 #include <functional>
@@ -65,6 +67,9 @@ class Mqtt {
 
   void start();
   void change();
+  void startTask();
+  void stopTask();
+  void setStatusProvider(const std::function<std::string()>& provider);
 
   void setup(const char* id);
 
@@ -72,9 +77,9 @@ class Mqtt {
   void setCredentials(const char* username, const char* password = nullptr);
 
   void setEnabled(const bool enable);
-  const bool isEnabled() const;
+  bool isEnabled() const;
 
-  const bool isConnected() const;
+  bool isConnected() const;
 
   const std::string& getUniqueId() const;
   const std::string& getRootTopic() const;
@@ -116,6 +121,13 @@ class Mqtt {
   std::queue<OutgoingAction> outgoingQueue;
   uint32_t lastOutgoing = 0;
   uint32_t outgoingInterval = 25;  // ms
+
+  TaskHandle_t taskHandle = nullptr;
+  uint32_t lastStatusPublish = 0;
+  uint32_t statusPublishIntervalMs = 10 * 1000;
+  std::function<std::string()> statusProvider;
+
+  static void taskFunc(void* arg);
 
   // Command handlers map
   std::unordered_map<std::string, CommandHandler> commandHandlers = {

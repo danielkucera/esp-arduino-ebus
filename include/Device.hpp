@@ -2,6 +2,7 @@
 
 #if defined(EBUS_INTERNAL)
 #include <cJSON.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -27,8 +28,8 @@ class Device {
   const std::vector<std::vector<uint8_t>> createVendorScanCommands() const;
 
   // Identification
-  static const bool getIdentification(const std::vector<uint8_t>& master,
-                                      std::vector<uint8_t>* const slave);
+  static bool getIdentification(const std::vector<uint8_t>& master,
+                                std::vector<uint8_t>* const slave);
 
  private:
   uint8_t slave = 0;

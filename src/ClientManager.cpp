@@ -1,9 +1,15 @@
 #if defined(EBUS_INTERNAL)
 #include "ClientManager.hpp"
 
-#include <algorithm>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+#include <cerrno>
+#include <fcntl.h>
+#include <lwip/sockets.h>
+#include <lwip/tcp.h>
+
+#include <algorithm>
 
 // C++11 compatible make_unique
 template <class T, class... Args>
@@ -13,27 +19,23 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 
 ClientManager clientManager;
 
-ClientManager::ClientManager()
-    : readonlyServer(3334), regularServer(3333), enhancedServer(3335) {}
+ClientManager::ClientManager() = default;
 
-void ClientManager::setLastCommsCallback(LastCommsCallback callback) {
-  lastCommsCallback = std::move(callback);
-}
+void ClientManager::start(ebus::Bus* bus, ebus::BusHandler* busHandler,
+                          ebus::Request* request) {
+  createListenSocket(readonlyServer);
+  createListenSocket(regularServer);
+  createListenSocket(enhancedServer);
 
-void ClientManager::start(ebus::Bus* bus, ebus::Request* request,
-                          ebus::ServiceRunnerFreeRtos* serviceRunner) {
-  readonlyServer.begin();
-  regularServer.begin();
-  enhancedServer.begin();
-
+  this->bus = bus;
+  this->busHandler = busHandler;
   this->request = request;
-  this->serviceRunner = serviceRunner;
 
   clientByteQueue = new ebus::Queue<uint8_t>();
 
   request->setExternalBusRequestedCallback([this]() { busRequested = true; });
 
-  serviceRunner->addByteListener(
+  busHandler->addByteListener(
       [this](const uint8_t& byte) { clientByteQueue->try_push(byte); });
 
   // Start the clientManagerRunner task
@@ -42,6 +44,59 @@ void ClientManager::start(ebus::Bus* bus, ebus::Request* request,
 }
 
 void ClientManager::stop() { stopRunner = true; }
+
+bool ClientManager::createListenSocket(ServerSocket& server) {
+  if (server.listenFd >= 0) return true;
+
+  server.listenFd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+  if (server.listenFd < 0) return false;
+
+  int enable = 1;
+  setsockopt(server.listenFd, SOL_SOCKET, SO_REUSEADDR, &enable,
+             sizeof(enable));
+
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(server.port);
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  if (bind(server.listenFd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) !=
+      0) {
+    close(server.listenFd);
+    server.listenFd = -1;
+    return false;
+  }
+
+  if (listen(server.listenFd, 4) != 0) {
+    close(server.listenFd);
+    server.listenFd = -1;
+    return false;
+  }
+
+  int flags = fcntl(server.listenFd, F_GETFL, 0);
+  if (flags >= 0) {
+    fcntl(server.listenFd, F_SETFL, flags | O_NONBLOCK);
+  }
+
+  return true;
+}
+
+int ClientManager::acceptClient(ServerSocket& server) {
+  if (server.listenFd < 0 && !createListenSocket(server)) return -1;
+
+  sockaddr_in addr{};
+  socklen_t addrLen = sizeof(addr);
+  const int clientFd =
+      accept(server.listenFd, reinterpret_cast<sockaddr*>(&addr), &addrLen);
+  if (clientFd < 0) {
+    if (errno == EWOULDBLOCK || errno == EAGAIN) return -1;
+    return -1;
+  }
+
+  int flag = 1;
+  setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+
+  return clientFd;
+}
 
 void ClientManager::taskFunc(void* arg) {
   ClientManager* self = static_cast<ClientManager*>(arg);
@@ -61,7 +116,7 @@ void ClientManager::taskFunc(void* arg) {
       activeClient = nullptr;
       busState = BusState::Idle;
       self->busRequested = false;
-      ebus::request->reset();
+      self->request->reset();
     }
 
     // Select new active client if idle
@@ -80,17 +135,17 @@ void ClientManager::taskFunc(void* arg) {
 
     // Request bus access
     if (activeClient && busState == BusState::Request) {
-      if (ebus::request->busAvailable()) {
+      if (self->request->busAvailable()) {
         uint8_t firstByte = 0;
         if (activeClient->readByte(firstByte)) {
-          ebus::request->requestBus(firstByte, true);
+          self->request->requestBus(firstByte, true);
           busState = BusState::Response;
         } else {
           // Client initialized or error
           activeClient = nullptr;
           busState = BusState::Idle;
           self->busRequested = false;
-          ebus::request->reset();
+          self->request->reset();
         }
       }
     }
@@ -99,15 +154,13 @@ void ClientManager::taskFunc(void* arg) {
     if (activeClient && busState == BusState::Transmit) {
       uint8_t sendByte = 0;
       if (activeClient->readByte(sendByte)) {
-        ebus::bus->writeByte(sendByte);
+        self->bus->writeByte(sendByte);
         busState = BusState::Response;
       }
     }
 
     // Process received bytes from bus
     while (self->clientByteQueue->try_pop(receiveByte)) {
-      self->lastCommsCallback();
-
       if (activeClient) {
         if ((busState == BusState::Response ||
              busState == BusState::Transmit) &&
@@ -120,7 +173,7 @@ void ClientManager::taskFunc(void* arg) {
             activeClient = nullptr;
             busState = BusState::Idle;
             self->busRequested = false;
-            ebus::request->reset();
+            self->request->reset();
           }
         }
       }
@@ -134,30 +187,30 @@ void ClientManager::taskFunc(void* arg) {
       }
     }
 
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(1);
   }
 }
 
 void ClientManager::acceptClients() {
   // Accept read-only clients
-  while (readonlyServer.hasClient()) {
-    WiFiClient* client = new WiFiClient(readonlyServer.accept());
-    client->setNoDelay(true);
-    clients.push_back(make_unique<ReadOnlyClient>(client, request));
+  for (;;) {
+    const int clientFd = acceptClient(readonlyServer);
+    if (clientFd < 0) break;
+    clients.push_back(make_unique<ReadOnlyClient>(clientFd, request));
   }
 
   // Accept regular clients
-  while (regularServer.hasClient()) {
-    WiFiClient* client = new WiFiClient(regularServer.accept());
-    client->setNoDelay(true);
-    clients.push_back(make_unique<RegularClient>(client, request));
+  for (;;) {
+    const int clientFd = acceptClient(regularServer);
+    if (clientFd < 0) break;
+    clients.push_back(make_unique<RegularClient>(clientFd, request));
   }
 
   // Accept enhanced clients
-  while (enhancedServer.hasClient()) {
-    WiFiClient* client = new WiFiClient(enhancedServer.accept());
-    client->setNoDelay(true);
-    clients.push_back(make_unique<EnhancedClient>(client, request));
+  for (;;) {
+    const int clientFd = acceptClient(enhancedServer);
+    if (clientFd < 0) break;
+    clients.push_back(make_unique<EnhancedClient>(clientFd, request));
   }
 
   // Clean up disconnected clients

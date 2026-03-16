@@ -52,20 +52,24 @@ const std::string Device::toJson() const {
   cJSON* doc = cJSON_CreateObject();
 
   uint8_t master = ebus::masterOf(slave);
-  cJSON_AddStringToObject(doc, "master",
-                          (master != slave ? ebus::to_string(master) : "").c_str());
+  cJSON_AddStringToObject(
+      doc, "master", (master != slave ? ebus::to_string(master) : "").c_str());
   cJSON_AddStringToObject(doc, "slave", ebus::to_string(slave).c_str());
 
   if (vec_070400.size() > 1) {
-    const std::string manufacturer =
-        (manufacturers.count(vec_070400[1]) > 0) ? manufacturers.at(vec_070400[1]) : "";
+    const std::string manufacturer = (manufacturers.count(vec_070400[1]) > 0)
+                                         ? manufacturers.at(vec_070400[1])
+                                         : "";
     cJSON_AddStringToObject(doc, "manufacturer", manufacturer.c_str());
     cJSON_AddStringToObject(
-        doc, "unitid", ebus::byte_2_char(ebus::range(vec_070400, 2, 5)).c_str());
+        doc, "unitid",
+        ebus::byte_2_char(ebus::range(vec_070400, 2, 5)).c_str());
     cJSON_AddStringToObject(
-        doc, "software", ebus::to_string(ebus::range(vec_070400, 7, 2)).c_str());
+        doc, "software",
+        ebus::to_string(ebus::range(vec_070400, 7, 2)).c_str());
     cJSON_AddStringToObject(
-        doc, "hardware", ebus::to_string(ebus::range(vec_070400, 9, 2)).c_str());
+        doc, "hardware",
+        ebus::to_string(ebus::range(vec_070400, 9, 2)).c_str());
 
     cJSON_AddStringToObject(doc, "ebusd", ebusdConfiguration().c_str());
   } else {
@@ -133,8 +137,8 @@ const std::vector<std::vector<uint8_t>> Device::createVendorScanCommands()
   return commands;
 }
 
-const bool Device::getIdentification(const std::vector<uint8_t>& master,
-                                     std::vector<uint8_t>* const slave) {
+bool Device::getIdentification(const std::vector<uint8_t>& master,
+                               std::vector<uint8_t>* const slave) {
   if (ebus::contains(master, VEC_070400, 2)) {
     // 10 data bytes = length (excluding slave and service bytes)
     uint8_t length = 0x0a;

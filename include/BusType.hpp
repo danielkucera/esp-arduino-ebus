@@ -1,6 +1,6 @@
 #pragma once
 
-#include <WiFiClient.h>
+#include <cstdint>
 
 #include <queue>
 
@@ -18,12 +18,12 @@ enum responses {
 
 enum errors { ERR_FRAMING = 0x00, ERR_OVERRUN = 0x01 };
 
-void getArbitrationClient(WiFiClient*& client, uint8_t& address);
+void getArbitrationClient(int& clientFd, uint8_t& address);
 void clearArbitrationClient();
-bool setArbitrationClient(WiFiClient*& client, uint8_t& address);
+bool setArbitrationClient(int& clientFd, uint8_t& address);
 
 void arbitrationDone();
-WiFiClient* arbitrationRequested(uint8_t& address);
+int arbitrationRequested(uint8_t& address);
 
 #include "atomic"
 #define ATOMIC_INT std::atomic<int>
@@ -42,8 +42,8 @@ class BusType {
     bool _enhanced;       // is this an enhanced command?
     uint8_t _c;           // command byte, only used when in "enhanced" mode
     uint8_t _d;           // data byte for both regular and enhanced command
-    WiFiClient* _client;  // the client that is being arbitrated
-    WiFiClient* _logtoclient;  // the client that needs to log
+    int _clientFd;        // the client fd that is being arbitrated
+    int _logToClientFd;   // the client fd that needs to log
   };
   BusType();
   ~BusType();
@@ -75,7 +75,7 @@ class BusType {
   void receive(uint8_t symbol, uint32_t startBitTime);
   BusState _busState;
   Arbitration _arbitration;
-  WiFiClient* _client;
+  int _clientFd;
 
 #if USE_ASYNCHRONOUS
   // handler to be notified when there is signal change on the serial input
