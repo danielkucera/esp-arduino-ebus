@@ -127,6 +127,20 @@ void startCaptiveDns() {
   logger.warn("Captive DNS start failed");
 }
 
+void prepareRuntimeForUpgrade() {
+#if defined(EBUS_INTERNAL)
+  mqtt.stopTask();
+  ebusController.stop();
+  schedule.stop();
+  clientManager.stop();
+
+  vTaskDelay(pdMS_TO_TICKS(50));
+#else
+  stopClientRuntime();
+#endif
+
+}
+
 }  // namespace
 
 // status
@@ -541,26 +555,8 @@ extern "C" void app_main(void) {
   configManager.begin();
   upgradeManager.begin();
   SetupHttpFallbackHandlers();
-  upgradeManager.setPreUpgradeHook([]() {
-#if defined(EBUS_INTERNAL)
-    mqtt.stopTask();
-    ebusController.stop();
-    schedule.stop();
-    clientManager.stop();
-#else
-  stopClientRuntime();
-#endif
-  });
-  espOtaManager.setPreUpgradeHook([]() {
-#if defined(EBUS_INTERNAL)
-    mqtt.stopTask();
-    ebusController.stop();
-    schedule.stop();
-    clientManager.stop();
-#else
-  stopClientRuntime();
-#endif
-  });
+  upgradeManager.setPreUpgradeHook(prepareRuntimeForUpgrade);
+  espOtaManager.setPreUpgradeHook(prepareRuntimeForUpgrade);
 
   set_pwm();
 
