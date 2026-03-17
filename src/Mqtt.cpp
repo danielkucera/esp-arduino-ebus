@@ -109,6 +109,16 @@ void Mqtt::setCredentials(const char* username, const char* password) {
   mqtt_cfg.credentials.authentication.password = password;
 }
 
+void Mqtt::setRootTopic(const std::string& topic) {
+  rootTopic = topic;
+  // Ensure proper formatting with trailing slash
+  if (!rootTopic.empty() && rootTopic.back() != '/') {
+    rootTopic += '/';
+  }
+  willTopic = rootTopic + "available";
+  requestTopic = rootTopic + "request";
+}
+
 void Mqtt::setEnabled(const bool enable) { enabled = enable; }
 
 bool Mqtt::isEnabled() const { return enabled; }
