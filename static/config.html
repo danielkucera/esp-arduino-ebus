@@ -28,6 +28,29 @@
         <div><input id="wifiSsid" type="text" class="config"></div>
         <div><label for="wifiPassword">WiFi Password</label></div>
         <div><input id="wifiPassword" type="password" class="config"></div>
+        <div><label for="wifiBssid">WiFi BSSID (MAC address)</label></div>
+        <div><input id="wifiBssid" type="text" class="config" placeholder="leave empty for dynamic selection" spellcheck="false"></div>
+        <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
+            <button id="btnWifiScan" style="margin-right: 10px;">Scan Available Networks</button>
+            <span id="scanStatus"></span>
+        </div>
+        <div id="wifiScanResults" style="display: none; margin-top: 15px;">
+            <h3>Available Networks</h3>
+            <table id="wifiTable" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">SSID</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">BSSID</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Signal (dBm)</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Channel</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Security</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="wifiTableBody">
+                </tbody>
+            </table>
+        </div>
     </fieldset>
 
     <fieldset>
@@ -111,6 +134,7 @@
         document.getElementById('fileInput').addEventListener('change', loadConfigFromFile);
         document.getElementById('btnRestart').addEventListener('click', restartDevice);
         document.getElementById('btnReset').addEventListener('click', resetConfig);
+        document.getElementById('btnWifiScan').addEventListener('click', scanWifiNetworks);
 
         function setField(id, value) {
             const el = document.getElementById(id);
@@ -250,6 +274,93 @@
             } catch (err) {
                 setStatus('Restart failed');
                 console.error(err);
+            }
+        }
+
+        async function scanWifiNetworks() {
+            const scanStatusEl = document.getElementById('scanStatus');
+            const resultsEl = document.getElementById('wifiScanResults');
+            const tableBodyEl = document.getElementById('wifiTableBody');
+
+            scanStatusEl.textContent = 'Scanning...';
+            tableBodyEl.innerHTML = '';
+            resultsEl.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/v1/wifi/scan', { method: 'POST' });
+                if (!res.ok) throw new Error('Scan failed');
+                
+                const networks = await res.json();
+                
+                if (!networks || networks.length === 0) {
+                    scanStatusEl.textContent = 'No networks found';
+                    return;
+                }
+
+                // Sort by RSSI (signal strength) descending
+                networks.sort((a, b) => b.rssi - a.rssi);
+
+                // Populate table
+                networks.forEach(network => {
+                    const row = document.createElement('tr');
+                    
+                    const ssidCell = document.createElement('td');
+                    ssidCell.textContent = network.ssid || '(Hidden)';
+                    ssidCell.style.border = '1px solid #ddd';
+                    ssidCell.style.padding = '8px';
+                    row.appendChild(ssidCell);
+
+                    const bssidCell = document.createElement('td');
+                    bssidCell.textContent = network.bssid;
+                    bssidCell.style.border = '1px solid #ddd';
+                    bssidCell.style.padding = '8px';
+                    row.appendChild(bssidCell);
+
+                    const rssiCell = document.createElement('td');
+                    rssiCell.textContent = network.rssi;
+                    rssiCell.style.border = '1px solid #ddd';
+                    rssiCell.style.padding = '8px';
+                    rssiCell.style.textAlign = 'center';
+                    row.appendChild(rssiCell);
+
+                    const channelCell = document.createElement('td');
+                    channelCell.textContent = network.channel;
+                    channelCell.style.border = '1px solid #ddd';
+                    channelCell.style.padding = '8px';
+                    channelCell.style.textAlign = 'center';
+                    row.appendChild(channelCell);
+
+                    const authCell = document.createElement('td');
+                    authCell.textContent = network.authMode;
+                    authCell.style.border = '1px solid #ddd';
+                    authCell.style.padding = '8px';
+                    row.appendChild(authCell);
+
+                    const actionCell = document.createElement('td');
+                    actionCell.style.border = '1px solid #ddd';
+                    actionCell.style.padding = '8px';
+                    actionCell.style.textAlign = 'center';
+                    
+                    const selectBtn = document.createElement('button');
+                    selectBtn.textContent = 'Select';
+                    selectBtn.style.padding = '4px 8px';
+                    selectBtn.style.cursor = 'pointer';
+                    selectBtn.onclick = () => {
+                        document.getElementById('wifiSsid').value = network.ssid || '';
+                        document.getElementById('wifiPassword').focus();
+                        scanStatusEl.textContent = 'Network selected';
+                    };
+                    actionCell.appendChild(selectBtn);
+                    row.appendChild(actionCell);
+
+                    tableBodyEl.appendChild(row);
+                });
+
+                resultsEl.style.display = 'block';
+                scanStatusEl.textContent = `Found ${networks.length} network(s)`;
+            } catch (err) {
+                console.error(err);
+                scanStatusEl.textContent = 'Scan failed: ' + err.message;
             }
         }
 

@@ -1,10 +1,14 @@
 #include "http.hpp"
 
 #include <cJSON.h>
+#include <cstdio>
+#include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <string>
+#include <vector>
 
+#include "ConfigManager.hpp"
 #include "DeviceManager.hpp"
 #include "HttpUtils.hpp"
 #include "Logger.hpp"
@@ -75,6 +79,98 @@ esp_err_t handleRestart(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "200 OK", "text/html", "Restarting...");
   vTaskDelay(pdMS_TO_TICKS(500));
   restart();
+  return ESP_OK;
+}
+
+esp_err_t handleWifiScan(httpd_req_t* req) {
+  // Start WiFi scan
+  wifi_scan_config_t scanConfig = {
+    .ssid = nullptr,
+    .bssid = nullptr,
+    .channel = 0,
+    .show_hidden = true,
+    .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+    .scan_time = {
+      .active = {
+        .min = 0,
+        .max = 0
+      },
+      .passive = 100
+    }
+  };
+
+  esp_err_t err = esp_wifi_scan_start(&scanConfig, true);
+  if (err != ESP_OK) {
+    HttpUtils::sendResponse(req, "500 Internal Server Error", "application/json",
+                           "{\"error\":\"WiFi scan failed\"}");
+    return ESP_OK;
+  }
+
+  // Get scan results
+  uint16_t apCount = 0;
+  esp_wifi_scan_get_ap_num(&apCount);
+
+  if (apCount == 0) {
+    HttpUtils::sendResponse(req, "200 OK", "application/json", "[]");
+    return ESP_OK;
+  }
+
+  std::vector<wifi_ap_record_t> aps(apCount);
+  esp_wifi_scan_get_ap_records(&apCount, aps.data());
+
+  // Build JSON response
+  cJSON* root = cJSON_CreateArray();
+
+  for (uint16_t i = 0; i < apCount; ++i) {
+    const wifi_ap_record_t& ap = aps[i];
+    
+    cJSON* item = cJSON_CreateObject();
+    
+    // SSID
+    std::string ssid(reinterpret_cast<const char*>(ap.ssid),
+                    strnlen(reinterpret_cast<const char*>(ap.ssid), 32));
+    cJSON_AddStringToObject(item, "ssid", ssid.c_str());
+    
+    // BSSID (MAC address)
+    char bssidStr[18];
+    snprintf(bssidStr, sizeof(bssidStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+             ap.bssid[0], ap.bssid[1], ap.bssid[2],
+             ap.bssid[3], ap.bssid[4], ap.bssid[5]);
+    cJSON_AddStringToObject(item, "bssid", bssidStr);
+    
+    // Signal strength (RSSI)
+    cJSON_AddNumberToObject(item, "rssi", ap.rssi);
+    
+    // Channel
+    cJSON_AddNumberToObject(item, "channel", ap.primary);
+    
+    // Security type
+    const char* authMode = "UNKNOWN";
+    switch (ap.authmode) {
+      case WIFI_AUTH_OPEN: authMode = "OPEN"; break;
+      case WIFI_AUTH_WEP: authMode = "WEP"; break;
+      case WIFI_AUTH_WPA_PSK: authMode = "WPA_PSK"; break;
+      case WIFI_AUTH_WPA2_PSK: authMode = "WPA2_PSK"; break;
+      case WIFI_AUTH_WPA_WPA2_PSK: authMode = "WPA_WPA2_PSK"; break;
+      case WIFI_AUTH_WPA2_ENTERPRISE: authMode = "WPA2_ENTERPRISE"; break;
+      case WIFI_AUTH_WPA3_PSK: authMode = "WPA3_PSK"; break;
+      case WIFI_AUTH_WPA2_WPA3_PSK: authMode = "WPA2_WPA3_PSK"; break;
+      default: break;
+    }
+    cJSON_AddStringToObject(item, "authMode", authMode);
+    
+    cJSON_AddItemToArray(root, item);
+  }
+
+  // Convert JSON to string and send response
+  char* jsonString = cJSON_Print(root);
+  HttpUtils::sendResponse(req, "200 OK", "application/json", jsonString);
+  
+  cJSON_Delete(root);
+  free(jsonString);
+  
+  esp_wifi_clear_ap_list();
+
   return ESP_OK;
 }
 
@@ -402,6 +498,7 @@ void SetupHttpHandlers() {
   RegisterUri("/config", HTTP_GET, handleConfigPage);
   RegisterUri("/status", HTTP_GET, handleStatusPage);
   RegisterUri("/api/v1/status", HTTP_GET, handleStatusApi);
+  RegisterUri("/api/v1/wifi/scan", HTTP_POST, handleWifiScan);
   RegisterUri("/upgrade", HTTP_GET, handleUpgradePage);
 
 #if defined(EBUS_INTERNAL)

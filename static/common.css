@@ -234,6 +234,44 @@ fieldset {
     margin: 0px;
 }
 
+/* ========== WiFi Scan ========== */
+#wifiScanResults {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 0.3rem;
+    padding: 10px;
+    overflow-x: auto;
+}
+
+#wifiTable {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#wifiTable th,
+#wifiTable td {
+    border: 1px solid #ddd;
+    padding: 8px;
+}
+
+#wifiTable th {
+    background: #f7f7f7;
+    font-weight: bold;
+}
+
+#wifiTable button {
+    padding: 4px 8px;
+    font-size: 0.9rem;
+    margin: 0;
+    margin-right: 0;
+}
+
+#scanStatus {
+    margin-left: 10px;
+    color: #666;
+    font-size: 0.9rem;
+}
+
 /* ========== Mobile Responsiveness ========== */
 @media (max-width: 600px) {
     body {
