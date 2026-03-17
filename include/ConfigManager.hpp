@@ -21,3 +21,5 @@ class ConfigManager {
   std::string readConfigJson();
   bool writeConfigJson(const std::string& body, std::string& error);
 };
+
+extern ConfigManager configManager;
