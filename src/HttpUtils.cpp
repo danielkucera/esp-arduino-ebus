@@ -3,24 +3,56 @@
 #include <esp_err.h>
 
 #include <cstring>
+#include <utility>
+#include <vector>
 
 #include "Logger.hpp"
 
 namespace HttpUtils {
 
-void sendResponse(httpd_req_t* req, const char* status, const char* type,
-                  const std::string& body) {
-  httpd_resp_set_status(req, status);
-  httpd_resp_set_type(req, type);
-  httpd_resp_send(req, body.c_str(), body.size());
+namespace {
+  std::vector<std::pair<std::string, std::string>> customHeaders;
+}
+
+void setCustomHeaders(const std::string& raw) {
+  customHeaders.clear();
+  size_t pos = 0;
+  while (pos < raw.size()) {
+    size_t end = raw.find('\n', pos);
+    if (end == std::string::npos) end = raw.size();
+    std::string line = raw.substr(pos, end - pos);
+    // Strip trailing \r
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    size_t colon = line.find(':');
+    if (colon != std::string::npos && colon > 0) {
+      std::string name = line.substr(0, colon);
+      std::string value = line.substr(colon + 1);
+      // Trim leading space from value
+      if (!value.empty() && value.front() == ' ') value.erase(0, 1);
+      if (!name.empty() && !value.empty())
+        customHeaders.emplace_back(std::move(name), std::move(value));
+    }
+    pos = end + 1;
+  }
+}
+
+static void applyCustomHeaders(httpd_req_t* req) {
+  for (const auto& h : customHeaders)
+    httpd_resp_set_hdr(req, h.first.c_str(), h.second.c_str());
 }
 
 void sendResponse(httpd_req_t* req, const char* status, const char* type,
                   const char* body) {
   httpd_resp_set_status(req, status);
   httpd_resp_set_type(req, type);
+  applyCustomHeaders(req);
   const size_t len = body != nullptr ? std::strlen(body) : 0;
   httpd_resp_send(req, body != nullptr ? body : "", len);
+}
+
+void sendResponse(httpd_req_t* req, const char* status, const char* type,
+                  const std::string& body) {
+  sendResponse(req, status, type, body.c_str());
 }
 
 std::string readBody(httpd_req_t* req) {

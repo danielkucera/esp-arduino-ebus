@@ -37,6 +37,7 @@
 #include "ConfigManager.hpp"
 #include "DNSServer.h"
 #include "EspOtaManager.hpp"
+#include "HttpUtils.hpp"
 #include "UpgradeManager.hpp"
 #include "WifiNetworkManager.hpp"
 #include "esp32c3/rom/rtc.h"
@@ -553,6 +554,7 @@ extern "C" void app_main(void) {
   startCaptiveDns();
   SetupHttpHandlers();
   configManager.begin();
+  HttpUtils::setCustomHeaders(configManager.readString("httpHeaders", ""));
   upgradeManager.begin();
   SetupHttpFallbackHandlers();
   upgradeManager.setPreUpgradeHook(prepareRuntimeForUpgrade);
