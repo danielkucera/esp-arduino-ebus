@@ -124,6 +124,12 @@
         <div><label><input id="haEnabledParam" type="checkbox" class="config"> Enabled</label></div>
     </fieldset>
 
+    <fieldset>
+        <legend>HTTP</legend>
+        <div><label for="httpHeaders">Custom Response Headers (one per line, format: <code>Name: Value</code>)</label></div>
+        <div><textarea id="httpHeaders" class="config" rows="4" placeholder="Access-Control-Allow-Origin: *"></textarea></div>
+    </fieldset>
+
     <script src="common.js"></script>
     <script>
         document.getElementById('btnHome').addEventListener('click', handleHome);
