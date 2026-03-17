@@ -7,18 +7,36 @@
     <title>esp-eBus Logs</title>
     <link rel="stylesheet" href="common.css">
     <style>
-        pre {
-            background-color: #f4f4f4;
-            padding: 10px 14px;
-            border-radius: 0.3rem;
-            font-size: 13px;
-            font-family: monospace;
+        #logsTableContainer {
             margin-top: 12px;
             width: 100%;
-            box-sizing: border-box;
-            color: #222;
-            border: 1px solid #ddd;
-            box-shadow: 0 2px 8px #0001;
+            overflow-x: auto;
+        }
+
+        #logsTable {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            font-family: monospace;
+        }
+
+        #logsTable th,
+        #logsTable td {
+            padding: 4px 8px;
+            text-align: left;
+            vertical-align: top;
+            border-bottom: 1px solid #ddd;
+            white-space: nowrap;
+        }
+
+        #logsTable td.message {
+            white-space: pre-wrap;
+            word-break: break-word;
+            width: 100%;
+        }
+
+        #logsTable tr:last-child td {
+            border-bottom: none;
         }
     </style>
 </head>
@@ -29,7 +47,7 @@
         <button id="btnHome">Home</button>
         <button id="btnPause">Pause</button>
         <button id="btnDownload">Download</button>
-        <label style="font-size:0.9rem;"><input type="checkbox" id="chkDate" unchecked> Show Date</label>
+        <label style="font-size:0.9rem;"><input type="checkbox" id="chkDate"> Show Date</label>
         <div id="filterContainer">
             <label style="font-size:0.9rem;"><input type="checkbox" value="DEBUG" checked /> DEBUG</label>
             <label style="font-size:0.9rem;"><input type="checkbox" value="INFO" checked /> INFO</label>
@@ -38,18 +56,186 @@
         </div>
         <span id="status">Connecting…</span>
     </div>
-    <pre id="logsContainer">Loading logs...</pre>
+    <div id="logsTableContainer">
+        <table id="logsTable">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Level</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody id="logsBody">
+                <tr><td colspan="3">Loading logs...</td></tr>
+            </tbody>
+        </table>
+    </div>
     <script src="common.js"></script>
     <script>
         const intervalMs = 500;
-        const lines = [];
-        const seen = new Set();
         const maxLines = 2000;
+        const storedEntries = [];
+        const seenEntries = new Set();
+        let renderedLines = [];
         let paused = false;
         let fetching = false;
-        let lastSnapshot = null;
         let lastUpdateTime = '';
         let showDate = false;
+        let lastSeenMillis = null;
+        let latestTimeRelation = null;
+        let latestMillisMinusTime = null;
+        let timeRelationRequested = false;
+
+        function pad2(value) {
+            return String(value).padStart(2, '0');
+        }
+
+        function pad3(value) {
+            return String(value).padStart(3, '0');
+        }
+
+        function formatLocalDateTime(epochMillis) {
+            const date = new Date(epochMillis);
+            return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}.${pad3(date.getMilliseconds())}`;
+        }
+
+        function formatTimestamp(logEntry, timeRelation, millisMinusTime) {
+            const millis = Number(logEntry.millis);
+            if (Number.isFinite(millis)) {
+                const relationMillis = Number(timeRelation && timeRelation.millis);
+                const relationTime = Number(timeRelation && timeRelation.time);
+
+                if (showDate && Number.isFinite(relationMillis) && Number.isFinite(relationTime)) {
+                    const epochMillis = relationTime + (millis - relationMillis);
+                    return formatLocalDateTime(epochMillis);
+                }
+
+                if (showDate && Number.isFinite(millisMinusTime)) {
+                    const epochMillis = millis - millisMinusTime;
+                    return formatLocalDateTime(epochMillis);
+                }
+
+                return `${millis}`;
+            }
+
+            if (logEntry.timestamp) {
+                const parsed = new Date(logEntry.timestamp);
+                if (!Number.isNaN(parsed.getTime())) {
+                    return showDate
+                        ? formatLocalDateTime(parsed.getTime())
+                        : `${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}:${pad2(parsed.getSeconds())}.${pad3(parsed.getMilliseconds())}`;
+                }
+
+                return showDate
+                    ? logEntry.timestamp.replace(/T|Z/g, ' ')
+                    : logEntry.timestamp.split('T')[1].replace(/Z/g, ' ');
+            }
+
+            return '';
+        }
+
+        function getCheckedLevels() {
+            return Array.from(document.querySelectorAll('#filterContainer input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function buildRenderedLine(logEntry) {
+            const timestamp = formatTimestamp(logEntry, latestTimeRelation, latestMillisMinusTime);
+            const logLevel = `${logEntry.level.padEnd(5, ' ')}`;
+            return `${timestamp} ${logLevel} ${logEntry.message}`;
+        }
+
+        function buildRenderedRow(logEntry) {
+            const timestamp = formatTimestamp(logEntry, latestTimeRelation, latestMillisMinusTime);
+            return `<tr><td>${escapeHtml(timestamp)}</td><td>${escapeHtml(logEntry.level)}</td><td class="message">${escapeHtml(logEntry.message)}</td></tr>`;
+        }
+
+        function renderFromStoredData() {
+            const checkedLevels = getCheckedLevels();
+            renderedLines = [];
+            const rows = [];
+
+            for (const logEntry of storedEntries) {
+                if (!checkedLevels.includes(logEntry.level)) continue;
+                renderedLines.push(buildRenderedLine(logEntry));
+                rows.push(buildRenderedRow(logEntry));
+            }
+
+            document.getElementById('logsBody').innerHTML = rows.length > 0
+                ? rows.join('')
+                : '<tr><td colspan="3">No logs available.</td></tr>';
+        }
+
+        function prependRenderedEntries(newEntries) {
+            if (newEntries.length === 0) return;
+
+            const checkedLevels = getCheckedLevels();
+            const logsBody = document.getElementById('logsBody');
+            const isPlaceholderVisible = logsBody.children.length === 1 && logsBody.textContent.includes('No logs available.');
+            if (isPlaceholderVisible) {
+                logsBody.innerHTML = '';
+            }
+
+            for (const logEntry of newEntries) {
+                if (!checkedLevels.includes(logEntry.level)) continue;
+                renderedLines.unshift(buildRenderedLine(logEntry));
+                logsBody.insertAdjacentHTML('afterbegin', buildRenderedRow(logEntry));
+            }
+        }
+
+        function addFetchedEntries(logItems) {
+            const newEntries = [];
+            let droppedAny = false;
+            for (const logEntry of logItems) {
+                const entryKey = `${logEntry.millis}|${logEntry.level}|${logEntry.message}`;
+                if (seenEntries.has(entryKey)) continue;
+
+                seenEntries.add(entryKey);
+                storedEntries.unshift(logEntry);
+                newEntries.push(logEntry);
+            }
+
+            if (storedEntries.length > maxLines) {
+                const removedEntries = storedEntries.splice(maxLines);
+                droppedAny = removedEntries.length > 0;
+                for (const entry of removedEntries) {
+                    const entryKey = `${entry.millis}|${entry.level}|${entry.message}`;
+                    seenEntries.delete(entryKey);
+                }
+            }
+
+            return { newEntries, droppedAny };
+        }
+
+        async function loadTimeRelationOnce() {
+            if (timeRelationRequested) return;
+            timeRelationRequested = true;
+
+            try {
+                const response = await fetch('/api/v1/logs/time-relation');
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                latestTimeRelation = data && data.timeRelation ? data.timeRelation : null;
+                const millisValue = Number(data && data.millis);
+                latestMillisMinusTime = Number.isFinite(millisValue)
+                    ? (millisValue - Date.now())
+                    : null;
+                if (showDate) {
+                    renderFromStoredData();
+                }
+            } catch (err) {
+                console.error('Time relation fetch error:', err);
+            }
+        }
 
         async function fetchLogs() {
             if (paused) return;
@@ -58,37 +244,34 @@
             const statusEl = document.getElementById('status');
             try {
                 statusEl.textContent = (lastUpdateTime || 'Connecting…');
-                const response = await fetch('/api/v1/logs');
+                let url = '/api/v1/logs';
+                if (Number.isFinite(lastSeenMillis)) {
+                    url += `?since=${encodeURIComponent(String(lastSeenMillis + 1))}`;
+                }
+
+                const response = await fetch(url);
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
+                const logItems = Array.isArray(data) ? data : (Array.isArray(data.logs) ? data.logs : []);
 
-                const pre = document.getElementById('logsContainer');
-                let newLines = [];
+                let maxMillis = Number.isFinite(lastSeenMillis) ? lastSeenMillis : null;
 
-                const checkedLevels = Array.from(document.querySelectorAll('#filterContainer input[type="checkbox"]:checked'))
-                    .map(cb => cb.value);
-
-                for (const logEntry of data) {
-                    const timestamp = showDate ? logEntry.timestamp.replace(/T|Z/g, ' ') : logEntry.timestamp.split('T')[1].replace(/Z/g, ' ');
-                    const logLevel = `${logEntry.level.padEnd(5, ' ')} `;
-
-                    if (!checkedLevels.includes(logEntry.level)) continue;
-
-                    const line = `${timestamp}${logLevel}${logEntry.message}`;
-                    if (!seen.has(line)) {
-                        newLines.unshift(line);
-                        seen.add(line);
+                for (const logEntry of logItems) {
+                    const millis = Number(logEntry.millis);
+                    if (Number.isFinite(millis) && (!Number.isFinite(maxMillis) || millis > maxMillis)) {
+                        maxMillis = millis;
                     }
                 }
 
-                lines.unshift(...newLines);
-                while (lines.length > maxLines) {
-                    const removed = lines.pop();
-                    seen.delete(removed);
+                const { newEntries, droppedAny } = addFetchedEntries(logItems);
+                if (droppedAny) {
+                    renderFromStoredData();
+                } else {
+                    prependRenderedEntries(newEntries);
                 }
-
-                pre.innerText = lines.join('\n');
-                lastSnapshot = JSON.stringify(data);
+                if (Number.isFinite(maxMillis)) {
+                    lastSeenMillis = maxMillis;
+                }
                 lastUpdateTime = new Date().toLocaleTimeString();
                 statusEl.textContent = lastUpdateTime;
             } catch (err) {
@@ -111,26 +294,39 @@
         }
 
         function clearStoredData() {
-            lines.length = 0;
-            seen.clear();
+            storedEntries.length = 0;
+            seenEntries.clear();
+            renderedLines = [];
+            lastSeenMillis = null;
+            latestTimeRelation = null;
+            latestMillisMinusTime = null;
 
-            const pre = document.getElementById('logsContainer');
-            pre.innerText = 'No logs available.';
+            document.getElementById('logsBody').innerHTML = '<tr><td colspan="3">No logs available.</td></tr>';
             setStatus('Stored data cleared');
         }
 
         document.getElementById('btnHome').addEventListener('click', handleHome);
         document.getElementById('btnPause').addEventListener('click', handlePause);
         document.getElementById('btnDownload').addEventListener('click', () => {
-            let text = lines.length > 0
-                ? lines.slice().reverse().join('\n')
-                : document.getElementById('logsContainer').innerText || '';
+            let text = renderedLines.length > 0
+                ? renderedLines.slice().reverse().join('\n')
+                : '';
             downloadTextFile(text, 'esp-ebus-log.txt', 'text/plain');
         });
-        document.getElementById('chkDate').addEventListener('change', function () { showDate = this.checked; clearStoredData(); });
-        document.querySelectorAll('#filterContainer input[type="checkbox"]').forEach(checkbox => {
-            checkbox.addEventListener('change', fetchLogs);
+        document.getElementById('chkDate').addEventListener('change', function () {
+            showDate = this.checked;
+            if (showDate) {
+                loadTimeRelationOnce();
+            }
+            renderFromStoredData();
         });
+        document.querySelectorAll('#filterContainer input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', renderFromStoredData);
+        });
+
+        const chkDate = document.getElementById('chkDate');
+        chkDate.checked = false;
+        showDate = false;
 
         // Initial load
         fetchLogs();

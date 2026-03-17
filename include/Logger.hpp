@@ -4,6 +4,7 @@
 #include <freertos/queue.h>
 #include <freertos/task.h>
 
+#include <cstdint>
 #include <string>
 
 // Simple circular buffer logger
@@ -21,18 +22,26 @@ class Logger {
   void info(std::string message);
   void debug(std::string message);
 
-  const std::string getLogs() const;
+  const std::string getLogs(uint64_t sinceMillis = 0) const;
+  const std::string getTimeRelation() const;
 
  private:
-  std::string* buffer;
+  enum class LogLevel { DEBUG, INFO, WARN, ERROR };
+  struct LogEntry {
+    uint64_t timestamp;
+    LogLevel level;
+    std::string message;
+  };
+
+  LogEntry* buffer;
   size_t maxEntries;
   size_t index;
   size_t entries;
 
-  enum class LogLevel { DEBUG, INFO, WARN, ERROR };
   static const char* logLevelText(LogLevel logLevel);
 
-  static const std::string timestamp();
+  static bool currentMillisTimeRelation(uint64_t& currentMillis,
+                                        int64_t& currentTimeMillis);
   static void printTaskEntry(void* arg);
   void printTaskLoop();
 

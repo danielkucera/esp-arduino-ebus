@@ -1,7 +1,6 @@
 #include "Logger.hpp"
 
-#include <inttypes.h>
-#include <ctime>
+#include <sys/time.h>
 #include <cstring>
 #include <esp_timer.h>
 
@@ -48,7 +47,7 @@ Logger::Logger(size_t maxEntries)
       mux(portMUX_INITIALIZER_UNLOCKED),
       printQueue(nullptr),
       printTask(nullptr) {
-  buffer = new std::string[maxEntries];
+  buffer = new LogEntry[maxEntries];
   printQueue = xQueueCreate(kPrintQueueLen, kPrintMsgMaxLen);
   if (printQueue != nullptr) {
     xTaskCreate(Logger::printTaskEntry, "logger_print", 4096, this, 1,
@@ -76,18 +75,50 @@ void Logger::info(std::string message) { log(LogLevel::INFO, message); }
 
 void Logger::debug(std::string message) { log(LogLevel::DEBUG, message); }
 
-const std::string Logger::getLogs() const {
-  std::string response = "[";
+const std::string Logger::getLogs(uint64_t sinceMillis) const {
+  std::string response = "{\"logs\":[";
 
+  bool first = true;
   portENTER_CRITICAL(&mux);
   for (size_t i = 0; i < entries; i++) {
     size_t logIndex = (index - entries + i + maxEntries) % maxEntries;
-    response += buffer[logIndex];
-    if (i < entries - 1) response += ",";
+    const LogEntry& entry = buffer[logIndex];
+    if (entry.timestamp < sinceMillis) continue;
+
+    if (!first) response += ",";
+    first = false;
+    response += "{\"millis\":";
+    response += std::to_string(entry.timestamp);
+    response += ",\"level\":\"";
+    response += logLevelText(entry.level);
+    response += "\",\"message\":\"";
+    response += jsonEscape(entry.message);
+    response += "\"}";
   }
   portEXIT_CRITICAL(&mux);
 
-  response += "]";
+  response += "]}";
+  return response;
+}
+
+const std::string Logger::getTimeRelation() const {
+  uint64_t currentMillis = 0;
+  int64_t currentTimeMillis = 0;
+  const bool hasTimeRelation =
+      currentMillisTimeRelation(currentMillis, currentTimeMillis);
+
+  std::string response = "{";
+  if (hasTimeRelation) {
+    response += "\"timeRelation\":{\"millis\":";
+    response += std::to_string(currentMillis);
+    response += ",\"time\":";
+    response += std::to_string(currentTimeMillis);
+    response += "}";
+  } else {
+    response += "\"millis\":";
+    response += std::to_string(currentMillis);
+  }
+  response += "}";
   return response;
 }
 
@@ -96,34 +127,20 @@ const char* Logger::logLevelText(LogLevel logLevel) {
   return values[static_cast<int>(logLevel)];
 }
 
-const std::string Logger::timestamp() {
-  time_t now = time(nullptr);
-  struct tm timeinfo;
-  localtime_r(&now, &timeinfo);
+bool Logger::currentMillisTimeRelation(uint64_t& currentMillis,
+                                       int64_t& currentTimeMillis) {
+  currentMillis = static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
 
-  char timestamp[40];
-  strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", &timeinfo);
-  const uint32_t millis =
-      static_cast<uint32_t>((esp_timer_get_time() / 1000ULL) % 1000ULL);
-  snprintf(timestamp + strlen(timestamp), sizeof(timestamp) - strlen(timestamp),
-           ".%03" PRIu32 "Z", millis);
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  currentTimeMillis = static_cast<int64_t>(tv.tv_sec) * 1000LL +
+                      static_cast<int64_t>(tv.tv_usec) / 1000LL;
 
-  return std::string(timestamp);
+  constexpr int64_t kMinValidEpochMs = 1577836800000LL;  // 2020-01-01 UTC
+  return currentTimeMillis >= kMinValidEpochMs;
 }
 
 void Logger::log(LogLevel level, std::string message) {
-  const std::string ts = timestamp();
-  const std::string escapedMessage = jsonEscape(message);
-  std::string payload;
-  payload.reserve(ts.size() + escapedMessage.size() + 64);
-  payload += "{\"timestamp\":\"";
-  payload += ts;
-  payload += "\",\"level\":\"";
-  payload += logLevelText(level);
-  payload += "\",\"message\":\"";
-  payload += escapedMessage;
-  payload += "\"}";
-
   if (printQueue != nullptr) {
     char msg[kPrintMsgMaxLen]{};
     std::strncpy(msg, message.c_str(), sizeof(msg) - 1);
@@ -132,7 +149,9 @@ void Logger::log(LogLevel level, std::string message) {
   }
 
   portENTER_CRITICAL(&mux);
-  buffer[index] = payload;
+  buffer[index].timestamp = static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
+  buffer[index].level = level;
+  buffer[index].message = std::move(message);
   index = (index + 1) % maxEntries;
   if (entries < maxEntries) entries++;
   portEXIT_CRITICAL(&mux);
