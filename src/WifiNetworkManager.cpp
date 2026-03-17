@@ -9,10 +9,13 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <arpa/inet.h>
 #include <lwip/ip4_addr.h>
+#include <lwip/sockets.h>
 #include <mdns.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
 #include <string>
 
@@ -37,6 +40,62 @@ esp_netif_t* WifiNetworkManager::staNetif_ = nullptr;
 esp_netif_t* WifiNetworkManager::apNetif_ = nullptr;
 
 namespace {
+
+TaskHandle_t socketLoggerTaskHandle = nullptr;
+
+void logOpenSockets() {
+  int detectedCount = 0;
+  int listedCount = 0;
+  std::string sockets;
+
+  for (int fd = 0; fd < 256; ++fd) {
+    int socketType = 0;
+    socklen_t socketTypeLen = sizeof(socketType);
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &socketType, &socketTypeLen) != 0) {
+      continue;
+    }
+    ++detectedCount;
+
+    sockaddr_in local{}, peer{};
+    socklen_t len = sizeof(local);
+    if (getsockname(fd, reinterpret_cast<sockaddr*>(&local), &len) != 0) {
+      std::string typeStr = (socketType == SOCK_STREAM) ? "TCP" :
+                            (socketType == SOCK_DGRAM) ? "UDP" : "?";
+      if (!sockets.empty()) sockets += "; ";
+      sockets += "fd=" + std::to_string(fd) + "/" + typeStr +
+                 "/local=?/getsockname_errno=" + std::to_string(errno);
+      continue;
+    }
+
+    std::string typeStr = (socketType == SOCK_STREAM) ? "TCP" : 
+                          (socketType == SOCK_DGRAM) ? "UDP" : "?";
+    std::string info = "fd=" + std::to_string(fd) + "/" + typeStr + 
+                       "/local=" + std::string(inet_ntoa(local.sin_addr)) + ":" +
+                       std::to_string(ntohs(local.sin_port));
+
+    if (getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &len) == 0) {
+      info += "/peer=" + std::string(inet_ntoa(peer.sin_addr)) + ":" +
+              std::to_string(ntohs(peer.sin_port));
+    }
+
+    if (!sockets.empty()) sockets += "; ";
+    sockets += info;
+    ++listedCount;
+  }
+
+  logger.debug("[sockets] detected=" + std::to_string(detectedCount) +
+              " max=" + std::to_string(CONFIG_LWIP_MAX_SOCKETS) +
+              " listed=" + std::to_string(listedCount) +
+              " [" + sockets + "]");
+}
+
+void socketLoggerTaskEntry(void* arg) {
+  (void)arg;
+  while (true) {
+    logOpenSockets();
+    vTaskDelay(pdMS_TO_TICKS(5000));
+  }
+}
 
 std::string trimCopy(const std::string& value) {
   const auto start = value.find_first_not_of(" \t\r\n");
@@ -80,6 +139,11 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   configManager_ = configManager;
   initStatusLed();
   setStatusLedMode(StatusLedMode::SlowBlink);
+
+  if (socketLoggerTaskHandle == nullptr) {
+    xTaskCreate(socketLoggerTaskEntry, "socket_logger_task", 6144, nullptr, 1,
+                &socketLoggerTaskHandle);
+  }
 
 
   std::string apPassword = configManager_ != nullptr
