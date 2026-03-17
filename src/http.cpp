@@ -1,6 +1,7 @@
 #include "http.hpp"
 
 #include <cJSON.h>
+#include <cstdlib>
 #include <cstdio>
 #include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
@@ -446,7 +447,33 @@ esp_err_t handleLogsPage(httpd_req_t* req) {
 }
 
 esp_err_t handleLogs(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "text/plain", logger.getLogs());
+  uint64_t sinceMillis = 0;
+
+  const size_t queryLen = httpd_req_get_url_query_len(req);
+  if (queryLen > 0) {
+    std::vector<char> query(queryLen + 1, '\0');
+    if (httpd_req_get_url_query_str(req, query.data(), query.size()) == ESP_OK) {
+      char sinceBuffer[32] = {'\0'};
+      if (httpd_query_key_value(query.data(), "since", sinceBuffer,
+                                sizeof(sinceBuffer)) == ESP_OK) {
+        char* end = nullptr;
+        const unsigned long long parsed =
+            std::strtoull(sinceBuffer, &end, 10);
+        if (end != sinceBuffer && *end == '\0') {
+          sinceMillis = static_cast<uint64_t>(parsed);
+        }
+      }
+    }
+  }
+
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                          logger.getLogs(sinceMillis));
+  return ESP_OK;
+}
+
+esp_err_t handleLogsTimeRelation(httpd_req_t* req) {
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                          logger.getTimeRelation());
   return ESP_OK;
 }
 #endif
@@ -529,6 +556,7 @@ void SetupHttpHandlers() {
 
   RegisterUri("/logs", HTTP_GET, handleLogsPage);
   RegisterUri("/api/v1/logs", HTTP_GET, handleLogs);
+  RegisterUri("/api/v1/logs/time-relation", HTTP_GET, handleLogsTimeRelation);
 #endif
 
   RegisterUri("/restart", HTTP_GET, handleRestart);
