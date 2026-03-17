@@ -1,15 +1,18 @@
 #if defined(EBUS_INTERNAL)
 #include "ClientManager.hpp"
+#include "Logger.hpp"
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
 #include <cerrno>
+#include <esp_timer.h>
 #include <fcntl.h>
 #include <lwip/sockets.h>
 #include <lwip/tcp.h>
 
 #include <algorithm>
+#include <string>
 
 // C++11 compatible make_unique
 template <class T, class... Args>
@@ -30,13 +33,6 @@ void ClientManager::start(ebus::Bus* bus, ebus::BusHandler* busHandler,
   this->bus = bus;
   this->busHandler = busHandler;
   this->request = request;
-
-  clientByteQueue = new ebus::Queue<uint8_t>();
-
-  request->setExternalBusRequestedCallback([this]() { busRequested = true; });
-
-  busHandler->addByteListener(
-      [this](const uint8_t& byte) { clientByteQueue->try_push(byte); });
 
   // Start the clientManagerRunner task
   xTaskCreate(&ClientManager::taskFunc, "clientManagerRunner", 4096, this, 3,
@@ -100,94 +96,14 @@ int ClientManager::acceptClient(ServerSocket& server) {
 
 void ClientManager::taskFunc(void* arg) {
   ClientManager* self = static_cast<ClientManager*>(arg);
-  AbstractClient* activeClient = nullptr;
-  BusState busState = BusState::Idle;
-  uint8_t receiveByte = 0;
 
   for (;;) {
     if (self->stopRunner) vTaskDelete(NULL);
 
-    // Check for new clients
+    // Accept new clients and clean up disconnected ones
     self->acceptClients();
 
-    // Clean up disconnected active client
-    if (activeClient && !activeClient->isConnected()) {
-      activeClient->stop();
-      activeClient = nullptr;
-      busState = BusState::Idle;
-      self->busRequested = false;
-      self->request->reset();
-    }
-
-    // Select new active client if idle
-    if (!activeClient && busState == BusState::Idle) {
-      for (size_t i = 0; i < self->clients.size(); ++i) {
-        AbstractClient* client = self->clients[i].get();
-        if (client->isConnected() && client->isWriteCapable() &&
-            client->available()) {
-          activeClient = client;
-          busState = BusState::Request;
-          self->busRequested = false;
-          break;
-        }
-      }
-    }
-
-    // Request bus access
-    if (activeClient && busState == BusState::Request) {
-      if (self->request->busAvailable()) {
-        uint8_t firstByte = 0;
-        if (activeClient->readByte(firstByte)) {
-          self->request->requestBus(firstByte, true);
-          busState = BusState::Response;
-        } else {
-          // Client initialized or error
-          activeClient = nullptr;
-          busState = BusState::Idle;
-          self->busRequested = false;
-          self->request->reset();
-        }
-      }
-    }
-
-    // Transmit to bus if needed
-    if (activeClient && busState == BusState::Transmit) {
-      uint8_t sendByte = 0;
-      if (activeClient->readByte(sendByte)) {
-        self->bus->writeByte(sendByte);
-        busState = BusState::Response;
-      }
-    }
-
-    // Process received bytes from bus
-    while (self->clientByteQueue->try_pop(receiveByte)) {
-      if (activeClient) {
-        if ((busState == BusState::Response ||
-             busState == BusState::Transmit) &&
-            self->busRequested) {
-          if (activeClient->handleBusData(receiveByte)) {
-            // Continue transmitting if needed
-            busState = BusState::Transmit;
-          } else {
-            // Transaction done or error
-            activeClient = nullptr;
-            busState = BusState::Idle;
-            self->busRequested = false;
-            self->request->reset();
-          }
-        }
-      }
-
-      // Forward to all other clients
-      for (size_t i = 0; i < self->clients.size(); ++i) {
-        AbstractClient* client = self->clients[i].get();
-        if (client != activeClient && client->isConnected()) {
-          client->writeBytes({receiveByte});
-        }
-      }
-    }
-
-    vTaskDelay(1);
+    vTaskDelay(100);
   }
 }
 
@@ -196,21 +112,24 @@ void ClientManager::acceptClients() {
   for (;;) {
     const int clientFd = acceptClient(readonlyServer);
     if (clientFd < 0) break;
-    clients.push_back(make_unique<ReadOnlyClient>(clientFd, request));
+    logger.debug("Accepted read-only client fd=" + std::to_string(clientFd));
+    clients.push_back(make_unique<ReadOnlyClient>(clientFd, bus, request));
   }
 
   // Accept regular clients
   for (;;) {
     const int clientFd = acceptClient(regularServer);
     if (clientFd < 0) break;
-    clients.push_back(make_unique<RegularClient>(clientFd, request));
+    logger.debug("Accepted regular client fd=" + std::to_string(clientFd));
+    clients.push_back(make_unique<RegularClient>(clientFd, bus, request));
   }
 
   // Accept enhanced clients
   for (;;) {
     const int clientFd = acceptClient(enhancedServer);
     if (clientFd < 0) break;
-    clients.push_back(make_unique<EnhancedClient>(clientFd, request));
+    logger.debug("Accepted enhanced client fd=" + std::to_string(clientFd));
+    clients.push_back(make_unique<EnhancedClient>(clientFd, bus, request));
   }
 
   // Clean up disconnected clients
@@ -218,6 +137,7 @@ void ClientManager::acceptClients() {
       std::remove_if(clients.begin(), clients.end(),
                      [](const std::unique_ptr<AbstractClient>& client) {
                        if (!client->isConnected()) {
+                         logger.debug("Removing disconnected client");
                          client->stop();  // <-- ensure socket is closed
                          return true;
                        }

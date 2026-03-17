@@ -17,31 +17,6 @@ bool isSocketConnected(int socketFd) {
   return errno == EWOULDBLOCK || errno == EAGAIN;
 }
 
-int socketAvailable(int socketFd) {
-  if (socketFd < 0) return 0;
-  int pending = 0;
-  if (lwip_ioctl(socketFd, FIONREAD, &pending) == 0) {
-    return pending;
-  }
-  return 0;
-}
-
-int socketReadByte(int socketFd) {
-  if (socketFd < 0) return -1;
-  uint8_t byte = 0;
-  const int result = recv(socketFd, &byte, 1, MSG_DONTWAIT);
-  if (result <= 0) return -1;
-  return byte;
-}
-
-int socketPeekByte(int socketFd) {
-  if (socketFd < 0) return -1;
-  uint8_t byte = 0;
-  const int result = recv(socketFd, &byte, 1, MSG_PEEK | MSG_DONTWAIT);
-  if (result <= 0) return -1;
-  return byte;
-}
-
 void closeSocket(int& socketFd) {
   if (socketFd >= 0) {
     shutdown(socketFd, SHUT_RDWR);
@@ -72,19 +47,95 @@ enum responses {
 
 enum errors { ERR_FRAMING = 0x00, ERR_OVERRUN = 0x01 };
 
-AbstractClient::AbstractClient(int socketFd, ebus::Request* request, bool write)
-  : socketFd(socketFd), request(request), write(write) {}
+AbstractClient::AbstractClient(int socketFd, ebus::Bus* bus,
+                               ebus::Request* request, bool write)
+    : socketFd(socketFd), bus(bus), request(request), write(write) {
+  connected = isSocketConnected(socketFd);
+  rxQueue = xQueueCreate(RX_QUEUE_LENGTH, sizeof(uint8_t));
+  xTaskCreate(&AbstractClient::readerTaskEntry, "client_rx", 3072, this, 2,
+              &readerTask);
+}
+
+AbstractClient::~AbstractClient() { stop(); }
 
 bool AbstractClient::isWriteCapable() const { return write; }
 
-bool AbstractClient::isConnected() const { return isSocketConnected(socketFd); }
+bool AbstractClient::isConnected() const { return connected; }
 
 void AbstractClient::stop() {
+  stopReader = true;
+  connected = false;
+
+  if (socketFd >= 0) {
+    shutdown(socketFd, SHUT_RDWR);
+  }
+
+  if (readerTask != nullptr) {
+    vTaskDelete(readerTask);
+    readerTask = nullptr;
+  }
+
   closeSocket(socketFd);
+
+  if (rxQueue != nullptr) {
+    vQueueDelete(rxQueue);
+    rxQueue = nullptr;
+  }
 }
 
-ReadOnlyClient::ReadOnlyClient(int socketFd, ebus::Request* request)
-    : AbstractClient(socketFd, request, false) {}
+bool AbstractClient::popRxByte(uint8_t& byte) {
+  if (rxQueue == nullptr) return false;
+  return xQueueReceive(rxQueue, &byte, 0) == pdTRUE;
+}
+
+bool AbstractClient::peekRxByte(uint8_t& byte) {
+  if (rxQueue == nullptr) return false;
+  return xQueuePeek(rxQueue, &byte, 0) == pdTRUE;
+}
+
+size_t AbstractClient::availableRx() const {
+  if (rxQueue == nullptr) return 0;
+  return static_cast<size_t>(uxQueueMessagesWaiting(rxQueue));
+}
+
+void AbstractClient::readerTaskEntry(void* arg) {
+  auto* self = static_cast<AbstractClient*>(arg);
+  self->readerTaskLoop();
+}
+
+void AbstractClient::readerTaskLoop() {
+  while (!stopReader) {
+    if (socketFd < 0 || rxQueue == nullptr) {
+      connected = false;
+      vTaskDelay(1);
+      continue;
+    }
+
+    uint8_t byte = 0;
+    int result = recv(socketFd, &byte, 1, 0);  // blocking read
+    if (result > 0) {
+      connected = true;
+      xQueueSend(rxQueue, &byte, 0);
+      continue;
+    }
+
+    if (result == 0) {
+      connected = false;
+      break;
+    }
+
+    if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
+      continue;
+    }
+
+    connected = false;
+    break;
+  }
+}
+
+ReadOnlyClient::ReadOnlyClient(int socketFd, ebus::Bus* bus,
+                               ebus::Request* request)
+    : AbstractClient(socketFd, bus, request, false) {}
 
 bool ReadOnlyClient::available() const { return false; }
 
@@ -97,22 +148,14 @@ bool ReadOnlyClient::writeBytes(const std::vector<uint8_t>& bytes) {
   return true;
 }
 
-bool ReadOnlyClient::handleBusData(const uint8_t& byte) { return false; }
+RegularClient::RegularClient(int socketFd, ebus::Bus* bus,
+                             ebus::Request* request)
+    : AbstractClient(socketFd, bus, request, true) {}
 
-RegularClient::RegularClient(int socketFd, ebus::Request* request)
-    : AbstractClient(socketFd, request, true) {}
-
-bool RegularClient::available() const { return socketAvailable(socketFd) > 0; }
+bool RegularClient::available() const { return availableRx() > 0; }
 
 bool RegularClient::readByte(uint8_t& byte) {
-  if (available()) {
-    const int value = socketReadByte(socketFd);
-    if (value >= 0) {
-      byte = static_cast<uint8_t>(value);
-      return true;
-    }
-  }
-  return false;
+  return popRxByte(byte);
 }
 
 bool RegularClient::writeBytes(const std::vector<uint8_t>& bytes) {
@@ -122,51 +165,37 @@ bool RegularClient::writeBytes(const std::vector<uint8_t>& bytes) {
   return true;
 }
 
-bool RegularClient::handleBusData(const uint8_t& byte) {
-  // Handle bus response according to last command
-  switch (request->getResult()) {
-    case ebus::RequestResult::observeSyn:
-    case ebus::RequestResult::firstLost:
-    case ebus::RequestResult::firstError:
-    case ebus::RequestResult::retryError:
-    case ebus::RequestResult::secondLost:
-    case ebus::RequestResult::secondError:
-      return false;
-    case ebus::RequestResult::observeData:
-    case ebus::RequestResult::firstSyn:
-    case ebus::RequestResult::firstRetry:
-    case ebus::RequestResult::retrySyn:
-    case ebus::RequestResult::firstWon:
-    case ebus::RequestResult::secondWon:
-      writeBytes({byte});
-      return true;
-    default:
-      break;
-  }
-  return false;
+EnhancedClient::EnhancedClient(int socketFd, ebus::Bus* bus,
+                               ebus::Request* request)
+    : AbstractClient(socketFd, bus, request, true) {}
+
+bool EnhancedClient::available() const {
+  return pendingRawByte >= 0 || availableRx() > 0;
 }
 
-EnhancedClient::EnhancedClient(int socketFd, ebus::Request* request)
-    : AbstractClient(socketFd, request, true) {}
-
-bool EnhancedClient::available() const { return socketAvailable(socketFd) > 0; }
-
 bool EnhancedClient::readByte(uint8_t& byte) {
-  int b1 = socketPeekByte(socketFd);
-  if (b1 < 0) return false;
+  int b1 = pendingRawByte;
+  if (b1 < 0) {
+    uint8_t raw1 = 0;
+    if (!popRxByte(raw1)) return false;
+    b1 = static_cast<int>(raw1);
+  } else {
+    pendingRawByte = -1;
+  }
 
   if (b1 < 0x80) {
     // Short form: just a data byte, no prefix
-    const int value = socketReadByte(socketFd);
-    if (value < 0) return false;
-    byte = static_cast<uint8_t>(value);
+    byte = static_cast<uint8_t>(b1);
     return true;
   }
 
   // Full enhanced protocol: need two bytes
-  if (socketAvailable(socketFd) < 2) return false;
-  b1 = socketReadByte(socketFd);
-  int b2 = socketReadByte(socketFd);
+  uint8_t raw2 = 0;
+  if (!popRxByte(raw2)) {
+    pendingRawByte = b1;
+    return false;
+  }
+  int b2 = static_cast<int>(raw2);
 
   // Check signatures
   if ((b1 & 0xc0) != 0xc0 || (b2 & 0xc0) != 0x80) {
@@ -222,37 +251,6 @@ bool EnhancedClient::writeBytes(const std::vector<uint8_t>& bytes) {
     socketWrite(socketFd, out, 2);
   }
   return true;
-}
-
-bool EnhancedClient::handleBusData(const uint8_t& byte) {
-  // Handle bus response according to last command
-  switch (request->getResult()) {
-    case ebus::RequestResult::observeSyn:
-    case ebus::RequestResult::firstLost:
-    case ebus::RequestResult::secondLost:
-      writeBytes({FAILED, byte});
-      return false;
-    case ebus::RequestResult::firstError:
-    case ebus::RequestResult::retryError:
-    case ebus::RequestResult::secondError:
-      writeBytes({ERROR_EBUS, ERR_FRAMING});
-      return false;
-    case ebus::RequestResult::observeData:
-      writeBytes({RECEIVED, byte});
-      return true;
-    case ebus::RequestResult::firstSyn:
-    case ebus::RequestResult::firstRetry:
-    case ebus::RequestResult::retrySyn:
-      // Waiting for arbitration, do nothing
-      return true;
-    case ebus::RequestResult::firstWon:
-    case ebus::RequestResult::secondWon:
-      writeBytes({STARTED, byte});
-      return true;
-    default:
-      break;
-  }
-  return false;
 }
 
 #endif

@@ -30,17 +30,13 @@ class ClientManager {
     ServerSocket regularServer{3333};
     ServerSocket enhancedServer{3335};
 
-  ebus::Queue<uint8_t>* clientByteQueue = nullptr;
   volatile bool stopRunner = false;
-  volatile bool busRequested = false;
 
   ebus::Bus* bus = nullptr;
   ebus::BusHandler* busHandler = nullptr;
   ebus::Request* request = nullptr;
 
   std::vector<std::unique_ptr<AbstractClient>> clients;
-
-  enum class BusState { Idle, Request, Transmit, Response };
 
   TaskHandle_t clientManagerTaskHandle;
 
