@@ -481,6 +481,12 @@ void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
     staConnected_ = false;
     setStatusLedMode(StatusLedMode::SlowBlink);
     logger.warn("STA disconnected, reconnecting");
+
+    if (esp_wifi_set_mode(WIFI_MODE_APSTA) != ESP_OK) {
+      logger.error("Failed to set WiFi mode");
+      return;
+    }
+
     if (staConfigured_) esp_wifi_connect();
   }
 }
