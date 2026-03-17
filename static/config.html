@@ -347,7 +347,6 @@
                     selectBtn.style.cursor = 'pointer';
                     selectBtn.onclick = () => {
                         document.getElementById('wifiSsid').value = network.ssid || '';
-                        document.getElementById('wifiBssid').value = network.bssid || '';
                         document.getElementById('wifiPassword').focus();
                         scanStatusEl.textContent = 'Network selected';
                     };
