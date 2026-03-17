@@ -239,6 +239,10 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
       configManager_ != nullptr
           ? configManager_->readString("wifiPassword", "lectronz")
           : std::string("lectronz");
+  std::string staBssid =
+      configManager_ != nullptr
+          ? configManager_->readString("wifiBssid", "")
+          : std::string("");
   staConfigured_ = !staSsid.empty();
 
   if (!staConfigured_) {
@@ -253,6 +257,21 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
                sizeof(staConfig.sta.ssid) - 1);
   std::strncpy(reinterpret_cast<char*>(staConfig.sta.password), staPass.c_str(),
                sizeof(staConfig.sta.password) - 1);
+
+  // Parse and set BSSID if provided (format: xx:xx:xx:xx:xx:xx)
+  if (!staBssid.empty()) {
+    uint8_t bssid[6]{};
+    if (sscanf(staBssid.c_str(), "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
+               &bssid[0], &bssid[1], &bssid[2], &bssid[3], &bssid[4],
+               &bssid[5]) == 6) {
+      std::memcpy(staConfig.sta.bssid, bssid, sizeof(bssid));
+      staConfig.sta.bssid_set = true;
+      logger.info("Using specific BSSID: " + staBssid);
+    } else {
+      logger.warn("Invalid BSSID format, ignoring: " + staBssid);
+    }
+  }
+
   if (esp_wifi_set_config(WIFI_IF_STA, &staConfig) != ESP_OK) {
     logger.error("STA config apply failed");
     return;

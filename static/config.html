@@ -28,6 +28,8 @@
         <div><input id="wifiSsid" type="text" class="config"></div>
         <div><label for="wifiPassword">WiFi Password</label></div>
         <div><input id="wifiPassword" type="password" class="config"></div>
+        <div><label for="wifiBssid">WiFi BSSID (MAC address)</label></div>
+        <div><input id="wifiBssid" type="text" class="config" placeholder="leave empty for dynamic selection" spellcheck="false"></div>
         <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
             <button id="btnWifiScan" style="margin-right: 10px;">Scan Available Networks</button>
             <span id="scanStatus"></span>
@@ -345,6 +347,7 @@
                     selectBtn.style.cursor = 'pointer';
                     selectBtn.onclick = () => {
                         document.getElementById('wifiSsid').value = network.ssid || '';
+                        document.getElementById('wifiBssid').value = network.bssid || '';
                         document.getElementById('wifiPassword').focus();
                         scanStatusEl.textContent = 'Network selected';
                     };
