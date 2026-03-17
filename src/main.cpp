@@ -336,9 +336,13 @@ void saveParamsCallback() {
   std::string mqttServerValue = configManager.readString("mqttServer");
   std::string mqttUserValue = configManager.readString("mqttUser");
   std::string mqttPassValue = configManager.readString("mqttPass");
+  std::string rootTopicValue = configManager.readString("rootTopic", "");
   mqtt.setEnabled(configManager.readBool("mqttEnabled"));
   mqtt.setServer(mqttServerValue.c_str(), 1883);
   mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
+  if (!rootTopicValue.empty()) {
+    mqtt.setRootTopic(rootTopicValue);
+  }
   mqtt.change();
 
   schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
@@ -575,10 +579,14 @@ extern "C" void app_main(void) {
   std::string mqttServerValue = configManager.readString("mqttServer");
   std::string mqttUserValue = configManager.readString("mqttUser");
   std::string mqttPassValue = configManager.readString("mqttPass");
+  std::string rootTopicValue = configManager.readString("rootTopic", "");
   mqtt.setEnabled(configManager.readBool("mqttEnabled"));
   mqtt.setup(unique_id);
   mqtt.setServer(mqttServerValue.c_str(), 1883);
   mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
+  if (!rootTopicValue.empty()) {
+    mqtt.setRootTopic(rootTopicValue);
+  }
   mqtt.start();
   mqtt.setStatusProvider([]() { return getMqttStatusJson(); });
 

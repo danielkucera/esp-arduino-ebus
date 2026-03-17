@@ -75,6 +75,7 @@ class Mqtt {
 
   void setServer(const char* host, uint16_t port);
   void setCredentials(const char* username, const char* password = nullptr);
+  void setRootTopic(const std::string& topic);
 
   void setEnabled(const bool enable);
   bool isEnabled() const;
