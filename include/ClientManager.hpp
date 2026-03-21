@@ -4,6 +4,8 @@
 
 #include <cstdint>
 
+#include <freertos/semphr.h>
+
 #include <vector>
 
 #include "ClientType.hpp"
@@ -42,13 +44,20 @@ class ClientManager {
 
   enum class BusState { Idle, Request, Transmit, Response };
 
-  TaskHandle_t clientManagerTaskHandle;
+  BusState busState = BusState::Idle;
+  AbstractClient* activeClient = nullptr;
+
+  TaskHandle_t clientManagerTaskHandle = nullptr;
+  TaskHandle_t clientAcceptTaskHandle = nullptr;
+  SemaphoreHandle_t clientsMutex = nullptr;
 
   static void taskFunc(void* arg);
+  static void acceptTaskFunc(void* arg);
 
   static bool createListenSocket(ServerSocket& server);
   static int acceptClient(ServerSocket& server);
   void acceptClients();
+  void cleanupDisconnectedClients();
 };
 
 extern ClientManager clientManager;

@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Logger.hpp"
+
 // C++11 compatible make_unique
 template <class T, class... Args>
 std::unique_ptr<T> make_unique(Args&&... args) {
@@ -112,6 +114,7 @@ void ClientManager::taskFunc(void* arg) {
 
     // Clean up disconnected active client
     if (activeClient && !activeClient->isConnected()) {
+      logger.info("Client disconnected (was active)");
       activeClient->stop();
       activeClient = nullptr;
       busState = BusState::Idle;
@@ -128,6 +131,7 @@ void ClientManager::taskFunc(void* arg) {
           activeClient = client;
           busState = BusState::Request;
           self->busRequested = false;
+          logger.info("Client has data to send (client #" + std::to_string(i) + ")");
           break;
         }
       }
@@ -197,6 +201,7 @@ void ClientManager::acceptClients() {
     const int clientFd = acceptClient(readonlyServer);
     if (clientFd < 0) break;
     clients.push_back(make_unique<ReadOnlyClient>(clientFd, request));
+    logger.info("ReadOnly client connected");
   }
 
   // Accept regular clients
@@ -204,6 +209,7 @@ void ClientManager::acceptClients() {
     const int clientFd = acceptClient(regularServer);
     if (clientFd < 0) break;
     clients.push_back(make_unique<RegularClient>(clientFd, request));
+    logger.info("Regular client connected");
   }
 
   // Accept enhanced clients
@@ -211,6 +217,7 @@ void ClientManager::acceptClients() {
     const int clientFd = acceptClient(enhancedServer);
     if (clientFd < 0) break;
     clients.push_back(make_unique<EnhancedClient>(clientFd, request));
+    logger.info("Enhanced client connected");
   }
 
   // Clean up disconnected clients
@@ -218,6 +225,7 @@ void ClientManager::acceptClients() {
       std::remove_if(clients.begin(), clients.end(),
                      [](const std::unique_ptr<AbstractClient>& client) {
                        if (!client->isConnected()) {
+                         logger.info("Client disconnected");
                          client->stop();  // <-- ensure socket is closed
                          return true;
                        }
