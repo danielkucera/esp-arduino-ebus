@@ -17,27 +17,38 @@ bool isSocketConnected(int socketFd) {
   return errno == EWOULDBLOCK || errno == EAGAIN;
 }
 
+int socketPeekByte(int socketFd) {
+  if (socketFd < 0) return -1;
+  uint8_t byte = 0;
+  const int result = recv(socketFd, &byte, 1, MSG_PEEK | MSG_DONTWAIT);
+  if (result <= 0) return -1;
+  return byte;
+}
+
+int socketPeekBytes(int socketFd, size_t maxSize) {
+  if (socketFd < 0 || maxSize == 0) return 0;
+  uint8_t buffer[2];
+  const int result = recv(socketFd, buffer, maxSize, MSG_PEEK | MSG_DONTWAIT);
+  if (result <= 0) return 0;
+  return result;
+}
+
 int socketAvailable(int socketFd) {
   if (socketFd < 0) return 0;
   int pending = 0;
-  if (lwip_ioctl(socketFd, FIONREAD, &pending) == 0) {
+  if (lwip_ioctl(socketFd, FIONREAD, &pending) == 0 && pending > 0) {
     return pending;
   }
-  return 0;
+  // Fallback: use peek to check if data is available
+  // Need to check for up to 2 bytes for enhanced protocol support
+  const int peekResult = socketPeekBytes(socketFd, 2);
+  return peekResult;
 }
 
 int socketReadByte(int socketFd) {
   if (socketFd < 0) return -1;
   uint8_t byte = 0;
   const int result = recv(socketFd, &byte, 1, MSG_DONTWAIT);
-  if (result <= 0) return -1;
-  return byte;
-}
-
-int socketPeekByte(int socketFd) {
-  if (socketFd < 0) return -1;
-  uint8_t byte = 0;
-  const int result = recv(socketFd, &byte, 1, MSG_PEEK | MSG_DONTWAIT);
   if (result <= 0) return -1;
   return byte;
 }
