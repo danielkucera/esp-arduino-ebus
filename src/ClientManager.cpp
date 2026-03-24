@@ -95,7 +95,11 @@ int ClientManager::acceptClient(ServerSocket& server) {
   }
 
   int flag = 1;
-  setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+  
+  if (setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) < 0) {
+    logger.warn("Failed to set TCP_NODELAY on client socket (fd=" + std::to_string(clientFd) +
+                "): " + std::to_string(errno));
+  }
 
   return clientFd;
 }
