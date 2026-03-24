@@ -42,20 +42,13 @@ class ClientManager {
 
   enum class BusState { Idle, Request, Transmit, Response };
 
-  BusState busState = BusState::Idle;
-  AbstractClient* activeClient = nullptr;
-
-  TaskHandle_t clientManagerTaskHandle = nullptr;
-  TaskHandle_t clientAcceptTaskHandle = nullptr;
-  SemaphoreHandle_t clientsMutex = nullptr;
+  TaskHandle_t clientManagerTaskHandle;
 
   static void taskFunc(void* arg);
-  static void acceptTaskFunc(void* arg);
 
   static bool createListenSocket(ServerSocket& server);
   static int acceptClient(ServerSocket& server);
   void acceptClients();
-  void cleanupDisconnectedClients();
 };
 
 extern ClientManager clientManager;
