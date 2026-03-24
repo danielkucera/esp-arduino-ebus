@@ -239,6 +239,11 @@ bool EnhancedClient::handleBusData(const uint8_t& byte) {
   // Handle bus response according to last command
   switch (request->getResult()) {
     case ebus::RequestResult::observeSyn:
+      if (byte == ebus::sym_syn) {
+        // Sync byte observed, send ACK
+        writeBytes({RECEIVED, byte});
+        return false;
+      }
     case ebus::RequestResult::firstLost:
     case ebus::RequestResult::secondLost:
       writeBytes({FAILED, byte});
