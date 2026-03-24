@@ -4,8 +4,6 @@
 
 #include <cstdint>
 
-#include <freertos/semphr.h>
-
 #include <vector>
 
 #include "ClientType.hpp"
