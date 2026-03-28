@@ -131,11 +131,11 @@ void startCaptiveDns() {
 
 void prepareRuntimeForUpgrade() {
 #if defined(EBUS_INTERNAL)
-  mqtt.stopTask();
-  ebusController.stop();
   cron.stop();
   schedule.stop();
   clientManager.stop();
+  mqtt.stopTask();
+  ebusController.stop();
 
   vTaskDelay(pdMS_TO_TICKS(50));
 #else
