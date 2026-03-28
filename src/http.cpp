@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "ConfigManager.hpp"
+#include "Cron.hpp"
 #include "DeviceManager.hpp"
 #include "HttpUtils.hpp"
 #include "Logger.hpp"
@@ -31,6 +32,7 @@ extern const char status_html_start[] asm("_binary_status_html_start");
 extern const char config_html_start[] asm("_binary_config_html_start");
 extern const char upgrade_html_start[] asm("_binary_upgrade_html_start");
 extern const char commands_html_start[] asm("_binary_commands_html_start");
+extern const char cron_html_start[] asm("_binary_cron_html_start");
 extern const char values_html_start[] asm("_binary_values_html_start");
 extern const char devices_html_start[] asm("_binary_devices_html_start");
 extern const char statistics_html_start[] asm("_binary_statistics_html_start");
@@ -299,6 +301,128 @@ esp_err_t handleCommandsWipe(httpd_req_t* req) {
   return ESP_OK;
 }
 
+esp_err_t handleCronPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", cron_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleCron(httpd_req_t* req) {
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                          cron.getRulesJson());
+  return ESP_OK;
+}
+
+esp_err_t handleCronEvaluate(httpd_req_t* req) {
+  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
+  if (!cJSON_IsArray(doc)) {
+    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
+  } else {
+    cJSON* rule = nullptr;
+    cJSON_ArrayForEach(rule, doc) {
+      std::string evalError = Cron::evaluate(rule);
+      if (!evalError.empty()) {
+        cJSON_Delete(doc);
+        HttpUtils::sendResponse(req, "403 Forbidden", "text/html", evalError.c_str());
+        return ESP_OK;
+      }
+    }
+    HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
+  }
+  if (doc) cJSON_Delete(doc);
+  return ESP_OK;
+}
+
+esp_err_t handleCronInsert(httpd_req_t* req) {
+  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
+  if (!cJSON_IsArray(doc)) {
+    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
+  } else {
+    cJSON* rule = nullptr;
+    cJSON_ArrayForEach(rule, doc) {
+      std::string evalError = Cron::evaluate(rule);
+      if (evalError.empty()) {
+        cron.insertRule(rule);
+      } else {
+        cJSON_Delete(doc);
+        HttpUtils::sendResponse(req, "403 Forbidden", "text/html", evalError.c_str());
+        return ESP_OK;
+      }
+    }
+    HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
+  }
+  if (doc) cJSON_Delete(doc);
+  return ESP_OK;
+}
+
+esp_err_t handleCronRemove(httpd_req_t* req) {
+  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
+  if (!cJSON_IsObject(doc)) {
+    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
+  } else {
+    cJSON* ids = cJSON_GetObjectItemCaseSensitive(doc, "ids");
+    if (cJSON_IsArray(ids) && cJSON_GetArraySize(ids) > 0) {
+      cJSON* id = nullptr;
+      cJSON_ArrayForEach(id, ids) {
+        if (!cJSON_IsString(id) || id->valuestring == nullptr) continue;
+        cron.removeRule(id->valuestring);
+      }
+      HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
+    } else {
+      cJSON* rulesDoc = cJSON_Parse(cron.getRulesJson().c_str());
+      if (cJSON_IsArray(rulesDoc) && cJSON_GetArraySize(rulesDoc) > 0) {
+        cJSON* rule = nullptr;
+        cJSON_ArrayForEach(rule, rulesDoc) {
+          cJSON* id = cJSON_GetObjectItemCaseSensitive(rule, "id");
+          if (!cJSON_IsString(id) || id->valuestring == nullptr) continue;
+          cron.removeRule(id->valuestring);
+        }
+        HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
+      } else {
+        HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "No rules");
+      }
+      if (rulesDoc) cJSON_Delete(rulesDoc);
+    }
+  }
+  if (doc) cJSON_Delete(doc);
+  return ESP_OK;
+}
+
+esp_err_t handleCronLoad(httpd_req_t* req) {
+  int64_t bytes = cron.loadRules();
+  if (bytes > 0)
+    HttpUtils::sendResponse(req, "200 OK", "text/html",
+                            std::to_string(bytes) + " bytes loaded");
+  else if (bytes < 0)
+    HttpUtils::sendResponse(req, "200 OK", "text/html", "Loading failed");
+  else
+    HttpUtils::sendResponse(req, "200 OK", "text/html", "No data loaded");
+  return ESP_OK;
+}
+
+esp_err_t handleCronSave(httpd_req_t* req) {
+  int64_t bytes = cron.saveRules();
+  if (bytes > 0)
+    HttpUtils::sendResponse(req, "200 OK", "text/html",
+                            std::to_string(bytes) + " bytes saved");
+  else if (bytes < 0)
+    HttpUtils::sendResponse(req, "200 OK", "text/html", "Saving failed");
+  else
+    HttpUtils::sendResponse(req, "200 OK", "text/html", "No data saved");
+  return ESP_OK;
+}
+
+esp_err_t handleCronWipe(httpd_req_t* req) {
+  int64_t bytes = Cron::wipeRules();
+  if (bytes > 0)
+    HttpUtils::sendResponse(req, "200 OK", "text/html",
+                            std::to_string(bytes) + " bytes wiped");
+  else if (bytes < 0)
+    HttpUtils::sendResponse(req, "200 OK", "text/html", "Wiping failed");
+  else
+    HttpUtils::sendResponse(req, "200 OK", "text/html", "No data wiped");
+  return ESP_OK;
+}
+
 esp_err_t handleValuesPage(httpd_req_t* req) {
   sendStatic(req, "text/html", values_html_start);
   return ESP_OK;
@@ -537,6 +661,15 @@ void SetupHttpHandlers() {
   RegisterUri("/api/v1/commands/load", HTTP_POST, handleCommandsLoad);
   RegisterUri("/api/v1/commands/save", HTTP_POST, handleCommandsSave);
   RegisterUri("/api/v1/commands/wipe", HTTP_POST, handleCommandsWipe);
+
+  RegisterUri("/cron", HTTP_GET, handleCronPage);
+  RegisterUri("/api/v1/cron", HTTP_GET, handleCron);
+  RegisterUri("/api/v1/cron/evaluate", HTTP_POST, handleCronEvaluate);
+  RegisterUri("/api/v1/cron/insert", HTTP_POST, handleCronInsert);
+  RegisterUri("/api/v1/cron/remove", HTTP_POST, handleCronRemove);
+  RegisterUri("/api/v1/cron/load", HTTP_POST, handleCronLoad);
+  RegisterUri("/api/v1/cron/save", HTTP_POST, handleCronSave);
+  RegisterUri("/api/v1/cron/wipe", HTTP_POST, handleCronWipe);
 
   RegisterUri("/values", HTTP_GET, handleValuesPage);
   RegisterUri("/api/v1/values", HTTP_GET, handleValues);

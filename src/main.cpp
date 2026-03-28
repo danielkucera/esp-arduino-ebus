@@ -24,6 +24,7 @@
 #include <Ebus.h>
 
 #include "ClientManager.hpp"
+#include "Cron.hpp"
 #include "DeviceManager.hpp"
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
@@ -132,6 +133,7 @@ void prepareRuntimeForUpgrade() {
 #if defined(EBUS_INTERNAL)
   mqtt.stopTask();
   ebusController.stop();
+  cron.stop();
   schedule.stop();
   clientManager.stop();
 
@@ -651,6 +653,9 @@ extern "C" void app_main(void) {
     logger.error("LittleFS initialization failed");
   }
   store.loadCommands();  // install saved commands
+  cron.initFileSystem();
+  cron.loadRules();
+  cron.start();
   mqttha.publishComponents();
   mqtt.startTask();
 #else
