@@ -17,12 +17,8 @@ class Cron {
   void start();
   void stop();
 
-  void insertRule(const cJSON* doc);
-  void removeRule(const std::string& id);
-
   int64_t loadRules();
-  int64_t saveRules() const;
-  static int64_t wipeRules();
+  int64_t replaceRules(const cJSON* doc);
 
   const std::string getRulesJson() const;
 
@@ -45,6 +41,9 @@ class Cron {
 
   mutable portMUX_TYPE rulesMux = portMUX_INITIALIZER_UNLOCKED;
 
+  static Rule ruleFromJson(const cJSON* doc);
+  void setRules(std::unordered_map<std::string, Rule>&& nextRules);
+  int64_t saveRules() const;
   static void taskFunc(void* arg);
   void tick();
 };

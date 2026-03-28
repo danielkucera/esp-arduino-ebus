@@ -235,9 +235,7 @@ void Cron::start() {
 
 void Cron::stop() { stopRunner = true; }
 
-void Cron::insertRule(const cJSON* doc) {
-  if (!cJSON_IsObject(doc)) return;
-
+Cron::Rule Cron::ruleFromJson(const cJSON* doc) {
   Rule rule;
   rule.id = getStringField(doc, "id");
   rule.schedule = getStringField(doc, "schedule");
@@ -253,15 +251,12 @@ void Cron::insertRule(const cJSON* doc) {
     rule.valueJson = "null";
   }
 
-  portENTER_CRITICAL(&rulesMux);
-  rules[rule.id] = rule;
-  portEXIT_CRITICAL(&rulesMux);
+  return rule;
 }
 
-void Cron::removeRule(const std::string& id) {
+void Cron::setRules(std::unordered_map<std::string, Rule>&& nextRules) {
   portENTER_CRITICAL(&rulesMux);
-  auto it = rules.find(id);
-  if (it != rules.end()) rules.erase(it);
+  rules = std::move(nextRules);
   portEXIT_CRITICAL(&rulesMux);
 }
 
@@ -280,12 +275,12 @@ int64_t Cron::loadRules() {
   }
 
   long size = std::ftell(file);
-  if (size <= 2) {
-    std::fclose(file);
-    return 0;
-  }
-
   if (size <= 0 || std::fseek(file, 0, SEEK_SET) != 0) {
+    if (size == 0) {
+      std::fclose(file);
+      setRules({});
+      return 0;
+    }
     std::fclose(file);
     return -1;
   }
@@ -302,18 +297,34 @@ int64_t Cron::loadRules() {
     return -1;
   }
 
-  portENTER_CRITICAL(&rulesMux);
-  rules.clear();
-  portEXIT_CRITICAL(&rulesMux);
-
+  std::unordered_map<std::string, Rule> nextRules;
   cJSON* entry = nullptr;
   cJSON_ArrayForEach(entry, doc) {
     if (!cJSON_IsObject(entry)) continue;
-    if (Cron::evaluate(entry).empty()) insertRule(entry);
+    if (Cron::evaluate(entry).empty()) {
+      Rule rule = ruleFromJson(entry);
+      nextRules[rule.id] = std::move(rule);
+    }
   }
 
+  setRules(std::move(nextRules));
   cJSON_Delete(doc);
   return static_cast<int64_t>(payload.size());
+}
+
+int64_t Cron::replaceRules(const cJSON* doc) {
+  if (!cJSON_IsArray(doc)) return -1;
+
+  std::unordered_map<std::string, Rule> nextRules;
+  cJSON* entry = nullptr;
+  cJSON_ArrayForEach(entry, doc) {
+    if (!cJSON_IsObject(entry)) continue;
+    Rule rule = ruleFromJson(entry);
+    nextRules[rule.id] = std::move(rule);
+  }
+
+  setRules(std::move(nextRules));
+  return saveRules();
 }
 
 int64_t Cron::saveRules() const {
@@ -321,7 +332,6 @@ int64_t Cron::saveRules() const {
 
   std::string payload = getRulesJson();
   size_t size = payload.size();
-  if (size <= 2) return 0;
 
   FILE* file = std::fopen(kCronFilePath, "wb");
   if (file == nullptr) return -1;
@@ -331,24 +341,6 @@ int64_t Cron::saveRules() const {
   if (bytesWritten != size) return -1;
 
   return static_cast<int64_t>(size);
-}
-
-int64_t Cron::wipeRules() {
-  if (!store.initFileSystem()) return -1;
-
-  struct stat fileStat {};
-  if (stat(kCronFilePath, &fileStat) != 0) {
-    if (errno == ENOENT) return 0;
-    return -1;
-  }
-
-  if (std::remove(kCronFilePath) != 0) {
-    if (errno == ENOENT) return 0;
-    return -1;
-  }
-
-  if (fileStat.st_size <= 0) return 0;
-  return static_cast<int64_t>(fileStat.st_size);
 }
 
 const std::string Cron::getRulesJson() const {
