@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Logger.hpp"
+
 // C++11 compatible make_unique
 template <class T, class... Args>
 std::unique_ptr<T> make_unique(Args&&... args) {
@@ -33,7 +35,10 @@ void ClientManager::start(ebus::Bus* bus, ebus::BusHandler* busHandler,
 
   clientByteQueue = new ebus::Queue<uint8_t>();
 
-  request->setExternalBusRequestedCallback([this]() { busRequested = true; });
+  request->setExternalBusRequestedCallback([this]() {
+    busRequestSuccess = true;
+    logger.info("Bus request success");
+  });
 
   busHandler->addByteListener(
       [this](const uint8_t& byte) { clientByteQueue->try_push(byte); });
@@ -93,7 +98,11 @@ int ClientManager::acceptClient(ServerSocket& server) {
   }
 
   int flag = 1;
-  setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+  
+  if (setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) < 0) {
+    logger.warn("Failed to set TCP_NODELAY on client socket (fd=" + std::to_string(clientFd) +
+                "): " + std::to_string(errno));
+  }
 
   return clientFd;
 }
@@ -112,10 +121,11 @@ void ClientManager::taskFunc(void* arg) {
 
     // Clean up disconnected active client
     if (activeClient && !activeClient->isConnected()) {
+      logger.info("Client disconnected (was active)");
       activeClient->stop();
       activeClient = nullptr;
       busState = BusState::Idle;
-      self->busRequested = false;
+      self->busRequestSuccess = false;
       self->request->reset();
     }
 
@@ -127,7 +137,8 @@ void ClientManager::taskFunc(void* arg) {
             client->available()) {
           activeClient = client;
           busState = BusState::Request;
-          self->busRequested = false;
+          self->busRequestSuccess = false;
+          logger.info("Client has data to send (client #" + std::to_string(i) + ")");
           break;
         }
       }
@@ -135,16 +146,30 @@ void ClientManager::taskFunc(void* arg) {
 
     // Request bus access
     if (activeClient && busState == BusState::Request) {
-      if (self->request->busAvailable()) {
+      if ((self->clientByteQueue->size() == 0)) {
+        int attempt = 0;
+        for (attempt = 0; attempt < 50; ++attempt) {
+          if (self->request->busAvailable()) {
+            break;
+          }
+          vTaskDelay(1);
+        }
+
+        if (attempt >= 50) {
+            logger.warn("Bus available timeout for client");
+            continue;
+        }
+
         uint8_t firstByte = 0;
         if (activeClient->readByte(firstByte)) {
           self->request->requestBus(firstByte, true);
+          logger.info("Bus requested by client");
           busState = BusState::Response;
         } else {
           // Client initialized or error
           activeClient = nullptr;
           busState = BusState::Idle;
-          self->busRequested = false;
+          self->busRequestSuccess = false;
           self->request->reset();
         }
       }
@@ -164,7 +189,7 @@ void ClientManager::taskFunc(void* arg) {
       if (activeClient) {
         if ((busState == BusState::Response ||
              busState == BusState::Transmit) &&
-            self->busRequested) {
+            self->busRequestSuccess) {
           if (activeClient->handleBusData(receiveByte)) {
             // Continue transmitting if needed
             busState = BusState::Transmit;
@@ -172,7 +197,7 @@ void ClientManager::taskFunc(void* arg) {
             // Transaction done or error
             activeClient = nullptr;
             busState = BusState::Idle;
-            self->busRequested = false;
+            self->busRequestSuccess = false;
             self->request->reset();
           }
         }
@@ -197,6 +222,7 @@ void ClientManager::acceptClients() {
     const int clientFd = acceptClient(readonlyServer);
     if (clientFd < 0) break;
     clients.push_back(make_unique<ReadOnlyClient>(clientFd, request));
+    logger.info("ReadOnly client connected");
   }
 
   // Accept regular clients
@@ -204,6 +230,7 @@ void ClientManager::acceptClients() {
     const int clientFd = acceptClient(regularServer);
     if (clientFd < 0) break;
     clients.push_back(make_unique<RegularClient>(clientFd, request));
+    logger.info("Regular client connected");
   }
 
   // Accept enhanced clients
@@ -211,6 +238,7 @@ void ClientManager::acceptClients() {
     const int clientFd = acceptClient(enhancedServer);
     if (clientFd < 0) break;
     clients.push_back(make_unique<EnhancedClient>(clientFd, request));
+    logger.info("Enhanced client connected");
   }
 
   // Clean up disconnected clients
@@ -218,6 +246,7 @@ void ClientManager::acceptClients() {
       std::remove_if(clients.begin(), clients.end(),
                      [](const std::unique_ptr<AbstractClient>& client) {
                        if (!client->isConnected()) {
+                         logger.info("Client disconnected");
                          client->stop();  // <-- ensure socket is closed
                          return true;
                        }
