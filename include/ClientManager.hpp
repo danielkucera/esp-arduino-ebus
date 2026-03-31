@@ -32,7 +32,7 @@ class ClientManager {
 
   ebus::Queue<uint8_t>* clientByteQueue = nullptr;
   volatile bool stopRunner = false;
-  volatile bool busRequested = false;
+  volatile bool busRequestSuccess = false;
 
   ebus::Bus* bus = nullptr;
   ebus::BusHandler* busHandler = nullptr;
