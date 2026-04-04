@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>esp-eBus Cron</title>
+  <link rel="stylesheet" href="common.css">
+</head>
+
+<body>
+  <h2>Cron Write Rules</h2>
+  <div class="row" style="margin-bottom:8px;">
+    <button id="btnHome">Home</button>
+    <button id="btnFetch">Load from adapter</button>
+    <button id="btnOpenFile" class="secondary">Load from file...</button>
+    <input id="fileUpload" type="file" style="display:none" accept="application/json">
+    <button id="btnClear">Clear</button>
+    <button id="btnFormat">Format</button>
+    <button id="btnEvaluate">Evaluate</button>
+    <button id="btnSave" class="apply">Save to adapter</button>
+    <button id="btnDownload" class="secondary">Save as file</button>
+    <span class="status" id="status"> </span>
+    <span id="size">0 bytes</span>
+  </div>
+  <textarea class="boxsizingBorder" id="cronArea">Loading...</textarea>
+  <div>
+    <div class="table-actions">
+      <button id="btnEditorToTable">Refresh table from editor</button>
+      <span id="ruleCount" style="margin-left: 10px;">0 rules</span>
+      <label style="margin-left:auto;color:#666;font-size:0.9rem">Table view (read-only)</label>
+    </div>
+    <table id="cronTable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <script src="common.js"></script>
+  <script>
+    function updateSize() {
+      const txt = document.getElementById('cronArea').value || '';
+      const bytes = new TextEncoder().encode(txt).length;
+      const chars = txt.length;
+      document.getElementById('size').textContent = bytes + ' bytes (' + chars + ' chars)';
+    }
+
+    function fetchRules() {
+      fetchJson('/api/v1/cron', js => {
+        document.getElementById('cronArea').value = JSON.stringify(js, null, 2);
+        renderTable(js || []);
+        setStatus('Fetched');
+        updateSize();
+      });
+    }
+
+    function renderTable(rules) {
+      const thead = document.querySelector('#cronTable thead');
+      const tbody = document.querySelector('#cronTable tbody');
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+      const keys = new Set();
+
+      rules.forEach(rule => { Object.keys(rule || {}).forEach(k => keys.add(k)); });
+      const cols = Array.from(keys);
+
+      const trh = document.createElement('tr');
+      cols.forEach(k => { const th = document.createElement('th'); th.textContent = k; trh.appendChild(th); });
+      thead.appendChild(trh);
+
+      rules.forEach(rule => {
+        const tr = document.createElement('tr');
+        tbody.appendChild(tr);
+
+        cols.forEach(k => {
+          const td = document.createElement('td');
+          const v = rule[k];
+          if (typeof v === 'object' && v !== null)
+            td.textContent = JSON.stringify(v);
+          else
+            td.textContent = (v === undefined ? '' : String(v));
+          tr.appendChild(td);
+        });
+
+        tr.dataset.id = rule.id;
+      });
+
+      document.getElementById('ruleCount').textContent = rules.length + ' rules';
+    }
+
+    function editorToTable() {
+      try {
+        const txt = document.getElementById('cronArea').value;
+        const obj = JSON.parse(txt);
+        renderTable(Array.isArray(obj) ? obj : []);
+        setStatus('Table updated from editor');
+      } catch (err) {
+        setStatus('Invalid JSON');
+      }
+    }
+
+    function handleSave() {
+      try {
+        const txt = document.getElementById('cronArea').value;
+        const obj = JSON.parse(txt);
+        if (!Array.isArray(obj)) {
+          setStatus('JSON must be an array');
+          return;
+        }
+        setStatus('Saving...');
+        fetch('/api/v1/cron', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(obj)
+        }).then(async res => {
+          const text = await res.text();
+          setStatus(text || (res.ok ? 'Saved' : 'Save failed'));
+          if (res.ok) fetchRules();
+        }).catch(() => setStatus('Invalid JSON or save failed'));
+      } catch (err) {
+        setStatus('Invalid JSON or save failed');
+      }
+    }
+
+    function handleEvaluate() {
+      try {
+        const txt = document.getElementById('cronArea').value;
+        const obj = JSON.parse(txt);
+        setStatus('Evaluating...');
+        fetch('/api/v1/cron/evaluate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(obj)
+        }).then(async res => {
+          const text = await res.text();
+          setStatus(text || (res.ok ? 'Evaluated' : 'Evaluation failed'));
+        }).catch(() => setStatus('Invalid JSON or evaluation failed'));
+      } catch (err) {
+        setStatus('Invalid JSON or evaluation failed');
+      }
+    }
+
+    document.getElementById('btnHome').addEventListener('click', handleHome);
+    document.getElementById('btnFetch').addEventListener('click', fetchRules);
+    document.getElementById('btnOpenFile').addEventListener('click', () => document.getElementById('fileUpload').click());
+    document.getElementById('fileUpload').addEventListener('change', ev => handleJsonFileUpload(ev, 'cronArea', updateSize));
+    document.getElementById('btnClear').addEventListener('click', () => clearTextarea('cronArea', 'size'));
+    document.getElementById('btnFormat').addEventListener('click', () => formatTextareaJson('cronArea'));
+    document.getElementById('btnEvaluate').addEventListener('click', handleEvaluate);
+    document.getElementById('btnSave').addEventListener('click', handleSave);
+    document.getElementById('btnDownload').addEventListener('click', () => {
+      const text = document.getElementById('cronArea').value;
+      downloadTextFile(text, 'cron.json', 'application/json');
+    });
+
+    document.getElementById('cronArea').addEventListener('input', updateSize);
+    document.getElementById('btnEditorToTable').addEventListener('click', editorToTable);
+
+    fetchRules();
+  </script>
+</body>
+
+</html>
