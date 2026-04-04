@@ -4,10 +4,9 @@
 #include <cstring>
 #include <sys/time.h>
 
-#include <Arduino.h>
-#include <WebServer.h>
 #include <driver/adc.h>
 #include <esp_err.h>
+#include <esp_timer.h>
 
 #include "Logger.hpp"
 
@@ -188,11 +187,11 @@ bool Adc::collectSamples(std::array<std::vector<uint16_t>, 5>& channels,
 }
 
 void Adc::logError(const char* stage, int err) const {
-  logger.error(String("ADC: ") + stage + ": " + esp_err_to_name(err));
+  logger.error(std::string("ADC: ") + stage + ": " + esp_err_to_name(err));
 }
 
 bool Adc::shouldLogNow() const {
-  const uint32_t now = millis();
+  const uint32_t now = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
   if (now - lastErrorLogMs >= 1000) {
     lastErrorLogMs = now;
     return true;
@@ -261,83 +260,4 @@ const std::string Adc::getJson(uint32_t sampleRate, uint32_t samplesPerChannel,
 
   payload += "]}";
   return payload;
-}
-
-void Adc::streamJson(WebServer& server, uint32_t sampleRate,
-                     uint32_t samplesPerChannel, uint32_t channelMask) const {
-  if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
-  if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  if (samplesPerChannel == 0)
-    samplesPerChannel = SAMPLES_PER_CHANNEL_DEFAULT;
-  channelMask &= ADC_CHANNEL_MASK_ALL;
-  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
-
-  std::array<std::vector<uint16_t>, 5> channels;
-  if (!collectSamples(channels, sampleRate, samplesPerChannel, channelMask)) {
-    server.sendContent("{\"error\":\"capture failed\"}");
-    return;
-  }
-
-  struct timeval now = {};
-  gettimeofday(&now, nullptr);
-  const bool ntpSynced = now.tv_sec >= NTP_SYNCED_EPOCH_THRESHOLD;
-  const uint64_t captureEndEpochMs =
-      ntpSynced ? (static_cast<uint64_t>(now.tv_sec) * 1000ULL) +
-                      (static_cast<uint64_t>(now.tv_usec) / 1000ULL)
-                : 0ULL;
-
-  String chunk;
-  chunk.reserve(1024);
-
-  auto flushChunk = [&]() {
-    if (!chunk.isEmpty()) {
-      server.sendContent(chunk);
-      chunk = "";
-    }
-  };
-
-  auto append = [&](const String& s) {
-    chunk += s;
-    if (chunk.length() > 900) flushChunk();
-  };
-
-  append("{\"gpio\":1,\"buffer_bytes\":");
-  append(String(SAMPLE_BUFFER_BYTES));
-  append(",\"sample_rate\":");
-  append(String(sampleRate));
-  append(",\"samples_per_channel\":");
-  append(String(samplesPerChannel));
-  append(",\"ntp_synced\":");
-  append(ntpSynced ? "true" : "false");
-  append(",\"capture_end_epoch_ms\":");
-  char epochMsBuffer[24];
-  snprintf(epochMsBuffer, sizeof(epochMsBuffer), "%llu",
-           static_cast<unsigned long long>(captureEndEpochMs));
-  append(epochMsBuffer);
-  append(",\"channels\":[");
-  bool firstChannel = true;
-  for (uint8_t ch = 0; ch <= 4; ++ch) {
-    if ((channelMask & (1U << ch)) == 0) continue;
-    if (!firstChannel) append(",");
-    append(String(ch));
-    firstChannel = false;
-  }
-  append("],\"samples\":[");
-
-  for (size_t i = 0; i < channels[1].size(); ++i) {
-    if (i > 0) append(",");
-    append(String(channels[1][i]));
-  }
-  for (uint8_t ch = 0; ch <= 4; ++ch) {
-    append("],\"samples_gpio");
-    append(String(ch));
-    append("\":[");
-    for (size_t i = 0; i < channels[ch].size(); ++i) {
-      if (i > 0) append(",");
-      append(String(channels[ch][i]));
-    }
-  }
-
-  append("]}");
-  flushChunk();
 }

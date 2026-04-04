@@ -5,8 +5,6 @@
 #include <string>
 #include <vector>
 
-class WebServer;
-
 class Adc {
  public:
   static constexpr size_t SAMPLE_BUFFER_BYTES = 10 * 1024;
@@ -19,8 +17,6 @@ class Adc {
   const bool isRunning() const;
   const std::string getJson(uint32_t sampleRate, uint32_t samplesPerChannel,
                             uint32_t channelMask) const;
-  void streamJson(WebServer& server, uint32_t sampleRate,
-                  uint32_t samplesPerChannel, uint32_t channelMask) const;
 
  private:
   bool startCapture() const;
