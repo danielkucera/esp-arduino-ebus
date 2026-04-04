@@ -29,6 +29,7 @@ extern const char common_js_start[] asm("_binary_common_js_start");
 
 extern const char root_html_start[] asm("_binary_root_html_start");
 extern const char status_html_start[] asm("_binary_status_html_start");
+extern const char adc_html_start[] asm("_binary_adc_html_start");
 extern const char config_html_start[] asm("_binary_config_html_start");
 extern const char upgrade_html_start[] asm("_binary_upgrade_html_start");
 extern const char commands_html_start[] asm("_binary_commands_html_start");
@@ -49,6 +50,11 @@ esp_err_t handleRoot(httpd_req_t* req) {
 
 esp_err_t handleStatusPage(httpd_req_t* req) {
   sendStatic(req, "text/html", status_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleAdcPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", adc_html_start);
   return ESP_OK;
 }
 
@@ -596,6 +602,7 @@ void SetupHttpHandlers() {
   RegisterUri("/", HTTP_GET, handleRoot);
   RegisterUri("/config", HTTP_GET, handleConfigPage);
   RegisterUri("/status", HTTP_GET, handleStatusPage);
+  RegisterUri("/adc", HTTP_GET, handleAdcPage);
   RegisterUri("/api/v1/status", HTTP_GET, handleStatusApi);
   RegisterUri("/api/v1/wifi/scan", HTTP_POST, handleWifiScan);
   RegisterUri("/upgrade", HTTP_GET, handleUpgradePage);
