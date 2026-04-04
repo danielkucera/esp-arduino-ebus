@@ -8,6 +8,7 @@
 #include <freertos/task.h>
 #include <string>
 #include <vector>
+#include "Adc.hpp"
 
 #include "ConfigManager.hpp"
 #include "Cron.hpp"
@@ -43,6 +44,50 @@ void sendStatic(httpd_req_t* req, const char* contentType, const char* data) {
   HttpUtils::sendResponse(req, "200 OK", contentType, std::string(data));
 }
 
+uint32_t parseAdcArg(httpd_req_t* req, const char* key, uint32_t fallback) {
+  if (req == nullptr || key == nullptr) return fallback;
+
+  char query[256] = {};
+  if (httpd_req_get_url_query_str(req, query, sizeof(query)) != ESP_OK)
+    return fallback;
+
+  char value[32] = {};
+  if (httpd_query_key_value(query, key, value, sizeof(value)) != ESP_OK)
+    return fallback;
+
+  char* end = nullptr;
+  unsigned long parsed = std::strtoul(value, &end, 10);
+  if (end == value || *end != '\0') return fallback;
+  return static_cast<uint32_t>(parsed);
+}
+
+uint32_t parseAdcChannelMask(httpd_req_t* req) {
+  if (req == nullptr) return 0x03;  // default GPIO0, GPIO1
+
+  char query[256] = {};
+  if (httpd_req_get_url_query_str(req, query, sizeof(query)) != ESP_OK)
+    return 0x03;
+
+  char value[128] = {};
+  if (httpd_query_key_value(query, "channels", value, sizeof(value)) != ESP_OK)
+    return 0x03;
+
+  uint32_t mask = 0;
+  const char* p = value;
+  while (*p != '\0') {
+    char* end = nullptr;
+    long ch = std::strtol(p, &end, 10);
+    if (end == p) break;
+    if (ch >= 0 && ch <= 4) mask |= (1U << ch);
+    if (*end == ',')
+      p = end + 1;
+    else
+      break;
+  }
+
+  return mask == 0 ? 0x03 : mask;
+}
+
 esp_err_t handleRoot(httpd_req_t* req) {
   sendStatic(req, "text/html", root_html_start);
   return ESP_OK;
@@ -55,6 +100,91 @@ esp_err_t handleStatusPage(httpd_req_t* req) {
 
 esp_err_t handleAdcPage(httpd_req_t* req) {
   sendStatic(req, "text/html", adc_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleAdcBulk(httpd_req_t* req) {
+  if (!adc.isRunning() && !adc.begin()) {
+    HttpUtils::sendResponse(req, "500 Internal Server Error",
+                            "application/json;charset=utf-8",
+                            "{\"error\":\"adc not running\"}");
+    return ESP_OK;
+  }
+
+  const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
+  const uint32_t samplesPerChannel =
+      parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
+  const uint32_t channelMask = parseAdcChannelMask(req);
+
+  const std::string payload =
+      adc.getJson(sampleRate, samplesPerChannel, channelMask);
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                          payload);
+  return ESP_OK;
+}
+
+esp_err_t handleAdcStream(httpd_req_t* req) {
+  // Keep stream endpoint compatible by returning one complete JSON payload.
+  return handleAdcBulk(req);
+}
+
+esp_err_t handleAdcLive(httpd_req_t* req) {
+  if (!adc.isRunning() && !adc.begin()) {
+    HttpUtils::sendResponse(req, "500 Internal Server Error",
+                            "application/json;charset=utf-8",
+                            "{\"error\":\"adc not running\"}");
+    return ESP_OK;
+  }
+
+  const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
+  const uint32_t samplesPerChannel =
+      parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
+  const uint32_t channelMask = parseAdcChannelMask(req);
+
+  httpd_resp_set_status(req, "200 OK");
+  httpd_resp_set_type(req, "text/event-stream");
+  httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+  httpd_resp_set_hdr(req, "Connection", "keep-alive");
+  httpd_resp_send_chunk(req, "retry: 1000\n\n", HTTPD_RESP_USE_STRLEN);
+
+  const std::string payload =
+      adc.getJson(sampleRate, samplesPerChannel, channelMask);
+  const std::string event = "data: " + payload + "\n\n";
+  httpd_resp_send_chunk(req, event.c_str(), event.size());
+  httpd_resp_send_chunk(req, nullptr, 0);
+  return ESP_OK;
+}
+
+esp_err_t handleAdcEnable(httpd_req_t* req) {
+  const bool started = adc.begin();
+  if (started)
+    HttpUtils::sendResponse(req, "200 OK", "text/plain", "ADC enabled");
+  else
+    HttpUtils::sendResponse(req, "500 Internal Server Error", "text/plain",
+                            "ADC enable failed");
+  return ESP_OK;
+}
+
+esp_err_t handleAdcDisable(httpd_req_t* req) {
+  adc.stop();
+  HttpUtils::sendResponse(req, "200 OK", "text/plain", "ADC disabled");
+  return ESP_OK;
+}
+
+esp_err_t handleAdcState(httpd_req_t* req) {
+  cJSON* root = cJSON_CreateObject();
+  cJSON_AddBoolToObject(root, "running", adc.isRunning());
+  char* out = cJSON_PrintUnformatted(root);
+  cJSON_Delete(root);
+  if (out == nullptr) {
+    HttpUtils::sendResponse(req, "500 Internal Server Error",
+                            "application/json;charset=utf-8",
+                            "{\"error\":\"json allocation failed\"}");
+    return ESP_OK;
+  }
+
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
+  free(out);
   return ESP_OK;
 }
 
@@ -590,7 +720,7 @@ void SetupHttpHandlers() {
   config.server_port = 80;
   config.uri_match_fn = httpd_uri_match_wildcard;
   config.max_uri_handlers = 64;
-  config.stack_size = 12288;
+  config.stack_size = 16384;
 
   if (httpd_start(&configServer, &config) != ESP_OK) {
     logger.error("Failed to start HTTP server");
@@ -604,6 +734,12 @@ void SetupHttpHandlers() {
   RegisterUri("/status", HTTP_GET, handleStatusPage);
   RegisterUri("/adc", HTTP_GET, handleAdcPage);
   RegisterUri("/api/v1/status", HTTP_GET, handleStatusApi);
+  RegisterUri("/api/v1/adc/bulk", HTTP_GET, handleAdcBulk);
+  RegisterUri("/api/v1/adc/stream", HTTP_GET, handleAdcStream);
+  RegisterUri("/api/v1/adc/live", HTTP_GET, handleAdcLive);
+  RegisterUri("/api/v1/adc/enable", HTTP_POST, handleAdcEnable);
+  RegisterUri("/api/v1/adc/disable", HTTP_POST, handleAdcDisable);
+  RegisterUri("/api/v1/adc/state", HTTP_GET, handleAdcState);
   RegisterUri("/api/v1/wifi/scan", HTTP_POST, handleWifiScan);
   RegisterUri("/upgrade", HTTP_GET, handleUpgradePage);
 

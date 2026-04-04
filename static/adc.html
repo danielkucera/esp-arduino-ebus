@@ -534,6 +534,10 @@
                 .then(text => {
                     lastRawJson = text;
                     const data = JSON.parse(text);
+                    if (data && typeof data.error === 'string' && data.error.length > 0) {
+                        setStatus(`ADC error: ${data.error}`);
+                        return;
+                    }
                     for (let ch = 0; ch <= 4; ch++) {
                         const key = `samples_gpio${ch}`;
                         if (ch === 1 && Array.isArray(data.samples))
@@ -550,7 +554,7 @@
                 })
                 .catch(err => {
                     console.error(err);
-                    setStatus('Error fetching');
+                    setStatus(`Error fetching: ${err.message || err}`);
                 });
         }
 
@@ -563,6 +567,10 @@
                 try {
                     lastRawJson = event.data;
                     const data = JSON.parse(event.data);
+                    if (data && typeof data.error === 'string' && data.error.length > 0) {
+                        setStatus(`ADC error: ${data.error}`);
+                        return;
+                    }
                     for (let ch = 0; ch <= 4; ch++) {
                         const key = `samples_gpio${ch}`;
                         if (ch === 1 && Array.isArray(data.samples))

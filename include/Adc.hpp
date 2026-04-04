@@ -14,7 +14,7 @@ class Adc {
   bool begin();
   void stop();
 
-  const bool isRunning() const;
+  bool isRunning() const;
   const std::string getJson(uint32_t sampleRate, uint32_t samplesPerChannel,
                             uint32_t channelMask) const;
 
