@@ -45,6 +45,7 @@
         <select id="methodSelect">
             <option value="bulk">bulk</option>
             <option value="stream" selected>stream</option>
+            <option value="raw">raw</option>
             <option value="live">live</option>
         </select>
         <span style="margin-left:8px">Sample</span>
@@ -522,6 +523,10 @@
                 startLiveStream();
                 return;
             }
+            if (endpointMode === 'raw') {
+                handleAdcRaw();
+                return;
+            }
             stopLiveStream();
             const endpoint = endpointMode === 'stream' ? '/api/v1/adc/stream' : '/api/v1/adc/bulk';
             const qs = `?sample_rate=${sampleRate}&samples=${samplesPerChannel}&channels=${getChannelsQuery()}`;
@@ -555,6 +560,88 @@
                 .catch(err => {
                     console.error(err);
                     setStatus(`Error fetching: ${err.message || err}`);
+                });
+        }
+
+        function decodeEsp32c3Type2(arrayBuffer, channelMask) {
+            const byChannel = [[], [], [], [], []];
+            const dv = new DataView(arrayBuffer);
+            const len = Math.floor(dv.byteLength / 4) * 4;
+            for (let i = 0; i < len; i += 4) {
+                const word = dv.getUint32(i, true);
+                const data = word & 0xFFF;
+                const channel = (word >> 13) & 0x7;
+                const unit = (word >> 16) & 0x1;
+                if (unit !== 0) continue;
+                if (channel > 4) continue;
+                if ((channelMask & (1 << channel)) === 0) continue;
+                byChannel[channel].push(data);
+            }
+            return byChannel;
+        }
+
+        function bitCount(v) {
+            let c = 0;
+            while (v) {
+                c += v & 1;
+                v >>>= 1;
+            }
+            return c;
+        }
+
+        function handleAdcRaw() {
+            stopLiveStream();
+            const endpoint = '/api/v1/adc/raw';
+            const qs = `?sample_rate=${sampleRate}&samples=${samplesPerChannel}&channels=${getChannelsQuery()}`;
+            setStatus('Fetching raw ADC...');
+            fetch(endpoint + qs)
+                .then(async (res) => {
+                    if (!res.ok) throw new Error('Fetch failed');
+                    const ct = (res.headers.get('content-type') || '').toLowerCase();
+                    if (!ct.includes('application/octet-stream')) {
+                        const text = await res.text();
+                        let msg = text;
+                        try {
+                            const obj = JSON.parse(text);
+                            if (obj && obj.error) msg = obj.error;
+                        } catch (_) {}
+                        throw new Error(msg || 'raw response invalid');
+                    }
+
+                    const fmt = (res.headers.get('x-adc-format') || '').toLowerCase();
+                    if (fmt !== 'esp32c3-type2-le') {
+                        throw new Error(`unsupported raw format: ${fmt || 'unknown'}`);
+                    }
+                    const maskHdr = parseInt(res.headers.get('x-adc-channel-mask') || '3', 10);
+                    const samplesHdr = parseInt(res.headers.get('x-adc-samples') || String(samplesPerChannel), 10);
+                    const rateHdr = parseInt(res.headers.get('x-adc-sample-rate') || String(sampleRate), 10);
+
+                    const raw = await res.arrayBuffer();
+                    const decoded = decodeEsp32c3Type2(raw, maskHdr);
+                    currentChannelData = decoded;
+                    if (Array.isArray(decoded[1])) {
+                        // Keep legacy primary series behavior.
+                        currentChannelData[1] = decoded[1];
+                    }
+
+                    sampleRate = Number.isFinite(rateHdr) ? rateHdr : sampleRate;
+                    lastCaptureChannelCount = Math.max(1, bitCount(maskHdr));
+                    lastNtpSynced = false;
+                    lastCaptureEndEpochMs = 0;
+                    lastRawJson = JSON.stringify({
+                        raw: true,
+                        sample_rate: sampleRate,
+                        samples_per_channel: samplesHdr,
+                        channels: getSelectedChannels()
+                    });
+
+                    decodeUartOnChannel4();
+                    drawChart();
+                    setStatus(`Fetched raw (${raw.byteLength} bytes)`);
+                })
+                .catch(err => {
+                    console.error(err);
+                    setStatus(`ADC raw error: ${err.message || err}`);
                 });
         }
 

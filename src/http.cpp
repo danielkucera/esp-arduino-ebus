@@ -124,8 +124,59 @@ esp_err_t handleAdcBulk(httpd_req_t* req) {
 }
 
 esp_err_t handleAdcStream(httpd_req_t* req) {
-  // Keep stream endpoint compatible by returning one complete JSON payload.
-  return handleAdcBulk(req);
+  if (!adc.isRunning() && !adc.begin()) {
+    HttpUtils::sendResponse(req, "500 Internal Server Error",
+                            "application/json;charset=utf-8",
+                            "{\"error\":\"adc not running\"}");
+    return ESP_OK;
+  }
+
+  const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
+  const uint32_t samplesPerChannel =
+      parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
+  const uint32_t channelMask = parseAdcChannelMask(req);
+
+  httpd_resp_set_status(req, "200 OK");
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  if (!adc.streamJson(req, sampleRate, samplesPerChannel, channelMask))
+    return ESP_FAIL;
+  httpd_resp_send_chunk(req, nullptr, 0);
+  return ESP_OK;
+}
+
+esp_err_t handleAdcRaw(httpd_req_t* req) {
+  if (!adc.isRunning() && !adc.begin()) {
+    HttpUtils::sendResponse(req, "500 Internal Server Error",
+                            "application/json;charset=utf-8",
+                            "{\"error\":\"adc not running\"}");
+    return ESP_OK;
+  }
+
+  const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
+  const uint32_t samplesPerChannel =
+      parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
+  const uint32_t channelMask = parseAdcChannelMask(req);
+
+  char tmp[32];
+  httpd_resp_set_status(req, "200 OK");
+  httpd_resp_set_type(req, "application/octet-stream");
+  httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+  httpd_resp_set_hdr(req, "X-ADC-Format", "esp32c3-type2-le");
+  std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(sampleRate));
+  httpd_resp_set_hdr(req, "X-ADC-Sample-Rate", tmp);
+  std::snprintf(tmp, sizeof(tmp), "%u",
+                static_cast<unsigned>(samplesPerChannel));
+  httpd_resp_set_hdr(req, "X-ADC-Samples", tmp);
+  std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(channelMask));
+  httpd_resp_set_hdr(req, "X-ADC-Channel-Mask", tmp);
+  std::snprintf(tmp, sizeof(tmp), "%u",
+                static_cast<unsigned>(Adc::RESULT_BYTES));
+  httpd_resp_set_hdr(req, "X-ADC-Result-Bytes", tmp);
+
+  if (!adc.streamRaw(req, sampleRate, samplesPerChannel, channelMask))
+    return ESP_FAIL;
+  httpd_resp_send_chunk(req, nullptr, 0);
+  return ESP_OK;
 }
 
 esp_err_t handleAdcLive(httpd_req_t* req) {
@@ -736,6 +787,7 @@ void SetupHttpHandlers() {
   RegisterUri("/api/v1/status", HTTP_GET, handleStatusApi);
   RegisterUri("/api/v1/adc/bulk", HTTP_GET, handleAdcBulk);
   RegisterUri("/api/v1/adc/stream", HTTP_GET, handleAdcStream);
+  RegisterUri("/api/v1/adc/raw", HTTP_GET, handleAdcRaw);
   RegisterUri("/api/v1/adc/live", HTTP_GET, handleAdcLive);
   RegisterUri("/api/v1/adc/enable", HTTP_POST, handleAdcEnable);
   RegisterUri("/api/v1/adc/disable", HTTP_POST, handleAdcDisable);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <esp_http_server.h>
+
 #include <cstdint>
 #include <array>
 #include <string>
@@ -8,13 +10,17 @@
 class Adc {
  public:
   static constexpr size_t SAMPLE_BUFFER_BYTES = 10 * 1024;
-  static constexpr size_t DMA_STORE_BUFFER_BYTES = 4 * 1024;
+  static constexpr size_t DMA_STORE_BUFFER_BYTES = 32 * 1024;
   static constexpr size_t RESULT_BYTES = 4;
 
   bool begin();
   void stop();
 
   bool isRunning() const;
+  bool streamJson(httpd_req_t* req, uint32_t sampleRate,
+                  uint32_t samplesPerChannel, uint32_t channelMask) const;
+  bool streamRaw(httpd_req_t* req, uint32_t sampleRate,
+                 uint32_t samplesPerChannel, uint32_t channelMask) const;
   const std::string getJson(uint32_t sampleRate, uint32_t samplesPerChannel,
                             uint32_t channelMask) const;
 
