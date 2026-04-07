@@ -238,6 +238,13 @@ void loadAdapterHwVersionFromEfuse() {
 
   adapterHwVersionRaw = raw;
   adapterHwVersion = formatAdapterHwVersion(raw);
+  
+  // Set status LED pin based on hardware version
+  if (static_cast<AdapterHwVersionEfuse>(raw) == AdapterHwVersionEfuse::V7_0) {
+    WifiNetworkManager::setStatusLedPin(5);
+  } else {
+    WifiNetworkManager::setStatusLedPin(3);
+  }
 }
 
 void restart() {
