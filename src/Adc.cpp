@@ -139,17 +139,20 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
   if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
   if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
   if (samplesPerChannel == 0) samplesPerChannel = 2400;
-  // Ignore the requested channelMask; always capture all channels.
-  // This allows UI to filter locally without re-fetching.
-  const uint32_t allChannelMask = ADC_CHANNEL_MASK_ALL;
+  channelMask &= ADC_CHANNEL_MASK_ALL;
+  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
 
   // Reconfigure safely in INIT state.
   stopCapture();
-  if (!configureController(sampleRate, allChannelMask)) return false;
+  if (!configureController(sampleRate, channelMask)) return false;
   if (!startCapture()) return false;
 
-  // Target is based on samplesPerChannel from all available channels.
-  const uint32_t numActiveChannels = 5;  // Max channels on ESP32-C3
+  // Count active channels to calculate target sample bytes.
+  uint32_t numActiveChannels = 0;
+  for (uint8_t ch = 0; ch <= 4; ++ch) {
+    if ((channelMask & (1U << ch)) != 0) ++numActiveChannels;
+  }
+  if (numActiveChannels == 0) numActiveChannels = 1;
   const uint64_t targetSamples =
       static_cast<uint64_t>(samplesPerChannel) * numActiveChannels;
   const uint64_t targetBytes = targetSamples * RESULT_BYTES;
@@ -209,7 +212,8 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
 
       const uint8_t channel = static_cast<uint8_t>(parsed[i].channel);
       if (channel > 4) continue;
-      // Send all channels; UI will filter locally.
+      // Only send channels that were requested in the mask.
+      if ((channelMask & (1U << channel)) == 0) continue;
 
       // Canonical TYPE2-LE word for UI decoder:
       // bits [11:0]=data, [12]=0, [15:13]=channel, [16]=unit(0 for ADC1).
