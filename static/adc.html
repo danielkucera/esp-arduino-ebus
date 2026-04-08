@@ -80,6 +80,7 @@
         let hoverInfo = null;
         let lastRawJson = '';
         let lastCaptureEndEpochMs = 0;
+        let lastCaptureStartMillis = 0;
         let lastNtpSynced = false;
         let lastCaptureChannelCount = 2;
         let lastUart1Decode = null;
@@ -123,15 +124,22 @@
             return (1000 * activeCount) / Math.max(1, sampleRate);
         }
 
-        function getSampleEpochMs(sampleIndex, totalSamples) {
+        function getSampleTimeMs(sampleIndex, totalSamples) {
+            if (isFinite(lastCaptureStartMillis) && lastCaptureStartMillis > 0) {
+                const dt = getChannelSamplePeriodMs();
+                return lastCaptureStartMillis + sampleIndex * dt;
+            }
             if (!lastNtpSynced || !isFinite(lastCaptureEndEpochMs) || lastCaptureEndEpochMs <= 0) return null;
             const dt = getChannelSamplePeriodMs();
             const toEnd = Math.max(0, totalSamples - 1 - sampleIndex);
             return lastCaptureEndEpochMs - toEnd * dt;
         }
 
-        function formatAxisTime(epochMs) {
-            const date = new Date(epochMs);
+        function formatAxisTime(timeMs) {
+            if (isFinite(lastCaptureStartMillis) && lastCaptureStartMillis > 0) {
+                return `${Math.round(timeMs)}ms`;
+            }
+            const date = new Date(timeMs);
             const ms = String(date.getMilliseconds()).padStart(3, '0');
             return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}.${ms}`;
         }
@@ -320,7 +328,7 @@
             }
             if (rows.length === 0) return;
             if (hoverInfo.globalIndex !== null) {
-                const sampleTime = getSampleEpochMs(hoverInfo.globalIndex, hoverInfo.totalSamples);
+                const sampleTime = getSampleTimeMs(hoverInfo.globalIndex, hoverInfo.totalSamples);
                 rows.unshift({
                     text: sampleTime ? formatAxisTime(sampleTime) : `sample #${hoverInfo.globalIndex}`,
                     color: '#111',
@@ -468,8 +476,8 @@
                 const t = i / ticks;
                 const x = chartLeft + t * chartWidth;
                 const index = startIndex + Math.round(t * Math.max(0, visibleCount - 1));
-                const epochMs = getSampleEpochMs(index, totalSamples);
-                const label = epochMs ? formatAxisTime(epochMs) : String(index);
+                const sampleTime = getSampleTimeMs(index, totalSamples);
+                const label = sampleTime ? formatAxisTime(sampleTime) : String(index);
                 ctx.fillText(label, x, chartTop + chartHeight + 6);
             }
 
@@ -566,6 +574,7 @@
                     }
                     lastNtpSynced = !!data.ntp_synced;
                     lastCaptureEndEpochMs = Number.isFinite(data.capture_end_epoch_ms) ? data.capture_end_epoch_ms : 0;
+                    lastCaptureStartMillis = 0;
                     lastCaptureChannelCount = Array.isArray(data.channels) ? Math.max(1, data.channels.length) : Math.max(1, getSelectedChannels().length);
                     decodeUartOnChannel1();
                     decodeUartOnChannel3();
@@ -612,11 +621,8 @@
             stopLiveStream();
             const endpoint = '/api/v1/adc/raw';
             const qs = `?sample_rate=${sampleRate}&samples=${samplesPerChannel}&channels=${getChannelsQuery()}`;
-            const fullUrl = endpoint + qs;
-            console.log('ADC request URL:', fullUrl);
-            console.log('Selected channels:', getSelectedChannels());
             setStatus('Fetching raw ADC...');
-            fetch(fullUrl)
+            fetch(endpoint + qs)
                 .then(async (res) => {
                     if (!res.ok) throw new Error('Fetch failed');
                     const ct = (res.headers.get('content-type') || '').toLowerCase();
@@ -637,6 +643,7 @@
                     const maskHdr = parseInt(res.headers.get('x-adc-channel-mask') || '31', 10);
                     const samplesHdr = parseInt(res.headers.get('x-adc-samples') || String(samplesPerChannel), 10);
                     const rateHdr = parseInt(res.headers.get('x-adc-sample-rate') || String(sampleRate), 10);
+                    const captureStartMillisHdr = parseInt(res.headers.get('x-adc-capture-start-millis') || '0', 10);
 
                     const raw = await res.arrayBuffer();
                     const decoded = decodeEsp32c3Type2(raw, maskHdr);
@@ -651,6 +658,9 @@
                     lastCaptureChannelCount = Math.max(1, bitCount(maskHdr));
                     lastNtpSynced = false;
                     lastCaptureEndEpochMs = 0;
+                    lastCaptureStartMillis = Number.isFinite(captureStartMillisHdr) && captureStartMillisHdr > 0
+                        ? captureStartMillisHdr
+                        : 0;
                     lastRawJson = JSON.stringify({
                         raw: true,
                         sample_rate: sampleRate,
@@ -691,6 +701,7 @@
                     }
                     lastNtpSynced = !!data.ntp_synced;
                     lastCaptureEndEpochMs = Number.isFinite(data.capture_end_epoch_ms) ? data.capture_end_epoch_ms : 0;
+                    lastCaptureStartMillis = 0;
                     lastCaptureChannelCount = Array.isArray(data.channels) ? Math.max(1, data.channels.length) : Math.max(1, getSelectedChannels().length);
                     decodeUartOnChannel1();
                     decodeUartOnChannel3();

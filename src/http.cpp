@@ -3,6 +3,7 @@
 #include <cJSON.h>
 #include <cstdlib>
 #include <cstdio>
+#include <esp_timer.h>
 #include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -128,7 +129,10 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
       parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
   const uint32_t channelMask = parseAdcChannelMask(req);
 
-  char tmp1[32], tmp2[32], tmp3[32], tmp4[32];
+  const uint64_t captureStartMillis =
+      static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
+
+  char tmp1[32], tmp2[32], tmp3[32], tmp4[32], tmp5[32];
   httpd_resp_set_status(req, "200 OK");
   httpd_resp_set_type(req, "application/octet-stream");
   httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
@@ -147,6 +151,9 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
   std::snprintf(tmp4, sizeof(tmp4), "%u",
                 static_cast<unsigned>(Adc::RESULT_BYTES));
   httpd_resp_set_hdr(req, "X-ADC-Result-Bytes", tmp4);
+  std::snprintf(tmp5, sizeof(tmp5), "%llu",
+                static_cast<unsigned long long>(captureStartMillis));
+  httpd_resp_set_hdr(req, "X-ADC-Capture-Start-Millis", tmp5);
 
   if (!adc.streamRaw(req, sampleRate, samplesPerChannel, channelMask))
     return ESP_FAIL;
