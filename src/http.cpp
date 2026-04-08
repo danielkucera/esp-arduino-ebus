@@ -128,21 +128,25 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
       parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
   const uint32_t channelMask = parseAdcChannelMask(req);
 
-  char tmp[32];
+  char tmp1[32], tmp2[32], tmp3[32], tmp4[32];
   httpd_resp_set_status(req, "200 OK");
   httpd_resp_set_type(req, "application/octet-stream");
   httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
   httpd_resp_set_hdr(req, "X-ADC-Format", "esp32c3-type2-le");
-  std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(sampleRate));
-  httpd_resp_set_hdr(req, "X-ADC-Sample-Rate", tmp);
-  std::snprintf(tmp, sizeof(tmp), "%u",
+  
+  std::snprintf(tmp1, sizeof(tmp1), "%u", static_cast<unsigned>(sampleRate));
+  httpd_resp_set_hdr(req, "X-ADC-Sample-Rate", tmp1);
+  
+  std::snprintf(tmp2, sizeof(tmp2), "%u",
                 static_cast<unsigned>(samplesPerChannel));
-  httpd_resp_set_hdr(req, "X-ADC-Samples", tmp);
-  // Always send all channels (0x1F = GPIO0..4).
-  httpd_resp_set_hdr(req, "X-ADC-Channel-Mask", "31");
-  std::snprintf(tmp, sizeof(tmp), "%u",
+  httpd_resp_set_hdr(req, "X-ADC-Samples", tmp2);
+  
+  std::snprintf(tmp3, sizeof(tmp3), "%u", static_cast<unsigned>(channelMask));
+  httpd_resp_set_hdr(req, "X-ADC-Channel-Mask", tmp3);
+  
+  std::snprintf(tmp4, sizeof(tmp4), "%u",
                 static_cast<unsigned>(Adc::RESULT_BYTES));
-  httpd_resp_set_hdr(req, "X-ADC-Result-Bytes", tmp);
+  httpd_resp_set_hdr(req, "X-ADC-Result-Bytes", tmp4);
 
   if (!adc.streamRaw(req, sampleRate, samplesPerChannel, channelMask))
     return ESP_FAIL;

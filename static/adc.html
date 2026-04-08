@@ -612,8 +612,11 @@
             stopLiveStream();
             const endpoint = '/api/v1/adc/raw';
             const qs = `?sample_rate=${sampleRate}&samples=${samplesPerChannel}&channels=${getChannelsQuery()}`;
+            const fullUrl = endpoint + qs;
+            console.log('ADC request URL:', fullUrl);
+            console.log('Selected channels:', getSelectedChannels());
             setStatus('Fetching raw ADC...');
-            fetch(endpoint + qs)
+            fetch(fullUrl)
                 .then(async (res) => {
                     if (!res.ok) throw new Error('Fetch failed');
                     const ct = (res.headers.get('content-type') || '').toLowerCase();
@@ -631,7 +634,7 @@
                     if (fmt !== 'esp32c3-type2-le') {
                         throw new Error(`unsupported raw format: ${fmt || 'unknown'}`);
                     }
-                    const maskHdr = 31;  // Always expect all channels (0x1F) from firmware.
+                    const maskHdr = parseInt(res.headers.get('x-adc-channel-mask') || '31', 10);
                     const samplesHdr = parseInt(res.headers.get('x-adc-samples') || String(samplesPerChannel), 10);
                     const rateHdr = parseInt(res.headers.get('x-adc-sample-rate') || String(sampleRate), 10);
 
