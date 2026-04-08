@@ -501,26 +501,6 @@
                 }
             }
 
-            // Fixed per-channel decoded-byte lines rendered on the canvas.
-            const lineBytes1 = (lastUart1Decode && Array.isArray(lastUart1Decode.bytes))
-                ? lastUart1Decode.bytes.map(byteToHex).join(' ')
-                : '';
-            const lineBytes3 = (lastUart3Decode && Array.isArray(lastUart3Decode.bytes))
-                ? lastUart3Decode.bytes.map(byteToHex).join(' ')
-                : '';
-            const canvasLine1 = `channel 1: ${lineBytes1}`;
-            const canvasLine3 = `channel 3: ${lineBytes3}`;
-            const canvasTextX = chartLeft + 6;
-            const canvasTextY = chartTop + 6;
-            const canvasLineH = 13;
-            ctx.font = '10px monospace';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            ctx.fillStyle = '#1d4ed8';
-            ctx.fillText(canvasLine1, canvasTextX, canvasTextY);
-            ctx.fillStyle = '#7c3aed';
-            ctx.fillText(canvasLine3, canvasTextX, canvasTextY + canvasLineH);
-
             lastPointsByChannel = {};
             selected.forEach(ch => {
                 const view = viewByChannel[ch];
