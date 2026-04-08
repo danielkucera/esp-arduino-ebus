@@ -82,7 +82,8 @@
         let lastCaptureEndEpochMs = 0;
         let lastNtpSynced = false;
         let lastCaptureChannelCount = 2;
-        let lastUart4Decode = null;
+        let lastUart1Decode = null;
+        let lastUart3Decode = null;
         const channelColors = ['#E77B16', '#16A1E7', '#3AA655', '#D9534F', '#6C7A89'];
 
         const canvas = document.getElementById('adcChart');
@@ -229,13 +230,26 @@
             return { bytes, frames, threshold };
         }
 
-        function decodeUartOnChannel4() {
-            const samples = currentChannelData[4] || [];
+        function decodeUartOnChannel(ch) {
+            const samples = currentChannelData[ch] || [];
             const samplePeriodMs = getChannelSamplePeriodMs();
             const normal = decodeUart8N1(samples, samplePeriodMs, 2400, false);
             const inverted = decodeUart8N1(samples, samplePeriodMs, 2400, true);
-            const best = inverted.bytes.length > normal.bytes.length ? { ...inverted, inverted: true } : { ...normal, inverted: false };
-            lastUart4Decode = best;
+            return inverted.bytes.length > normal.bytes.length ? { ...inverted, inverted: true } : { ...normal, inverted: false };
+        }
+
+        function decodeUartOnChannel1() {
+            lastUart1Decode = decodeUartOnChannel(1);
+        }
+
+        function decodeUartOnChannel3() {
+            // Some captures may present channel-3 data shifted to index 2.
+            const ch3 = decodeUartOnChannel(3);
+            if (ch3 && Array.isArray(ch3.frames) && ch3.frames.length > 0) {
+                lastUart3Decode = ch3;
+                return;
+            }
+            lastUart3Decode = decodeUartOnChannel(2);
         }
 
         function drawSeries(view, min, max, color) {
@@ -244,7 +258,7 @@
             const chartLeft = 96;
             const chartTop = 8;
             const chartWidth = w - chartLeft - 8;
-            const chartHeight = h - 40;
+            const chartHeight = h - 64;
 
             const targetPoints = Math.max(120, Math.floor(chartWidth));
             const step = Math.max(1, Math.ceil(view.length / targetPoints));
@@ -285,7 +299,7 @@
             const chartLeft = 96;
             const chartTop = 8;
             const chartWidth = w - chartLeft - 8;
-            const chartHeight = h - 40;
+            const chartHeight = h - 64;
             const lineX = clamp(hoverInfo.x, chartLeft, chartLeft + chartWidth);
 
             ctx.strokeStyle = 'rgba(80, 80, 80, 0.65)';
@@ -400,7 +414,7 @@
             const chartLeft = 96;
             const chartTop = 8;
             const chartWidth = w - chartLeft - 8;
-            const chartHeight = h - 40;
+            const chartHeight = h - 64;
 
             ctx.strokeStyle = '#e6e6e6';
             ctx.lineWidth = 1;
@@ -459,25 +473,53 @@
                 ctx.fillText(label, x, chartTop + chartHeight + 6);
             }
 
-            if (lastUart4Decode && Array.isArray(lastUart4Decode.frames) && lastUart4Decode.frames.length > 0) {
-                ctx.fillStyle = '#1d4ed8';
-                ctx.font = '10px monospace';
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'top';
-                ctx.strokeStyle = 'rgba(29, 78, 216, 0.35)';
-                ctx.lineWidth = 1;
-                for (let i = 0; i < lastUart4Decode.frames.length; i++) {
-                    const f = lastUart4Decode.frames[i];
-                    if (!f || !isFinite(f.startIndex)) continue;
-                    if (f.startIndex < startIndex || f.startIndex >= startIndex + visibleCount) continue;
-                    const x = chartLeft + ((f.startIndex - startIndex) * chartWidth / Math.max(1, visibleCount - 1));
-                    ctx.beginPath();
-                    ctx.moveTo(x, chartTop + chartHeight);
-                    ctx.lineTo(x, chartTop + chartHeight + 4);
-                    ctx.stroke();
-                    ctx.fillText(byteToHex(f.value), x, chartTop + chartHeight + 20);
+            const uartDecodes = [
+                { decode: lastUart1Decode, color: '#1d4ed8', yOffset: 0, label: 'CH1' },
+                { decode: lastUart3Decode, color: '#7c3aed', yOffset: 16, label: 'CH3' }
+            ];
+            for (let uartIdx = 0; uartIdx < uartDecodes.length; uartIdx++) {
+                const uartData = uartDecodes[uartIdx];
+                if (uartData.decode && Array.isArray(uartData.decode.frames) && uartData.decode.frames.length > 0) {
+                    ctx.fillStyle = uartData.color;
+                    ctx.font = '10px monospace';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'top';
+                    ctx.strokeStyle = uartData.color.replace(')', ', 0.35)').replace('rgb', 'rgba');
+                    ctx.lineWidth = 1;
+                    for (let i = 0; i < uartData.decode.frames.length; i++) {
+                        const f = uartData.decode.frames[i];
+                        if (!f || !isFinite(f.startIndex)) continue;
+                        if (f.startIndex < startIndex || f.startIndex >= startIndex + visibleCount) continue;
+                        const x = chartLeft + ((f.startIndex - startIndex) * chartWidth / Math.max(1, visibleCount - 1));
+                        ctx.beginPath();
+                        ctx.moveTo(x, chartTop + chartHeight);
+                        ctx.lineTo(x, chartTop + chartHeight + 4);
+                        ctx.stroke();
+                        ctx.fillText(`${byteToHex(f.value)}`, x,
+                                     chartTop + chartHeight + 20 + uartData.yOffset);
+                    }
                 }
             }
+
+            // Fixed per-channel decoded-byte lines rendered on the canvas.
+            const lineBytes1 = (lastUart1Decode && Array.isArray(lastUart1Decode.bytes))
+                ? lastUart1Decode.bytes.map(byteToHex).join(' ')
+                : '';
+            const lineBytes3 = (lastUart3Decode && Array.isArray(lastUart3Decode.bytes))
+                ? lastUart3Decode.bytes.map(byteToHex).join(' ')
+                : '';
+            const canvasLine1 = `channel 1: ${lineBytes1}`;
+            const canvasLine3 = `channel 3: ${lineBytes3}`;
+            const canvasTextX = chartLeft + 6;
+            const canvasTextY = chartTop + 6;
+            const canvasLineH = 13;
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = '#1d4ed8';
+            ctx.fillText(canvasLine1, canvasTextX, canvasTextY);
+            ctx.fillStyle = '#7c3aed';
+            ctx.fillText(canvasLine3, canvasTextX, canvasTextY + canvasLineH);
 
             lastPointsByChannel = {};
             selected.forEach(ch => {
@@ -545,7 +587,8 @@
                     lastNtpSynced = !!data.ntp_synced;
                     lastCaptureEndEpochMs = Number.isFinite(data.capture_end_epoch_ms) ? data.capture_end_epoch_ms : 0;
                     lastCaptureChannelCount = Array.isArray(data.channels) ? Math.max(1, data.channels.length) : Math.max(1, getSelectedChannels().length);
-                    decodeUartOnChannel4();
+                    decodeUartOnChannel1();
+                    decodeUartOnChannel3();
                     drawChart();
                     setStatus('Fetched');
                 })
@@ -632,7 +675,8 @@
                         channels: getSelectedChannels()
                     });
 
-                    decodeUartOnChannel4();
+                    decodeUartOnChannel1();
+                    decodeUartOnChannel3();
                     drawChart();
                     setStatus(`Fetched raw (${raw.byteLength} bytes)`);
                 })
@@ -665,7 +709,8 @@
                     lastNtpSynced = !!data.ntp_synced;
                     lastCaptureEndEpochMs = Number.isFinite(data.capture_end_epoch_ms) ? data.capture_end_epoch_ms : 0;
                     lastCaptureChannelCount = Array.isArray(data.channels) ? Math.max(1, data.channels.length) : Math.max(1, getSelectedChannels().length);
-                    decodeUartOnChannel4();
+                    decodeUartOnChannel1();
+                    decodeUartOnChannel3();
                     drawChart();
                 } catch (err) {
                     console.error(err);
