@@ -36,6 +36,7 @@ class WifiNetworkManager {
   static int32_t channel();
   static const char* getHostname();
   static std::string macAddress();
+  static void setStatusLedPin(int pin);
 
   static void handle_event(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data);
@@ -61,6 +62,7 @@ class WifiNetworkManager {
   static bool staConfigured_;
   static TaskHandle_t statusLedTaskHandle_;
   static volatile StatusLedMode statusLedMode_;
+  static int statusLedPin_;
   static void (*staIpAssignedCallback_)(const std::string& ipAddress);
   static esp_netif_t* staNetif_;
   static esp_netif_t* apNetif_;

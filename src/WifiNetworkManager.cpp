@@ -35,6 +35,7 @@ bool WifiNetworkManager::staConfigured_ = false;
 TaskHandle_t WifiNetworkManager::statusLedTaskHandle_ = nullptr;
 volatile WifiNetworkManager::StatusLedMode WifiNetworkManager::statusLedMode_ =
   WifiNetworkManager::StatusLedMode::SlowBlink;
+int WifiNetworkManager::statusLedPin_ = -1;
 void (*WifiNetworkManager::staIpAssignedCallback_)(const std::string& ipAddress) = nullptr;
 esp_netif_t* WifiNetworkManager::staNetif_ = nullptr;
 esp_netif_t* WifiNetworkManager::apNetif_ = nullptr;
@@ -398,45 +399,50 @@ void WifiNetworkManager::statusLedTaskEntry(void* arg) {
 }
 
 void WifiNetworkManager::statusLedTaskLoop() {
-#if defined(STATUS_LED_PIN)
   bool ledOn = false;
   while (true) {
+    if (statusLedPin_ < 0) {
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      continue;
+    }
+    
     if (statusLedMode_ == StatusLedMode::SolidOn) {
-      gpio_set_level(static_cast<gpio_num_t>(STATUS_LED_PIN), 1);
+      gpio_set_level(static_cast<gpio_num_t>(statusLedPin_), 1);
       vTaskDelay(pdMS_TO_TICKS(200));
       continue;
     }
 
     ledOn = !ledOn;
-    gpio_set_level(static_cast<gpio_num_t>(STATUS_LED_PIN), ledOn ? 1 : 0);
+    gpio_set_level(static_cast<gpio_num_t>(statusLedPin_), ledOn ? 1 : 0);
     vTaskDelay(pdMS_TO_TICKS(700));
   }
-#else
-  while (true) {
-    vTaskDelay(pdMS_TO_TICKS(1000));
-  }
-#endif
 }
 
 void WifiNetworkManager::initStatusLed() {
-#if defined(STATUS_LED_PIN)
+  if (statusLedPin_ < 0) {
+    return;
+  }
+  
   gpio_config_t config{};
-  config.pin_bit_mask = 1ULL << STATUS_LED_PIN;
+  config.pin_bit_mask = 1ULL << statusLedPin_;
   config.mode = GPIO_MODE_OUTPUT;
   config.pull_down_en = GPIO_PULLDOWN_DISABLE;
   config.pull_up_en = GPIO_PULLUP_DISABLE;
   config.intr_type = GPIO_INTR_DISABLE;
   gpio_config(&config);
-  gpio_set_level(static_cast<gpio_num_t>(STATUS_LED_PIN), 0);
+  gpio_set_level(static_cast<gpio_num_t>(statusLedPin_), 0);
   if (statusLedTaskHandle_ == nullptr) {
     xTaskCreate(statusLedTaskEntry, "status_led_task", 2048, nullptr, 1,
                 &statusLedTaskHandle_);
   }
-#endif
 }
 
 void WifiNetworkManager::setStatusLedMode(StatusLedMode mode) {
   statusLedMode_ = mode;
+}
+
+void WifiNetworkManager::setStatusLedPin(int pin) {
+  statusLedPin_ = pin;
 }
 
 bool WifiNetworkManager::isStaticIpEnabled() {
