@@ -1,14 +1,9 @@
 #include "Adc.hpp"
 
-#include <cstdio>
 #include <cstring>
-#include <inttypes.h>
-#include <sys/time.h>
 
 #include <esp_adc/adc_continuous.h>
 #include <esp_err.h>
-#include <esp_heap_caps.h>
-#include <esp_rom_sys.h>
 #include <esp_timer.h>
 #include <soc/soc_caps.h>
 
@@ -28,14 +23,10 @@ static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX = SOC_ADC_SAMPLE_FREQ_THRES_HIG
 #else
 static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX = 200000;
 #endif
-static constexpr uint32_t SAMPLES_PER_CHANNEL_DEFAULT = 2400;
-// Building bulk JSON in-memory is expensive on ESP32-C3. Keep this bounded.
-static constexpr uint32_t SAMPLES_PER_CHANNEL_MAX_JSON = 800;
 static constexpr uint32_t ADC_CHANNEL_MASK_ALL = 0x1F;      // GPIO0..4
 static constexpr uint32_t ADC_CHANNEL_MASK_DEFAULT = 0x03;  // GPIO0,1
 static constexpr uint32_t ADC_RAW_FRAME_BYTES = 1024;
 static constexpr uint32_t ADC_RAW_HTTP_CHUNK_BYTES = 4096;
-static constexpr time_t NTP_SYNCED_EPOCH_THRESHOLD = 1700000000;
 
 namespace {
 adc_continuous_handle_t adcHandle = nullptr;
@@ -137,270 +128,30 @@ bool Adc::configureController(uint32_t sampleRate, uint32_t channelMask) const {
   return true;
 }
 
-bool Adc::collectSamples(std::array<std::vector<uint16_t>, 5>& channels,
-                         uint32_t sampleRate, uint32_t samplesPerChannel,
-                         uint32_t channelMask) const {
-  if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
-  if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  if (samplesPerChannel == 0) samplesPerChannel = SAMPLES_PER_CHANNEL_DEFAULT;
-  channelMask &= ADC_CHANNEL_MASK_ALL;
-  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
-
-  // adc_continuous_config requires the driver to be in INIT (not started) state.
-  stopCapture();
-  if (!configureController(sampleRate, channelMask)) return false;
-  if (!startCapture()) return false;
-
-  for (uint8_t ch = 0; ch <= 4; ++ch) {
-    channels[ch].clear();
-    // Reserve upfront to avoid vector reallocation (and its peak double-alloc)
-    // during capture, which would throw std::bad_alloc on heap exhaustion.
-    if (channelMask & (1U << ch)) channels[ch].reserve(samplesPerChannel);
-  }
-
-  uint8_t dmaChunk[256];
-  uint32_t selectedChannels = 0;
-  for (uint8_t ch = 0; ch <= 4; ++ch) {
-    if ((channelMask & (1U << ch)) != 0) ++selectedChannels;
-  }
-  auto countBits = [](uint32_t mask) -> uint32_t {
-    uint32_t count = 0;
-    for (uint8_t b = 0; b < 5; ++b) {
-      if ((mask & (1U << b)) != 0) ++count;
-    }
-    return count;
-  };
-
-  const uint64_t targetTotalSamples =
-      static_cast<uint64_t>(samplesPerChannel) * selectedChannels;
-  uint64_t collectedSamples = 0;
-  uint32_t seenChannelMask = 0;
-  uint64_t effectiveTargetSamples = targetTotalSamples;
-  static constexpr uint32_t CHANNEL_DISCOVERY_WINDOW_MS = 300;
-
-  // Guard against wedging the HTTP server task if ADC DMA stops producing
-  // samples, while still allowing slow captures to complete.
-  const uint32_t expectedDurationMs =
-      static_cast<uint32_t>((targetTotalSamples * 1000ULL) / sampleRate);
-  uint32_t noProgressTimeoutMs = expectedDurationMs * 4U + 1000U;
-  if (noProgressTimeoutMs < 3000U) noProgressTimeoutMs = 3000U;
-  if (noProgressTimeoutMs > 20000U) noProgressTimeoutMs = 20000U;
-
-  uint32_t hardTimeoutMs = expectedDurationMs * 20U + 3000U;
-  if (hardTimeoutMs < 8000U) hardTimeoutMs = 8000U;
-  if (hardTimeoutMs > 60000U) hardTimeoutMs = 60000U;
-
-  const uint64_t captureStartUs = esp_timer_get_time();
-  uint64_t lastProgressUs = captureStartUs;
-  uint32_t timeoutReads = 0;
-  uint32_t invalidStateRestarts = 0;
-  uint32_t okReads = 0;
-
-  while (collectedSamples < targetTotalSamples) {
-    const uint64_t elapsedMs =
-        static_cast<uint64_t>((esp_timer_get_time() - captureStartUs) / 1000ULL);
-    const uint64_t noProgressMs =
-        static_cast<uint64_t>((esp_timer_get_time() - lastProgressUs) / 1000ULL);
-    if (noProgressMs > noProgressTimeoutMs || elapsedMs > hardTimeoutMs) {
-      if (shouldLogNow()) {
-        char warnBuf[180];
-        std::snprintf(warnBuf, sizeof(warnBuf),
-                      "ADC: capture timeout got=%llu/%llu reads=%" PRIu32 " timeout=%" PRIu32 " restarts=%" PRIu32 " mask=%" PRIu32,
-                      static_cast<unsigned long long>(collectedSamples),
-                      static_cast<unsigned long long>(effectiveTargetSamples),
-                      okReads, timeoutReads, invalidStateRestarts,
-                      seenChannelMask);
-        logger.warn(warnBuf);
-      }
-      break;
-    }
-
-    uint32_t bytesRead = 0;
-    esp_err_t err =
-      adc_continuous_read(adcHandle, dmaChunk, sizeof(dmaChunk), &bytesRead,
-                20);
-
-    if (err == ESP_ERR_TIMEOUT || bytesRead == 0) {
-      ++timeoutReads;
-      esp_rom_delay_us(1000);
-      continue;
-    }
-
-    if (err == ESP_ERR_INVALID_STATE) {
-      // Ringbuffer full: drain one frame and retry.
-      if (shouldLogNow()) {
-        logger.warn("ADC: pool overflow, draining");
-      }
-      ++invalidStateRestarts;
-      uint32_t drained = 0;
-      if (adcHandle != nullptr) {
-        adc_continuous_read(adcHandle, dmaChunk, sizeof(dmaChunk), &drained, 0);
-      }
-      continue;
-    }
-
-    if (err != ESP_OK) {
-      if (shouldLogNow()) logError("adc_continuous_read", err);
-      break;
-    }
-
-    ++okReads;
-
-    // Static so this 1 KB array lives in BSS rather than on the HTTP task stack.
-    static adc_continuous_data_t parsed[64];
-    uint32_t parsedSamples = 0;
-    err = adc_continuous_parse_data(adcHandle, dmaChunk, bytesRead, parsed,
-                                    &parsedSamples);
-    if (err != ESP_OK) {
-      if (shouldLogNow()) logError("adc_continuous_parse_data", err);
-      continue;
-    }
-
-    for (uint32_t i = 0; i < parsedSamples; ++i) {
-      if (!parsed[i].valid) continue;
-      if (parsed[i].unit != ADC_UNIT_1) continue;
-
-      const uint8_t channel = static_cast<uint8_t>(parsed[i].channel);
-      if (channel <= 4 && (channelMask & (1U << channel))) {
-        seenChannelMask |= (1U << channel);
-        std::vector<uint16_t>& series = channels[channel];
-        if (series.size() < samplesPerChannel) {
-          series.push_back(static_cast<uint16_t>(parsed[i].raw_data));
-          ++collectedSamples;
-          lastProgressUs = esp_timer_get_time();
-        }
-      }
-
-      if (collectedSamples >= effectiveTargetSamples) break;
-    }
-
-    if (elapsedMs >= CHANNEL_DISCOVERY_WINDOW_MS && seenChannelMask != 0) {
-      const uint32_t seenChannels = countBits(seenChannelMask & channelMask);
-      if (seenChannels > 0) {
-        effectiveTargetSamples =
-            static_cast<uint64_t>(samplesPerChannel) * seenChannels;
-      }
-    }
-
-    if (collectedSamples >= effectiveTargetSamples) break;
-  }
-
-  stopCapture();
-  return collectedSamples >= effectiveTargetSamples;
-}
-
 void Adc::logError(const char* stage, int err) const {
   logger.error(std::string("ADC: ") + stage + ": " + esp_err_to_name(err));
 }
 
-bool Adc::shouldLogNow() const {
-  const uint32_t now = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
-  if (now - lastErrorLogMs >= 1000) {
-    lastErrorLogMs = now;
-    return true;
-  }
-  return false;
-}
-
 bool Adc::isRunning() const { return configured; }
-
-bool Adc::streamJson(httpd_req_t* req, uint32_t sampleRate,
-                     uint32_t samplesPerChannel, uint32_t channelMask) const {
-  if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
-  if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  if (samplesPerChannel == 0)
-    samplesPerChannel = SAMPLES_PER_CHANNEL_DEFAULT;
-  channelMask &= ADC_CHANNEL_MASK_ALL;
-  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
-
-  std::array<std::vector<uint16_t>, 5> channels;
-  if (!collectSamples(channels, sampleRate, samplesPerChannel, channelMask)) {
-    return httpd_resp_send_chunk(req, "{\"error\":\"capture failed\"}",
-                                 HTTPD_RESP_USE_STRLEN) == ESP_OK;
-  }
-
-  struct timeval now = {};
-  gettimeofday(&now, nullptr);
-  const bool ntpSynced = now.tv_sec >= NTP_SYNCED_EPOCH_THRESHOLD;
-  const uint64_t captureEndEpochMs =
-      ntpSynced ? (static_cast<uint64_t>(now.tv_sec) * 1000ULL) +
-                      (static_cast<uint64_t>(now.tv_usec) / 1000ULL)
-                : 0ULL;
-
-  auto send = [&](const char* s) {
-    return httpd_resp_send_chunk(req, s, HTTPD_RESP_USE_STRLEN) == ESP_OK;
-  };
-
-  char tmp[64];
-  if (!send("{\"gpio\":1,\"buffer_bytes\":")) return false;
-  std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(SAMPLE_BUFFER_BYTES));
-  if (!send(tmp)) return false;
-  if (!send(",\"sample_rate\":")) return false;
-  std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(sampleRate));
-  if (!send(tmp)) return false;
-  if (!send(",\"samples_per_channel\":")) return false;
-  std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(samplesPerChannel));
-  if (!send(tmp)) return false;
-  if (!send(",\"ntp_synced\":")) return false;
-  if (!send(ntpSynced ? "true" : "false")) return false;
-  if (!send(",\"capture_end_epoch_ms\":")) return false;
-  std::snprintf(tmp, sizeof(tmp), "%llu",
-                static_cast<unsigned long long>(captureEndEpochMs));
-  if (!send(tmp)) return false;
-
-  if (!send(",\"channels\":[")) return false;
-  bool first = true;
-  for (uint8_t ch = 0; ch <= 4; ++ch) {
-    if ((channelMask & (1U << ch)) == 0) continue;
-    if (!first && !send(",")) return false;
-    std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(ch));
-    if (!send(tmp)) return false;
-    first = false;
-  }
-
-  if (!send("],\"samples\":[")) return false;
-  for (size_t i = 0; i < channels[1].size(); ++i) {
-    if (i > 0 && !send(",")) return false;
-    std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(channels[1][i]));
-    if (!send(tmp)) return false;
-  }
-
-  for (uint8_t ch = 0; ch <= 4; ++ch) {
-    if (!send("],\"samples_gpio")) return false;
-    std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(ch));
-    if (!send(tmp)) return false;
-    if (!send("\":[")) return false;
-    for (size_t i = 0; i < channels[ch].size(); ++i) {
-      if (i > 0 && !send(",")) return false;
-      std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(channels[ch][i]));
-      if (!send(tmp)) return false;
-    }
-  }
-
-  return send("]}");
-}
 
 bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
                     uint32_t samplesPerChannel, uint32_t channelMask) const {
   if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
   if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  if (samplesPerChannel == 0)
-    samplesPerChannel = SAMPLES_PER_CHANNEL_DEFAULT;
-  channelMask &= ADC_CHANNEL_MASK_ALL;
-  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
+  if (samplesPerChannel == 0) samplesPerChannel = 2400;
+  // Ignore the requested channelMask; always capture all channels.
+  // This allows UI to filter locally without re-fetching.
+  const uint32_t allChannelMask = ADC_CHANNEL_MASK_ALL;
 
   // Reconfigure safely in INIT state.
   stopCapture();
-  if (!configureController(sampleRate, channelMask)) return false;
+  if (!configureController(sampleRate, allChannelMask)) return false;
   if (!startCapture()) return false;
 
-  uint32_t selectedChannels = 0;
-  for (uint8_t ch = 0; ch <= 4; ++ch) {
-    if ((channelMask & (1U << ch)) != 0) ++selectedChannels;
-  }
-
+  // Target is based on samplesPerChannel from all available channels.
+  const uint32_t numActiveChannels = 5;  // Max channels on ESP32-C3
   const uint64_t targetSamples =
-      static_cast<uint64_t>(samplesPerChannel) * selectedChannels;
+      static_cast<uint64_t>(samplesPerChannel) * numActiveChannels;
   const uint64_t targetBytes = targetSamples * RESULT_BYTES;
   uint64_t sentBytes = 0;
 
@@ -420,6 +171,7 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
   uint8_t dmaChunk[ADC_RAW_FRAME_BYTES];
   uint8_t txChunk[ADC_RAW_HTTP_CHUNK_BYTES];
   uint32_t txFill = 0;
+  static adc_continuous_data_t parsed[ADC_RAW_FRAME_BYTES / RESULT_BYTES];
   while (sentBytes < targetBytes) {
     const uint64_t elapsedMs =
         static_cast<uint64_t>((esp_timer_get_time() - startUs) / 1000ULL);
@@ -444,32 +196,41 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
 
     if (err != ESP_OK) break;
 
-    uint32_t sendLen = bytesRead;
-    const uint64_t remaining = targetBytes - sentBytes;
-    if (sendLen > remaining) sendLen = static_cast<uint32_t>(remaining);
+    uint32_t parsedSamples = 0;
+    err = adc_continuous_parse_data(adcHandle, dmaChunk, bytesRead, parsed,
+                                    &parsedSamples);
+    if (err != ESP_OK) {
+      logError("adc_continuous_parse_data", err);
+      break;
+    }
 
-    uint32_t consumed = 0;
-    while (consumed < sendLen) {
-      const uint32_t room = sizeof(txChunk) - txFill;
-      const uint32_t toCopy = (sendLen - consumed < room) ? (sendLen - consumed)
-                                                           : room;
-      std::memcpy(txChunk + txFill, dmaChunk + consumed, toCopy);
-      txFill += toCopy;
-      consumed += toCopy;
+    for (uint32_t i = 0; i < parsedSamples && sentBytes < targetBytes; ++i) {
+      if (!parsed[i].valid || parsed[i].unit != ADC_UNIT_1) continue;
 
-      if (txFill == sizeof(txChunk)) {
+      const uint8_t channel = static_cast<uint8_t>(parsed[i].channel);
+      if (channel > 4) continue;
+      // Send all channels; UI will filter locally.
+
+      // Canonical TYPE2-LE word for UI decoder:
+      // bits [11:0]=data, [12]=0, [15:13]=channel, [16]=unit(0 for ADC1).
+      const uint32_t packed =
+          (static_cast<uint32_t>(parsed[i].raw_data) & 0x0FFFU) |
+          (static_cast<uint32_t>(channel) << 13);
+
+      if (txFill + RESULT_BYTES > sizeof(txChunk)) {
         if (httpd_resp_send_chunk(req, reinterpret_cast<const char*>(txChunk),
                                   txFill) != ESP_OK) {
-          sentBytes += consumed;
           txFill = 0;
           goto raw_done;
         }
         txFill = 0;
       }
-    }
 
-    sentBytes += sendLen;
-    lastProgressUs = esp_timer_get_time();
+      std::memcpy(txChunk + txFill, &packed, RESULT_BYTES);
+      txFill += RESULT_BYTES;
+      sentBytes += RESULT_BYTES;
+      lastProgressUs = esp_timer_get_time();
+    }
   }
 
   if (txFill > 0) {
@@ -483,90 +244,4 @@ raw_done:
 
   stopCapture();
   return sentBytes >= targetBytes;
-}
-
-const std::string Adc::getJson(uint32_t sampleRate, uint32_t samplesPerChannel,
-                               uint32_t channelMask) const {
-  if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
-  if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  if (samplesPerChannel == 0)
-    samplesPerChannel = SAMPLES_PER_CHANNEL_DEFAULT;
-  if (samplesPerChannel > SAMPLES_PER_CHANNEL_MAX_JSON)
-    samplesPerChannel = SAMPLES_PER_CHANNEL_MAX_JSON;
-  channelMask &= ADC_CHANNEL_MASK_ALL;
-  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
-
-  std::array<std::vector<uint16_t>, 5> channels;
-
-  if (!collectSamples(channels, sampleRate, samplesPerChannel, channelMask))
-    return "{\"error\":\"capture failed\"}";
-
-  struct timeval now = {};
-  gettimeofday(&now, nullptr);
-  const bool ntpSynced = now.tv_sec >= NTP_SYNCED_EPOCH_THRESHOLD;
-  const uint64_t captureEndEpochMs =
-      ntpSynced ? (static_cast<uint64_t>(now.tv_sec) * 1000ULL) +
-                      (static_cast<uint64_t>(now.tv_usec) / 1000ULL)
-                : 0ULL;
-
-  // Per-sample: up to 5 digits + comma = 6 chars. Legacy 'samples' field
-  // duplicates channel-1, so account for (channelCount + 1) arrays total,
-  // plus all five samples_gpioN fields (most empty). Add fixed overhead.
-  uint8_t channelCount = 0;
-  for (uint8_t ch = 0; ch <= 4; ++ch)
-    if (channelMask & (1U << ch)) ++channelCount;
-  const size_t estimatedSize =
-      512 + static_cast<size_t>(samplesPerChannel) * (channelCount + 6) * 6;
-
-  // Avoid creating very large contiguous allocations in std::string.
-  if (estimatedSize > 64U * 1024U) {
-    return "{\"error\":\"adc payload too large; reduce samples\"}";
-  }
-
-  // Avoid abort-on-bad_alloc (exceptions are disabled in this firmware).
-  const size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-  const size_t largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-  if (largestBlock < estimatedSize + 8192 || freeHeap < estimatedSize + 16384) {
-    return "{\"error\":\"insufficient heap for adc payload\"}";
-  }
-
-  std::string payload;
-  payload.reserve(estimatedSize);
-  payload = "{\"gpio\":1,\"buffer_bytes\":";
-  payload += std::to_string(SAMPLE_BUFFER_BYTES);
-  payload += ",\"sample_rate\":";
-  payload += std::to_string(sampleRate);
-  payload += ",\"samples_per_channel\":";
-  payload += std::to_string(samplesPerChannel);
-  payload += ",\"ntp_synced\":";
-  payload += ntpSynced ? "true" : "false";
-  payload += ",\"capture_end_epoch_ms\":";
-  payload += std::to_string(captureEndEpochMs);
-  payload += ",\"channels\":[";
-  bool firstChannel = true;
-  for (uint8_t ch = 0; ch <= 4; ++ch) {
-    if ((channelMask & (1U << ch)) == 0) continue;
-    if (!firstChannel) payload += ",";
-    payload += std::to_string(ch);
-    firstChannel = false;
-  }
-  payload += "],\"samples\":[";
-
-  for (size_t i = 0; i < channels[1].size(); ++i) {
-    if (i > 0) payload += ",";
-    payload += std::to_string(channels[1][i]);
-  }
-
-  for (uint8_t ch = 0; ch <= 4; ++ch) {
-    payload += "],\"samples_gpio";
-    payload += std::to_string(ch);
-    payload += "\":[";
-    for (size_t i = 0; i < channels[ch].size(); ++i) {
-      if (i > 0) payload += ",";
-      payload += std::to_string(channels[ch][i]);
-    }
-  }
-
-  payload += "]}";
-  return payload;
 }

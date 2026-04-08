@@ -104,43 +104,14 @@ esp_err_t handleAdcPage(httpd_req_t* req) {
 }
 
 esp_err_t handleAdcBulk(httpd_req_t* req) {
-  if (!adc.isRunning() && !adc.begin()) {
-    HttpUtils::sendResponse(req, "500 Internal Server Error",
-                            "application/json;charset=utf-8",
-                            "{\"error\":\"adc not running\"}");
-    return ESP_OK;
-  }
-
-  const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
-  const uint32_t samplesPerChannel =
-      parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
-  const uint32_t channelMask = parseAdcChannelMask(req);
-
-  const std::string payload =
-      adc.getJson(sampleRate, samplesPerChannel, channelMask);
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          payload);
+  HttpUtils::sendResponse(req, "410 Gone", "application/json;charset=utf-8",
+                          "{\"error\":\"adc json endpoint removed; use /api/adc/raw\"}");
   return ESP_OK;
 }
 
 esp_err_t handleAdcStream(httpd_req_t* req) {
-  if (!adc.isRunning() && !adc.begin()) {
-    HttpUtils::sendResponse(req, "500 Internal Server Error",
-                            "application/json;charset=utf-8",
-                            "{\"error\":\"adc not running\"}");
-    return ESP_OK;
-  }
-
-  const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
-  const uint32_t samplesPerChannel =
-      parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
-  const uint32_t channelMask = parseAdcChannelMask(req);
-
-  httpd_resp_set_status(req, "200 OK");
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  if (!adc.streamJson(req, sampleRate, samplesPerChannel, channelMask))
-    return ESP_FAIL;
-  httpd_resp_send_chunk(req, nullptr, 0);
+  HttpUtils::sendResponse(req, "410 Gone", "application/json;charset=utf-8",
+                          "{\"error\":\"adc json stream removed; use /api/adc/raw\"}");
   return ESP_OK;
 }
 
@@ -167,8 +138,8 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
   std::snprintf(tmp, sizeof(tmp), "%u",
                 static_cast<unsigned>(samplesPerChannel));
   httpd_resp_set_hdr(req, "X-ADC-Samples", tmp);
-  std::snprintf(tmp, sizeof(tmp), "%u", static_cast<unsigned>(channelMask));
-  httpd_resp_set_hdr(req, "X-ADC-Channel-Mask", tmp);
+  // Always send all channels (0x1F = GPIO0..4).
+  httpd_resp_set_hdr(req, "X-ADC-Channel-Mask", "31");
   std::snprintf(tmp, sizeof(tmp), "%u",
                 static_cast<unsigned>(Adc::RESULT_BYTES));
   httpd_resp_set_hdr(req, "X-ADC-Result-Bytes", tmp);
@@ -180,29 +151,8 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
 }
 
 esp_err_t handleAdcLive(httpd_req_t* req) {
-  if (!adc.isRunning() && !adc.begin()) {
-    HttpUtils::sendResponse(req, "500 Internal Server Error",
-                            "application/json;charset=utf-8",
-                            "{\"error\":\"adc not running\"}");
-    return ESP_OK;
-  }
-
-  const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
-  const uint32_t samplesPerChannel =
-      parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
-  const uint32_t channelMask = parseAdcChannelMask(req);
-
-  httpd_resp_set_status(req, "200 OK");
-  httpd_resp_set_type(req, "text/event-stream");
-  httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-  httpd_resp_set_hdr(req, "Connection", "keep-alive");
-  httpd_resp_send_chunk(req, "retry: 1000\n\n", HTTPD_RESP_USE_STRLEN);
-
-  const std::string payload =
-      adc.getJson(sampleRate, samplesPerChannel, channelMask);
-  const std::string event = "data: " + payload + "\n\n";
-  httpd_resp_send_chunk(req, event.c_str(), event.size());
-  httpd_resp_send_chunk(req, nullptr, 0);
+  HttpUtils::sendResponse(req, "410 Gone", "application/json;charset=utf-8",
+                          "{\"error\":\"adc live endpoint removed; use /api/adc/raw\"}");
   return ESP_OK;
 }
 

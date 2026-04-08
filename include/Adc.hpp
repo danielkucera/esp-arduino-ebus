@@ -3,9 +3,6 @@
 #include <esp_http_server.h>
 
 #include <cstdint>
-#include <array>
-#include <string>
-#include <vector>
 
 class Adc {
  public:
@@ -17,26 +14,17 @@ class Adc {
   void stop();
 
   bool isRunning() const;
-  bool streamJson(httpd_req_t* req, uint32_t sampleRate,
-                  uint32_t samplesPerChannel, uint32_t channelMask) const;
   bool streamRaw(httpd_req_t* req, uint32_t sampleRate,
                  uint32_t samplesPerChannel, uint32_t channelMask) const;
-  const std::string getJson(uint32_t sampleRate, uint32_t samplesPerChannel,
-                            uint32_t channelMask) const;
 
  private:
   bool startCapture() const;
   void stopCapture() const;
   bool configureController(uint32_t sampleRate, uint32_t channelMask) const;
-  bool collectSamples(std::array<std::vector<uint16_t>, 5>& channels,
-                      uint32_t sampleRate, uint32_t samplesPerChannel,
-                      uint32_t channelMask) const;
   void logError(const char* stage, int err) const;
-  bool shouldLogNow() const;
 
   bool configured = false;
   mutable bool capturing = false;
-  mutable uint32_t lastErrorLogMs = 0;
 };
 
 extern Adc adc;
