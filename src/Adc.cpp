@@ -135,6 +135,31 @@ void Adc::logError(const char* stage, int err) const {
 
 bool Adc::isRunning() const { return configured; }
 
+uint32_t Adc::effectivePerChannelSampleRate(uint32_t sampleRate,
+                                            uint32_t channelMask) const {
+  if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
+  if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
+  channelMask &= ADC_CHANNEL_MASK_ALL;
+  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
+
+  uint32_t numActiveChannels = 0;
+  for (uint8_t ch = 0; ch <= 4; ++ch) {
+    if ((channelMask & (1U << ch)) != 0) ++numActiveChannels;
+  }
+  if (numActiveChannels == 0) numActiveChannels = 1;
+
+  uint64_t controllerSampleRate =
+      static_cast<uint64_t>(sampleRate) * numActiveChannels;
+  if (controllerSampleRate < ADC_SAMPLE_FREQ_HZ_MIN)
+    controllerSampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
+  if (controllerSampleRate > ADC_SAMPLE_FREQ_HZ_MAX)
+    controllerSampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
+
+  uint32_t effectivePerChannelRate =
+      static_cast<uint32_t>(controllerSampleRate / numActiveChannels);
+  return effectivePerChannelRate == 0 ? 1 : effectivePerChannelRate;
+}
+
 bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
                     uint32_t samplesPerChannel, uint32_t channelMask) const {
   if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
@@ -143,24 +168,40 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
   channelMask &= ADC_CHANNEL_MASK_ALL;
   if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
 
-  // Reconfigure safely in INIT state.
-  stopCapture();
-  if (!configureController(sampleRate, channelMask)) return false;
-  if (!startCapture()) return false;
-
-  // Count active channels to calculate target sample bytes.
+  // Count active channels first so requested sampleRate can be interpreted
+  // as per-channel rate even in multi-channel scans.
   uint32_t numActiveChannels = 0;
   for (uint8_t ch = 0; ch <= 4; ++ch) {
     if ((channelMask & (1U << ch)) != 0) ++numActiveChannels;
   }
   if (numActiveChannels == 0) numActiveChannels = 1;
-  const uint64_t targetSamples =
-      static_cast<uint64_t>(samplesPerChannel) * numActiveChannels;
-  const uint64_t targetBytes = targetSamples * RESULT_BYTES;
+
+  uint64_t controllerSampleRate =
+      static_cast<uint64_t>(effectivePerChannelSampleRate(sampleRate, channelMask)) *
+      numActiveChannels;
+  if (controllerSampleRate < ADC_SAMPLE_FREQ_HZ_MIN)
+    controllerSampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
+  if (controllerSampleRate > ADC_SAMPLE_FREQ_HZ_MAX)
+    controllerSampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
+
+  // Reconfigure safely in INIT state.
+  stopCapture();
+  if (!configureController(static_cast<uint32_t>(controllerSampleRate),
+                           channelMask))
+    return false;
+  if (!startCapture()) return false;
+
+  // samplesPerChannel is per-channel; total bytes accounts for all active channels.
+  const uint64_t totalSamples = static_cast<uint64_t>(samplesPerChannel) * numActiveChannels;
+  const uint64_t targetBytes = totalSamples * RESULT_BYTES;
   uint64_t sentBytes = 0;
 
+    const uint32_t effectivePerChannelRate =
+      effectivePerChannelSampleRate(sampleRate, channelMask);
+
   const uint32_t expectedDurationMs =
-      static_cast<uint32_t>((targetSamples * 1000ULL) / sampleRate);
+      static_cast<uint32_t>((static_cast<uint64_t>(samplesPerChannel) * 1000ULL) /
+                            effectivePerChannelRate);
   uint32_t noProgressTimeoutMs = expectedDurationMs * 4U + 1000U;
   if (noProgressTimeoutMs < 3000U) noProgressTimeoutMs = 3000U;
   if (noProgressTimeoutMs > 20000U) noProgressTimeoutMs = 20000U;

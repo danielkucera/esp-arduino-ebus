@@ -72,6 +72,7 @@
         let currentChannelData = [[], [], [], [], []];
         let endpointMode = 'raw';
         let sampleRate = 30000;
+        let lastEffectiveSampleRate = 30000;
         let samplesPerChannel = 2400;
         let liveSource = null;
         let zoomX = 1;
@@ -120,8 +121,7 @@
         }
 
         function getChannelSamplePeriodMs() {
-            const activeCount = Math.max(1, lastCaptureChannelCount || getSelectedChannels().length);
-            return (1000 * activeCount) / Math.max(1, sampleRate);
+            return 1000 / Math.max(1, lastEffectiveSampleRate || sampleRate);
         }
 
         function getSampleTimeMs(sampleIndex, totalSamples) {
@@ -574,6 +574,7 @@
                     }
                     lastNtpSynced = !!data.ntp_synced;
                     lastCaptureEndEpochMs = Number.isFinite(data.capture_end_epoch_ms) ? data.capture_end_epoch_ms : 0;
+                    lastEffectiveSampleRate = sampleRate;
                     lastCaptureStartMillis = 0;
                     lastCaptureChannelCount = Array.isArray(data.channels) ? Math.max(1, data.channels.length) : Math.max(1, getSelectedChannels().length);
                     decodeUartOnChannel1();
@@ -636,7 +637,7 @@
         function handleAdcRaw() {
             stopLiveStream();
             const endpoint = '/api/v1/adc/raw';
-            const qs = `?sample_rate=${sampleRate}&samples=${samplesPerChannel}&channels=${getChannelsQuery()}`;
+            const qs = `?sample_rate=${sampleRate}&samples_per_channel=${samplesPerChannel}&channels=${getChannelsQuery()}`;
             setStatus('Fetching raw ADC...');
             fetch(endpoint + qs)
                 .then(async (res) => {
@@ -673,6 +674,9 @@
 
                     // Do NOT update sampleRate from header to avoid corruption on next request.
                     // Always use fresh values from input fields.
+                    lastEffectiveSampleRate = Number.isFinite(rateHdr) && rateHdr > 0
+                        ? rateHdr
+                        : sampleRate;
                     lastCaptureChannelCount = Math.max(1, bitCount(maskHdr));
                     lastNtpSynced = false;
                     lastCaptureEndEpochMs = 0;
@@ -719,6 +723,7 @@
                     }
                     lastNtpSynced = !!data.ntp_synced;
                     lastCaptureEndEpochMs = Number.isFinite(data.capture_end_epoch_ms) ? data.capture_end_epoch_ms : 0;
+                    lastEffectiveSampleRate = sampleRate;
                     lastCaptureStartMillis = 0;
                     lastCaptureChannelCount = Array.isArray(data.channels) ? Math.max(1, data.channels.length) : Math.max(1, getSelectedChannels().length);
                     decodeUartOnChannel1();
@@ -744,6 +749,7 @@
             const rateVal = parseInt(document.getElementById('sampleRate').value, 10);
             const countVal = parseInt(document.getElementById('sampleCount').value, 10);
             sampleRate = isFinite(rateVal) ? clamp(rateVal, 600, 200000) : 30000;
+            lastEffectiveSampleRate = sampleRate;
             samplesPerChannel = (isFinite(countVal) && countVal > 0) ? countVal : 2400;
             document.getElementById('sampleRate').value = sampleRate;
             document.getElementById('sampleCount').value = samplesPerChannel;

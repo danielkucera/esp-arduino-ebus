@@ -14,6 +14,8 @@ class Adc {
   void stop();
 
   bool isRunning() const;
+  uint32_t effectivePerChannelSampleRate(uint32_t sampleRate,
+                                         uint32_t channelMask) const;
   bool streamRaw(httpd_req_t* req, uint32_t sampleRate,
                  uint32_t samplesPerChannel, uint32_t channelMask) const;
 

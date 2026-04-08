@@ -126,19 +126,26 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
 
   const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
   const uint32_t samplesPerChannel =
-      parseAdcArg(req, "samples", parseAdcArg(req, "sample_count", 2400));
+      parseAdcArg(req, "samples_per_channel", parseAdcArg(req, "sample_count", 2400));
   const uint32_t channelMask = parseAdcChannelMask(req);
+    const uint32_t effectivePerChannelRate =
+      adc.effectivePerChannelSampleRate(sampleRate, channelMask);
+    const uint32_t activeChannelCount =
+      static_cast<uint32_t>(__builtin_popcount(channelMask & 0x1F));
+    const uint32_t controllerRate =
+      effectivePerChannelRate * (activeChannelCount == 0 ? 1U : activeChannelCount);
 
   const uint64_t captureStartMillis =
       static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
 
-  char tmp1[32], tmp2[32], tmp3[32], tmp4[32], tmp5[32];
+  char tmp1[32], tmp2[32], tmp3[32], tmp4[32], tmp5[32], tmp6[32];
   httpd_resp_set_status(req, "200 OK");
   httpd_resp_set_type(req, "application/octet-stream");
   httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
   httpd_resp_set_hdr(req, "X-ADC-Format", "esp32c3-ch12c3-le16");
   
-  std::snprintf(tmp1, sizeof(tmp1), "%u", static_cast<unsigned>(sampleRate));
+  std::snprintf(tmp1, sizeof(tmp1), "%u",
+                static_cast<unsigned>(effectivePerChannelRate));
   httpd_resp_set_hdr(req, "X-ADC-Sample-Rate", tmp1);
   
   std::snprintf(tmp2, sizeof(tmp2), "%u",
@@ -154,6 +161,8 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
   std::snprintf(tmp5, sizeof(tmp5), "%llu",
                 static_cast<unsigned long long>(captureStartMillis));
   httpd_resp_set_hdr(req, "X-ADC-Capture-Start-Millis", tmp5);
+  std::snprintf(tmp6, sizeof(tmp6), "%u", static_cast<unsigned>(controllerRate));
+  httpd_resp_set_hdr(req, "X-ADC-Controller-Sample-Rate", tmp6);
 
   if (!adc.streamRaw(req, sampleRate, samplesPerChannel, channelMask))
     return ESP_FAIL;
