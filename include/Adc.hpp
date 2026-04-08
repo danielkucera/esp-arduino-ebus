@@ -8,7 +8,7 @@ class Adc {
  public:
   static constexpr size_t SAMPLE_BUFFER_BYTES = 10 * 1024;
   static constexpr size_t DMA_STORE_BUFFER_BYTES = 32 * 1024;
-  static constexpr size_t RESULT_BYTES = 4;
+  static constexpr size_t RESULT_BYTES = 2;
 
   bool begin();
   void stop();

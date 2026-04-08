@@ -608,6 +608,22 @@
             return byChannel;
         }
 
+        function decodeEsp32c3Ch12c3Le16(arrayBuffer, channelMask) {
+            const dv = new DataView(arrayBuffer);
+            const len = Math.floor(dv.byteLength / 2) * 2;
+
+            const byChannel = [[], [], [], [], []];
+            for (let i = 0; i < len; i += 2) {
+                const word = dv.getUint16(i, true);
+                const data = word & 0x0FFF;
+                const channel = (word >> 13) & 0x7;
+                if (channel > 4) continue;
+                if ((channelMask & (1 << channel)) === 0) continue;
+                byChannel[channel].push(data);
+            }
+            return byChannel;
+        }
+
         function bitCount(v) {
             let c = 0;
             while (v) {
@@ -637,7 +653,7 @@
                     }
 
                     const fmt = (res.headers.get('x-adc-format') || '').toLowerCase();
-                    if (fmt !== 'esp32c3-type2-le') {
+                    if (fmt !== 'esp32c3-type2-le' && fmt !== 'esp32c3-ch12c3-le16') {
                         throw new Error(`unsupported raw format: ${fmt || 'unknown'}`);
                     }
                     const maskHdr = parseInt(res.headers.get('x-adc-channel-mask') || '31', 10);
@@ -646,7 +662,9 @@
                     const captureStartMillisHdr = parseInt(res.headers.get('x-adc-capture-start-millis') || '0', 10);
 
                     const raw = await res.arrayBuffer();
-                    const decoded = decodeEsp32c3Type2(raw, maskHdr);
+                    const decoded = (fmt === 'esp32c3-ch12c3-le16')
+                        ? decodeEsp32c3Ch12c3Le16(raw, maskHdr)
+                        : decodeEsp32c3Type2(raw, maskHdr);
                     currentChannelData = decoded;
                     if (Array.isArray(decoded[1])) {
                         // Keep legacy primary series behavior.

@@ -136,7 +136,7 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
   httpd_resp_set_status(req, "200 OK");
   httpd_resp_set_type(req, "application/octet-stream");
   httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-  httpd_resp_set_hdr(req, "X-ADC-Format", "esp32c3-type2-le");
+  httpd_resp_set_hdr(req, "X-ADC-Format", "esp32c3-ch12c3-le16");
   
   std::snprintf(tmp1, sizeof(tmp1), "%u", static_cast<unsigned>(sampleRate));
   httpd_resp_set_hdr(req, "X-ADC-Sample-Rate", tmp1);

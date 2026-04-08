@@ -27,6 +27,7 @@ static constexpr uint32_t ADC_CHANNEL_MASK_ALL = 0x1F;      // GPIO0..4
 static constexpr uint32_t ADC_CHANNEL_MASK_DEFAULT = 0x03;  // GPIO0,1
 static constexpr uint32_t ADC_RAW_FRAME_BYTES = 1024;
 static constexpr uint32_t ADC_RAW_HTTP_CHUNK_BYTES = 4096;
+static constexpr uint32_t ADC_DMA_SAMPLE_BYTES = 4;
 
 namespace {
 adc_continuous_handle_t adcHandle = nullptr;
@@ -174,7 +175,7 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
   uint8_t dmaChunk[ADC_RAW_FRAME_BYTES];
   uint8_t txChunk[ADC_RAW_HTTP_CHUNK_BYTES];
   uint32_t txFill = 0;
-  static adc_continuous_data_t parsed[ADC_RAW_FRAME_BYTES / RESULT_BYTES];
+  static adc_continuous_data_t parsed[ADC_RAW_FRAME_BYTES / ADC_DMA_SAMPLE_BYTES];
   while (sentBytes < targetBytes) {
     const uint64_t elapsedMs =
         static_cast<uint64_t>((esp_timer_get_time() - startUs) / 1000ULL);
@@ -215,11 +216,11 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
       // Only send channels that were requested in the mask.
       if ((channelMask & (1U << channel)) == 0) continue;
 
-      // Canonical TYPE2-LE word for UI decoder:
-      // bits [11:0]=data, [12]=0, [15:13]=channel, [16]=unit(0 for ADC1).
-      const uint32_t packed =
-          (static_cast<uint32_t>(parsed[i].raw_data) & 0x0FFFU) |
-          (static_cast<uint32_t>(channel) << 13);
+        // Compact 16-bit word for UI decoder:
+        // bits [11:0]=data, [12]=0, [15:13]=channel.
+        const uint16_t packed =
+          static_cast<uint16_t>((static_cast<uint16_t>(parsed[i].raw_data) & 0x0FFFU) |
+                    (static_cast<uint16_t>(channel) << 13));
 
       if (txFill + RESULT_BYTES > sizeof(txChunk)) {
         if (httpd_resp_send_chunk(req, reinterpret_cast<const char*>(txChunk),
