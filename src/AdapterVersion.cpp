@@ -52,4 +52,4 @@ uint8_t getAdapterHwVersionRaw() { return adapterHwVersionRaw; }
 
 const std::string& getAdapterHwVersionString() { return adapterHwVersion; }
 
-std::pair<uint8_t, uint8_t> getAdapterSwVersion() { return {0x07, 0xff}; }
+std::pair<uint8_t, uint8_t> getAdapterSwVersion() { return {0x07, 0x02}; }
