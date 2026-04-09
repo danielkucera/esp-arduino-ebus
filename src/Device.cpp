@@ -1,5 +1,6 @@
 #if defined(EBUS_INTERNAL)
 #include "Device.hpp"
+#include "AdapterVersion.hpp"
 
 #include <Ebus.h>
 
@@ -146,12 +147,14 @@ bool Device::getIdentification(const std::vector<uint8_t>& master,
     uint8_t manufacturer = 0xda;
     //  "ESPDA" as default unit id (ASCII)
     uint8_t uinitId[5] = {0x45, 0x53, 0x50, 0x44, 0x41};
-    // "07.02" as default software version and revision (BCD)
-    uint8_t softwareVersion = 0x07;
-    uint8_t softwareRevision = 0x02;
-    // "06.03" as default hardware version and revision (BCD)
-    uint8_t hardwareVersion = 0x06;
-    uint8_t hardwareRevision = 0x03;
+    // Software version and revision from adapter SW version.
+    const auto swVersion = getAdapterSwVersion();
+    uint8_t softwareVersion = swVersion.first;
+    uint8_t softwareRevision = swVersion.second;
+    // Derive hardware version/revision from eFuse nibble encoding XY -> X.Y.
+    const uint8_t hwRaw = getAdapterHwVersionRaw();
+    uint8_t hardwareVersion = (hwRaw >> 4) & 0x0F;
+    uint8_t hardwareRevision = hwRaw & 0x0F;
     *slave = {length,          manufacturer,    uinitId[0],
               uinitId[1],      uinitId[2],      uinitId[3],
               uinitId[4],      softwareVersion, softwareRevision,
