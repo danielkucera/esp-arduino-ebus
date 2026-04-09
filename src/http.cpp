@@ -104,18 +104,6 @@ esp_err_t handleAdcPage(httpd_req_t* req) {
   return ESP_OK;
 }
 
-esp_err_t handleAdcBulk(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "410 Gone", "application/json;charset=utf-8",
-                          "{\"error\":\"adc json endpoint removed; use /api/adc/raw\"}");
-  return ESP_OK;
-}
-
-esp_err_t handleAdcStream(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "410 Gone", "application/json;charset=utf-8",
-                          "{\"error\":\"adc json stream removed; use /api/adc/raw\"}");
-  return ESP_OK;
-}
-
 esp_err_t handleAdcRaw(httpd_req_t* req) {
   if (!adc.isRunning() && !adc.begin()) {
     HttpUtils::sendResponse(req, "500 Internal Server Error",
@@ -167,12 +155,6 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
   if (!adc.streamRaw(req, sampleRate, samplesPerChannel, channelMask))
     return ESP_FAIL;
   httpd_resp_send_chunk(req, nullptr, 0);
-  return ESP_OK;
-}
-
-esp_err_t handleAdcLive(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "410 Gone", "application/json;charset=utf-8",
-                          "{\"error\":\"adc live endpoint removed; use /api/adc/raw\"}");
   return ESP_OK;
 }
 
@@ -755,10 +737,7 @@ void SetupHttpHandlers() {
   RegisterUri("/status", HTTP_GET, handleStatusPage);
   RegisterUri("/adc", HTTP_GET, handleAdcPage);
   RegisterUri("/api/v1/status", HTTP_GET, handleStatusApi);
-  RegisterUri("/api/v1/adc/bulk", HTTP_GET, handleAdcBulk);
-  RegisterUri("/api/v1/adc/stream", HTTP_GET, handleAdcStream);
   RegisterUri("/api/v1/adc/raw", HTTP_GET, handleAdcRaw);
-  RegisterUri("/api/v1/adc/live", HTTP_GET, handleAdcLive);
   RegisterUri("/api/v1/adc/enable", HTTP_POST, handleAdcEnable);
   RegisterUri("/api/v1/adc/disable", HTTP_POST, handleAdcDisable);
   RegisterUri("/api/v1/adc/state", HTTP_GET, handleAdcState);

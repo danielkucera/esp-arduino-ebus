@@ -540,52 +540,8 @@
         function handleAdc() {
             // Always refresh from UI input fields to avoid stale/corrupted values
             updateSampleSettings();
-            
-            if (endpointMode === 'live') {
-                startLiveStream();
-                return;
-            }
-            if (endpointMode === 'raw') {
-                handleAdcRaw();
-                return;
-            }
-            stopLiveStream();
-            const endpoint = endpointMode === 'stream' ? '/api/v1/adc/stream' : '/api/v1/adc/bulk';
-            const qs = `?sample_rate=${sampleRate}&samples=${samplesPerChannel}&channels=${getChannelsQuery()}`;
-            setStatus('Fetching ADC...');
-            fetch(endpoint + qs)
-                .then(res => {
-                    if (!res.ok) throw new Error('Fetch failed');
-                    return res.text();
-                })
-                .then(text => {
-                    lastRawJson = text;
-                    const data = JSON.parse(text);
-                    if (data && typeof data.error === 'string' && data.error.length > 0) {
-                        setStatus(`ADC error: ${data.error}`);
-                        return;
-                    }
-                    for (let ch = 0; ch <= 4; ch++) {
-                        const key = `samples_gpio${ch}`;
-                        if (ch === 1 && Array.isArray(data.samples))
-                            currentChannelData[1] = data.samples;
-                        else
-                            currentChannelData[ch] = Array.isArray(data[key]) ? data[key] : [];
-                    }
-                    lastNtpSynced = !!data.ntp_synced;
-                    lastCaptureEndEpochMs = Number.isFinite(data.capture_end_epoch_ms) ? data.capture_end_epoch_ms : 0;
-                    lastEffectiveSampleRate = sampleRate;
-                    lastCaptureStartMillis = 0;
-                    lastCaptureChannelCount = Array.isArray(data.channels) ? Math.max(1, data.channels.length) : Math.max(1, getSelectedChannels().length);
-                    decodeUartOnChannel1();
-                    decodeUartOnChannel3();
-                    drawChart();
-                    setStatus('Fetched');
-                })
-                .catch(err => {
-                    console.error(err);
-                    setStatus(`Error fetching: ${err.message || err}`);
-                });
+
+            handleAdcRaw();
         }
 
         function decodeEsp32c3Type2(arrayBuffer, channelMask) {
@@ -701,44 +657,6 @@
                 });
         }
 
-        function startLiveStream() {
-            if (liveSource) return;
-            const qs = `?sample_rate=${sampleRate}&samples=${samplesPerChannel}&channels=${getChannelsQuery()}`;
-            liveSource = new EventSource('/api/v1/adc/live' + qs);
-            setStatus('Live streaming...');
-            liveSource.onmessage = (event) => {
-                try {
-                    lastRawJson = event.data;
-                    const data = JSON.parse(event.data);
-                    if (data && typeof data.error === 'string' && data.error.length > 0) {
-                        setStatus(`ADC error: ${data.error}`);
-                        return;
-                    }
-                    for (let ch = 0; ch <= 4; ch++) {
-                        const key = `samples_gpio${ch}`;
-                        if (ch === 1 && Array.isArray(data.samples))
-                            currentChannelData[1] = data.samples;
-                        else
-                            currentChannelData[ch] = Array.isArray(data[key]) ? data[key] : [];
-                    }
-                    lastNtpSynced = !!data.ntp_synced;
-                    lastCaptureEndEpochMs = Number.isFinite(data.capture_end_epoch_ms) ? data.capture_end_epoch_ms : 0;
-                    lastEffectiveSampleRate = sampleRate;
-                    lastCaptureStartMillis = 0;
-                    lastCaptureChannelCount = Array.isArray(data.channels) ? Math.max(1, data.channels.length) : Math.max(1, getSelectedChannels().length);
-                    decodeUartOnChannel1();
-                    decodeUartOnChannel3();
-                    drawChart();
-                } catch (err) {
-                    console.error(err);
-                }
-            };
-            liveSource.onerror = () => {
-                setStatus('Live stream error');
-                stopLiveStream();
-            };
-        }
-
         function stopLiveStream() {
             if (!liveSource) return;
             liveSource.close();
@@ -753,10 +671,6 @@
             samplesPerChannel = (isFinite(countVal) && countVal > 0) ? countVal : 2400;
             document.getElementById('sampleRate').value = sampleRate;
             document.getElementById('sampleCount').value = samplesPerChannel;
-            if (endpointMode === 'live' && liveSource) {
-                stopLiveStream();
-                startLiveStream();
-            }
         }
 
         function updateMethodButtons() {
@@ -803,10 +717,6 @@
         document.getElementById('sampleCount').addEventListener('change', updateSampleSettings);
         document.querySelectorAll('.channelSelect').forEach(el => {
             el.addEventListener('change', () => {
-                if (endpointMode === 'live' && liveSource) {
-                    stopLiveStream();
-                    startLiveStream();
-                }
                 drawChart();
             });
         });
