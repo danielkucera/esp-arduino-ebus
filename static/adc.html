@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>esp-eBus ADC</title>
+    <link rel="stylesheet" href="common.css">
+    <style>
+        .chart-wrap {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 0.3rem;
+            padding: 8px;
+        }
+
+        #adcChart {
+            width: 100%;
+            height: 320px;
+            display: block;
+            background: #fcfcfc;
+        }
+
+        .adc-metrics {
+            margin-top: 8px;
+            font-family: monospace;
+            font-size: 13px;
+            color: #333;
+        }
+
+    </style>
+</head>
+
+<body>
+    <h1>ADC</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnDisable">Disable ADC</button>
+        <span style="margin-left:8px">Method: raw</span>
+        <span style="margin-left:8px">Sample</span>
+        <label for="sampleRate" style="font-size:0.9rem">rate</label>
+        <input id="sampleRate" type="number" value="30000" min="600" max="200000" style="width:90px">
+        <label for="sampleCount" style="font-size:0.9rem">samples</label>
+        <input id="sampleCount" type="number" value="2400" min="1" style="width:90px" title="Per-channel samples">
+        <span style="margin-left:8px">Channels</span>
+        <label><input type="checkbox" class="channelSelect" value="0" checked>0</label>
+        <label><input type="checkbox" class="channelSelect" value="1" checked>1</label>
+        <label><input type="checkbox" class="channelSelect" value="2">2</label>
+        <label><input type="checkbox" class="channelSelect" value="3">3</label>
+        <label><input type="checkbox" class="channelSelect" value="4">4</label>
+        <button id="btnRefresh">Run</button>
+        <button id="btnSaveJson">Save JSON</button>
+        <button id="btnResetZoom">Reset Zoom</button>
+        <span id="status">...</span>
+    </div>
+
+    <div class="chart-wrap">
+        <canvas id="adcChart"></canvas>
+        <div class="adc-metrics">
+            <span id="metaSamples">samples: 0</span>
+            <span id="metaSamples0" style="margin-left:12px">samples0: 0</span>
+            <span id="metaZoom" style="margin-left:12px">zoom: 1.0x</span>
+            <span id="metaMin" style="margin-left:12px">min: -</span>
+            <span id="metaMax" style="margin-left:12px">max: -</span>
+            <span id="metaLast" style="margin-left:12px"></span>
+            <span id="metaLast0" style="display:block; margin-top:6px"></span>
+        </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script>
+        let currentChannelData = [[], [], [], [], []];
+        let endpointMode = 'raw';
+        let sampleRate = 30000;
+        let lastEffectiveSampleRate = 30000;
+        let samplesPerChannel = 2400;
+        let liveSource = null;
+        let zoomX = 1;
+        let viewStartIndex = null; // null => auto-stick to latest data
+        let lastPointsByChannel = {};
+        let hoverInfo = null;
+        let lastRawJson = '';
+        let lastCaptureEndEpochMs = 0;
+        let lastCaptureStartMillis = 0;
+        let lastNtpSynced = false;
+        let lastCaptureChannelCount = 2;
+        let lastUart1Decode = null;
+        let lastUart3Decode = null;
+        const channelColors = ['#E77B16', '#16A1E7', '#3AA655', '#D9534F', '#6C7A89'];
+
+        const canvas = document.getElementById('adcChart');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const cssWidth = canvas.clientWidth;
+            const cssHeight = canvas.clientHeight;
+            canvas.width = Math.floor(cssWidth * dpr);
+            canvas.height = Math.floor(cssHeight * dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        function clamp(v, min, max) {
+            return Math.max(min, Math.min(max, v));
+        }
+
+        function getVisibleCount(total) {
+            return clamp(Math.floor(total / zoomX), 20, total || 20);
+        }
+
+        function getViewStart(total, visibleCount) {
+            if (total <= visibleCount) return 0;
+            const maxStart = total - visibleCount;
+            if (viewStartIndex === null) return maxStart;
+            return clamp(viewStartIndex, 0, maxStart);
+        }
+
+        function rawToMilliVolts(raw) {
+            // Approximate conversion for 12-bit ADC range.
+            return Math.round((raw * 3300) / 4095);
+        }
+
+        function getChannelSamplePeriodMs() {
+            return 1000 / Math.max(1, lastEffectiveSampleRate || sampleRate);
+        }
+
+        function getSampleTimeMs(sampleIndex, totalSamples) {
+            if (isFinite(lastCaptureStartMillis) && lastCaptureStartMillis > 0) {
+                const dt = getChannelSamplePeriodMs();
+                return lastCaptureStartMillis + sampleIndex * dt;
+            }
+            if (!lastNtpSynced || !isFinite(lastCaptureEndEpochMs) || lastCaptureEndEpochMs <= 0) return null;
+            const dt = getChannelSamplePeriodMs();
+            const toEnd = Math.max(0, totalSamples - 1 - sampleIndex);
+            return lastCaptureEndEpochMs - toEnd * dt;
+        }
+
+        function formatAxisTime(timeMs) {
+            if (isFinite(lastCaptureStartMillis) && lastCaptureStartMillis > 0) {
+                return `${Math.round(timeMs)}ms`;
+            }
+            const date = new Date(timeMs);
+            const ms = String(date.getMilliseconds()).padStart(3, '0');
+            return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}.${ms}`;
+        }
+
+        function getPrimarySeries() {
+            const selected = getSelectedChannels();
+            for (let i = 0; i < selected.length; i++) {
+                const ch = selected[i];
+                if (currentChannelData[ch] && currentChannelData[ch].length > 0) return currentChannelData[ch];
+            }
+            return currentChannelData[1] || [];
+        }
+
+        function getSelectedChannels() {
+            const channels = [];
+            document.querySelectorAll('.channelSelect:checked').forEach(el => {
+                const ch = parseInt(el.value, 10);
+                if (isFinite(ch) && ch >= 0 && ch <= 4) channels.push(ch);
+            });
+            if (channels.length === 0) return [0, 1];
+            return channels;
+        }
+
+        function getChannelsQuery() {
+            return getSelectedChannels().join(',');
+        }
+
+        function byteToHex(v) {
+            return v.toString(16).toUpperCase().padStart(2, '0');
+        }
+
+        function decodeUart8N1(samples, samplePeriodMs, baud, invert) {
+            if (!samples || samples.length < 20 || samplePeriodMs <= 0 || baud <= 0) {
+                return { bytes: [], frames: [], threshold: 0 };
+            }
+
+            let min = Number.POSITIVE_INFINITY;
+            let max = Number.NEGATIVE_INFINITY;
+            for (let i = 0; i < samples.length; i++) {
+                const v = samples[i];
+                if (v < min) min = v;
+                if (v > max) max = v;
+            }
+            if (!isFinite(min) || !isFinite(max) || max <= min) {
+                return { bytes: [], frames: [], threshold: 0 };
+            }
+
+            const threshold = (min + max) / 2;
+            const levels = new Array(samples.length);
+            for (let i = 0; i < samples.length; i++) {
+                const rawBit = samples[i] >= threshold ? 1 : 0;
+                levels[i] = invert ? (rawBit ? 0 : 1) : rawBit;
+            }
+
+            const bitMs = 1000 / baud;
+            const samplesPerBit = bitMs / samplePeriodMs;
+            if (!isFinite(samplesPerBit) || samplesPerBit < 1.2) {
+                return { bytes: [], frames: [], threshold };
+            }
+
+            const bytes = [];
+            const frames = [];
+            let i = 1;
+            while (i < levels.length - Math.ceil(10 * samplesPerBit)) {
+                const prev = levels[i - 1];
+                const cur = levels[i];
+                if (!(prev === 1 && cur === 0)) {
+                    i++;
+                    continue;
+                }
+
+                let value = 0;
+                let valid = true;
+                for (let bit = 0; bit < 8; bit++) {
+                    const sampleIndex = Math.round(i + (1.5 + bit) * samplesPerBit);
+                    if (sampleIndex < 0 || sampleIndex >= levels.length) {
+                        valid = false;
+                        break;
+                    }
+                    const b = levels[sampleIndex] ? 1 : 0;
+                    value |= (b << bit);
+                }
+
+                const stopIndex = Math.round(i + 9.5 * samplesPerBit);
+                if (stopIndex >= levels.length || levels[stopIndex] !== 1) valid = false;
+
+                if (valid) {
+                    bytes.push(value);
+                    frames.push({ value, startIndex: i });
+                    i += Math.max(1, Math.floor(9.5 * samplesPerBit));
+                } else {
+                    i++;
+                }
+            }
+
+            return { bytes, frames, threshold };
+        }
+
+        function decodeUartOnChannel(ch) {
+            const samples = currentChannelData[ch] || [];
+            const samplePeriodMs = getChannelSamplePeriodMs();
+            const normal = decodeUart8N1(samples, samplePeriodMs, 2400, false);
+            const inverted = decodeUart8N1(samples, samplePeriodMs, 2400, true);
+            return inverted.bytes.length > normal.bytes.length ? { ...inverted, inverted: true } : { ...normal, inverted: false };
+        }
+
+        function decodeUartOnChannel1() {
+            lastUart1Decode = decodeUartOnChannel(1);
+        }
+
+        function decodeUartOnChannel3() {
+            // Some captures may present channel-3 data shifted to index 2.
+            const ch3 = decodeUartOnChannel(3);
+            if (ch3 && Array.isArray(ch3.frames) && ch3.frames.length > 0) {
+                lastUart3Decode = ch3;
+                return;
+            }
+            lastUart3Decode = decodeUartOnChannel(2);
+        }
+
+        function drawSeries(view, min, max, color) {
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+            const chartLeft = 96;
+            const chartTop = 8;
+            const chartWidth = w - chartLeft - 8;
+            const chartHeight = h - 64;
+
+            const targetPoints = Math.max(120, Math.floor(chartWidth));
+            const step = Math.max(1, Math.ceil(view.length / targetPoints));
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+
+            const points = [];
+            let plotted = 0;
+            for (let i = 0; i < view.length; i += step) {
+                const v = view[i];
+                const x = chartLeft + (plotted * chartWidth / Math.max(1, Math.ceil(view.length / step) - 1));
+                const norm = (v - min) / (max - min);
+                const y = chartTop + chartHeight - norm * chartHeight;
+                points.push({ x, y, v, index: i });
+                if (plotted === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+                plotted++;
+            }
+            ctx.stroke();
+
+            ctx.fillStyle = color;
+            for (let i = 0; i < points.length; i++) {
+                const p = points[i];
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            return points;
+        }
+
+        function drawHoverLabel() {
+            if (!hoverInfo) return;
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+            const chartLeft = 96;
+            const chartTop = 8;
+            const chartWidth = w - chartLeft - 8;
+            const chartHeight = h - 64;
+            const lineX = clamp(hoverInfo.x, chartLeft, chartLeft + chartWidth);
+
+            ctx.strokeStyle = 'rgba(80, 80, 80, 0.65)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(lineX, chartTop);
+            ctx.lineTo(lineX, chartTop + chartHeight);
+            ctx.stroke();
+
+            const rows = [];
+            for (let i = 0; i < hoverInfo.values.length; i++) {
+                const p = hoverInfo.values[i];
+                rows.push({
+                    text: `GPIO${p.ch}: ${p.value} (${rawToMilliVolts(p.value)}mV)`,
+                    color: p.color,
+                    point: p
+                });
+            }
+            if (rows.length === 0) return;
+            if (hoverInfo.globalIndex !== null) {
+                const sampleTime = getSampleTimeMs(hoverInfo.globalIndex, hoverInfo.totalSamples);
+                rows.unshift({
+                    text: sampleTime ? formatAxisTime(sampleTime) : `sample #${hoverInfo.globalIndex}`,
+                    color: '#111',
+                    point: null
+                });
+            }
+
+            ctx.font = '12px monospace';
+            const padX = 6;
+            const padY = 4;
+            let maxTextWidth = 0;
+            for (let i = 0; i < rows.length; i++) {
+                maxTextWidth = Math.max(maxTextWidth, ctx.measureText(rows[i].text).width);
+            }
+            const lineHeight = 16;
+            const boxW = maxTextWidth + padX * 2;
+            const boxH = rows.length * lineHeight + padY * 2;
+
+            let x = lineX + 10;
+            let y = hoverInfo.y - 26;
+            if (x + boxW > canvas.clientWidth - 4) x = hoverInfo.x - boxW - 10;
+            if (y < 4) y = hoverInfo.y + 10;
+
+            ctx.fillStyle = 'rgba(255,255,255,0.95)';
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.rect(x, y, boxW, boxH);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#111';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                ctx.fillStyle = row.color;
+                ctx.fillText(row.text, x + padX, y + padY + i * lineHeight);
+                if (row.point) {
+                    ctx.beginPath();
+                    ctx.arc(row.point.x, row.point.y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function drawChart() {
+            resizeCanvas();
+
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+            ctx.clearRect(0, 0, w, h);
+
+            const selected = getSelectedChannels();
+            const hasAny = selected.some(ch => currentChannelData[ch] && currentChannelData[ch].length > 0);
+            if (!hasAny) {
+                ctx.fillStyle = '#666';
+                ctx.font = '13px monospace';
+                ctx.fillText('No ADC samples', 10, 20);
+                return;
+            }
+
+            const base = getPrimarySeries();
+            const visibleCount = getVisibleCount(base.length);
+            const startIndex = getViewStart(base.length, visibleCount);
+
+            const viewByChannel = {};
+            selected.forEach(ch => {
+                const arr = currentChannelData[ch] || [];
+                viewByChannel[ch] = arr.slice(startIndex, startIndex + visibleCount);
+            });
+
+            let min = Number.POSITIVE_INFINITY;
+            let max = Number.NEGATIVE_INFINITY;
+            selected.forEach(ch => {
+                const view = viewByChannel[ch];
+                for (let i = 0; i < view.length; i++) {
+                    const v = view[i];
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+            });
+            if (!isFinite(min) || !isFinite(max)) {
+                min = 0;
+                max = 1;
+            }
+            min = Math.min(0, min);
+            max = Math.max(0, max);
+            if (max === min) max = min + 1;
+
+            const chartLeft = 96;
+            const chartTop = 8;
+            const chartWidth = w - chartLeft - 8;
+            const chartHeight = h - 64;
+
+            ctx.strokeStyle = '#e6e6e6';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = chartTop + (chartHeight * i / 4);
+                ctx.beginPath();
+                ctx.moveTo(chartLeft, y);
+                ctx.lineTo(chartLeft + chartWidth, y);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(chartLeft, chartTop);
+            ctx.lineTo(chartLeft, chartTop + chartHeight);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(chartLeft, chartTop + chartHeight);
+            ctx.lineTo(chartLeft + chartWidth, chartTop + chartHeight);
+            ctx.stroke();
+
+            ctx.fillStyle = '#666';
+            ctx.font = '11px monospace';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i <= 4; i++) {
+                const t = i / 4;
+                const y = chartTop + chartHeight - t * chartHeight;
+                const value = Math.round(min + t * (max - min));
+                const mv = rawToMilliVolts(value);
+                ctx.fillText(`${value} (${mv}mV)`, chartLeft - 6, y);
+            }
+
+            const zeroNorm = (0 - min) / (max - min);
+            const zeroY = chartTop + chartHeight - zeroNorm * chartHeight;
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(chartLeft, zeroY);
+            ctx.lineTo(chartLeft + chartWidth, zeroY);
+            ctx.stroke();
+
+            const ticks = 4;
+            ctx.fillStyle = '#666';
+            ctx.font = '11px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const totalSamples = base.length;
+            for (let i = 0; i <= ticks; i++) {
+                const t = i / ticks;
+                const x = chartLeft + t * chartWidth;
+                const index = startIndex + Math.round(t * Math.max(0, visibleCount - 1));
+                const sampleTime = getSampleTimeMs(index, totalSamples);
+                const label = sampleTime ? formatAxisTime(sampleTime) : String(index);
+                ctx.fillText(label, x, chartTop + chartHeight + 6);
+            }
+
+            const uartDecodes = [
+                { decode: lastUart1Decode, color: '#1d4ed8', yOffset: 0, label: 'CH1' },
+                { decode: lastUart3Decode, color: '#7c3aed', yOffset: 16, label: 'CH3' }
+            ];
+            for (let uartIdx = 0; uartIdx < uartDecodes.length; uartIdx++) {
+                const uartData = uartDecodes[uartIdx];
+                if (uartData.decode && Array.isArray(uartData.decode.frames) && uartData.decode.frames.length > 0) {
+                    ctx.fillStyle = uartData.color;
+                    ctx.font = '10px monospace';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'top';
+                    ctx.strokeStyle = uartData.color.replace(')', ', 0.35)').replace('rgb', 'rgba');
+                    ctx.lineWidth = 1;
+                    for (let i = 0; i < uartData.decode.frames.length; i++) {
+                        const f = uartData.decode.frames[i];
+                        if (!f || !isFinite(f.startIndex)) continue;
+                        if (f.startIndex < startIndex || f.startIndex >= startIndex + visibleCount) continue;
+                        const x = chartLeft + ((f.startIndex - startIndex) * chartWidth / Math.max(1, visibleCount - 1));
+                        ctx.beginPath();
+                        ctx.moveTo(x, chartTop + chartHeight);
+                        ctx.lineTo(x, chartTop + chartHeight + 4);
+                        ctx.stroke();
+                        ctx.fillText(`${byteToHex(f.value)}`, x,
+                                     chartTop + chartHeight + 20 + uartData.yOffset);
+                    }
+                }
+            }
+
+            lastPointsByChannel = {};
+            selected.forEach(ch => {
+                const view = viewByChannel[ch];
+                const color = channelColors[ch % channelColors.length];
+                lastPointsByChannel[ch] = view.length > 0 ? drawSeries(view, min, max, color) : [];
+            });
+
+            const selectedSummary = selected.map(ch => {
+                const total = (currentChannelData[ch] || []).length;
+                const vis = (viewByChannel[ch] || []).length;
+                return `${ch}:${vis}/${total}`;
+            }).join(' ');
+            document.getElementById('metaSamples').textContent = `channels ${selectedSummary}`;
+            const lastSummary = selected.map(ch => {
+                const arr = currentChannelData[ch] || [];
+                const last = arr.length ? arr[arr.length - 1] : '-';
+                return `${ch}:${last}`;
+            }).join(' ');
+            document.getElementById('metaSamples0').textContent = `last ${lastSummary}`;
+            document.getElementById('metaZoom').textContent = `zoom: ${zoomX.toFixed(1)}x`;
+            document.getElementById('metaMin').textContent = `min: ${min}`;
+            document.getElementById('metaMax').textContent = `max: ${max}`;
+            document.getElementById('metaLast').textContent = '';
+            document.getElementById('metaLast0').textContent = '';
+
+            drawHoverLabel();
+        }
+
+        function handleAdc() {
+            // Always refresh from UI input fields to avoid stale/corrupted values
+            updateSampleSettings();
+
+            handleAdcRaw();
+        }
+
+        function decodeEsp32c3Type2(arrayBuffer, channelMask) {
+            const dv = new DataView(arrayBuffer);
+            const len = Math.floor(dv.byteLength / 4) * 4;
+
+            const byChannel = [[], [], [], [], []];
+            for (let i = 0; i < len; i += 4) {
+                const word = dv.getUint32(i, true);
+                const data = word & 0xFFF;
+
+                // Canonical TYPE2-LE word from firmware:
+                // [11:0]=data, [12]=0, [15:13]=channel, [16]=unit.
+                const channel = (word >> 13) & 0x7;
+                const unit = (word >> 16) & 0x1;
+                if (unit !== 0) continue;
+                if (channel > 4) continue;
+                if ((channelMask & (1 << channel)) === 0) continue;
+                byChannel[channel].push(data);
+            }
+            return byChannel;
+        }
+
+        function decodeEsp32c3Ch12c3Le16(arrayBuffer, channelMask) {
+            const dv = new DataView(arrayBuffer);
+            const len = Math.floor(dv.byteLength / 2) * 2;
+
+            const byChannel = [[], [], [], [], []];
+            for (let i = 0; i < len; i += 2) {
+                const word = dv.getUint16(i, true);
+                const data = word & 0x0FFF;
+                const channel = (word >> 13) & 0x7;
+                if (channel > 4) continue;
+                if ((channelMask & (1 << channel)) === 0) continue;
+                byChannel[channel].push(data);
+            }
+            return byChannel;
+        }
+
+        function bitCount(v) {
+            let c = 0;
+            while (v) {
+                c += v & 1;
+                v >>>= 1;
+            }
+            return c;
+        }
+
+        function handleAdcRaw() {
+            stopLiveStream();
+            const endpoint = '/api/v1/adc/raw';
+            const qs = `?sample_rate=${sampleRate}&samples_per_channel=${samplesPerChannel}&channels=${getChannelsQuery()}`;
+            setStatus('Fetching raw ADC...');
+            fetch(endpoint + qs)
+                .then(async (res) => {
+                    if (!res.ok) throw new Error('Fetch failed');
+                    const ct = (res.headers.get('content-type') || '').toLowerCase();
+                    if (!ct.includes('application/octet-stream')) {
+                        const text = await res.text();
+                        let msg = text;
+                        try {
+                            const obj = JSON.parse(text);
+                            if (obj && obj.error) msg = obj.error;
+                        } catch (_) {}
+                        throw new Error(msg || 'raw response invalid');
+                    }
+
+                    const fmt = (res.headers.get('x-adc-format') || '').toLowerCase();
+                    if (fmt !== 'esp32c3-type2-le' && fmt !== 'esp32c3-ch12c3-le16') {
+                        throw new Error(`unsupported raw format: ${fmt || 'unknown'}`);
+                    }
+                    const maskHdr = parseInt(res.headers.get('x-adc-channel-mask') || '31', 10);
+                    const samplesHdr = parseInt(res.headers.get('x-adc-samples') || String(samplesPerChannel), 10);
+                    const rateHdr = parseInt(res.headers.get('x-adc-sample-rate') || String(sampleRate), 10);
+                    const captureStartMillisHdr = parseInt(res.headers.get('x-adc-capture-start-millis') || '0', 10);
+
+                    const raw = await res.arrayBuffer();
+                    const decoded = (fmt === 'esp32c3-ch12c3-le16')
+                        ? decodeEsp32c3Ch12c3Le16(raw, maskHdr)
+                        : decodeEsp32c3Type2(raw, maskHdr);
+                    currentChannelData = decoded;
+                    if (Array.isArray(decoded[1])) {
+                        // Keep legacy primary series behavior.
+                        currentChannelData[1] = decoded[1];
+                    }
+
+                    // Do NOT update sampleRate from header to avoid corruption on next request.
+                    // Always use fresh values from input fields.
+                    lastEffectiveSampleRate = Number.isFinite(rateHdr) && rateHdr > 0
+                        ? rateHdr
+                        : sampleRate;
+                    lastCaptureChannelCount = Math.max(1, bitCount(maskHdr));
+                    lastNtpSynced = false;
+                    lastCaptureEndEpochMs = 0;
+                    lastCaptureStartMillis = Number.isFinite(captureStartMillisHdr) && captureStartMillisHdr > 0
+                        ? captureStartMillisHdr
+                        : 0;
+                    lastRawJson = JSON.stringify({
+                        raw: true,
+                        sample_rate: sampleRate,
+                        samples_per_channel: samplesHdr,
+                        channels: getSelectedChannels()
+                    });
+
+                    decodeUartOnChannel1();
+                    decodeUartOnChannel3();
+                    drawChart();
+                    setStatus(`Fetched raw (${raw.byteLength} bytes)`);
+                })
+                .catch(err => {
+                    console.error(err);
+                    setStatus(`ADC raw error: ${err.message || err}`);
+                });
+        }
+
+        function stopLiveStream() {
+            if (!liveSource) return;
+            liveSource.close();
+            liveSource = null;
+        }
+
+        function updateSampleSettings() {
+            const rateVal = parseInt(document.getElementById('sampleRate').value, 10);
+            const countVal = parseInt(document.getElementById('sampleCount').value, 10);
+            sampleRate = isFinite(rateVal) ? clamp(rateVal, 600, 200000) : 30000;
+            lastEffectiveSampleRate = sampleRate;
+            samplesPerChannel = (isFinite(countVal) && countVal > 0) ? countVal : 2400;
+            document.getElementById('sampleRate').value = sampleRate;
+            document.getElementById('sampleCount').value = samplesPerChannel;
+        }
+
+        function updateMethodButtons() {
+            endpointMode = 'raw';
+        }
+
+        async function updateAdcState() {
+            try {
+                const res = await fetch('/api/v1/adc/state');
+                const state = await res.json();
+                const running = !!state.running;
+                if (!running) stopLiveStream();
+                setStatus(running ? 'ADC running' : 'ADC disabled');
+            } catch (err) {
+                console.error(err);
+                setStatus('ADC state error');
+            }
+        }
+
+        async function disableAdc() {
+            await postSimple('/api/v1/adc/disable', 'Disabling ADC...');
+            stopLiveStream();
+            await updateAdcState();
+        }
+
+        function saveJson() {
+            if (!lastRawJson || lastRawJson.length === 0) {
+                setStatus('No JSON data to save');
+                return;
+            }
+            downloadTextFile(lastRawJson, 'adc.json', 'application/json');
+        }
+
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnDisable').addEventListener('click', disableAdc);
+        document.getElementById('btnRefresh').addEventListener('click', handleAdc);
+        document.getElementById('btnSaveJson').addEventListener('click', saveJson);
+        document.getElementById('btnResetZoom').addEventListener('click', () => {
+            zoomX = 1;
+            viewStartIndex = null;
+            drawChart();
+        });
+        document.getElementById('sampleRate').addEventListener('change', updateSampleSettings);
+        document.getElementById('sampleCount').addEventListener('change', updateSampleSettings);
+        document.querySelectorAll('.channelSelect').forEach(el => {
+            el.addEventListener('change', () => {
+                drawChart();
+            });
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            const base = getPrimarySeries();
+            if (!base || base.length < 2) return;
+            e.preventDefault();
+
+            const rect = canvas.getBoundingClientRect();
+            const relX = clamp((e.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+
+            const oldVisible = getVisibleCount(base.length);
+            const oldStart = getViewStart(base.length, oldVisible);
+            const anchorIndex = oldStart + relX * oldVisible;
+
+            if (e.deltaY < 0) zoomX *= 1.2;
+            else zoomX /= 1.2;
+            zoomX = clamp(zoomX, 1, 100);
+
+            const newVisible = getVisibleCount(base.length);
+            const maxStart = Math.max(0, base.length - newVisible);
+            viewStartIndex = clamp(Math.round(anchorIndex - relX * newVisible), 0, maxStart);
+
+            drawChart();
+        }, { passive: false });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const selected = getSelectedChannels();
+            const values = [];
+            const base = getPrimarySeries();
+            const visibleCount = getVisibleCount(base.length);
+            const startIndex = getViewStart(base.length, visibleCount);
+            for (let c = 0; c < selected.length; c++) {
+                const ch = selected[c];
+                const points = lastPointsByChannel[ch] || [];
+                if (points.length === 0) continue;
+                let best = points[0];
+                let bestDx = Math.abs(best.x - x);
+                for (let i = 0; i < points.length; i++) {
+                    const p = points[i];
+                    const dx = Math.abs(p.x - x);
+                    if (dx < bestDx) {
+                        bestDx = dx;
+                        best = p;
+                    }
+                }
+                values.push({
+                    ch,
+                    value: best.v,
+                    x: best.x,
+                    y: best.y,
+                    index: best.index,
+                    color: channelColors[ch % channelColors.length]
+                });
+            }
+
+            hoverInfo = values.length > 0 ? { x, y, values, globalIndex: values.length > 0 ? startIndex + values[0].index : null, totalSamples: base.length } : null;
+            drawChart();
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            hoverInfo = null;
+            drawChart();
+        });
+
+        window.addEventListener('resize', () => drawChart());
+
+        updateSampleSettings();
+        updateMethodButtons();
+        updateAdcState();
+    </script>
+</body>
+
+</html>
