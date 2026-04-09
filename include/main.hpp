@@ -2,6 +2,7 @@
 
 #include "UartPort.hpp"
 
+#include <cstdint>
 #include <string>
 
 #define MAX_WIFI_CLIENTS 4

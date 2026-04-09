@@ -4,7 +4,6 @@
 #include <driver/gpio.h>
 #include <driver/ledc.h>
 #include <esp_chip_info.h>
-#include <esp_efuse.h>
 #include <esp_flash.h>
 #include <esp_idf_version.h>
 #include <esp_mac.h>
@@ -38,6 +37,7 @@
 #include "ConfigManager.hpp"
 #include "DNSServer.h"
 #include "EspOtaManager.hpp"
+#include "AdapterVersion.hpp"
 #include "HttpUtils.hpp"
 #include "UpgradeManager.hpp"
 #include "WifiNetworkManager.hpp"
@@ -149,22 +149,6 @@ void prepareRuntimeForUpgrade() {
 // status
 uint32_t reset_code = 0;
 
-enum class AdapterHwVersionEfuse : uint8_t {
-  PRE_7_0 = 0x00,
-  V7_0 = 0x70,
-};
-
-static constexpr size_t ADAPTER_HW_VERSION_EFUSE_BITS = 8;
-static constexpr size_t ADAPTER_HW_VERSION_EFUSE_OFFSET =
-    248;  // BLOCK3 bit 248..255
-
-static const esp_efuse_desc_t ADAPTER_HW_VERSION_EFUSE_DESC = {
-    EFUSE_BLK3, ADAPTER_HW_VERSION_EFUSE_OFFSET, ADAPTER_HW_VERSION_EFUSE_BITS};
-static const esp_efuse_desc_t* ADAPTER_HW_VERSION_EFUSE_FIELD[] = {
-    &ADAPTER_HW_VERSION_EFUSE_DESC, nullptr};
-uint8_t adapterHwVersionRaw = 0xEE;
-std::string adapterHwVersion = "unread";
-
 inline void disableTX() {
 #if defined(TX_DISABLE_PIN)
   gpio_config_t config{};
@@ -207,44 +191,6 @@ uint32_t get_pwm() {
 void calcUniqueId() {
   const uint32_t id = static_cast<uint32_t>(getEfuseMac() & 0xFFFFFFULL);
   snprintf(unique_id, sizeof(unique_id), "%06" PRIx32, id);
-}
-
-std::string formatAdapterHwVersion(const uint8_t raw) {
-  if (static_cast<AdapterHwVersionEfuse>(raw) ==
-      AdapterHwVersionEfuse::PRE_7_0) {
-    return "pre-7.0";
-  }
-
-  const uint8_t major = (raw >> 4) & 0x0F;
-  const uint8_t minor = raw & 0x0F;
-  if (major <= 9 && minor <= 9) {
-    return std::to_string(major) + "." + std::to_string(minor);
-  }
-
-  char tmp[8]{};
-  snprintf(tmp, sizeof(tmp), "0x%02X", raw);
-  return std::string(tmp);
-}
-
-void loadAdapterHwVersionFromEfuse() {
-  uint8_t raw;
-  const esp_err_t err = esp_efuse_read_field_blob(
-      ADAPTER_HW_VERSION_EFUSE_FIELD, &raw, ADAPTER_HW_VERSION_EFUSE_BITS);
-  if (err != ESP_OK) {
-    adapterHwVersionRaw = 0xEE;
-    adapterHwVersion = "reading error";
-    return;
-  }
-
-  adapterHwVersionRaw = raw;
-  adapterHwVersion = formatAdapterHwVersion(raw);
-  
-  // Set status LED pin based on hardware version
-  if (static_cast<AdapterHwVersionEfuse>(raw) == AdapterHwVersionEfuse::V7_0) {
-    WifiNetworkManager::setStatusLedPin(5);
-  } else {
-    WifiNetworkManager::setStatusLedPin(3);
-  }
 }
 
 void restart() {
@@ -404,9 +350,9 @@ const std::string getStatusJson() {
 #endif
   cJSON_AddStringToObject(firmware, "Unique_ID", unique_id);
   cJSON_AddStringToObject(firmware, "Adapter_HW_Version",
-                          adapterHwVersion.c_str());
+                          getAdapterHwVersionString().c_str());
   cJSON_AddNumberToObject(firmware, "Adapter_HW_Version_Raw",
-                          adapterHwVersionRaw);
+                          getAdapterHwVersionRaw());
   cJSON_AddNumberToObject(firmware, "Clock_Speed", esp_clk_cpu_freq() / 1000000U);
   cJSON_AddNumberToObject(firmware, "Apb_Speed", esp_clk_apb_freq());
 
@@ -552,6 +498,12 @@ extern "C" void app_main(void) {
 
   calcUniqueId();
   loadAdapterHwVersionFromEfuse();
+  if (getAdapterHwVersionRaw() ==
+      static_cast<uint8_t>(AdapterHwVersionEfuse::V7_0)) {
+    WifiNetworkManager::setStatusLedPin(5);
+  } else {
+    WifiNetworkManager::setStatusLedPin(3);
+  }
 
 #if !defined(EBUS_INTERNAL)
   Bus.begin();
@@ -605,7 +557,7 @@ extern "C" void app_main(void) {
   mqttha.setEnabled(configManager.readBool("haEnabledParam"));
 
   mqttha.setThingName(configManager.readString("thingName", "esp-eBus").c_str()); 
-  mqttha.setThingHwVersion(adapterHwVersion);
+  mqttha.setThingHwVersion(getAdapterHwVersionString());
   mqttha.setThingModel("esp-eBus Adapter");
   mqttha.setThingModelId("esp-ebus-adapter");
   WifiNetworkManager::setStaIpAssignedCallback([](const std::string& ipAddress) {
