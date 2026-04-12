@@ -1,7 +1,9 @@
 #include "HttpUtils.hpp"
 
 #include <esp_err.h>
+#include <esp_timer.h>
 
+#include <cstdio>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -43,8 +45,15 @@ static void applyCustomHeaders(httpd_req_t* req) {
 
 void sendResponse(httpd_req_t* req, const char* status, const char* type,
                   const char* body) {
+  char uptimeHeaderValue[32] = {'\0'};
+  const uint64_t uptimeMillis =
+      static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
+  std::snprintf(uptimeHeaderValue, sizeof(uptimeHeaderValue), "%llu",
+                static_cast<unsigned long long>(uptimeMillis));
+
   httpd_resp_set_status(req, status);
   httpd_resp_set_type(req, type);
+  httpd_resp_set_hdr(req, "X-Device-Uptime-Millis", uptimeHeaderValue);
   applyCustomHeaders(req);
   const size_t len = body != nullptr ? std::strlen(body) : 0;
   httpd_resp_send(req, body != nullptr ? body : "", len);
