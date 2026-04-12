@@ -20,6 +20,7 @@ import argparse
 import json
 import socket
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -278,6 +279,8 @@ SAMPLE_COMMANDS: List[Dict[str, Any]] = [
 class HttpResult:
     status: int
     body: str
+    headers: Dict[str, str]
+    duration_ms: float
     error: Optional[str] = None
 
 
@@ -296,16 +299,51 @@ class ApiClient:
             headers["Content-Type"] = "application/json"
 
         req = urllib.request.Request(url=url, data=data, headers=headers, method=method)
+        print(f"START {method} {path}")
+        start = time.perf_counter()
 
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as response:
                 body = response.read().decode("utf-8", errors="replace")
-                return HttpResult(status=response.status, body=body)
+                duration_ms = (time.perf_counter() - start) * 1000.0
+                response_headers = {k: v for k, v in response.headers.items()}
+                uptime = response_headers.get("X-Device-Uptime-Millis", "")
+                print(
+                    f"RESULT {method} {path} status={response.status} dur_ms={duration_ms:.1f} uptime_ms={uptime}"
+                )
+                return HttpResult(
+                    status=response.status,
+                    body=body,
+                    headers=response_headers,
+                    duration_ms=duration_ms,
+                )
         except urllib.error.HTTPError as err:
             body = err.read().decode("utf-8", errors="replace")
-            return HttpResult(status=err.code, body=body)
+            duration_ms = (time.perf_counter() - start) * 1000.0
+            response_headers = {k: v for k, v in err.headers.items()} if err.headers else {}
+            uptime = response_headers.get("X-Device-Uptime-Millis", "")
+            print(
+                f"RESULT {method} {path} status={err.code} dur_ms={duration_ms:.1f} uptime_ms={uptime}"
+            )
+            return HttpResult(
+                status=err.code,
+                body=body,
+                headers=response_headers,
+                duration_ms=duration_ms,
+            )
         except (ConnectionResetError, socket.timeout, TimeoutError, urllib.error.URLError, OSError) as err:
-            return HttpResult(status=0, body="", error=f"{type(err).__name__}: {err}")
+            duration_ms = (time.perf_counter() - start) * 1000.0
+            error_text = f"{type(err).__name__}: {err}"
+            print(
+                f"RESULT {method} {path} status=ERROR dur_ms={duration_ms:.1f} error={error_text}"
+            )
+            return HttpResult(
+                status=0,
+                body="",
+                headers={},
+                duration_ms=duration_ms,
+                error=error_text,
+            )
 
 
 class TestRunner:
@@ -313,6 +351,7 @@ class TestRunner:
         self.client = client
         self.verbose = verbose
         self.failures: List[str] = []
+        self.last_uptime_millis: Optional[int] = None
 
     def check(self, condition: bool, message: str) -> None:
         if condition:
@@ -326,10 +365,32 @@ class TestRunner:
         self.check(result.status == 200, f"{operation} returned HTTP 200 (got {result.status})")
         if result.error:
             self.check(False, f"{operation} request error: {result.error}")
+        self.check_uptime_header(result, operation)
         if self.verbose:
             print(f"  body: {result.body}")
             if result.error:
                 print(f"  error: {result.error}")
+
+    def check_uptime_header(self, result: HttpResult, operation: str) -> None:
+        raw_uptime = result.headers.get("X-Device-Uptime-Millis", "").strip()
+        self.check(bool(raw_uptime), f"{operation} includes X-Device-Uptime-Millis header")
+
+        try:
+            uptime_millis = int(raw_uptime)
+        except ValueError:
+            self.check(False, f"{operation} uptime header is numeric (got '{raw_uptime}')")
+            return
+
+        self.check(uptime_millis >= 0, f"{operation} uptime header is non-negative")
+        if self.last_uptime_millis is not None:
+            self.check(
+                uptime_millis >= self.last_uptime_millis,
+                (
+                    f"{operation} uptime is monotonic "
+                    f"({uptime_millis} >= {self.last_uptime_millis})"
+                ),
+            )
+        self.last_uptime_millis = uptime_millis
 
     def parse_commands(self, result: HttpResult, operation: str) -> List[Dict[str, Any]]:
         self.expect_http_200(result, operation)
