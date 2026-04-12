@@ -7,6 +7,9 @@
 #include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <lwip/inet.h>
+#include <lwip/sockets.h>
+#include <list>
 #include <string>
 #include <vector>
 #include "Adc.hpp"
@@ -24,6 +27,7 @@
 
 static httpd_handle_t configServer = nullptr;
 static bool fallbackHandlersRegistered = false;
+static std::list<esp_err_t (*)(httpd_req_t*)> registeredHandlers;
 
 namespace {
 extern const char common_css_start[] asm("_binary_common_css_start");
@@ -40,6 +44,74 @@ extern const char values_html_start[] asm("_binary_values_html_start");
 extern const char devices_html_start[] asm("_binary_devices_html_start");
 extern const char statistics_html_start[] asm("_binary_statistics_html_start");
 extern const char logs_html_start[] asm("_binary_logs_html_start");
+
+const char* methodToString(int method) {
+  switch (method) {
+    case HTTP_GET:
+      return "GET";
+    case HTTP_POST:
+      return "POST";
+    case HTTP_PUT:
+      return "PUT";
+    case HTTP_DELETE:
+      return "DELETE";
+    case HTTP_HEAD:
+      return "HEAD";
+    case HTTP_PATCH:
+      return "PATCH";
+    case HTTP_OPTIONS:
+      return "OPTIONS";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+std::string getClientIp(httpd_req_t* req) {
+  if (req == nullptr) return "unknown";
+
+  const int sockfd = httpd_req_to_sockfd(req);
+  if (sockfd < 0) return "unknown";
+
+  sockaddr_storage addr = {};
+  socklen_t addrLen = sizeof(addr);
+  if (getpeername(sockfd, reinterpret_cast<sockaddr*>(&addr), &addrLen) != 0)
+    return "unknown";
+
+  char ip[INET6_ADDRSTRLEN] = {};
+  if (addr.ss_family == AF_INET) {
+    const auto* addr4 = reinterpret_cast<const sockaddr_in*>(&addr);
+    if (inet_ntop(AF_INET, &addr4->sin_addr, ip, sizeof(ip)) == nullptr)
+      return "unknown";
+    return ip;
+  }
+
+  if (addr.ss_family == AF_INET6) {
+    const auto* addr6 = reinterpret_cast<const sockaddr_in6*>(&addr);
+    if (inet_ntop(AF_INET6, &addr6->sin6_addr, ip, sizeof(ip)) == nullptr)
+      return "unknown";
+    return ip;
+  }
+
+  return "unknown";
+}
+
+void logRequestStart(httpd_req_t* req) {
+  if (req == nullptr) return;
+  const char* method = methodToString(req->method);
+  const char* uri = req->uri;
+  logger.info(std::string("HTTP ") + method + " " + uri + " from " +
+              getClientIp(req));
+}
+
+esp_err_t handleLoggedRequest(httpd_req_t* req) {
+  logRequestStart(req);
+  auto* handler = reinterpret_cast<esp_err_t (**)(httpd_req_t*)>(req->user_ctx);
+  if (handler == nullptr || *handler == nullptr) {
+    logger.error("HTTP handler context missing");
+    return ESP_FAIL;
+  }
+  return (*handler)(req);
+}
 
 void sendStatic(httpd_req_t* req, const char* contentType, const char* data) {
   HttpUtils::sendResponse(req, "200 OK", contentType, std::string(data));
@@ -713,7 +785,15 @@ bool RegisterUri(const char* uri, httpd_method_t method,
     logger.error(std::string("HTTP server not started; cannot register ") + uri);
     return false;
   }
-  return HttpUtils::registerRoute(configServer, uri, method, handler);
+
+  registeredHandlers.push_back(handler);
+
+  httpd_uri_t route = {};
+  route.uri = uri;
+  route.method = method;
+  route.handler = handleLoggedRequest;
+  route.user_ctx = &registeredHandlers.back();
+  return HttpUtils::registerRoute(configServer, route);
 }
 
 void SetupHttpHandlers() {
