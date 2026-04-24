@@ -1,12 +1,13 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
+/*
 
 #include <cstdint>
 
 #include <vector>
 
-#include "ClientType.hpp"
+ #include "ClientType.hpp"
 
 // ClientManager handles all connected clients and routes data between them and
 // the eBus It supports ReadOnly, Regular, and Enhanced clients.
@@ -52,4 +53,5 @@ class ClientManager {
 };
 
 extern ClientManager clientManager;
+*/
 #endif

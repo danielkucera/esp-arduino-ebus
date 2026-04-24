@@ -1,7 +1,7 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <Ebus.h>
+#include <ebus.hpp>
 #include <cJSON.h>
 
 #include <functional>
@@ -47,11 +47,11 @@ class Store {
   bool active() const;
 
   Command* nextActiveCommand();
-  std::vector<Command*> findPassiveCommands(const std::vector<uint8_t>& master);
+  std::vector<Command*> findPassiveCommands(ebus::ByteView master);
 
   std::vector<Command*> updateData(Command* command,
-                                   const std::vector<uint8_t>& master,
-                                   const std::vector<uint8_t>& slave);
+                                   ebus::ByteView master_view,
+                                   ebus::ByteView slave_view);
 
   static const std::string getValueFullJson(const Command* command);
 

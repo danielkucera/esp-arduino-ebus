@@ -1,4 +1,5 @@
 #if defined(EBUS_INTERNAL)
+/*
 #include "Device.hpp"
 #include "AdapterVersion.hpp"
 
@@ -202,5 +203,5 @@ std::string Device::ebusdConfiguration() const {
 
   return conf;
 }
-
+*/
 #endif

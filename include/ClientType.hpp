@@ -1,6 +1,7 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
+/*
 #include <Ebus.h>
 
 // Abstract base class for all client types
@@ -55,5 +56,5 @@ class EnhancedClient : public AbstractClient {
   bool writeBytes(const std::vector<uint8_t>& bytes) override;
   bool handleBusData(const uint8_t& byte) override;
 };
-
+*/
 #endif

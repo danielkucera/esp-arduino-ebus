@@ -20,24 +20,24 @@
 #include "Logger.hpp"
 
 #if defined(EBUS_INTERNAL)
-#include <Ebus.h>
+#include <ebus.hpp>
 
-#include "ClientManager.hpp"
+// #include "ClientManager.hpp"
 #include "Cron.hpp"
-#include "DeviceManager.hpp"
+// #include "DeviceManager.hpp"
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
-#include "Schedule.hpp"
+// #include "Schedule.hpp"
 #include "Store.hpp"
 #else
 #include "BusType.hpp"
 #include "client.hpp"
 #endif
 
+#include "AdapterVersion.hpp"
 #include "ConfigManager.hpp"
 #include "DNSServer.h"
 #include "EspOtaManager.hpp"
-#include "AdapterVersion.hpp"
 #include "HttpUtils.hpp"
 #include "UpgradeManager.hpp"
 #include "WifiNetworkManager.hpp"
@@ -46,7 +46,7 @@
 #include "http.hpp"
 
 #if defined(EBUS_INTERNAL)
-ebus::ebusConfig ebusConfig;
+ebus::EbusConfig ebusConfig;
 ebus::Controller ebusController;
 #endif
 
@@ -132,8 +132,8 @@ void startCaptiveDns() {
 void prepareRuntimeForUpgrade() {
 #if defined(EBUS_INTERNAL)
   cron.stop();
-  schedule.stop();
-  clientManager.stop();
+  // schedule.stop();
+  // clientManager.stop();
   mqtt.stopTask();
   ebusController.stop();
 
@@ -141,7 +141,6 @@ void prepareRuntimeForUpgrade() {
 #else
   stopClientRuntime();
 #endif
-
 }
 
 }  // namespace
@@ -173,10 +172,10 @@ void set_pwm() {
 #if defined(PWM_PIN)
   ledc_set_duty(kPwmSpeedMode, kPwmChannel, value);
   ledc_update_duty(kPwmSpeedMode, kPwmChannel);
-#if defined(EBUS_INTERNAL)
-  schedule.resetCounter();
-  schedule.resetTiming();
-#endif
+// #if defined(EBUS_INTERNAL)
+//   schedule.resetCounter();
+//   schedule.resetTiming();
+// #endif
 #endif
 }
 
@@ -282,11 +281,11 @@ void saveParamsCallback() {
     esp_sntp_stop();
   }
 
-  deviceManager.setScanOnStartup(configManager.readBool("scanOnStartPrm"));
+  // deviceManager.setScanOnStartup(configManager.readBool("scanOnStartPrm"));
 
-  schedule.setSendInquiryOfExistence(configManager.readBool("inquiryExistPrm"));
-  schedule.setFirstCommandAfterStart(
-      configManager.readInt("firstCmdAfterSt", 10));
+  // schedule.setSendInquiryOfExistence(configManager.readBool("inquiryExistPrm"));
+  // schedule.setFirstCommandAfterStart(
+  //     configManager.readInt("firstCmdAfterSt", 10));
 
   std::string mqttServerValue = configManager.readString("mqttServer");
   std::string mqttUserValue = configManager.readString("mqttUser");
@@ -300,8 +299,8 @@ void saveParamsCallback() {
   }
   mqtt.change();
 
-  schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
-  schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
+  // schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
+  // schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
 
   mqttha.setEnabled(configManager.readBool("haEnabledParam"));
   mqttha.publishDeviceInfo();
@@ -353,7 +352,8 @@ const std::string getStatusJson() {
                           getAdapterHwVersionString().c_str());
   cJSON_AddNumberToObject(firmware, "Adapter_HW_Version_Raw",
                           getAdapterHwVersionRaw());
-  cJSON_AddNumberToObject(firmware, "Clock_Speed", esp_clk_cpu_freq() / 1000000U);
+  cJSON_AddNumberToObject(firmware, "Clock_Speed",
+                          esp_clk_cpu_freq() / 1000000U);
   cJSON_AddNumberToObject(firmware, "Apb_Speed", esp_clk_apb_freq());
 
   // Chip
@@ -398,27 +398,29 @@ const std::string getStatusJson() {
 
     cJSON_AddBoolToObject(wifi, "Static_IP", false);
     cJSON_AddStringToObject(
-      wifi, "IP_Address",
-      hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.ip).c_str() : "");
+        wifi, "IP_Address",
+        hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.ip).c_str() : "");
     cJSON_AddStringToObject(
-      wifi, "Gateway",
-      hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.gw).c_str() : "");
+        wifi, "Gateway",
+        hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.gw).c_str() : "");
     cJSON_AddStringToObject(
-      wifi, "Netmask",
-      hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.netmask).c_str()
-           : "");
+        wifi, "Netmask",
+        hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.netmask).c_str()
+                 : "");
     cJSON_AddStringToObject(
-      wifi, "DNS1",
-      hasDnsMain ? WifiNetworkManager::ipToString(dnsMain).c_str() : "");
+        wifi, "DNS1",
+        hasDnsMain ? WifiNetworkManager::ipToString(dnsMain).c_str() : "");
     cJSON_AddStringToObject(
-      wifi, "DNS2",
-      hasDnsBackup ? WifiNetworkManager::ipToString(dnsBackup).c_str() : "");
+        wifi, "DNS2",
+        hasDnsBackup ? WifiNetworkManager::ipToString(dnsBackup).c_str() : "");
   }
   cJSON_AddStringToObject(wifi, "SSID", WifiNetworkManager::SSID().c_str());
-  cJSON_AddStringToObject(wifi, "BSSID", WifiNetworkManager::BSSIDstr().c_str());
+  cJSON_AddStringToObject(wifi, "BSSID",
+                          WifiNetworkManager::BSSIDstr().c_str());
   cJSON_AddNumberToObject(wifi, "Channel", WifiNetworkManager::channel());
   cJSON_AddStringToObject(wifi, "Hostname", WifiNetworkManager::getHostname());
-  cJSON_AddStringToObject(wifi, "MAC_Address", WifiNetworkManager::macAddress().c_str());
+  cJSON_AddStringToObject(wifi, "MAC_Address",
+                          WifiNetworkManager::macAddress().c_str());
 
 // SNTP
 #if defined(EBUS_INTERNAL)
@@ -470,9 +472,10 @@ const std::string getStatusJson() {
   cJSON_AddStringToObject(mqttObj, "User",
                           configManager.readString("mqttUser").c_str());
   cJSON_AddBoolToObject(mqttObj, "Connected", mqtt.isConnected());
-  cJSON_AddBoolToObject(mqttObj, "Publish_Counter",
-                        schedule.getPublishCounter());
-  cJSON_AddBoolToObject(mqttObj, "Publish_Timing", schedule.getPublishTiming());
+  // cJSON_AddBoolToObject(mqttObj, "Publish_Counter",
+  //                       schedule.getPublishCounter());
+  // cJSON_AddBoolToObject(mqttObj, "Publish_Timing",
+  // schedule.getPublishTiming());
 
   // HomeAssistant
   cJSON* homeAssistant = cJSON_AddObjectToObject(doc, "Home_Assistant");
@@ -556,54 +559,57 @@ extern "C" void app_main(void) {
   mqttha.setWillTopic(mqtt.getWillTopic());
   mqttha.setEnabled(configManager.readBool("haEnabledParam"));
 
-  mqttha.setThingName(configManager.readString("thingName", "esp-eBus").c_str()); 
+  mqttha.setThingName(
+      configManager.readString("thingName", "esp-eBus").c_str());
   mqttha.setThingHwVersion(getAdapterHwVersionString());
   mqttha.setThingModel("esp-eBus Adapter");
   mqttha.setThingModelId("esp-ebus-adapter");
-  WifiNetworkManager::setStaIpAssignedCallback([](const std::string& ipAddress) {
-    if (ipAddress.empty()) return;
+  WifiNetworkManager::setStaIpAssignedCallback(
+      [](const std::string& ipAddress) {
+        if (ipAddress.empty()) return;
 
-    mqttha.setThingConfigurationUrl("http://" + ipAddress + "/");
+        mqttha.setThingConfigurationUrl("http://" + ipAddress + "/");
 
-    if (mqttha.isEnabled()) {
-      mqttha.publishDeviceInfo();
-    }
-  });
+        if (mqttha.isEnabled()) {
+          mqttha.publishDeviceInfo();
+        }
+      });
 #endif
 
   espOtaManager.begin();
   enableTX();
 
 #if defined(EBUS_INTERNAL)
-  ebus::busConfig busConfig = {.uart_port = UART_NUM_1,
+  ebus::BusConfig busConfig = {.uart_port = UART_NUM_1,
                                .rx_pin = UART_RX,
                                .tx_pin = UART_TX,
                                .timer_group = 1,
                                .timer_idx = 0};
 
-  ebusConfig.address = uint8_t(std::strtoul(
+  ebusConfig.runtime.address = uint8_t(std::strtoul(
       configManager.readString("ebusAddress", "ff").c_str(), nullptr, 16));
-  ebusConfig.window = configManager.readInt("busisrWindow", 4300);
-  ebusConfig.offset = configManager.readInt("busisrOffset", 80);
+  ebusConfig.runtime.window = configManager.readInt("busisrWindow", 4300);
+  ebusConfig.runtime.offset = configManager.readInt("busisrOffset", 80);
   ebusConfig.bus = busConfig;
 
   ebusController.configure(ebusConfig);
 
   ebusController.start();
 
-  deviceManager.setEbusHandler(ebusController.getHandler());
-  deviceManager.setScanOnStartup(configManager.readBool("scanOnStartPrm"));
+  // deviceManager.setEbusHandler(ebusController.getHandler());
+  // deviceManager.setScanOnStartup(configManager.readBool("scanOnStartPrm"));
 
-  schedule.setSendInquiryOfExistence(configManager.readBool("inquiryExistPrm"));
-  schedule.setFirstCommandAfterStart(
-      configManager.readInt("firstCmdAfterSt", 10));
-  schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
-  schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
-  schedule.start(ebusController.getBus(), ebusController.getRequest(),
-                 ebusController.getHandler());
+  // schedule.setSendInquiryOfExistence(configManager.readBool("inquiryExistPrm"));
+  // schedule.setFirstCommandAfterStart(
+  //     configManager.readInt("firstCmdAfterSt", 10));
+  // schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
+  // schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
+  // schedule.start(ebusController.getBus(), ebusController.getRequest(),
+  //                ebusController.getHandler());
 
-  clientManager.start(ebusController.getBus(), ebusController.getBusHandler(),
-                      ebusController.getRequest());
+  // clientManager.start(ebusController.getBus(),
+  // ebusController.getBusHandler(),
+  //                     ebusController.getRequest());
 
   store.setDataUpdatedCallback(Mqtt::publishValue);
   store.setDataUpdatedLogCallback(

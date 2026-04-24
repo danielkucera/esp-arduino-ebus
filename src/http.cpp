@@ -1,23 +1,22 @@
 #include "http.hpp"
 
 #include <cJSON.h>
-#include <cstdlib>
-#include <cstdio>
 #include <esp_timer.h>
 #include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
-#include "Adc.hpp"
 
+#include "Adc.hpp"
 #include "ConfigManager.hpp"
 #include "Cron.hpp"
-#include "DeviceManager.hpp"
 #include "HttpUtils.hpp"
 #include "Logger.hpp"
 #include "MqttHA.hpp"
-#include "Schedule.hpp"
 #include "Store.hpp"
 #include "WifiNetworkManager.hpp"
 #include "main.hpp"
@@ -113,15 +112,16 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
   }
 
   const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
-  const uint32_t samplesPerChannel =
-      parseAdcArg(req, "samples_per_channel", parseAdcArg(req, "sample_count", 2400));
+  const uint32_t samplesPerChannel = parseAdcArg(
+      req, "samples_per_channel", parseAdcArg(req, "sample_count", 2400));
   const uint32_t channelMask = parseAdcChannelMask(req);
-    const uint32_t effectivePerChannelRate =
+  const uint32_t effectivePerChannelRate =
       adc.effectivePerChannelSampleRate(sampleRate, channelMask);
-    const uint32_t activeChannelCount =
+  const uint32_t activeChannelCount =
       static_cast<uint32_t>(__builtin_popcount(channelMask & 0x1F));
-    const uint32_t controllerRate =
-      effectivePerChannelRate * (activeChannelCount == 0 ? 1U : activeChannelCount);
+  const uint32_t controllerRate =
+      effectivePerChannelRate *
+      (activeChannelCount == 0 ? 1U : activeChannelCount);
 
   const uint64_t captureStartMillis =
       static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
@@ -131,25 +131,26 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/octet-stream");
   httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
   httpd_resp_set_hdr(req, "X-ADC-Format", "esp32c3-ch12c3-le16");
-  
+
   std::snprintf(tmp1, sizeof(tmp1), "%u",
                 static_cast<unsigned>(effectivePerChannelRate));
   httpd_resp_set_hdr(req, "X-ADC-Sample-Rate", tmp1);
-  
+
   std::snprintf(tmp2, sizeof(tmp2), "%u",
                 static_cast<unsigned>(samplesPerChannel));
   httpd_resp_set_hdr(req, "X-ADC-Samples", tmp2);
-  
+
   std::snprintf(tmp3, sizeof(tmp3), "%u", static_cast<unsigned>(channelMask));
   httpd_resp_set_hdr(req, "X-ADC-Channel-Mask", tmp3);
-  
+
   std::snprintf(tmp4, sizeof(tmp4), "%u",
                 static_cast<unsigned>(Adc::RESULT_BYTES));
   httpd_resp_set_hdr(req, "X-ADC-Result-Bytes", tmp4);
   std::snprintf(tmp5, sizeof(tmp5), "%llu",
                 static_cast<unsigned long long>(captureStartMillis));
   httpd_resp_set_hdr(req, "X-ADC-Capture-Start-Millis", tmp5);
-  std::snprintf(tmp6, sizeof(tmp6), "%u", static_cast<unsigned>(controllerRate));
+  std::snprintf(tmp6, sizeof(tmp6), "%u",
+                static_cast<unsigned>(controllerRate));
   httpd_resp_set_hdr(req, "X-ADC-Controller-Sample-Rate", tmp6);
 
   if (!adc.streamRaw(req, sampleRate, samplesPerChannel, channelMask))
@@ -227,24 +228,18 @@ esp_err_t handleRestart(httpd_req_t* req) {
 esp_err_t handleWifiScan(httpd_req_t* req) {
   // Start WiFi scan
   wifi_scan_config_t scanConfig = {
-    .ssid = nullptr,
-    .bssid = nullptr,
-    .channel = 0,
-    .show_hidden = true,
-    .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-    .scan_time = {
-      .active = {
-        .min = 0,
-        .max = 0
-      },
-      .passive = 100
-    }
-  };
+      .ssid = nullptr,
+      .bssid = nullptr,
+      .channel = 0,
+      .show_hidden = true,
+      .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+      .scan_time = {.active = {.min = 0, .max = 0}, .passive = 100}};
 
   esp_err_t err = esp_wifi_scan_start(&scanConfig, true);
   if (err != ESP_OK) {
-    HttpUtils::sendResponse(req, "500 Internal Server Error", "application/json",
-                           "{\"error\":\"WiFi scan failed\"}");
+    HttpUtils::sendResponse(req, "500 Internal Server Error",
+                            "application/json",
+                            "{\"error\":\"WiFi scan failed\"}");
     return ESP_OK;
   }
 
@@ -265,52 +260,69 @@ esp_err_t handleWifiScan(httpd_req_t* req) {
 
   for (uint16_t i = 0; i < apCount; ++i) {
     const wifi_ap_record_t& ap = aps[i];
-    
+
     cJSON* item = cJSON_CreateObject();
-    
+
     // SSID
     std::string ssid(reinterpret_cast<const char*>(ap.ssid),
-                    strnlen(reinterpret_cast<const char*>(ap.ssid), 32));
+                     strnlen(reinterpret_cast<const char*>(ap.ssid), 32));
     cJSON_AddStringToObject(item, "ssid", ssid.c_str());
-    
+
     // BSSID (MAC address)
     char bssidStr[18];
     snprintf(bssidStr, sizeof(bssidStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-             ap.bssid[0], ap.bssid[1], ap.bssid[2],
-             ap.bssid[3], ap.bssid[4], ap.bssid[5]);
+             ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4],
+             ap.bssid[5]);
     cJSON_AddStringToObject(item, "bssid", bssidStr);
-    
+
     // Signal strength (RSSI)
     cJSON_AddNumberToObject(item, "rssi", ap.rssi);
-    
+
     // Channel
     cJSON_AddNumberToObject(item, "channel", ap.primary);
-    
+
     // Security type
     const char* authMode = "UNKNOWN";
     switch (ap.authmode) {
-      case WIFI_AUTH_OPEN: authMode = "OPEN"; break;
-      case WIFI_AUTH_WEP: authMode = "WEP"; break;
-      case WIFI_AUTH_WPA_PSK: authMode = "WPA_PSK"; break;
-      case WIFI_AUTH_WPA2_PSK: authMode = "WPA2_PSK"; break;
-      case WIFI_AUTH_WPA_WPA2_PSK: authMode = "WPA_WPA2_PSK"; break;
-      case WIFI_AUTH_WPA2_ENTERPRISE: authMode = "WPA2_ENTERPRISE"; break;
-      case WIFI_AUTH_WPA3_PSK: authMode = "WPA3_PSK"; break;
-      case WIFI_AUTH_WPA2_WPA3_PSK: authMode = "WPA2_WPA3_PSK"; break;
-      default: break;
+      case WIFI_AUTH_OPEN:
+        authMode = "OPEN";
+        break;
+      case WIFI_AUTH_WEP:
+        authMode = "WEP";
+        break;
+      case WIFI_AUTH_WPA_PSK:
+        authMode = "WPA_PSK";
+        break;
+      case WIFI_AUTH_WPA2_PSK:
+        authMode = "WPA2_PSK";
+        break;
+      case WIFI_AUTH_WPA_WPA2_PSK:
+        authMode = "WPA_WPA2_PSK";
+        break;
+      case WIFI_AUTH_WPA2_ENTERPRISE:
+        authMode = "WPA2_ENTERPRISE";
+        break;
+      case WIFI_AUTH_WPA3_PSK:
+        authMode = "WPA3_PSK";
+        break;
+      case WIFI_AUTH_WPA2_WPA3_PSK:
+        authMode = "WPA2_WPA3_PSK";
+        break;
+      default:
+        break;
     }
     cJSON_AddStringToObject(item, "authMode", authMode);
-    
+
     cJSON_AddItemToArray(root, item);
   }
 
   // Convert JSON to string and send response
   char* jsonString = cJSON_Print(root);
   HttpUtils::sendResponse(req, "200 OK", "application/json", jsonString);
-  
+
   cJSON_Delete(root);
   free(jsonString);
-  
+
   esp_wifi_clear_ap_list();
 
   return ESP_OK;
@@ -338,7 +350,8 @@ esp_err_t handleCommandsEvaluate(httpd_req_t* req) {
       std::string evalError = Command::evaluate(command);
       if (!evalError.empty()) {
         cJSON_Delete(doc);
-        HttpUtils::sendResponse(req, "403 Forbidden", "text/html", evalError.c_str());
+        HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
+                                evalError.c_str());
         return ESP_OK;
       }
     }
@@ -360,7 +373,8 @@ esp_err_t handleCommandsInsert(httpd_req_t* req) {
         store.insertCommand(Command::fromJson(command));
       } else {
         cJSON_Delete(doc);
-        HttpUtils::sendResponse(req, "403 Forbidden", "text/html", evalError.c_str());
+        HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
+                                evalError.c_str());
         return ESP_OK;
       }
     }
@@ -461,7 +475,8 @@ esp_err_t handleCronEvaluate(httpd_req_t* req) {
       std::string evalError = Cron::evaluate(rule);
       if (!evalError.empty()) {
         cJSON_Delete(doc);
-        HttpUtils::sendResponse(req, "403 Forbidden", "text/html", evalError.c_str());
+        HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
+                                evalError.c_str());
         return ESP_OK;
       }
     }
@@ -481,7 +496,8 @@ esp_err_t handleCronSave(httpd_req_t* req) {
       std::string evalError = Cron::evaluate(rule);
       if (!evalError.empty()) {
         cJSON_Delete(doc);
-        HttpUtils::sendResponse(req, "403 Forbidden", "text/html", evalError.c_str());
+        HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
+                                evalError.c_str());
         return ESP_OK;
       }
     }
@@ -523,34 +539,35 @@ esp_err_t handleValues(httpd_req_t* req) {
 
 esp_err_t handleValuesWrite(httpd_req_t* req) {
   cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
-  if (!cJSON_IsObject(doc)) {
-    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
-  } else {
-    cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(doc, "key");
-    std::string key =
-        (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
-            ? keyNode->valuestring
-            : "";
-    Command* command = store.findCommand(key);
-    if (command != nullptr) {
-      std::vector<uint8_t> valueBytes = command->getVectorFromJson(doc);
-      if (!valueBytes.empty()) {
-        std::vector<uint8_t> writeCmd = command->getWriteCmd();
-        writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
-        schedule.handleWrite(writeCmd);
-        HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
-      } else {
-        HttpUtils::sendResponse(
-            req, "403 Forbidden", "text/html",
-            std::string("Invalid value for key '") + key + "'");
-      }
-    } else {
-      HttpUtils::sendResponse(
-          req, "403 Forbidden", "text/html",
-          std::string("Key '") + key + "' not found");
-    }
-  }
-  if (doc) cJSON_Delete(doc);
+  // if (!cJSON_IsObject(doc)) {
+  //   HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json
+  //   invalid");
+  // } else {
+  //   cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(doc, "key");
+  //   std::string key =
+  //       (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
+  //           ? keyNode->valuestring
+  //           : "";
+  //   Command* command = store.findCommand(key);
+  //   if (command != nullptr) {
+  //     std::vector<uint8_t> valueBytes = command->getVectorFromJson(doc);
+  //     if (!valueBytes.empty()) {
+  //       std::vector<uint8_t> writeCmd = command->getWriteCmd();
+  //       writeCmd.insert(writeCmd.end(), valueBytes.begin(),
+  //       valueBytes.end()); schedule.handleWrite(writeCmd);
+  //       HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
+  //     } else {
+  //       HttpUtils::sendResponse(
+  //           req, "403 Forbidden", "text/html",
+  //           std::string("Invalid value for key '") + key + "'");
+  //     }
+  //   } else {
+  //     HttpUtils::sendResponse(
+  //         req, "403 Forbidden", "text/html",
+  //         std::string("Key '") + key + "' not found");
+  //   }
+  // }
+  // if (doc) cJSON_Delete(doc);
   return ESP_OK;
 }
 
@@ -564,7 +581,8 @@ esp_err_t handleValuesRead(httpd_req_t* req) {
     std::string payload = printed != nullptr ? printed : "{}";
     if (printed != nullptr) cJSON_free(printed);
     cJSON_Delete(errDoc);
-    HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", payload.c_str());
+    HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                            payload.c_str());
   } else {
     cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(doc, "key");
     std::string key =
@@ -581,17 +599,20 @@ esp_err_t handleValuesRead(httpd_req_t* req) {
       std::string payload = printed != nullptr ? printed : "{}";
       if (printed != nullptr) cJSON_free(printed);
       cJSON_Delete(resp);
-      HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", payload.c_str());
+      HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                              payload.c_str());
     } else {
       cJSON* errDoc = cJSON_CreateObject();
       cJSON_AddStringToObject(errDoc, "id", "read");
-      cJSON_AddStringToObject(errDoc, "status",
-                              (std::string("Key '") + key + "' not found").c_str());
+      cJSON_AddStringToObject(
+          errDoc, "status",
+          (std::string("Key '") + key + "' not found").c_str());
       char* printed = cJSON_PrintUnformatted(errDoc);
       std::string payload = printed != nullptr ? printed : "{}";
       if (printed != nullptr) cJSON_free(printed);
       cJSON_Delete(errDoc);
-      HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", payload.c_str());
+      HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                              payload.c_str());
     }
   }
   if (doc) cJSON_Delete(doc);
@@ -604,26 +625,27 @@ esp_err_t handleDevicesPage(httpd_req_t* req) {
 }
 
 esp_err_t handleDevices(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          deviceManager.getDevicesJson());
+  // HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+  //                         deviceManager.getDevicesJson());
   return ESP_OK;
 }
 
 esp_err_t handleDevicesScan(httpd_req_t* req) {
-  schedule.handleScan();
-  HttpUtils::sendResponse(req, "200 OK", "text/html", "Scan initiated");
+  // schedule.handleScan();
+  // HttpUtils::sendResponse(req, "200 OK", "text/html", "Scan initiated");
   return ESP_OK;
 }
 
 esp_err_t handleDevicesScanFull(httpd_req_t* req) {
-  schedule.handleScanFull();
-  HttpUtils::sendResponse(req, "200 OK", "text/html", "Full scan initiated");
+  // schedule.handleScanFull();
+  // HttpUtils::sendResponse(req, "200 OK", "text/html", "Full scan initiated");
   return ESP_OK;
 }
 
 esp_err_t handleDevicesScanVendor(httpd_req_t* req) {
-  schedule.handleScanVendor();
-  HttpUtils::sendResponse(req, "200 OK", "text/html", "Vendor scan initiated");
+  // schedule.handleScanVendor();
+  // HttpUtils::sendResponse(req, "200 OK", "text/html", "Vendor scan
+  // initiated");
   return ESP_OK;
 }
 
@@ -633,22 +655,22 @@ esp_err_t handleStatisticsPage(httpd_req_t* req) {
 }
 
 esp_err_t handleStatisticsCounter(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          schedule.getCounterJson());
+  // HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+  //                         schedule.getCounterJson());
   return ESP_OK;
 }
 
 esp_err_t handleStatisticsTiming(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          schedule.getTimingJson());
+  // HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+  //                         schedule.getTimingJson());
   return ESP_OK;
 }
 
 esp_err_t handleStatisticsReset(httpd_req_t* req) {
-  deviceManager.resetAddresses();
-  schedule.resetCounter();
-  schedule.resetTiming();
-  HttpUtils::sendResponse(req, "200 OK", "text/html", "Statistics reset");
+  // deviceManager.resetAddresses();
+  // schedule.resetCounter();
+  // schedule.resetTiming();
+  // HttpUtils::sendResponse(req, "200 OK", "text/html", "Statistics reset");
   return ESP_OK;
 }
 
@@ -663,13 +685,13 @@ esp_err_t handleLogs(httpd_req_t* req) {
   const size_t queryLen = httpd_req_get_url_query_len(req);
   if (queryLen > 0) {
     std::vector<char> query(queryLen + 1, '\0');
-    if (httpd_req_get_url_query_str(req, query.data(), query.size()) == ESP_OK) {
+    if (httpd_req_get_url_query_str(req, query.data(), query.size()) ==
+        ESP_OK) {
       char sinceBuffer[32] = {'\0'};
       if (httpd_query_key_value(query.data(), "since", sinceBuffer,
                                 sizeof(sinceBuffer)) == ESP_OK) {
         char* end = nullptr;
-        const unsigned long long parsed =
-            std::strtoull(sinceBuffer, &end, 10);
+        const unsigned long long parsed = std::strtoull(sinceBuffer, &end, 10);
         if (end != sinceBuffer && *end == '\0') {
           sinceMillis = static_cast<uint64_t>(parsed);
         }
@@ -710,7 +732,8 @@ httpd_handle_t GetHttpServer() { return configServer; }
 bool RegisterUri(const char* uri, httpd_method_t method,
                  esp_err_t (*handler)(httpd_req_t*)) {
   if (configServer == nullptr) {
-    logger.error(std::string("HTTP server not started; cannot register ") + uri);
+    logger.error(std::string("HTTP server not started; cannot register ") +
+                 uri);
     return false;
   }
   return HttpUtils::registerRoute(configServer, uri, method, handler);
@@ -768,7 +791,8 @@ void SetupHttpHandlers() {
   RegisterUri("/api/v1/devices", HTTP_GET, handleDevices);
   RegisterUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
   RegisterUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
-  RegisterUri("/api/v1/devices/scan/vendor", HTTP_POST, handleDevicesScanVendor);
+  RegisterUri("/api/v1/devices/scan/vendor", HTTP_POST,
+              handleDevicesScanVendor);
 
   RegisterUri("/statistics", HTTP_GET, handleStatisticsPage);
   RegisterUri("/api/v1/statistics/counter", HTTP_GET, handleStatisticsCounter);

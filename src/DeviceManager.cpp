@@ -1,4 +1,5 @@
 #if defined(EBUS_INTERNAL)
+/*
 #include "DeviceManager.hpp"
 
 #include <set>
@@ -146,5 +147,5 @@ std::vector<uint8_t> DeviceManager::nextStartupScanCommand() {
   }
   return {};
 }
-
+*/
 #endif

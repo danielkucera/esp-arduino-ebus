@@ -5,10 +5,8 @@
 
 #include <functional>
 
-#include "DeviceManager.hpp"
 #include "Logger.hpp"
 #include "MqttHA.hpp"
-#include "Schedule.hpp"
 #include "Store.hpp"
 #include "main.hpp"
 
@@ -151,8 +149,8 @@ void Mqtt::publishData(const std::string& id,
 
   cJSON* doc = cJSON_CreateObject();
   cJSON_AddStringToObject(doc, "id", id.c_str());
-  cJSON_AddStringToObject(doc, "master", ebus::to_string(master).c_str());
-  cJSON_AddStringToObject(doc, "slave", ebus::to_string(slave).c_str());
+  cJSON_AddStringToObject(doc, "master", ebus::toString(master).c_str());
+  cJSON_AddStringToObject(doc, "slave", ebus::toString(slave).c_str());
 
   std::string payload = printJson(doc);
   cJSON_Delete(doc);
@@ -187,8 +185,8 @@ void Mqtt::taskFunc(void* arg) {
           const std::string payload = self->statusProvider();
           self->publish("state", 0, false, payload.c_str());
         }
-        schedule.publishCounter();
-        schedule.publishTiming();
+        // schedule.publishCounter();
+        // schedule.publishTiming();
       }
       self->doLoop();
     }
@@ -296,8 +294,8 @@ void Mqtt::handleRemove(const cJSON* doc) {
 }
 
 void Mqtt::handlePublish(const cJSON* doc) {
-  for (const Command* command : store.getCommands())
-    enqueueOutgoing(OutgoingAction(command));
+  // for (const Command* command : store.getCommands())
+  //   enqueueOutgoing(OutgoingAction(command));
 }
 
 void Mqtt::handleLoad(const cJSON* doc) {
@@ -343,46 +341,46 @@ void Mqtt::handleScan(const cJSON* doc) {
   std::vector<std::string> addresses =
       getStringArray(const_cast<cJSON*>(doc), "addresses");
 
-  if (full)
-    schedule.handleScanFull();
-  else if (vendor)
-    schedule.handleScanVendor();
-  else if (addresses.empty())
-    schedule.handleScan();
-  else
-    schedule.handleScanAddresses(addresses);
+  // if (full)
+  //   schedule.handleScanFull();
+  // else if (vendor)
+  //   schedule.handleScanVendor();
+  // else if (addresses.empty())
+  //   schedule.handleScan();
+  // else
+  //   schedule.handleScanAddresses(addresses);
 
   mqtt.publishResponse("scan", "initiated");
 }
 
 void Mqtt::handleDevices(const cJSON* doc) {
-  for (const Device* device : deviceManager.getDevices())
-    enqueueOutgoing(OutgoingAction(device));
+  // for (const Device* device : deviceManager.getDevices())
+  //   enqueueOutgoing(OutgoingAction(device));
 }
 
 void Mqtt::handleSend(const cJSON* doc) {
-  std::vector<std::string> commands =
-      getStringArray(const_cast<cJSON*>(doc), "commands");
-  if (commands.empty())
-    mqtt.publishResponse("send", "commands array invalid");
-  else
-    schedule.handleSend(commands);
+  // std::vector<std::string> commands =
+  //     getStringArray(const_cast<cJSON*>(doc), "commands");
+  // if (commands.empty())
+  //   mqtt.publishResponse("send", "commands array invalid");
+  // else
+  //   schedule.handleSend(commands);
 }
 
 void Mqtt::handleForward(const cJSON* doc) {
-  std::vector<std::string> filters =
-      getStringArray(const_cast<cJSON*>(doc), "filters");
-  if (!filters.empty()) schedule.handleForwardFilter(filters);
+  // std::vector<std::string> filters =
+  //     getStringArray(const_cast<cJSON*>(doc), "filters");
+  // if (!filters.empty()) schedule.handleForwardFilter(filters);
 
-  cJSON* enableNode =
-      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "enable");
-  schedule.toggleForward(cJSON_IsTrue(enableNode));
+  // cJSON* enableNode =
+  //     cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "enable");
+  // schedule.toggleForward(cJSON_IsTrue(enableNode));
 }
 
 void Mqtt::handleReset(const cJSON* doc) {
-  deviceManager.resetAddresses();
-  schedule.resetCounter();
-  schedule.resetTiming();
+  // deviceManager.resetAddresses();
+  // schedule.resetCounter();
+  // schedule.resetTiming();
 }
 
 void Mqtt::handleRead(const cJSON* doc) {
@@ -410,21 +408,21 @@ void Mqtt::handleWrite(const cJSON* doc) {
                         : "";
 
   Command* command = store.findCommand(key);
-  if (command != nullptr) {
-    std::vector<uint8_t> valueBytes = command->getVectorFromJson(doc);
-    if (!valueBytes.empty()) {
-      std::vector<uint8_t> writeCmd = command->getWriteCmd();
-      writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
-      schedule.handleWrite(writeCmd);
-      mqtt.publishResponse("write", "scheduled for key '" + key + "' name '" +
-                                        command->getName() + "'");
-      command->setLast(0);
-    } else {
-      mqtt.publishResponse("write", "invalid value for key '" + key + "'");
-    }
-  } else {
-    mqtt.publishResponse("write", "key '" + key + "' not found");
-  }
+  // if (command != nullptr) {
+  //   std::vector<uint8_t> valueBytes = command->getVectorFromJson(doc);
+  //   if (!valueBytes.empty()) {
+  //     std::vector<uint8_t> writeCmd = command->getWriteCmd();
+  //     writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
+  //     schedule.handleWrite(writeCmd);
+  //     mqtt.publishResponse("write", "scheduled for key '" + key + "' name '" +
+  //                                       command->getName() + "'");
+  //     command->setLast(0);
+  //   } else {
+  //     mqtt.publishResponse("write", "invalid value for key '" + key + "'");
+  //   }
+  // } else {
+  //   mqtt.publishResponse("write", "key '" + key + "' not found");
+  // }
 }
 
 void Mqtt::checkIncomingQueue() {
@@ -467,7 +465,7 @@ void Mqtt::checkOutgoingQueue() {
         publishCommand(action.command);
         break;
       case OutgoingActionType::Device:
-        publishDevice(action.device);
+        // publishDevice(action.device);
         break;
       case OutgoingActionType::Component:
         mqttha.publishComponent(action.command, action.haRemove);
@@ -495,10 +493,10 @@ void Mqtt::publishCommand(const Command* command) {
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 
-void Mqtt::publishDevice(const Device* device) {
-  std::string topic = "devices/" + ebus::to_string(device->getSlave());
-  std::string payload = device->toJson();
-  publish(topic.c_str(), 0, false, payload.c_str());
-}
+// void Mqtt::publishDevice(const Device* device) {
+//   std::string topic = "devices/" + ebus::to_string(device->getSlave());
+//   std::string payload = device->toJson();
+//   publish(topic.c_str(), 0, false, payload.c_str());
+// }
 
 #endif

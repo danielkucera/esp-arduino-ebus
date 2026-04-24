@@ -2,6 +2,8 @@
 
 #include "Cron.hpp"
 
+#include <sys/stat.h>
+
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
@@ -9,11 +11,9 @@
 #include <cstring>
 #include <ctime>
 #include <string>
-#include <sys/stat.h>
 #include <vector>
 
 #include "Logger.hpp"
-#include "Schedule.hpp"
 #include "Store.hpp"
 
 Cron cron;
@@ -105,7 +105,8 @@ bool matchSinglePart(const std::string& part, int value, int minValue,
     }
   }
 
-  if (!inRange(start, minValue, maxValue) || !inRange(end, minValue, maxValue)) {
+  if (!inRange(start, minValue, maxValue) ||
+      !inRange(end, minValue, maxValue)) {
     return false;
   }
   if (start > end) return false;
@@ -121,7 +122,8 @@ bool matchField(const std::string& expr, int value, int minValue, int maxValue,
 
   for (const std::string& part : parts) {
     if (part.empty()) return false;
-    if (matchSinglePart(part, value, minValue, maxValue, dayOfWeek)) return true;
+    if (matchSinglePart(part, value, minValue, maxValue, dayOfWeek))
+      return true;
   }
   return false;
 }
@@ -162,7 +164,8 @@ bool validateSinglePart(const std::string& part, int minValue, int maxValue,
     if (start == 6 && end == 0) return true;
   }
 
-  if (!inRange(start, minValue, maxValue) || !inRange(end, minValue, maxValue)) {
+  if (!inRange(start, minValue, maxValue) ||
+      !inRange(end, minValue, maxValue)) {
     return false;
   }
   if (start > end) return false;
@@ -442,7 +445,8 @@ const std::string Cron::evaluate(const cJSON* doc) {
   cJSON* wrapper = cJSON_CreateObject();
   cJSON_AddItemToObject(wrapper, "value",
                         cJSON_Duplicate(const_cast<cJSON*>(valueNode), 1));
-  const std::vector<uint8_t> valueBytes = command->getVectorFromJson(wrapper);
+  const std::vector<uint8_t> valueBytes =
+      command->getVectorFromJson(wrapper).toVector();
   cJSON_Delete(wrapper);
 
   if (valueBytes.empty()) {
@@ -511,7 +515,8 @@ void Cron::tick() {
     cJSON* wrapper = cJSON_CreateObject();
     cJSON_AddItemToObject(wrapper, "value", valueNode);
 
-    std::vector<uint8_t> valueBytes = command->getVectorFromJson(wrapper);
+    std::vector<uint8_t> valueBytes =
+        command->getVectorFromJson(wrapper).toVector();
     cJSON_Delete(wrapper);
 
     if (valueBytes.empty()) {
@@ -520,10 +525,10 @@ void Cron::tick() {
       continue;
     }
 
-    std::vector<uint8_t> writeCmd = command->getWriteCmd();
+    std::vector<uint8_t> writeCmd = command->getWriteCmd().toVector();
     writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
 
-    schedule.handleWrite(writeCmd);
+    // schedule.handleWrite(writeCmd);
 
     logger.info(std::string("Cron write triggered: ") + pendingRule.id +
                 " -> " + pendingRule.commandKey);

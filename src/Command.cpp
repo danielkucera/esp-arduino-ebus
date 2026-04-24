@@ -1,11 +1,10 @@
 #if defined(EBUS_INTERNAL)
 #include "Command.hpp"
 
-#include <Ebus.h>
-
 #include <cerrno>
 #include <cmath>
 #include <cstdlib>
+#include <ebus/utils.hpp>
 #include <limits>
 #include <regex>
 
@@ -13,21 +12,21 @@ const uint32_t& Command::getLast() const { return last; }
 
 void Command::setLast(const uint32_t time) { last = time; }
 
-const std::vector<uint8_t>& Command::getData() const { return data; }
+const ebus::Sequence& Command::getData() const { return data; }
 
-void Command::setData(const std::vector<uint8_t>& data) { this->data = data; }
+void Command::setData(ebus::ByteView data) { this->data.assign(data); }
 
-const size_t& Command::getLength() const { return length; }
+size_t Command::getLength() const { return length; }
 
-const bool& Command::getNumeric() const { return numeric; }
+bool Command::getNumeric() const { return numeric; }
 
 const std::string& Command::getKey() const { return key; }
 
 const std::string& Command::getName() const { return name; }
 
-const std::vector<uint8_t>& Command::getReadCmd() const { return read_cmd; }
+const ebus::Sequence& Command::getReadCmd() const { return read_cmd; }
 
-const std::vector<uint8_t>& Command::getWriteCmd() const { return write_cmd; }
+const ebus::Sequence& Command::getWriteCmd() const { return write_cmd; }
 
 const bool& Command::getActive() const { return active; }
 
@@ -75,12 +74,22 @@ const std::string& Command::getHAStateClass() const { return ha_state_class; }
 
 const float& Command::getHAStep() const { return ha_step; }
 
+bool Command::matches(ebus::ByteView master_view) const {
+  return ebus::contains(master_view, read_cmd);
+}
+
 const std::string Command::getValueJson() const {
   cJSON* doc = cJSON_CreateObject();
-  if (numeric)
-    cJSON_AddNumberToObject(doc, "value", getDoubleFromVector());
-  else
-    cJSON_AddStringToObject(doc, "value", getStringFromVector().c_str());
+
+  auto decoded = ebus::decode(datatype, data);
+  if (!decoded || ebus::isNull(*decoded)) {
+    cJSON_AddNullToObject(doc, "value");
+  } else {
+    if (numeric)
+      cJSON_AddNumberToObject(doc, "value", getDoubleFromVector());
+    else
+      cJSON_AddStringToObject(doc, "value", getStringFromVector().c_str());
+  }
 
   char* printed = cJSON_PrintUnformatted(doc);
   std::string payload = printed != nullptr ? printed : "{}";
@@ -89,8 +98,8 @@ const std::string Command::getValueJson() const {
   return payload;
 }
 
-const std::vector<uint8_t> Command::getVectorFromJson(const cJSON* doc) const {
-  std::vector<uint8_t> result;
+ebus::Sequence Command::getVectorFromJson(const cJSON* doc) const {
+  ebus::Sequence result;
 
   if (doc == nullptr) return result;
   cJSON* valueNode = cJSON_GetObjectItemCaseSensitive(doc, "value");
@@ -113,15 +122,15 @@ const std::string Command::toJson() const {
   // Command Fields
   cJSON_AddStringToObject(doc, "key", key.c_str());
   cJSON_AddStringToObject(doc, "name", name.c_str());
-  cJSON_AddStringToObject(doc, "read_cmd", ebus::to_string(read_cmd).c_str());
-  cJSON_AddStringToObject(doc, "write_cmd", ebus::to_string(write_cmd).c_str());
+  cJSON_AddStringToObject(doc, "read_cmd", read_cmd.toString().c_str());
+  cJSON_AddStringToObject(doc, "write_cmd", write_cmd.toString().c_str());
   cJSON_AddBoolToObject(doc, "active", active);
   cJSON_AddNumberToObject(doc, "interval", interval);
 
   // Data Fields
   cJSON_AddBoolToObject(doc, "master", master);
   cJSON_AddNumberToObject(doc, "position", static_cast<double>(position));
-  cJSON_AddStringToObject(doc, "datatype", ebus::datatype_2_string(datatype));
+  cJSON_AddStringToObject(doc, "datatype", ebus::dataTypeToString(datatype));
   cJSON_AddNumberToObject(doc, "divider", divider);
   cJSON_AddNumberToObject(doc, "min", min);
   cJSON_AddNumberToObject(doc, "max", max);
@@ -180,17 +189,17 @@ Command Command::fromJson(const cJSON* doc) {
   // Command Fields
   command.key = getString("key");
   command.name = getString("name");
-  command.read_cmd = ebus::to_vector(getString("read_cmd"));
+  command.read_cmd.assign(ebus::toVector(getString("read_cmd")));
 
   std::string writeCmd = getString("write_cmd");
-  if (!writeCmd.empty()) command.write_cmd = ebus::to_vector(writeCmd);
+  if (!writeCmd.empty()) command.write_cmd.assign(ebus::toVector(writeCmd));
 
   command.active = getBool("active", false);
   cJSON* intervalNode = cJSON_GetObjectItemCaseSensitive(doc, "interval");
   if (cJSON_IsNumber(intervalNode) && intervalNode->valuedouble >= 0)
     command.interval = static_cast<uint32_t>(intervalNode->valuedouble);
   command.last = 0;
-  command.data = std::vector<uint8_t>();
+  command.data.clear();
 
   // Data Fields
   command.master = getBool("master", false);
@@ -198,9 +207,9 @@ Command Command::fromJson(const cJSON* doc) {
   if (cJSON_IsNumber(positionNode) && positionNode->valuedouble >= 0)
     command.position = static_cast<size_t>(positionNode->valuedouble);
 
-  command.datatype = ebus::string_2_datatype(getString("datatype").c_str());
-  command.length = ebus::sizeof_datatype(command.datatype);
-  command.numeric = ebus::typeof_datatype(command.datatype);
+  command.datatype = ebus::stringToDataType(getString("datatype").c_str());
+  command.length = ebus::sizeOfDataType(command.datatype);
+  command.numeric = ebus::isNumeric(command.datatype);
 
   cJSON* dividerNode = cJSON_GetObjectItemCaseSensitive(doc, "divider");
   if (cJSON_IsNumber(dividerNode) && dividerNode->valuedouble > 0)
@@ -373,7 +382,7 @@ const std::string Command::isFieldValid(const cJSON* doc,
     } break;
     case FT_DataType: {
       if (!cJSON_IsString(v) || v->valuestring == nullptr ||
-          ebus::string_2_datatype(v->valuestring) == ebus::DataType::ERROR)
+          ebus::stringToDataType(v->valuestring) == ebus::DataType::error)
         return "Invalid datatype for field: " + field;
     } break;
     case FT_KeyValueMap: {
@@ -410,208 +419,54 @@ const std::string Command::isKeyValueMapValid(const cJSON* ha_key_value_map) {
   return "";
 }
 
-double Command::getDoubleFromVector() const {
-  double value = 0;
-
-  switch (datatype) {
-    case ebus::DataType::BCD:
-      value = ebus::byte_2_bcd(data);
-      break;
-    case ebus::DataType::UINT8:
-      value = ebus::byte_2_uint8(data);
-      break;
-    case ebus::DataType::INT8:
-      value = ebus::byte_2_int8(data);
-      break;
-    case ebus::DataType::DATA1B:
-      value = ebus::byte_2_data1b(data);
-      break;
-    case ebus::DataType::DATA1C:
-      value = ebus::byte_2_data1c(data);
-      break;
-    case ebus::DataType::UINT16:
-      value = ebus::byte_2_uint16(data, ebus::Endian::Little);
-      break;
-    case ebus::DataType::UINT16R:
-      value = ebus::byte_2_uint16(data, ebus::Endian::Big);
-      break;
-    case ebus::DataType::INT16:
-      value = ebus::byte_2_int16(data, ebus::Endian::Little);
-      break;
-    case ebus::DataType::INT16R:
-      value = ebus::byte_2_int16(data, ebus::Endian::Big);
-      break;
-    case ebus::DataType::DATA2B:
-      value = ebus::byte_2_data2b(data, ebus::Endian::Little);
-      break;
-    case ebus::DataType::DATA2BR:
-      value = ebus::byte_2_data2b(data, ebus::Endian::Big);
-      break;
-    case ebus::DataType::DATA2C:
-      value = ebus::byte_2_data2c(data, ebus::Endian::Little);
-      break;
-    case ebus::DataType::DATA2CR:
-      value = ebus::byte_2_data2c(data, ebus::Endian::Big);
-      break;
-    case ebus::DataType::UINT32:
-      value = ebus::byte_2_uint32(data, ebus::Endian::Little);
-      break;
-    case ebus::DataType::UINT32R:
-      value = ebus::byte_2_uint32(data, ebus::Endian::Big);
-      break;
-    case ebus::DataType::INT32:
-      value = ebus::byte_2_int32(data, ebus::Endian::Little);
-      break;
-    case ebus::DataType::INT32R:
-      value = ebus::byte_2_int32(data, ebus::Endian::Big);
-      break;
-    case ebus::DataType::FLOAT:
-      value = ebus::byte_2_float(data, ebus::Endian::Little);
-      break;
-    case ebus::DataType::FLOATR:
-      value = ebus::byte_2_float(data, ebus::Endian::Big);
-      break;
-    default:
-      break;
+const ebus::DataTypeInfo* Command::getMetaCached() const {
+  if (!_cachedMeta.has_value()) {
+    _cachedMeta = ebus::getMeta(datatype);
   }
+  return _cachedMeta.has_value() ? &_cachedMeta.value() : nullptr;
+}
 
-  value = value / divider;
-  value = ebus::round_digits(value, digits);
+double Command::getDoubleFromVector() const {
+  if (data.empty()) return 0.0;
+  auto decoded = ebus::decode(datatype, data);
+  if (!decoded) return 0.0;
 
-  return value;
+  return ebus::roundDigits(ebus::asDouble(*decoded) / divider, digits);
 }
 
 const std::string Command::getStringFromVector() const {
-  std::string value;
+  if (data.empty()) return "";
+  auto decoded = ebus::decode(datatype, data);
+  if (!decoded) return "";
 
-  switch (datatype) {
-    case ebus::DataType::CHAR1:
-    case ebus::DataType::CHAR2:
-    case ebus::DataType::CHAR3:
-    case ebus::DataType::CHAR4:
-    case ebus::DataType::CHAR5:
-    case ebus::DataType::CHAR6:
-    case ebus::DataType::CHAR7:
-    case ebus::DataType::CHAR8:
-      value = ebus::byte_2_char(data);
-      break;
-    case ebus::DataType::HEX1:
-    case ebus::DataType::HEX2:
-    case ebus::DataType::HEX3:
-    case ebus::DataType::HEX4:
-    case ebus::DataType::HEX5:
-    case ebus::DataType::HEX6:
-    case ebus::DataType::HEX7:
-    case ebus::DataType::HEX8:
-      value = ebus::byte_2_hex(data);
-      break;
-    default:
-      break;
+  const auto meta = getMetaCached();
+  if (meta && std::string(meta->name).find("HEX") == 0) {
+    return ebus::toHexString(*decoded, 0);
   }
-
-  return value;
+  return ebus::asString(*decoded);
 }
 
-const std::vector<uint8_t> Command::getVectorFromDouble(double value) const {
-  std::vector<uint8_t> result;
+ebus::Sequence Command::getVectorFromDouble(double value) const {
+  double scaledValue = ebus::roundDigits(value * divider, digits);
 
-  value = value * divider;
-  value = ebus::round_digits(value, digits);
+  ebus::DataValue dv;
+  dv = static_cast<float>(scaledValue);
 
-  switch (datatype) {
-    case ebus::DataType::BCD:
-      result = ebus::bcd_2_byte(value);
-      break;
-    case ebus::DataType::UINT8:
-      result = ebus::uint8_2_byte(value);
-      break;
-    case ebus::DataType::INT8:
-      result = ebus::int8_2_byte(value);
-      break;
-    case ebus::DataType::DATA1B:
-      result = ebus::data1b_2_byte(value);
-      break;
-    case ebus::DataType::DATA1C:
-      result = ebus::data1c_2_byte(value);
-      break;
-    case ebus::DataType::UINT16:
-      result = ebus::uint16_2_byte(value, ebus::Endian::Little);
-      break;
-    case ebus::DataType::UINT16R:
-      result = ebus::uint16_2_byte(value, ebus::Endian::Big);
-      break;
-    case ebus::DataType::INT16:
-      result = ebus::int16_2_byte(value, ebus::Endian::Little);
-      break;
-    case ebus::DataType::INT16R:
-      result = ebus::int16_2_byte(value, ebus::Endian::Big);
-      break;
-    case ebus::DataType::DATA2B:
-      result = ebus::data2b_2_byte(value, ebus::Endian::Little);
-      break;
-    case ebus::DataType::DATA2BR:
-      result = ebus::data2b_2_byte(value, ebus::Endian::Big);
-      break;
-    case ebus::DataType::DATA2C:
-      result = ebus::data2c_2_byte(value, ebus::Endian::Little);
-      break;
-    case ebus::DataType::DATA2CR:
-      result = ebus::data2c_2_byte(value, ebus::Endian::Big);
-      break;
-    case ebus::DataType::UINT32:
-      result = ebus::uint32_2_byte(value, ebus::Endian::Little);
-      break;
-    case ebus::DataType::UINT32R:
-      result = ebus::uint32_2_byte(value, ebus::Endian::Big);
-      break;
-    case ebus::DataType::INT32:
-      result = ebus::int32_2_byte(value, ebus::Endian::Little);
-      break;
-    case ebus::DataType::INT32R:
-      result = ebus::int32_2_byte(value, ebus::Endian::Big);
-      break;
-    case ebus::DataType::FLOAT:
-      result = ebus::float_2_byte(value, ebus::Endian::Little);
-      break;
-    case ebus::DataType::FLOATR:
-      result = ebus::float_2_byte(value, ebus::Endian::Big);
-      break;
-    default:
-      break;
-  }
-
-  return result;
+  return ebus::encode(datatype, dv);
 }
 
-const std::vector<uint8_t> Command::getVectorFromString(
-    const std::string& value) const {
-  std::vector<uint8_t> result;
+ebus::Sequence Command::getVectorFromString(const std::string& value) const {
+  const auto meta = getMetaCached();
+  if (!meta) return ebus::Sequence{};
 
-  switch (datatype) {
-    case ebus::DataType::CHAR1:
-    case ebus::DataType::CHAR2:
-    case ebus::DataType::CHAR3:
-    case ebus::DataType::CHAR4:
-    case ebus::DataType::CHAR5:
-    case ebus::DataType::CHAR6:
-    case ebus::DataType::CHAR7:
-    case ebus::DataType::CHAR8:
-      result = ebus::char_2_byte(value.substr(0, length));
-      break;
-    case ebus::DataType::HEX1:
-    case ebus::DataType::HEX2:
-    case ebus::DataType::HEX3:
-    case ebus::DataType::HEX4:
-    case ebus::DataType::HEX5:
-    case ebus::DataType::HEX6:
-    case ebus::DataType::HEX7:
-    case ebus::DataType::HEX8:
-      result = ebus::hex_2_byte(value.substr(0, length));
-      break;
-    default:
-      break;
+  ebus::DataValue dv;
+  if (std::string(meta->name).find("HEX") == 0) {
+    dv = ebus::byteToChar(ebus::toVector(value));
+  } else {
+    dv = value.substr(0, length);
   }
-  return result;
+
+  return ebus::encode(datatype, dv);
 }
 
 #endif

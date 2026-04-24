@@ -1,7 +1,7 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-
+/*
 #include <Ebus.h>
 #include <cJSON.h>
 
@@ -67,4 +67,6 @@ class DeviceManager {
 };
 
 extern DeviceManager deviceManager;
+
+*/
 #endif

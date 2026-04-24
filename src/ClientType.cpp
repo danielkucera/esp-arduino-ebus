@@ -1,4 +1,5 @@
 #if defined(EBUS_INTERNAL)
+/*
 #include "ClientType.hpp"
 
 #include <cerrno>
@@ -270,5 +271,5 @@ bool EnhancedClient::handleBusData(const uint8_t& byte) {
   }
   return false;
 }
-
+*/
 #endif

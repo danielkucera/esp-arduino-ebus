@@ -1,4 +1,5 @@
 #if defined(EBUS_INTERNAL)
+/*
 #include "Schedule.hpp"
 
 #include <esp_timer.h>
@@ -386,8 +387,8 @@ const std::string Schedule::getTimingJson() {
             handlerTiming.callbackTelegram_Count);
 
   addTiming(callbackError, handlerTiming.callbackError_Last,
-            handlerTiming.callbackError_Mean, handlerTiming.callbackError_StdDev,
-            handlerTiming.callbackError_Count);
+            handlerTiming.callbackError_Mean,
+handlerTiming.callbackError_StdDev, handlerTiming.callbackError_Count);
 
   ebus::Handler::StateTiming stateTiming = ebusHandler->getStateTiming();
 
@@ -704,5 +705,5 @@ void Schedule::processPassive(const std::vector<uint8_t>& master,
   if (ebus::contains(master, VEC_07fe00, 2))
     enqueueCommand({Mode::internal, PRIO_INTERNAL, VEC_fe07ff00, nullptr});
 }
-
+*/
 #endif

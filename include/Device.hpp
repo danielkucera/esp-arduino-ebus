@@ -1,6 +1,7 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
+/*
 #include <cJSON.h>
 
 #include <cstdint>
@@ -46,5 +47,5 @@ class Device {
 
   std::string ebusdConfiguration() const;
 };
-
+*/
 #endif
