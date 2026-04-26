@@ -24,10 +24,8 @@
 
 // #include "ClientManager.hpp"
 #include "Cron.hpp"
-// #include "DeviceManager.hpp"
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
-// #include "Schedule.hpp"
 #include "Store.hpp"
 #else
 #include "BusType.hpp"
@@ -588,8 +586,9 @@ extern "C" void app_main(void) {
 
   ebusConfig.runtime.address = uint8_t(std::strtoul(
       configManager.readString("ebusAddress", "ff").c_str(), nullptr, 16));
-  ebusConfig.runtime.window = configManager.readInt("busisrWindow", 4300);
-  ebusConfig.runtime.offset = configManager.readInt("busisrOffset", 80);
+  ebusConfig.runtime.bus.window_us =
+      configManager.readInt("busisrWindow", 4300);
+  ebusConfig.runtime.bus.offset_us = configManager.readInt("busisrOffset", 80);
   ebusConfig.bus = busConfig;
 
   ebusController.configure(ebusConfig);
