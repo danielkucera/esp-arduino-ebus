@@ -1,6 +1,7 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
+/*
 #include <Ebus.h>
 #include <cJSON.h>
 
@@ -162,4 +163,6 @@ class Schedule {
 };
 
 extern Schedule schedule;
+
+*/
 #endif

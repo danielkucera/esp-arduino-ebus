@@ -14,7 +14,6 @@
 #include <vector>
 
 #include "Command.hpp"
-#include "Device.hpp"
 
 enum class IncomingActionType { Insert, Remove };
 
@@ -35,25 +34,25 @@ enum class OutgoingActionType { Command, Device, Component };
 struct OutgoingAction {
   OutgoingActionType type;
   const Command* command;  // for Command and Component
-  const Device* device;    // for Device
-  bool haRemove;           // for Component
+  // const Device* device;    // for Device
+  bool haRemove;  // for Component
 
   explicit OutgoingAction(const Command* cmd)
       : type(OutgoingActionType::Command),
         command(cmd),
-        device(nullptr),
+        // device(nullptr),
         haRemove(false) {}
 
-  explicit OutgoingAction(const Device* part)
-      : type(OutgoingActionType::Device),
-        command(nullptr),
-        device(part),
-        haRemove(false) {}
+  // explicit OutgoingAction(const Device* part)
+  //     : type(OutgoingActionType::Device),
+  //       command(nullptr),
+  //       device(part),
+  //       haRemove(false) {}
 
   explicit OutgoingAction(const Command* cmd, bool remove)
       : type(OutgoingActionType::Component),
         command(cmd),
-        device(nullptr),
+        // device(nullptr),
         haRemove(remove) {}
 };
 
@@ -185,7 +184,7 @@ class Mqtt {
 
   void publishCommand(const Command* command);
 
-  void publishDevice(const Device* device);
+  // void publishDevice(const Device* device);
 };
 
 extern Mqtt mqtt;

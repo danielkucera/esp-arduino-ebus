@@ -1,4 +1,5 @@
 #if defined(EBUS_INTERNAL)
+/*
 #include "ClientManager.hpp"
 
 #include <freertos/FreeRTOS.h>
@@ -98,9 +99,10 @@ int ClientManager::acceptClient(ServerSocket& server) {
   }
 
   int flag = 1;
-  
+
   if (setsockopt(clientFd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) < 0) {
-    logger.warn("Failed to set TCP_NODELAY on client socket (fd=" + std::to_string(clientFd) +
+    logger.warn("Failed to set TCP_NODELAY on client socket (fd=" +
+std::to_string(clientFd) +
                 "): " + std::to_string(errno));
   }
 
@@ -138,8 +140,8 @@ void ClientManager::taskFunc(void* arg) {
           activeClient = client;
           busState = BusState::Request;
           self->busRequestSuccess = false;
-          logger.info("Client has data to send (client #" + std::to_string(i) + ")");
-          break;
+          logger.info("Client has data to send (client #" + std::to_string(i) +
+")"); break;
         }
       }
     }
@@ -254,5 +256,5 @@ void ClientManager::acceptClients() {
                      }),
       clients.end());
 }
-
+*/
 #endif

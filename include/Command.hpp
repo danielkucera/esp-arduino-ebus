@@ -1,9 +1,9 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <Ebus.h>
 #include <cJSON.h>
 
+#include <ebus/data_types.hpp>
 #include <map>
 #include <string>
 #include <vector>
@@ -16,18 +16,18 @@ class Command {
   const uint32_t& getLast() const;
   void setLast(const uint32_t time);
 
-  const std::vector<uint8_t>& getData() const;
-  void setData(const std::vector<uint8_t>& data);
+  const ebus::Sequence& getData() const;
+  void setData(ebus::ByteView data);
 
-  const size_t& getLength() const;
+  size_t getLength() const;
 
-  const bool& getNumeric() const;
+  bool getNumeric() const;
 
   // Command field accessors
   const std::string& getKey() const;
   const std::string& getName() const;
-  const std::vector<uint8_t>& getReadCmd() const;
-  const std::vector<uint8_t>& getWriteCmd() const;
+  const ebus::Sequence& getReadCmd() const;
+  const ebus::Sequence& getWriteCmd() const;
   const bool& getActive() const;
   const uint32_t& getInterval() const;
 
@@ -54,9 +54,16 @@ class Command {
   const std::string& getHAStateClass() const;
   const float& getHAStep() const;
 
+  /**
+   * Checks if the master telegram matches this command's read sequence.
+   * The match is performed at index 2 (Primary/Secondary bytes).
+   * @param master The master part of the telegram.
+   */
+  bool matches(ebus::ByteView master_view) const;
+
   // Data conversion
   const std::string getValueJson() const;
-  const std::vector<uint8_t> getVectorFromJson(const cJSON* doc) const;
+  ebus::Sequence getVectorFromJson(const cJSON* doc) const;
 
   // Serialization / Deserialization
   const std::string toJson() const;
@@ -69,7 +76,7 @@ class Command {
   // last time of the successful command
   uint32_t last = 0;
   // received raw data
-  std::vector<uint8_t> data = {};
+  ebus::Sequence data = {};
   // length of datatype
   size_t length = 1;
   // indicates numeric datatype
@@ -81,9 +88,9 @@ class Command {
   // name of the command used as mqtt topic below "values/"
   std::string name = "";
   // read command as vector of "ZZPBSBNNDBx"
-  std::vector<uint8_t> read_cmd = {};
+  ebus::Sequence read_cmd = {};
   // write command as vector of "ZZPBSBNNDBx" (OPTIONAL)
-  std::vector<uint8_t> write_cmd = {};
+  ebus::Sequence write_cmd = {};
   // active sending of command
   bool active = false;
   // minimum interval between two commands in seconds (OPTIONAL)
@@ -95,7 +102,7 @@ class Command {
   // starting position within the data bytes, beginning with 1
   size_t position = 1;
   // ebus data type
-  ebus::DataType datatype = ebus::DataType::HEX1;
+  ebus::DataType datatype = ebus::DataType::hex1;
   // divider for value conversion (OPTIONAL)
   float divider = 1;
   // minimum value (OPTIONAL)
@@ -155,15 +162,15 @@ class Command {
   static const std::string isFieldValid(const cJSON* doc,
                                         const std::string& field, bool required,
                                         FieldType type);
-
   static const std::string isKeyValueMapValid(const cJSON* ha_key_value_map);
-
   double getDoubleFromVector() const;
   const std::string getStringFromVector() const;
 
-  const std::vector<uint8_t> getVectorFromDouble(double value) const;
-  const std::vector<uint8_t> getVectorFromString(
-      const std::string& value) const;
+  ebus::Sequence getVectorFromDouble(double value) const;
+  ebus::Sequence getVectorFromString(const std::string& value) const;
+
+  mutable std::optional<ebus::DataTypeInfo> _cachedMeta;
+  const ebus::DataTypeInfo* getMetaCached() const;
 };
 
 #endif

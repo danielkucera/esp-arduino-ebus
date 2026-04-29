@@ -5,3 +5,4 @@
 .wiki/
 sdkconfig.esp32*
 managed_components
+/build

@@ -3,12 +3,12 @@
 
 #include <esp_littlefs.h>
 #include <esp_timer.h>
+#include <sys/stat.h>
 
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <sys/stat.h>
 
 Store store;
 
@@ -155,7 +155,7 @@ int64_t Store::saveCommands() const {
 int64_t Store::wipeCommands() {
   if (!ensureLittlefsMounted()) return -1;
 
-  struct stat fileStat {};
+  struct stat fileStat{};
   if (stat(kCommandsFilePath, &fileStat) != 0) {
     if (errno == ENOENT) return 0;
     return -1;
@@ -250,14 +250,13 @@ Command* Store::nextActiveCommand() {
   return next;
 }
 
-std::vector<Command*> Store::findPassiveCommands(
-    const std::vector<uint8_t>& master) {
+std::vector<Command*> Store::findPassiveCommands(ebus::ByteView master) {
   std::vector<Command*> result;
   for (auto& kv : commands) {
     Command* cmd = &kv.second;
     // Skip active commands
     if (cmd->getActive()) continue;
-    if (ebus::contains(master, cmd->getReadCmd())) {
+    if (cmd->matches(master)) {
       result.push_back(cmd);
     }
   }
@@ -265,17 +264,18 @@ std::vector<Command*> Store::findPassiveCommands(
 }
 
 std::vector<Command*> Store::updateData(Command* command,
-                                        const std::vector<uint8_t>& master,
-                                        const std::vector<uint8_t>& slave) {
-  auto update = [this](Command* cmd, const std::vector<uint8_t>& master,
-                       const std::vector<uint8_t>& slave) {
+                                        ebus::ByteView master_view,
+                                        ebus::ByteView slave_view) {
+  auto update = [this](Command* cmd, ebus::ByteView master_view,
+                       ebus::ByteView slave_view) {
     cmd->setLast((uint32_t)(esp_timer_get_time() / 1000ULL));
-    if (cmd->getMaster())
+    if (cmd->getMaster()) {
       cmd->setData(
-          ebus::range(master, 4 + cmd->getPosition(), cmd->getLength()));
-    else
-      cmd->setData(ebus::range(slave, cmd->getPosition(), cmd->getLength()));
-
+          ebus::range(master_view, 4 + cmd->getPosition(), cmd->getLength()));
+    } else {
+      cmd->setData(
+          ebus::range(slave_view, cmd->getPosition(), cmd->getLength()));
+    }
     std::string valueJson = cmd->getValueJson();
     if (dataUpdatedCallback) dataUpdatedCallback(cmd->getName(), valueJson);
 
@@ -284,9 +284,9 @@ std::vector<Command*> Store::updateData(Command* command,
                            ? cJSON_GetObjectItemCaseSensitive(valueDoc, "value")
                            : nullptr;
 
-    std::string payload = " '" + ebus::to_string(cmd->getReadCmd()) + "' [" +
+    std::string payload = " '" + ebus::toString(cmd->getReadCmd()) + "' [" +
                           cmd->getName() + "] " +
-                          ebus::to_string(cmd->getData()) + " -> " +
+                          ebus::toString(cmd->getData()) + " -> " +
                           jsonValueToString(valueNode) + " " + cmd->getUnit();
 
     if (valueDoc) cJSON_Delete(valueDoc);
@@ -295,14 +295,14 @@ std::vector<Command*> Store::updateData(Command* command,
   };
 
   if (command) {
-    update(command, master, slave);
+    update(command, master_view, slave_view);
     // Return a vector with just this command, but avoid heap allocation
     return {command};
   }
 
   // Passive: potentially multiple matches
-  std::vector<Command*> passiveCommands = findPassiveCommands(master);
-  for (Command* cmd : passiveCommands) update(cmd, master, slave);
+  std::vector<Command*> passiveCommands = findPassiveCommands(master_view);
+  for (Command* cmd : passiveCommands) update(cmd, master_view, slave_view);
 
   return passiveCommands;
 }
