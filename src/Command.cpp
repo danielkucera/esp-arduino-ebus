@@ -431,7 +431,7 @@ double Command::getDoubleFromVector() const {
   auto decoded = ebus::decode(datatype, data);
   if (!decoded) return 0.0;
 
-  return ebus::roundDigits(ebus::asDouble(*decoded) / divider, digits);
+  return ebus::roundDigits(ebus::asFloat(*decoded) / divider, digits);
 }
 
 const std::string Command::getStringFromVector() const {
