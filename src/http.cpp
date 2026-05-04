@@ -632,21 +632,14 @@ esp_err_t handleDevices(httpd_req_t* req) {
 }
 
 esp_err_t handleDevicesScan(httpd_req_t* req) {
-  // schedule.handleScan();
-  // HttpUtils::sendResponse(req, "200 OK", "text/html", "Scan initiated");
+  getEbusController().scanObservedDevices();
+  HttpUtils::sendResponse(req, "200 OK", "text/html", "Scan initiated");
   return ESP_OK;
 }
 
 esp_err_t handleDevicesScanFull(httpd_req_t* req) {
-  // schedule.handleScanFull();
-  // HttpUtils::sendResponse(req, "200 OK", "text/html", "Full scan initiated");
-  return ESP_OK;
-}
-
-esp_err_t handleDevicesScanVendor(httpd_req_t* req) {
-  // schedule.handleScanVendor();
-  // HttpUtils::sendResponse(req, "200 OK", "text/html", "Vendor scan
-  // initiated");
+  getEbusController().initFullScan(true);
+  HttpUtils::sendResponse(req, "200 OK", "text/html", "Full scan initiated");
   return ESP_OK;
 }
 
@@ -792,8 +785,6 @@ void SetupHttpHandlers() {
   RegisterUri("/api/v1/devices", HTTP_GET, handleDevices);
   RegisterUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
   RegisterUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
-  RegisterUri("/api/v1/devices/scan/vendor", HTTP_POST,
-              handleDevicesScanVendor);
 
   RegisterUri("/statistics", HTTP_GET, handleStatisticsPage);
   RegisterUri("/api/v1/statistics/counter", HTTP_GET, handleStatisticsCounter);

@@ -353,10 +353,6 @@ void Mqtt::handleScan(const cJSON* doc) {
 
   if (full) {
     getEbusController().initFullScan(true);
-  } else if (vendor) {
-    // If your library has a vendor-specific scan method or uses specific
-    // addresses
-    getEbusController().scanObservedDevices();
   } else if (addresses.empty()) {
     getEbusController().scanObservedDevices();
   } else {
