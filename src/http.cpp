@@ -626,8 +626,8 @@ esp_err_t handleDevicesPage(httpd_req_t* req) {
 }
 
 esp_err_t handleDevices(httpd_req_t* req) {
-  // HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-  //                         deviceManager.getDevicesJson());
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                          getEbusController().getDeviceInfoJson());
   return ESP_OK;
 }
 

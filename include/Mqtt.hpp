@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "Command.hpp"
+#include "ebus/device.hpp"
 #include "ebus_accessor.hpp"
 
 enum class IncomingActionType { Insert, Remove };
@@ -34,26 +35,26 @@ enum class OutgoingActionType { Command, Device, Component };
 
 struct OutgoingAction {
   OutgoingActionType type;
-  const Command* command;  // for Command and Component
-  // const Device* device;    // for Device
-  bool ha_remove;  // for Component
+  const Command* command;   // for Command and Component
+  ebus::DeviceInfo device;  // for Device
+  bool ha_remove;           // for Component
 
   explicit OutgoingAction(const Command* cmd)
       : type(OutgoingActionType::Command),
         command(cmd),
-        // device(nullptr),
+        device(),
         ha_remove(false) {}
 
-  // explicit OutgoingAction(const Device* part)
-  //     : type(OutgoingActionType::Device),
-  //       command(nullptr),
-  //       device(part),
-  //       ha_remove(false) {}
+  explicit OutgoingAction(const ebus::DeviceInfo& dev)
+      : type(OutgoingActionType::Device),
+        command(nullptr),
+        device(dev),
+        ha_remove(false) {}
 
   explicit OutgoingAction(const Command* cmd, bool remove)
       : type(OutgoingActionType::Component),
         command(cmd),
-        // device(nullptr),
+        device(),
         ha_remove(remove) {}
 };
 
@@ -187,7 +188,7 @@ class Mqtt {
 
   void publishCommand(const Command* command);
 
-  // void publishDevice(const Device* device);
+  void publishDevice(const ebus::DeviceInfo& device);
 };
 
 extern Mqtt mqtt;

@@ -304,8 +304,8 @@ void Mqtt::handleRemove(const cJSON* doc) {
 }
 
 void Mqtt::handlePublish(const cJSON* doc) {
-  // for (const Command* command : store.getCommands())
-  //   enqueueOutgoing(OutgoingAction(command));
+  for (const Command* command : store.getCommands())
+    enqueueOutgoing(OutgoingAction(command));
 }
 
 void Mqtt::handleLoad(const cJSON* doc) {
@@ -368,8 +368,9 @@ void Mqtt::handleScan(const cJSON* doc) {
 }
 
 void Mqtt::handleDevices(const cJSON* doc) {
-  // for (const Device* device : deviceManager.getDevices())
-  //   enqueueOutgoing(OutgoingAction(device));
+  for (const auto& device : getEbusController().getDeviceInfo()) {
+    enqueueOutgoing(OutgoingAction(device));
+  }
 }
 
 void Mqtt::handleSend(const cJSON* doc) {
@@ -484,7 +485,7 @@ void Mqtt::checkOutgoingQueue() {
         publishCommand(action.command);
         break;
       case OutgoingActionType::Device:
-        // publishDevice(action.device);
+        publishDevice(action.device);
         break;
       case OutgoingActionType::Component:
         mqttha.publishComponent(action.command, action.ha_remove);
@@ -512,10 +513,10 @@ void Mqtt::publishCommand(const Command* command) {
   publish(topic.c_str(), 0, false, payload.c_str());
 }
 
-// void Mqtt::publishDevice(const Device* device) {
-//   std::string topic = "devices/" + ebus::to_string(device->getSlave());
-//   std::string payload = device->toJson();
-//   publish(topic.c_str(), 0, false, payload.c_str());
-// }
+void Mqtt::publishDevice(const ebus::DeviceInfo& device) {
+  std::string topic = "devices/" + ebus::toString(device.slave_address);
+  std::string payload = ebus::toJson(device);
+  publish(topic.c_str(), 0, false, payload.c_str());
+}
 
 #endif
