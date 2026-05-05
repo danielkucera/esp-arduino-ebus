@@ -1,6 +1,6 @@
 # Contributing to esp-arduino-ebus
 
-Thank you for your interest in contributing to the esp-arduino-ebus project! To maintain high code quality and architectural consistency, please follow these guidelines.
+Thank you for your interest in contributing to the esp-arduino-ebus project! To maintain high code quality and architectural consistency, please follow these guidelines for all new code.
 
 ## Coding Standards
 
