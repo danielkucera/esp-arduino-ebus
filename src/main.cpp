@@ -652,7 +652,9 @@ extern "C" void app_main(void) {
   getEbusController().setTelegramCallback([](const ebus::TelegramInfo& info) {
     // Update the store. Passing nullptr for the command tells the store
     // to find all matching command definitions (both active and passive).
-    store.updateData(nullptr, info.master_view, info.slave_view);
+    // store.updateData(nullptr, info.master_view, info.slave_view);
+    std::string logMessage = ebus::toJson(info);
+    logger.debug(logMessage, true, info.session_id, info.poll_id);
   });
 
   // Setup the ErrorCallback to log errors and publish them to MQTT for UI
@@ -662,9 +664,9 @@ extern "C" void app_main(void) {
     std::string logMessage =
         ebus::toJson(info);  // Use ebus::toJson for ErrorInfo
     if (info.level == ebus::LogLevel::error) {
-      logger.error(logMessage);
+      logger.error(logMessage, true, info.session_id, info.poll_id);
     } else {
-      logger.warn(logMessage);
+      logger.warn(logMessage, true, info.session_id, info.poll_id);
     }
     // Publish the error to MQTT for UI consumption
     mqtt.publishError(info);

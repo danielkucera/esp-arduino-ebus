@@ -29,6 +29,17 @@
             white-space: nowrap;
         }
 
+        #logsTable th:nth-child(3),
+        /* SID */
+        #logsTable td:nth-child(3),
+        #logsTable th:nth-child(4),
+        /* PID */
+        #logsTable td:nth-child(4) {
+            width: 50px;
+            /* Fixed width for SID/PID */
+            text-align: center;
+        }
+
         #logsTable td.message {
             white-space: pre-wrap;
             word-break: break-word;
@@ -37,6 +48,13 @@
 
         #logsTable tr:last-child td {
             border-bottom: none;
+        }
+
+        /* For structured JSON messages in logs */
+        pre.json-message {
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin: 0;
         }
     </style>
 </head>
@@ -62,11 +80,15 @@
                 <tr>
                     <th>Timestamp</th>
                     <th>Level</th>
+                    <th>SID</th>
+                    <th>PID</th>
                     <th>Message</th>
                 </tr>
             </thead>
             <tbody id="logsBody">
-                <tr><td colspan="3">Loading logs...</td></tr>
+                <tr>
+                    <td colspan="5">Loading logs...</td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -110,26 +132,26 @@
                     return formatLocalDateTime(epochMillis);
                 }
 
-                if (showDate && Number.isFinite(millisMinusTime)) {
-                    const epochMillis = millis - millisMinusTime;
-                    return formatLocalDateTime(epochMillis);
-                }
+                // if (showDate && Number.isFinite(millisMinusTime)) {
+                //     const epochMillis = millis - millisMinusTime;
+                //     return formatLocalDateTime(epochMillis);
+                // }
 
                 return `${millis}`;
             }
 
-            if (logEntry.timestamp) {
-                const parsed = new Date(logEntry.timestamp);
-                if (!Number.isNaN(parsed.getTime())) {
-                    return showDate
-                        ? formatLocalDateTime(parsed.getTime())
-                        : `${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}:${pad2(parsed.getSeconds())}.${pad3(parsed.getMilliseconds())}`;
-                }
+            // if (logEntry.timestamp) {
+            //     const parsed = new Date(logEntry.timestamp);
+            //     if (!Number.isNaN(parsed.getTime())) {
+            //         return showDate
+            //             ? formatLocalDateTime(parsed.getTime())
+            //             : `${pad2(parsed.getHours())}:${pad2(parsed.getMinutes())}:${pad2(parsed.getSeconds())}.${pad3(parsed.getMilliseconds())}`;
+            //     }
 
-                return showDate
-                    ? logEntry.timestamp.replace(/T|Z/g, ' ')
-                    : logEntry.timestamp.split('T')[1].replace(/Z/g, ' ');
-            }
+            //     return showDate
+            //         ? logEntry.timestamp.replace(/T|Z/g, ' ')
+            //         : logEntry.timestamp.split('T')[1].replace(/Z/g, ' ');
+            // }
 
             return '';
         }
@@ -151,12 +173,29 @@
         function buildRenderedLine(logEntry) {
             const timestamp = formatTimestamp(logEntry, latestTimeRelation, latestMillisMinusTime);
             const logLevel = `${logEntry.level.padEnd(5, ' ')}`;
-            return `${timestamp} ${logLevel} ${logEntry.message}`;
+            // return `${timestamp} ${logLevel} ${logEntry.message}`;
+            const sid = logEntry.sid && logEntry.sid > 0 ? `SID:${logEntry.sid}` : '';
+            const pid = logEntry.pid && logEntry.pid > 0 ? `PID:${logEntry.pid}` : '';
+            const ids = [sid, pid].filter(Boolean).join(' ');
+            const message = typeof logEntry.message === 'object' ? JSON.stringify(logEntry.message) : logEntry.message;
+            return `${timestamp} ${logLevel} ${ids} ${message}`;
         }
 
         function buildRenderedRow(logEntry) {
             const timestamp = formatTimestamp(logEntry, latestTimeRelation, latestMillisMinusTime);
-            return `<tr><td>${escapeHtml(timestamp)}</td><td>${escapeHtml(logEntry.level)}</td><td class="message">${escapeHtml(logEntry.message)}</td></tr>`;
+            // return `<tr><td>${escapeHtml(timestamp)}</td><td>${escapeHtml(logEntry.level)}</td><td class="message">${escapeHtml(logEntry.message)}</td></tr>`;
+            const sid = logEntry.sid && logEntry.sid > 0 ? logEntry.sid : '';
+            const pid = logEntry.pid && logEntry.pid > 0 ? logEntry.pid : '';
+            let messageContent = '';
+            if (typeof logEntry.message === 'object' && logEntry.message !== null) {
+                // If it's already a parsed JSON object, pretty print it
+                messageContent = `<pre class="json-message">${escapeHtml(JSON.stringify(logEntry.message, null, 2))}</pre>`;
+            } else {
+                // Otherwise, treat as plain text
+                messageContent = escapeHtml(logEntry.message);
+            }
+            return `<tr><td>${escapeHtml(timestamp)}</td><td>${escapeHtml(logEntry.level)}</td><td>${escapeHtml(sid)}</td><td>${escapeHtml(pid)}</td><td class="message">${messageContent}</td></tr>`;
+
         }
 
         function renderFromStoredData() {
@@ -196,7 +235,8 @@
             const newEntries = [];
             let droppedAny = false;
             for (const logEntry of logItems) {
-                const entryKey = `${logEntry.millis}|${logEntry.level}|${logEntry.message}`;
+                // const entryKey = `${logEntry.millis}|${logEntry.level}|${logEntry.message}`;
+                const entryKey = `${logEntry.millis}|${logEntry.level}|${logEntry.sid}|${logEntry.pid}|${JSON.stringify(logEntry.message)}`;
                 if (seenEntries.has(entryKey)) continue;
 
                 seenEntries.add(entryKey);

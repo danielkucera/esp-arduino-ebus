@@ -66,13 +66,22 @@ Logger::~Logger() {
   }
 }
 
-void Logger::error(std::string message) { log(LogLevel::ERROR, message); }
-
-void Logger::warn(std::string message) { log(LogLevel::WARN, message); }
-
-void Logger::info(std::string message) { log(LogLevel::INFO, message); }
-
-void Logger::debug(std::string message) { log(LogLevel::DEBUG, message); }
+void Logger::error(std::string message, bool is_json, uint32_t sid,
+                   uint32_t pid) {
+  log(LogLevel::ERROR, message, is_json, sid, pid);
+}
+void Logger::warn(std::string message, bool is_json, uint32_t sid,
+                  uint32_t pid) {
+  log(LogLevel::WARN, message, is_json, sid, pid);
+}
+void Logger::info(std::string message, bool is_json, uint32_t sid,
+                  uint32_t pid) {
+  log(LogLevel::INFO, message, is_json, sid, pid);
+}
+void Logger::debug(std::string message, bool is_json, uint32_t sid,
+                   uint32_t pid) {
+  log(LogLevel::DEBUG, message, is_json, sid, pid);
+}
 
 const std::string Logger::getLogs(uint64_t sinceMillis) const {
   std::string response = "{\"logs\":[";
@@ -86,13 +95,20 @@ const std::string Logger::getLogs(uint64_t sinceMillis) const {
 
     if (!first) response += ",";
     first = false;
-    response += "{\"millis\":";
-    response += std::to_string(entry.timestamp);
-    response += ",\"level\":\"";
-    response += logLevelText(entry.level);
-    response += "\",\"message\":\"";
-    response += jsonEscape(entry.message);
-    response += "\"}";
+    response += "{\"millis\":" + std::to_string(entry.timestamp);
+    response += ",\"level\":\"" + std::string(logLevelText(entry.level)) + "\"";
+    if (entry.session_id > 0)
+      response += ",\"sid\":" + std::to_string(entry.session_id);
+    if (entry.poll_id > 0)
+      response += ",\"pid\":" + std::to_string(entry.poll_id);
+    response += ",\"message\":";
+    if (entry.is_json_message) {
+      // If it's already JSON, insert it raw (assuming it's valid JSON)
+      response += entry.message;
+    } else {
+      response += "\"" + jsonEscape(entry.message) + "\"";
+    }
+    response += "}";
   }
   portEXIT_CRITICAL(&mux);
 
@@ -139,7 +155,8 @@ bool Logger::currentMillisTimeRelation(uint64_t& currentMillis,
   return currentTimeMillis >= kMinValidEpochMs;
 }
 
-void Logger::log(LogLevel level, std::string message) {
+void Logger::log(LogLevel level, std::string message, bool is_json,
+                 uint32_t session_id, uint32_t poll_id) {
   if (printQueue != nullptr &&
       printTask != nullptr) {  // Ensure task is running before sending to queue
     char msg[kPrintMsgMaxLen]{};
@@ -153,6 +170,9 @@ void Logger::log(LogLevel level, std::string message) {
       static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
   buffer_[index].level = level;
   buffer_[index].message = std::move(message);
+  buffer_[index].is_json_message = is_json;
+  buffer_[index].session_id = session_id;
+  buffer_[index].poll_id = poll_id;
   index = (index + 1) % maxEntries;
   if (entries < maxEntries) entries++;
   portEXIT_CRITICAL(&mux);

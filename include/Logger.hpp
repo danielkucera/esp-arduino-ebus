@@ -18,10 +18,14 @@ class Logger {
   Logger(const Logger& other) = delete;             // Prevent copying
   Logger& operator=(const Logger& other) = delete;  // Prevent assignment
 
-  void error(std::string message);
-  void warn(std::string message);
-  void info(std::string message);
-  void debug(std::string message);
+  void error(std::string message, bool is_json = false, uint32_t session_id = 0,
+             uint32_t poll_id = 0);
+  void warn(std::string message, bool is_json = false, uint32_t session_id = 0,
+            uint32_t poll_id = 0);
+  void info(std::string message, bool is_json = false, uint32_t session_id = 0,
+            uint32_t poll_id = 0);
+  void debug(std::string message, bool is_json = false, uint32_t session_id = 0,
+             uint32_t poll_id = 0);
 
   const std::string getLogs(uint64_t sinceMillis = 0) const;
   const std::string getTimeRelation() const;
@@ -32,6 +36,9 @@ class Logger {
     uint64_t timestamp;
     LogLevel level;
     std::string message;
+    bool is_json_message;
+    uint32_t session_id;
+    uint32_t poll_id;
   };
 
   std::vector<LogEntry> buffer_;  // Use std::vector for RAII
@@ -46,7 +53,8 @@ class Logger {
   static void printTaskEntry(void* arg);
   void printTaskLoop();
 
-  void log(LogLevel level, std::string message);
+  void log(LogLevel level, std::string message, bool is_json,
+           uint32_t session_id, uint32_t poll_id);
 
   mutable portMUX_TYPE mux;  // Mutex for thread safety
   QueueHandle_t printQueue;
