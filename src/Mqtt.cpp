@@ -343,10 +343,7 @@ void Mqtt::handleWipe(const cJSON* doc) {
 void Mqtt::handleScan(const cJSON* doc) {
   cJSON* fullNode =
       cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "full");
-  cJSON* vendorNode =
-      cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), "vendor");
   bool full = cJSON_IsTrue(fullNode);
-  bool vendor = cJSON_IsTrue(vendorNode);
 
   std::vector<std::string> addresses =
       getStringArray(const_cast<cJSON*>(doc), "addresses");
