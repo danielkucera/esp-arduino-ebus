@@ -42,7 +42,8 @@ extern const char statistics_html_start[] asm("_binary_statistics_html_start");
 extern const char logs_html_start[] asm("_binary_logs_html_start");
 
 void sendStatic(httpd_req_t* req, const char* contentType, const char* data) {
-  HttpUtils::sendResponse(req, "200 OK", contentType, std::string(data));
+  // HttpUtils::sendResponse(req, "200 OK", contentType, std::string(data));
+  HttpUtils::sendResponse(req, "200 OK", contentType, data);
 }
 
 uint32_t parseAdcArg(httpd_req_t* req, const char* key, uint32_t fallback) {

@@ -96,38 +96,52 @@ void ClientAcceptor::taskFunc(void* arg) {
   ClientAcceptor* self = static_cast<ClientAcceptor*>(arg);
 
   for (;;) {
-    // Check if a stop notification was received
     if (ulTaskNotifyTake(pdTRUE, 0) > 0) {
       self->client_acceptor_task_handle_ = nullptr;
       vTaskDelete(NULL);
     }
 
-    // Check for new clients
     self->acceptClients();
 
-    // Periodically clean up closed FDs from our tracking list if necessary.
-    // Note: The library typically handles the I/O errors and stops using the
-    // FD, but we can remove them from our internal list by checking socket
-    // status.
-    portENTER_CRITICAL(&self->clients_mux_);
-    auto it = self->clients_.begin();
-    while (it != self->clients_.end()) {
+    std::vector<int> client_fds;
+    {
+      portENTER_CRITICAL(&self->clients_mux_);
+      client_fds.reserve(self->clients_.size());
+      for (const auto& c : self->clients_) {
+        client_fds.push_back(c.fd);
+      }
+      portEXIT_CRITICAL(&self->clients_mux_);
+    }
+
+    std::vector<int> closed_fds;
+    for (int fd : client_fds) {
       char buffer = 0;
-      int res = recv(it->fd, &buffer, 1, MSG_PEEK | MSG_DONTWAIT);
+      int res = recv(fd, &buffer, 1, MSG_PEEK | MSG_DONTWAIT);
       if (res == 0 || (res < 0 && errno != EWOULDBLOCK && errno != EAGAIN)) {
-        logger.info("TCP Client FD " + std::to_string(it->fd) + " closed.");
-        self->controller_.removeClient(it->fd);
-        close(it->fd);
-        it = self->clients_.erase(it);
-      } else {
-        ++it;
+        closed_fds.push_back(fd);
       }
     }
-    portEXIT_CRITICAL(&self->clients_mux_);
 
-    ulTaskNotifyTake(
-        pdTRUE,
-        pdMS_TO_TICKS(100));  // Wait for 100ms or until notified to stop
+    if (!closed_fds.empty()) {
+      for (int fd : closed_fds) {
+        logger.info("TCP Client FD " + std::to_string(fd) + " closed.");
+        self->controller_.removeClient(fd);
+        close(fd);
+      }
+
+      portENTER_CRITICAL(&self->clients_mux_);
+      self->clients_.erase(
+          std::remove_if(self->clients_.begin(), self->clients_.end(),
+                         [&](const ConnectedClient& c) {
+                           return std::find(closed_fds.begin(),
+                                            closed_fds.end(),
+                                            c.fd) != closed_fds.end();
+                         }),
+          self->clients_.end());
+      portEXIT_CRITICAL(&self->clients_mux_);
+    }
+
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
   }
 }
 
