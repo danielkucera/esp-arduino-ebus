@@ -8,7 +8,6 @@ static ebus::Controller s_controller;
 ebus::EbusConfig& getEbusConfig() { return s_config; }
 ebus::Controller& getEbusController() { return s_controller; }
 
-// void initEbus() { s_controller = ebus::Controller(); }
 void configureEbus(const ebus::EbusConfig& cfg) {
   s_config = cfg;
   s_controller.configure(s_config);

@@ -13,7 +13,6 @@ static constexpr uint8_t PRIO_FULLSCAN = 1;  // manual full scan
 ebus::EbusConfig& getEbusConfig();
 ebus::Controller& getEbusController();
 
-// void initEbus();
 void configureEbus(const ebus::EbusConfig& cfg);
 
 void startEbus();
