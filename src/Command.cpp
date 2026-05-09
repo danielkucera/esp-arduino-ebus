@@ -84,7 +84,6 @@ bool Command::matches(ebus::ByteView master_view) const {
 
 const std::string Command::getValueJson() const {
   cJSON* doc = cJSON_CreateObject();
-
   auto decoded = ebus::decode(datatype, data);
   if (!decoded || ebus::isNull(*decoded)) {
     cJSON_AddNullToObject(doc, "value");
@@ -121,8 +120,16 @@ ebus::Sequence Command::getVectorFromJson(const cJSON* doc) const {
 }
 
 const std::string Command::toJson() const {
-  cJSON* doc = cJSON_CreateObject();
+  cJSON* doc = toCJson();
+  char* printed = cJSON_PrintUnformatted(doc);
+  std::string payload = printed != nullptr ? printed : "{}";
+  if (printed != nullptr) cJSON_free(printed);
+  cJSON_Delete(doc);
+  return payload;
+}
 
+cJSON* Command::toCJson() const {
+  cJSON* doc = cJSON_CreateObject();
   // Command Fields
   cJSON_AddStringToObject(doc, "key", key.c_str());
   cJSON_AddStringToObject(doc, "name", name.c_str());
@@ -160,11 +167,7 @@ const std::string Command::toJson() const {
   cJSON_AddStringToObject(doc, "ha_state_class", ha_state_class.c_str());
   cJSON_AddNumberToObject(doc, "ha_step", ha_step);
 
-  char* printed = cJSON_PrintUnformatted(doc);
-  std::string payload = printed != nullptr ? printed : "{}";
-  if (printed != nullptr) cJSON_free(printed);
-  cJSON_Delete(doc);
-  return payload;
+  return doc;
 }
 
 Command Command::fromJson(const cJSON* doc) {

@@ -1,9 +1,9 @@
 #pragma once
 
 #include <esp_netif_types.h>
-#include <string>
 #include <esp_wifi.h>
 
+#include <string>
 
 class ConfigManager;
 
@@ -18,7 +18,8 @@ class WifiNetworkManager {
   static wifi_mode_t getMode();
   static bool isStaConnected();
   static std::string getIpAddress();
-  static void setStaIpAssignedCallback(void (*callback)(const std::string& ipAddress));
+  static void setStaIpAssignedCallback(
+      void (*callback)(const std::string& ipAddress));
   static bool isStaticIpEnabled();
   static std::string getConfiguredIpAddress();
   static std::string getConfiguredGateway();
@@ -39,7 +40,10 @@ class WifiNetworkManager {
   static void setStatusLedPin(int pin);
 
   static void handle_event(void* arg, esp_event_base_t event_base,
-                                int32_t event_id, void* event_data);
+                           int32_t event_id, void* event_data);
+
+  static TaskHandle_t getStatusLedTaskHandle();
+  static TaskHandle_t getSocketLoggerTaskHandle();
 
  private:
   enum class StatusLedMode : uint8_t { SlowBlink = 0, SolidOn = 1 };

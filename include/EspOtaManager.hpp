@@ -14,6 +14,8 @@ class EspOtaManager {
   void begin(uint16_t port = 3232);
   void setPreUpgradeHook(PreUpgradeHook hook);
 
+  TaskHandle_t getTaskHandle() const { return taskHandle_; }
+
  private:
   void prepareForUpgrade();
   bool handleInvitation();

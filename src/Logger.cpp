@@ -50,7 +50,7 @@ Logger::Logger(size_t maxEntries)
   buffer_ = std::vector<LogEntry>(maxEntries);  // Initialize std::vector
   printQueue = xQueueCreate(kPrintQueueLen, kPrintMsgMaxLen);
   if (printQueue != nullptr) {
-    xTaskCreate(Logger::printTaskEntry, "logger_print", 4096, this, 1,
+    xTaskCreate(Logger::printTaskEntry, "logger_print", 2048, this, 1,
                 &printTask);
   }
 }
@@ -64,6 +64,11 @@ Logger::~Logger() {
     vQueueDelete(printQueue);
     printQueue = nullptr;
   }
+}
+
+size_t Logger::getQueueSize() const {
+  if (printQueue == nullptr) return 0;
+  return uxQueueMessagesWaiting(printQueue);
 }
 
 void Logger::error(std::string message, bool is_json, uint32_t sid,
@@ -104,9 +109,9 @@ const std::string Logger::getLogs(uint64_t sinceMillis) const {
     response += ",\"message\":";
     if (entry.is_json_message) {
       // If it's already JSON, insert it raw (assuming it's valid JSON)
-      response += entry.message;
+      response += std::string(entry.message);
     } else {
-      response += "\"" + jsonEscape(entry.message) + "\"";
+      response += "\"" + jsonEscape(std::string(entry.message)) + "\"";
     }
     response += "}";
   }
@@ -169,7 +174,8 @@ void Logger::log(LogLevel level, std::string message, bool is_json,
   buffer_[index].timestamp =
       static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
   buffer_[index].level = level;
-  buffer_[index].message = std::move(message);
+  std::strncpy(buffer_[index].message, message.c_str(), LOG_MSG_MAX_LEN - 1);
+  buffer_[index].message[LOG_MSG_MAX_LEN - 1] = '\0';
   buffer_[index].is_json_message = is_json;
   buffer_[index].session_id = session_id;
   buffer_[index].poll_id = poll_id;

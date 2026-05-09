@@ -20,6 +20,9 @@ class ClientAcceptor {
   void start();
   void stop();
 
+  TaskHandle_t getTaskHandle() const { return client_acceptor_task_handle_; }
+  size_t getClientsCount() const { return clients_.size(); }
+
  private:
   struct ServerSocket {
     uint16_t port;

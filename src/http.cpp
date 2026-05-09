@@ -627,8 +627,16 @@ esp_err_t handleDevicesPage(httpd_req_t* req) {
 }
 
 esp_err_t handleDevices(httpd_req_t* req) {
+  std::ostringstream oss;
+  oss << "[";
+  for (size_t i = 0; i < getEbusController().getDeviceInfo().size(); ++i) {
+    if (i > 0) oss << ",";
+    oss << getEbusController().getDeviceInfo()[i].toJson();
+  }
+  oss << "]";
+
   HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          getEbusController().getDeviceInfoJson());
+                          oss.str());
   return ESP_OK;
 }
 
@@ -741,7 +749,7 @@ void SetupHttpHandlers() {
   config.server_port = 80;
   config.uri_match_fn = httpd_uri_match_wildcard;
   config.max_uri_handlers = 64;
-  config.stack_size = 16384;
+  config.stack_size = 8192;
 
   if (httpd_start(&configServer, &config) != ESP_OK) {
     logger.error("Failed to start HTTP server");

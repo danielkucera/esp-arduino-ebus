@@ -1,22 +1,22 @@
 #include "WifiNetworkManager.hpp"
 
-#include <cctype>
-#include <cstring>
-#include <cstdlib>
+#include <arpa/inet.h>
 #include <driver/gpio.h>
 #include <esp_event.h>
 #include <esp_netif.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <arpa/inet.h>
 #include <lwip/ip4_addr.h>
 #include <lwip/sockets.h>
 #include <mdns.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 
 #include "ConfigManager.hpp"
@@ -34,9 +34,10 @@ bool WifiNetworkManager::staConnected_ = false;
 bool WifiNetworkManager::staConfigured_ = false;
 TaskHandle_t WifiNetworkManager::statusLedTaskHandle_ = nullptr;
 volatile WifiNetworkManager::StatusLedMode WifiNetworkManager::statusLedMode_ =
-  WifiNetworkManager::StatusLedMode::SlowBlink;
+    WifiNetworkManager::StatusLedMode::SlowBlink;
 int WifiNetworkManager::statusLedPin_ = -1;
-void (*WifiNetworkManager::staIpAssignedCallback_)(const std::string& ipAddress) = nullptr;
+void (*WifiNetworkManager::staIpAssignedCallback_)(
+    const std::string& ipAddress) = nullptr;
 esp_netif_t* WifiNetworkManager::staNetif_ = nullptr;
 esp_netif_t* WifiNetworkManager::apNetif_ = nullptr;
 
@@ -60,19 +61,21 @@ void logOpenSockets() {
     sockaddr_in local{}, peer{};
     socklen_t len = sizeof(local);
     if (getsockname(fd, reinterpret_cast<sockaddr*>(&local), &len) != 0) {
-      std::string typeStr = (socketType == SOCK_STREAM) ? "TCP" :
-                            (socketType == SOCK_DGRAM) ? "UDP" : "?";
+      std::string typeStr = (socketType == SOCK_STREAM)  ? "TCP"
+                            : (socketType == SOCK_DGRAM) ? "UDP"
+                                                         : "?";
       if (!sockets.empty()) sockets += "; ";
       sockets += "fd=" + std::to_string(fd) + "/" + typeStr +
                  "/local=?/getsockname_errno=" + std::to_string(errno);
       continue;
     }
 
-    std::string typeStr = (socketType == SOCK_STREAM) ? "TCP" : 
-                          (socketType == SOCK_DGRAM) ? "UDP" : "?";
-    std::string info = "fd=" + std::to_string(fd) + "/" + typeStr + 
-                       "/local=" + std::string(inet_ntoa(local.sin_addr)) + ":" +
-                       std::to_string(ntohs(local.sin_port));
+    std::string typeStr = (socketType == SOCK_STREAM)  ? "TCP"
+                          : (socketType == SOCK_DGRAM) ? "UDP"
+                                                       : "?";
+    std::string info = "fd=" + std::to_string(fd) + "/" + typeStr +
+                       "/local=" + std::string(inet_ntoa(local.sin_addr)) +
+                       ":" + std::to_string(ntohs(local.sin_port));
 
     if (getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &len) == 0) {
       info += "/peer=" + std::string(inet_ntoa(peer.sin_addr)) + ":" +
@@ -85,9 +88,8 @@ void logOpenSockets() {
   }
 
   logger.debug("[sockets] detected=" + std::to_string(detectedCount) +
-              " max=" + std::to_string(CONFIG_LWIP_MAX_SOCKETS) +
-              " listed=" + std::to_string(listedCount) +
-              " [" + sockets + "]");
+               " max=" + std::to_string(CONFIG_LWIP_MAX_SOCKETS) +
+               " listed=" + std::to_string(listedCount) + " [" + sockets + "]");
 }
 
 void socketLoggerTaskEntry(void* arg) {
@@ -114,7 +116,8 @@ std::string buildHostname(const std::string& source, const char* fallback) {
   for (size_t i = 0; i < hostname.size(); ++i) {
     const char c = hostname[i];
     if (std::isalnum(static_cast<unsigned char>(c))) {
-      sanitized += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      sanitized +=
+          static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     } else if (c == '-' || c == '_' || c == ' ') {
       sanitized += '-';
     }
@@ -142,15 +145,14 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   setStatusLedMode(StatusLedMode::SlowBlink);
 
   if (socketLoggerTaskHandle == nullptr) {
-    xTaskCreate(socketLoggerTaskEntry, "socket_logger_task", 6144, nullptr, 1,
+    xTaskCreate(socketLoggerTaskEntry, "socket_logger_task", 1024, nullptr, 1,
                 &socketLoggerTaskHandle);
   }
 
-
-  std::string apPassword = configManager_ != nullptr
-                               ? configManager_->readString("apModePassword",
-                                                            kDefaultApPassword)
-                               : std::string(kDefaultApPassword);
+  std::string apPassword =
+      configManager_ != nullptr
+          ? configManager_->readString("apModePassword", kDefaultApPassword)
+          : std::string(kDefaultApPassword);
   if (apPassword.empty()) apPassword = kDefaultApPassword;
   const std::string configuredThingName =
       configManager_ != nullptr
@@ -184,10 +186,11 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   }
 
   esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                      &WifiNetworkManager::handle_event, nullptr,
-                                      nullptr);
+                                      &WifiNetworkManager::handle_event,
+                                      nullptr, nullptr);
   esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                      &WifiNetworkManager::handle_event, nullptr, nullptr);
+                                      &WifiNetworkManager::handle_event,
+                                      nullptr, nullptr);
 
   esp_wifi_set_storage(false ? WIFI_STORAGE_FLASH : WIFI_STORAGE_RAM);
 
@@ -218,8 +221,8 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   std::strncpy(reinterpret_cast<char*>(apConfig.ap.ssid), kDefaultApSsid,
                sizeof(apConfig.ap.ssid) - 1);
   apConfig.ap.ssid_len = std::strlen(kDefaultApSsid);
-  std::strncpy(reinterpret_cast<char*>(apConfig.ap.password), apPassword.c_str(),
-               sizeof(apConfig.ap.password) - 1);
+  std::strncpy(reinterpret_cast<char*>(apConfig.ap.password),
+               apPassword.c_str(), sizeof(apConfig.ap.password) - 1);
   apConfig.ap.max_connection = 4;
   apConfig.ap.channel = rand() % 12 + 1;
   apConfig.ap.authmode = WIFI_AUTH_WPA2_PSK;
@@ -232,18 +235,16 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
                 ")");
   }
 
-  std::string staSsid =
-      configManager_ != nullptr
-          ? configManager_->readString("wifiSsid", "ebus-test")
-          : std::string("ebus-test");
+  std::string staSsid = configManager_ != nullptr ? configManager_->readString(
+                                                        "wifiSsid", "ebus-test")
+                                                  : std::string("ebus-test");
   std::string staPass =
       configManager_ != nullptr
           ? configManager_->readString("wifiPassword", "lectronz")
           : std::string("lectronz");
-  std::string staBssid =
-      configManager_ != nullptr
-          ? configManager_->readString("wifiBssid", "")
-          : std::string("");
+  std::string staBssid = configManager_ != nullptr
+                             ? configManager_->readString("wifiBssid", "")
+                             : std::string("");
   staConfigured_ = !staSsid.empty();
 
   if (!staConfigured_) {
@@ -378,7 +379,8 @@ int32_t WifiNetworkManager::channel() {
 const char* WifiNetworkManager::getHostname() {
   if (staNetif_ == nullptr) return "";
   const char* hostname = "";
-  if (esp_netif_get_hostname(staNetif_, &hostname) != ESP_OK || hostname == nullptr) {
+  if (esp_netif_get_hostname(staNetif_, &hostname) != ESP_OK ||
+      hostname == nullptr) {
     return "";
   }
   return hostname;
@@ -388,8 +390,8 @@ std::string WifiNetworkManager::macAddress() {
   uint8_t mac[6]{};
   if (esp_wifi_get_mac(WIFI_IF_STA, mac) != ESP_OK) return "";
   char buffer[18]{};
-  std::snprintf(buffer, sizeof(buffer), "%02x:%02x:%02x:%02x:%02x:%02x",
-                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  std::snprintf(buffer, sizeof(buffer), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0],
+                mac[1], mac[2], mac[3], mac[4], mac[5]);
   return buffer;
 }
 
@@ -405,7 +407,7 @@ void WifiNetworkManager::statusLedTaskLoop() {
       vTaskDelay(pdMS_TO_TICKS(1000));
       continue;
     }
-    
+
     if (statusLedMode_ == StatusLedMode::SolidOn) {
       gpio_set_level(static_cast<gpio_num_t>(statusLedPin_), 1);
       vTaskDelay(pdMS_TO_TICKS(200));
@@ -422,7 +424,7 @@ void WifiNetworkManager::initStatusLed() {
   if (statusLedPin_ < 0) {
     return;
   }
-  
+
   gpio_config_t config{};
   config.pin_bit_mask = 1ULL << statusLedPin_;
   config.mode = GPIO_MODE_OUTPUT;
@@ -441,16 +443,16 @@ void WifiNetworkManager::setStatusLedMode(StatusLedMode mode) {
   statusLedMode_ = mode;
 }
 
-void WifiNetworkManager::setStatusLedPin(int pin) {
-  statusLedPin_ = pin;
-}
+void WifiNetworkManager::setStatusLedPin(int pin) { statusLedPin_ = pin; }
 
 bool WifiNetworkManager::isStaticIpEnabled() {
-  return configManager_ != nullptr && configManager_->readBool("staticIPEnabled");
+  return configManager_ != nullptr &&
+         configManager_->readBool("staticIPEnabled");
 }
 
 std::string WifiNetworkManager::getConfiguredIpAddress() {
-  return configManager_ != nullptr ? configManager_->readString("ipAddress") : "";
+  return configManager_ != nullptr ? configManager_->readString("ipAddress")
+                                   : "";
 }
 
 std::string WifiNetworkManager::getConfiguredGateway() {
@@ -470,7 +472,7 @@ std::string WifiNetworkManager::getConfiguredDns2() {
 }
 
 void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
-                                int32_t event_id, void* event_data) {
+                                      int32_t event_id, void* event_data) {
   (void)arg;
   (void)event_base;
 
@@ -516,6 +518,14 @@ void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
   }
 }
 
+TaskHandle_t WifiNetworkManager::getStatusLedTaskHandle() {
+  return statusLedTaskHandle_;
+}
+
+TaskHandle_t WifiNetworkManager::getSocketLoggerTaskHandle() {
+  return socketLoggerTaskHandle;
+}
+
 void WifiNetworkManager::configureStaticIpIfEnabled() {
   if (!isStaticIpEnabled()) {
     logger.info("Static IP disabled, using DHCP");
@@ -551,32 +561,31 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
     bool dns1IsValid = true;
     if (!dns1Value.empty())
       dns1IsValid = esp_netif_str_to_ip4(dns1Value.c_str(), &dns1_);
-    if (!dns1IsValid) logger.warn("Invalid DNS1 configured, ignoring");
+    if (!dns1IsValid)
+      logger.warn("Invalid DNS1 configured, ignoring");
     else {
       esp_netif_dns_info_t dns{};
       dns.ip.u_addr.ip4 = dns1_;
       dns.ip.type = ESP_IPADDR_TYPE_V4;
-      esp_netif_set_dns_info(staNetif_, ESP_NETIF_DNS_MAIN, &dns);  
+      esp_netif_set_dns_info(staNetif_, ESP_NETIF_DNS_MAIN, &dns);
     }
 
     bool dns2IsValid = true;
     if (!dns2Value.empty())
       dns2IsValid = esp_netif_str_to_ip4(dns2Value.c_str(), &dns2_);
-    if (!dns2IsValid) logger.warn("Invalid DNS2 configured, ignoring");
+    if (!dns2IsValid)
+      logger.warn("Invalid DNS2 configured, ignoring");
     else {
-       esp_netif_dns_info_t dns{};
-       dns.ip.u_addr.ip4 = dns2_;
-       dns.ip.type = ESP_IPADDR_TYPE_V4;
-       esp_netif_set_dns_info(staNetif_, ESP_NETIF_DNS_BACKUP, &dns);  
+      esp_netif_dns_info_t dns{};
+      dns.ip.u_addr.ip4 = dns2_;
+      dns.ip.type = ESP_IPADDR_TYPE_V4;
+      esp_netif_set_dns_info(staNetif_, ESP_NETIF_DNS_BACKUP, &dns);
     }
 
-    logger.info(
-        std::string("Static IP configured: ") +
-        ipToString(ipAddress_) + ", Gateway: " + ipToString(gateway_) +
-        ", DNS1: " + ipToString(dns1_) +
-        (dns2Value.empty()
-             ? ""
-             : ", DNS2: " + ipToString(dns2_)));
+    logger.info(std::string("Static IP configured: ") + ipToString(ipAddress_) +
+                ", Gateway: " + ipToString(gateway_) +
+                ", DNS1: " + ipToString(dns1_) +
+                (dns2Value.empty() ? "" : ", DNS2: " + ipToString(dns2_)));
   } else {
     logger.warn("Invalid static IP/netmask config, falling back to DHCP");
   }

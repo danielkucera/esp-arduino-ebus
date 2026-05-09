@@ -15,6 +15,8 @@ class DNSServer {
              const esp_ip4_addr_t& resolvedIp);
   void stop();
 
+  TaskHandle_t getTaskHandle() const { return taskHandle_; }
+
  private:
   static void taskEntry(void* arg);
   void taskLoop();

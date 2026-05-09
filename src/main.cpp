@@ -5,6 +5,7 @@
 #include <driver/ledc.h>
 #include <esp_chip_info.h>
 #include <esp_flash.h>
+#include <esp_heap_caps.h>
 #include <esp_idf_version.h>
 #include <esp_mac.h>
 #include <esp_private/esp_clk.h>
@@ -129,8 +130,6 @@ void startCaptiveDns() {
 void prepareRuntimeForUpgrade() {
 #if defined(EBUS_INTERNAL)
   cron.stop();
-  // schedule.stop();
-  // clientManager.stop();
   mqtt.stopTask();
   stopEbus();
 
@@ -242,12 +241,14 @@ void setTimezone(const char* timezone) {
 
 const std::string getMqttStatusJson() {
   const uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
-  const uint32_t free_heap = esp_get_free_heap_size();
+  ssize_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+  ssize_t min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
 
   cJSON* doc = cJSON_CreateObject();
   cJSON_AddNumberToObject(doc, "reset_code", reset_code);
   cJSON_AddNumberToObject(doc, "uptime", uptime);
   cJSON_AddNumberToObject(doc, "free_heap", free_heap);
+  cJSON_AddNumberToObject(doc, "min_free_heap", min_free_heap);
   cJSON_AddNumberToObject(doc, "rssi", WifiNetworkManager::RSSI());
 
   char* printed = cJSON_PrintUnformatted(doc);
@@ -257,6 +258,48 @@ const std::string getMqttStatusJson() {
   return payload;
 }
 #endif
+
+namespace {  // Anonymous namespace for helper functions
+void addThreadInfo(cJSON* parent, const char* name, TaskHandle_t handle,
+                   uint32_t stackSize) {
+  if (!handle) return;
+  cJSON* obj = cJSON_AddObjectToObject(parent, name);
+  cJSON_AddNumberToObject(obj, "stack_bytes", stackSize);
+  cJSON_AddNumberToObject(
+      obj, "stack_free_bytes",
+      uxTaskGetStackHighWaterMark(handle) * sizeof(StackType_t));
+}
+}  // namespace
+
+char* getAppResourcesJson() {
+  cJSON* root = cJSON_CreateObject();
+
+  cJSON* threads = cJSON_AddObjectToObject(root, "threads");
+  addThreadInfo(threads, "mqtt", mqtt.getTaskHandle(), 3072);
+  addThreadInfo(threads, "cron", cron.getTaskHandle(), 2048);
+  addThreadInfo(threads, "logger", logger.getTaskHandle(), 2048);
+  addThreadInfo(threads, "client_acceptor", client_acceptor.getTaskHandle(),
+                2048);
+  addThreadInfo(threads, "dns", captiveDnsServer.getTaskHandle(), 2048);
+  addThreadInfo(threads, "espota", espOtaManager.getTaskHandle(), 8192);
+  addThreadInfo(threads, "status_led",
+                WifiNetworkManager::getStatusLedTaskHandle(), 1024);
+  addThreadInfo(threads, "socket_logger",
+                WifiNetworkManager::getSocketLoggerTaskHandle(), 2048);
+
+  cJSON* queues = cJSON_AddObjectToObject(root, "queues");
+  cJSON_AddNumberToObject(queues, "mqtt_in", mqtt.getIncomingQueueSize());
+  cJSON_AddNumberToObject(queues, "mqtt_out", mqtt.getOutgoingQueueSize());
+  cJSON_AddNumberToObject(queues, "logger", logger.getQueueSize());
+
+  char* payload = cJSON_PrintUnformatted(root);
+  cJSON_Delete(root);
+  if (payload == nullptr) {
+    // Return a heap-allocated empty JSON string if printing failed
+    return strdup("{}");  // strdup allocates memory, caller must free
+  }
+  return payload;
+}
 
 void saveParamsCallback() {
   set_pwm();
@@ -603,13 +646,7 @@ extern "C" void app_main(void) {
   getEbusConfig().runtime.bus.offset_us = configManager.readInt("offsetUs", 80);
   getEbusConfig().runtime.bus.watchdog_timeout_ms =
       configManager.readInt("watchdogTimeoutMs", 250);
-
-  // Bus - Syn Generator
-  // ebusConfig.runtime.bus.syn.enabled =
-  //     configManager.readBool("synEnabled", false);
-  // ebusConfig.runtime.bus.syn.base_ms = configManager.readInt("synBaseMs",
-  // 50); ebusConfig.runtime.bus.syn.tolerance_ms =
-  //     configManager.readInt("synToleranceMs", 5);
+  getEbusConfig().runtime.bus.syn_gen = configManager.readBool("synGen", true);
 
   // Logging
   getEbusConfig().runtime.diagnostics.level =
@@ -626,8 +663,8 @@ extern "C" void app_main(void) {
   //     configManager.readInt("outboundBufferSize", 4096);
 
   // Scanner
-  // ebusConfig.runtime.scanner.scan_on_startup =
-  //     configManager.readBool("scanOnStart", false);
+  getEbusConfig().runtime.scanner.scan_on_startup =
+      configManager.readBool("scanOnStart", false);
   // ebusConfig.runtime.scanner.initial_delay_s =
   //     configManager.readInt("initialDelayS", 5);
   // ebusConfig.runtime.scanner.startup_interval_s =
@@ -636,8 +673,8 @@ extern "C" void app_main(void) {
   //     configManager.readInt("maxStartupScans", 5);
 
   // Scheduler
-  // ebusConfig.runtime.scheduler.max_send_attempts =
-  //     configManager.readInt("maxSendAttempts", 3);
+  getEbusConfig().runtime.scheduler.max_send_attempts =
+      configManager.readInt("maxSendAttempts", 1);
   // ebusConfig.runtime.scheduler.base_backoff_ms =
   //     configManager.readInt("baseBackoffMs", 100);
   // ebusConfig.runtime.scheduler.fsm_timeout_ms =
@@ -653,7 +690,7 @@ extern "C" void app_main(void) {
     // Update the store. Passing nullptr for the command tells the store
     // to find all matching command definitions (both active and passive).
     // store.updateData(nullptr, info.master_view, info.slave_view);
-    std::string logMessage = ebus::toJson(info);
+    std::string logMessage = info.toJson();
     logger.debug(logMessage, true, info.session_id, info.poll_id);
   });
 
@@ -661,8 +698,7 @@ extern "C" void app_main(void) {
   // feedback
   getEbusController().setErrorCallback([](const ebus::ErrorInfo& info) {
     // Log the error using the application's logger
-    std::string logMessage =
-        ebus::toJson(info);  // Use ebus::toJson for ErrorInfo
+    std::string logMessage = info.toJson();
     if (info.level == ebus::LogLevel::error) {
       logger.error(logMessage, true, info.session_id, info.poll_id);
     } else {

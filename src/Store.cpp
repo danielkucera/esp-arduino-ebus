@@ -54,16 +54,6 @@ std::string formatDouble(double value, int precision) {
   if (!s.empty() && s.back() == '.') s.pop_back();
   return s.empty() ? "0" : s;
 }
-
-std::string jsonValueToString(cJSON* value) {
-  if (cJSON_IsString(value) && value->valuestring != nullptr)
-    return value->valuestring;
-  if (cJSON_IsBool(value)) return cJSON_IsTrue(value) ? "true" : "false";
-  if (cJSON_IsNumber(value)) {
-    return formatDouble(value->valuedouble, 6);
-  }
-  return printJson(value, "null");
-}
 }  // namespace
 
 bool Store::initFileSystem() { return ensureLittlefsMounted(); }
@@ -305,19 +295,17 @@ std::vector<Command*> Store::updateData(Command* command,
     if (data_updated_callback_)
       data_updated_callback_(cmd->getName(), valueJson);
 
-    cJSON* valueDoc = cJSON_Parse(valueJson.c_str());
-    cJSON* valueNode = valueDoc
-                           ? cJSON_GetObjectItemCaseSensitive(valueDoc, "value")
-                           : nullptr;
-
-    std::string payload = " '" + ebus::toString(cmd->getReadCmd()) + "' [" +
-                          cmd->getName() + "] " +
-                          ebus::toString(cmd->getData()) + " -> " +
-                          jsonValueToString(valueNode) + " " + cmd->getUnit();
-
-    if (valueDoc) cJSON_Delete(valueDoc);
-
-    if (data_updated_log_callback_) data_updated_log_callback_(payload);
+    if (data_updated_log_callback_) {
+      std::string valStr =
+          cmd->getNumeric()
+              ? formatDouble(cmd->getDoubleFromVector(), cmd->getDigits())
+              : cmd->getStringFromVector();
+      std::string payload = " '" + ebus::toString(cmd->getReadCmd()) + "' [" +
+                            cmd->getName() + "] " +
+                            ebus::toString(cmd->getData()) + " -> " + valStr +
+                            " " + cmd->getUnit();
+      data_updated_log_callback_(payload);
+    }
   };
 
   if (command) {
@@ -407,12 +395,7 @@ const std::string Store::serializeCommands() const {
 
   // Add each command as an array of values in the same order as header
   for (const auto& cmd : commands_) {
-    cJSON* cmdDoc = cJSON_Parse(cmd.second.toJson().c_str());
-    if (!cJSON_IsObject(cmdDoc)) {
-      if (cmdDoc) cJSON_Delete(cmdDoc);
-      continue;
-    }
-
+    cJSON* cmdDoc = cmd.second.toCJson();
     cJSON* row = cJSON_CreateArray();
     for (const auto& field : fields) {
       cJSON* item = cJSON_GetObjectItemCaseSensitive(cmdDoc, field.c_str());

@@ -10,6 +10,8 @@
 
 // Simple circular buffer logger
 
+inline constexpr size_t LOG_MSG_MAX_LEN = 384;
+
 class Logger {
  public:
   explicit Logger(size_t maxEntries = 35);
@@ -30,12 +32,15 @@ class Logger {
   const std::string getLogs(uint64_t sinceMillis = 0) const;
   const std::string getTimeRelation() const;
 
+  TaskHandle_t getTaskHandle() const { return printTask; }
+  size_t getQueueSize() const;
+
  private:
   enum class LogLevel { DEBUG, INFO, WARN, ERROR };
   struct LogEntry {
     uint64_t timestamp;
     LogLevel level;
-    std::string message;
+    char message[LOG_MSG_MAX_LEN];
     bool is_json_message;
     uint32_t session_id;
     uint32_t poll_id;

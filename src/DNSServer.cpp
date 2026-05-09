@@ -42,7 +42,7 @@ bool DNSServer::start(uint16_t port, const char* domainName,
   fcntl(socketFd_, F_SETFL, flags | O_NONBLOCK);
 
   if (taskHandle_ == nullptr) {
-    xTaskCreate(taskEntry, "dns_task", 4096, this, 1, &taskHandle_);
+    xTaskCreate(taskEntry, "dns_task", 2048, this, 1, &taskHandle_);
   }
 
   return true;

@@ -7,6 +7,7 @@
 #include <mqtt_client.h>
 
 #include <functional>
+#include <mutex>
 #include <queue>
 #include <string>
 #include <tuple>
@@ -103,6 +104,10 @@ class Mqtt {
 
   void doLoop();
 
+  TaskHandle_t getTaskHandle() const { return task_handle_; }
+  size_t getIncomingQueueSize() const;
+  size_t getOutgoingQueueSize() const;
+
  private:
   esp_mqtt_client_handle_t client_ = nullptr;
   esp_mqtt_client_config_t mqtt_cfg_ = {};
@@ -119,10 +124,12 @@ class Mqtt {
   bool connected_ = false;
 
   std::queue<IncomingAction> incoming_queue_;
+  std::mutex incoming_queue_mutex_;
   uint32_t last_incoming_ = 0;
   uint32_t incoming_interval_ = 25;  // ms
 
   std::queue<OutgoingAction> outgoing_queue_;
+  std::mutex outgoing_queue_mutex_;
   uint32_t last_outgoing_ = 0;
   uint32_t outgoing_interval_ = 25;  // ms
 

@@ -68,8 +68,13 @@ class Command {
   const std::string getValueJson() const;
   ebus::Sequence getVectorFromJson(const cJSON* doc) const;
 
+  // Helpers for direct value access to avoid JSON overhead
+  double getDoubleFromVector() const;
+  const std::string getStringFromVector() const;
+
   // Serialization / Deserialization
   const std::string toJson() const;
+  cJSON* toCJson() const;
   static Command fromJson(const cJSON* doc);
 
   static const std::string evaluate(const cJSON* doc);
@@ -168,8 +173,6 @@ class Command {
                                         const std::string& field, bool required,
                                         FieldType type);
   static const std::string isKeyValueMapValid(const cJSON* ha_key_value_map);
-  double getDoubleFromVector() const;
-  const std::string getStringFromVector() const;
 
   ebus::Sequence getVectorFromDouble(double value) const;
   ebus::Sequence getVectorFromString(const std::string& value) const;

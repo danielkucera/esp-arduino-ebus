@@ -20,3 +20,4 @@ int DEBUG_LOG_IMPL(const char* format, ...);
 
 void restart();
 const std::string getStatusJson();
+char* getAppResourcesJson();

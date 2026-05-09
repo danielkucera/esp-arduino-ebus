@@ -1,11 +1,11 @@
 #include "Adc.hpp"
 
-#include <cstring>
-
 #include <esp_adc/adc_continuous.h>
 #include <esp_err.h>
 #include <esp_timer.h>
 #include <soc/soc_caps.h>
+
+#include <cstring>
 
 #include "Logger.hpp"
 
@@ -13,13 +13,15 @@ Adc adc;
 
 static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_DEFAULT = 30000;
 #if defined(SOC_ADC_SAMPLE_FREQ_THRES_LOW)
-static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MIN = SOC_ADC_SAMPLE_FREQ_THRES_LOW;
+static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MIN =
+    SOC_ADC_SAMPLE_FREQ_THRES_LOW;
 #else
 static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MIN = 600;
 #endif
 
 #if defined(SOC_ADC_SAMPLE_FREQ_THRES_HIGH)
-static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX = SOC_ADC_SAMPLE_FREQ_THRES_HIGH;
+static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX =
+    SOC_ADC_SAMPLE_FREQ_THRES_HIGH;
 #else
 static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX = 200000;
 #endif
@@ -32,7 +34,7 @@ static constexpr uint32_t ADC_DMA_SAMPLE_BYTES = 4;
 namespace {
 adc_continuous_handle_t adcHandle = nullptr;
 adc_digi_pattern_config_t adcPattern[5] = {};
-}
+}  // namespace
 
 bool Adc::begin() {
   if (configured) return true;
@@ -49,7 +51,8 @@ bool Adc::begin() {
     return false;
   }
 
-  if (!configureController(ADC_SAMPLE_FREQ_HZ_DEFAULT, ADC_CHANNEL_MASK_DEFAULT)) {
+  if (!configureController(ADC_SAMPLE_FREQ_HZ_DEFAULT,
+                           ADC_CHANNEL_MASK_DEFAULT)) {
     adc_continuous_deinit(adcHandle);
     adcHandle = nullptr;
     configured = false;
@@ -177,7 +180,8 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
   if (numActiveChannels == 0) numActiveChannels = 1;
 
   uint64_t controllerSampleRate =
-      static_cast<uint64_t>(effectivePerChannelSampleRate(sampleRate, channelMask)) *
+      static_cast<uint64_t>(
+          effectivePerChannelSampleRate(sampleRate, channelMask)) *
       numActiveChannels;
   if (controllerSampleRate < ADC_SAMPLE_FREQ_HZ_MIN)
     controllerSampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
@@ -191,17 +195,19 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
     return false;
   if (!startCapture()) return false;
 
-  // samplesPerChannel is per-channel; total bytes accounts for all active channels.
-  const uint64_t totalSamples = static_cast<uint64_t>(samplesPerChannel) * numActiveChannels;
+  // samplesPerChannel is per-channel; total bytes accounts for all active
+  // channels.
+  const uint64_t totalSamples =
+      static_cast<uint64_t>(samplesPerChannel) * numActiveChannels;
   const uint64_t targetBytes = totalSamples * RESULT_BYTES;
   uint64_t sentBytes = 0;
 
-    const uint32_t effectivePerChannelRate =
+  const uint32_t effectivePerChannelRate =
       effectivePerChannelSampleRate(sampleRate, channelMask);
 
-  const uint32_t expectedDurationMs =
-      static_cast<uint32_t>((static_cast<uint64_t>(samplesPerChannel) * 1000ULL) /
-                            effectivePerChannelRate);
+  const uint32_t expectedDurationMs = static_cast<uint32_t>(
+      (static_cast<uint64_t>(samplesPerChannel) * 1000ULL) /
+      effectivePerChannelRate);
   uint32_t noProgressTimeoutMs = expectedDurationMs * 4U + 1000U;
   if (noProgressTimeoutMs < 3000U) noProgressTimeoutMs = 3000U;
   if (noProgressTimeoutMs > 20000U) noProgressTimeoutMs = 20000U;
@@ -216,12 +222,13 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
   uint8_t dmaChunk[ADC_RAW_FRAME_BYTES];
   uint8_t txChunk[ADC_RAW_HTTP_CHUNK_BYTES];
   uint32_t txFill = 0;
-  static adc_continuous_data_t parsed[ADC_RAW_FRAME_BYTES / ADC_DMA_SAMPLE_BYTES];
+  static adc_continuous_data_t
+      parsed[ADC_RAW_FRAME_BYTES / ADC_DMA_SAMPLE_BYTES];
   while (sentBytes < targetBytes) {
     const uint64_t elapsedMs =
         static_cast<uint64_t>((esp_timer_get_time() - startUs) / 1000ULL);
-    const uint64_t noProgressMs =
-        static_cast<uint64_t>((esp_timer_get_time() - lastProgressUs) / 1000ULL);
+    const uint64_t noProgressMs = static_cast<uint64_t>(
+        (esp_timer_get_time() - lastProgressUs) / 1000ULL);
     if (noProgressMs > noProgressTimeoutMs || elapsedMs > hardTimeoutMs) break;
 
     uint32_t bytesRead = 0;
@@ -257,11 +264,11 @@ bool Adc::streamRaw(httpd_req_t* req, uint32_t sampleRate,
       // Only send channels that were requested in the mask.
       if ((channelMask & (1U << channel)) == 0) continue;
 
-        // Compact 16-bit word for UI decoder:
-        // bits [11:0]=data, [12]=0, [15:13]=channel.
-        const uint16_t packed =
-          static_cast<uint16_t>((static_cast<uint16_t>(parsed[i].raw_data) & 0x0FFFU) |
-                    (static_cast<uint16_t>(channel) << 13));
+      // Compact 16-bit word for UI decoder:
+      // bits [11:0]=data, [12]=0, [15:13]=channel.
+      const uint16_t packed = static_cast<uint16_t>(
+          (static_cast<uint16_t>(parsed[i].raw_data) & 0x0FFFU) |
+          (static_cast<uint16_t>(channel) << 13));
 
       if (txFill + RESULT_BYTES > sizeof(txChunk)) {
         if (httpd_resp_send_chunk(req, reinterpret_cast<const char*>(txChunk),

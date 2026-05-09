@@ -233,7 +233,7 @@ bool Cron::initFileSystem() { return store.initFileSystem(); }
 void Cron::start() {
   stop_runner_ = false;
   if (task_handle_ == nullptr) {
-    xTaskCreate(&Cron::taskFunc, "cronRunner", 4096, this, 2, &task_handle_);
+    xTaskCreate(&Cron::taskFunc, "cronRunner", 2048, this, 2, &task_handle_);
   }
 }
 

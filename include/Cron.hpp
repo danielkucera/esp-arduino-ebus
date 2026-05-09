@@ -24,6 +24,9 @@ class Cron {
 
   static const std::string evaluate(const cJSON* doc);
 
+  TaskHandle_t getTaskHandle() const { return task_handle_; }
+  size_t getRulesCount() const { return rules_.size(); }
+
  private:
   struct Rule {
     std::string id;
