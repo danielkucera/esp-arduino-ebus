@@ -46,6 +46,11 @@ std::vector<std::string> getStringArray(cJSON* doc, const char* key) {
 
 void Mqtt::start() {
   if (enabled_) {
+    // Important: destroy previous client to free resources and close sockets
+    if (client_ != nullptr) {
+      esp_mqtt_client_destroy(client_);
+      client_ = nullptr;
+    }
     client_ = esp_mqtt_client_init(&mqtt_cfg_);
     esp_mqtt_client_register_event(client_,
                                    (esp_mqtt_event_id_t)ESP_EVENT_ANY_ID,
@@ -91,6 +96,8 @@ void Mqtt::setup(const char* id) {
   mqtt_cfg_.session.last_will.retain = 1;
   // Keep-alive interval in seconds
   mqtt_cfg_.session.keepalive = 60;
+  mqtt_cfg_.buffer.size = 2048;
+  mqtt_cfg_.buffer.out_size = 2048;
 }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
@@ -133,7 +140,7 @@ const std::string& Mqtt::getWillTopic() const { return will_topic_; }
 
 void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
                    const char* payload, bool prefix) {
-  if (!enabled_ || client_ == nullptr) return;
+  if (!enabled_ || client_ == nullptr || payload == nullptr) return;
 
   if (prefix) {
     // Memory optimization: Use stack buffer for combined topic to avoid
@@ -142,12 +149,19 @@ void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
     int n = snprintf(fullTopic, sizeof(fullTopic), "%s%s", root_topic_.c_str(),
                      topic);
     if (n > 0 && (size_t)n < sizeof(fullTopic)) {
-      esp_mqtt_client_publish(client_, fullTopic, payload, 0, qos, retain);
+      if (esp_mqtt_client_publish(client_, fullTopic, payload, 0, qos, retain) <
+          0) {
+        // Use static strings for error logging to avoid heap churn during link
+        // congestion
+        logger.warn("MQTT: Publish failed (buffer full or slow link)");
+      }
       return;
     }
   }
 
-  esp_mqtt_client_publish(client_, topic, payload, 0, qos, retain);
+  if (esp_mqtt_client_publish(client_, topic, payload, 0, qos, retain) < 0) {
+    logger.warn("MQTT: Publish failed");
+  }
 }
 
 void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
@@ -197,15 +211,13 @@ void Mqtt::publishValue(const std::string& name, const std::string& valueJson) {
 }
 
 size_t Mqtt::getIncomingQueueSize() const {
-  std::lock_guard<std::mutex> lock(
-      const_cast<std::mutex&>(mqtt.incoming_queue_mutex_));
-  return mqtt.incoming_queue_.size();
+  std::lock_guard<std::mutex> lock(incoming_queue_mutex_);
+  return incoming_queue_.size();
 }
 
 size_t Mqtt::getOutgoingQueueSize() const {
-  std::lock_guard<std::mutex> lock(
-      const_cast<std::mutex&>(mqtt.outgoing_queue_mutex_));
-  return mqtt.outgoing_queue_.size();
+  std::lock_guard<std::mutex> lock(outgoing_queue_mutex_);
+  return outgoing_queue_.size();
 }
 
 void Mqtt::doLoop() {
@@ -215,29 +227,44 @@ void Mqtt::doLoop() {
 
 void Mqtt::taskFunc(void* arg) {
   Mqtt* self = static_cast<Mqtt*>(arg);
-  for (;;) {
-    if (self->enabled_ && self->connected_) {
-      uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
-      if (currentMillis >
-          self->last_status_publish_ + self->status_publish_interval_ms_) {
-        self->last_status_publish_ = currentMillis;
-        if (self->status_provider_) {
-          const std::string payload = self->status_provider_();
-          self->publish("state", 0, false, payload.c_str());
-        }
+  uint8_t tele_phase = 0;
 
-        if (self->connected_) {
-          // Post eBUS library internal status periodically
-          const std::string libResources =
-              getEbusController().getSystemResourcesJson();
-          if (!libResources.empty() && libResources != "{}") {
-            self->publish("resources/lib", 0, false, libResources.c_str());
+  for (;;) {
+    if (self->enabled_) {
+      uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
+      if (self->connected_ &&
+          currentMillis >
+              self->last_status_publish_ + self->status_publish_interval_ms_) {
+        self->last_status_publish_ = currentMillis;
+
+        // Telemetry Rotation: Cycle through different status payloads to spread
+        // out heap usage and network traffic, preventing congestion on weak
+        // links.
+        switch (tele_phase) {
+          case 0:  // Phase 1: Basic App State
+            if (self->status_provider_) {
+              const std::string payload = self->status_provider_();
+              self->publish("state", 0, false, payload.c_str());
+            }
+            tele_phase = 1;
+            break;
+
+          case 1: {  // Phase 2: App Resources (Thread stacks and Queue depths)
+            char* appRes = getAppResourcesJson();
+            self->publish("resources/app", 0, false, appRes);
+            cJSON_free(appRes);
+            tele_phase = 2;
+            break;
           }
-          // Post App resources periodically
-          self->publish("resources/app", 0, false, getAppResourcesJson());
-          char* appResourcesJson = getAppResourcesJson();
-          self->publish("resources/app", 0, false, appResourcesJson);
-          cJSON_free(appResourcesJson);  // Free the allocated string
+
+          case 2: {  // Phase 3: Library Resources (Internal protocol metrics)
+            std::string libRes = getEbusController().getSystemResourcesJson();
+            if (!libRes.empty() && libRes != "{}") {
+              self->publish("resources/lib", 0, false, libRes.c_str());
+            }
+            tele_phase = 0;
+            break;
+          }
         }
       }
       self->doLoop();
@@ -259,8 +286,8 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       self->connected_ = true;
       esp_mqtt_client_subscribe(self->client_, self->request_topic_.c_str(), 0);
 
-      mqtt.publish(mqtt.will_topic_.c_str(), 0, true,
-                   "{ \"value\": \"online\" }", false);
+      self->publish(self->will_topic_.c_str(), 0, true,
+                    "{ \"value\": \"online\" }", false);
 
       if (mqttha.isEnabled()) mqttha.publishDeviceInfo();
     } break;
@@ -277,11 +304,12 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
     case MQTT_EVENT_DATA: {
       logger.debug("MQTT data received");
 
-      std::string incoming(event->data, event->data + event->data_len);
-      cJSON* doc = cJSON_Parse(incoming.c_str());
+      // Memory optimization: Parse directly from event buffer without creating
+      // a temporary std::string
+      cJSON* doc = cJSON_ParseWithLength(event->data, event->data_len);
       if (!cJSON_IsObject(doc)) {
-        mqtt.publish("response", 0, false,
-                     errorPayload("invalid json payload").c_str());
+        self->publish("response", 0, false,
+                      errorPayload("invalid json payload").c_str());
         if (doc) cJSON_Delete(doc);
         return;
       }
@@ -292,13 +320,12 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
               ? idNode->valuestring
               : "";
 
-      auto it = mqtt.command_handlers_.find(id);
-      if (it != mqtt.command_handlers_.end()) {
+      auto it = self->command_handlers_.find(id);
+      if (it != self->command_handlers_.end()) {
         it->second(doc);
       } else {
-        // Unknown command error handling
-        mqtt.publish("response", 0, false,
-                     errorPayload("command '" + id + "' not found").c_str());
+        self->publish("response", 0, false,
+                      errorPayload("command '" + id + "' not found").c_str());
       }
 
       cJSON_Delete(doc);
@@ -309,8 +336,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       logger.error("MQTT Error occured");
     } break;
     default: {
-      logger.warn(std::string("Unhandled event id: ") +
-                  std::to_string(event->event_id));
+      logger.warn("MQTT: Unhandled event " + std::to_string(event_id));
     } break;
   }
 }
@@ -341,13 +367,13 @@ void Mqtt::handleRemove(const cJSON* doc) {
       getStringArray(const_cast<cJSON*>(doc), "keys");
 
   {
-    std::lock_guard<std::mutex> lock(incoming_queue_mutex_);
+    std::lock_guard<std::mutex> lock(mqtt.incoming_queue_mutex_);
     if (!keys.empty()) {
       for (const std::string& key : keys)
-        incoming_queue_.push(IncomingAction(key));
+        mqtt.incoming_queue_.push(IncomingAction(key));
     } else {
       for (const Command* command : store.getCommands())
-        incoming_queue_.push(IncomingAction(command->getKey()));
+        mqtt.incoming_queue_.push(IncomingAction(command->getKey()));
     }
   }
 }

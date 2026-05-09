@@ -749,7 +749,15 @@ void SetupHttpHandlers() {
   config.server_port = 80;
   config.uri_match_fn = httpd_uri_match_wildcard;
   config.max_uri_handlers = 64;
-  config.stack_size = 8192;
+  // Memory optimization: 4KB stack is sufficient for this server
+  config.stack_size = 4096;
+  // Resilience: Enable LRU purge to reclaim sockets from stalled clients
+  config.lru_purge_enable = true;
+  // Reduce socket count to conserve pbufs/heap on weak links (RSSI -86)
+  config.max_open_sockets = 4;
+  // Give the networking stack more time to recover from packet loss
+  config.recv_wait_timeout = 10;
+  config.send_wait_timeout = 10;
 
   if (httpd_start(&configServer, &config) != ESP_OK) {
     logger.error("Failed to start HTTP server");

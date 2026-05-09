@@ -48,9 +48,9 @@ TaskHandle_t socketLoggerTaskHandle = nullptr;
 void logOpenSockets() {
   int detectedCount = 0;
   int listedCount = 0;
-  std::string sockets;
 
-  for (int fd = 0; fd < 256; ++fd) {
+  // Optimization: Range 64 is usually sufficient for ESP-IDF socket descriptors
+  for (int fd = 0; fd < 64; ++fd) {
     int socketType = 0;
     socklen_t socketTypeLen = sizeof(socketType);
     if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &socketType, &socketTypeLen) != 0) {
@@ -60,43 +60,39 @@ void logOpenSockets() {
 
     sockaddr_in local{}, peer{};
     socklen_t len = sizeof(local);
-    if (getsockname(fd, reinterpret_cast<sockaddr*>(&local), &len) != 0) {
-      std::string typeStr = (socketType == SOCK_STREAM)  ? "TCP"
-                            : (socketType == SOCK_DGRAM) ? "UDP"
-                                                         : "?";
-      if (!sockets.empty()) sockets += "; ";
-      sockets += "fd=" + std::to_string(fd) + "/" + typeStr +
-                 "/local=?/getsockname_errno=" + std::to_string(errno);
-      continue;
-    }
-
     std::string typeStr = (socketType == SOCK_STREAM)  ? "TCP"
                           : (socketType == SOCK_DGRAM) ? "UDP"
                                                        : "?";
-    std::string info = "fd=" + std::to_string(fd) + "/" + typeStr +
-                       "/local=" + std::string(inet_ntoa(local.sin_addr)) +
-                       ":" + std::to_string(ntohs(local.sin_port));
+
+    std::string info = "fd=" + std::to_string(fd) + "/" + typeStr;
+
+    if (getsockname(fd, reinterpret_cast<sockaddr*>(&local), &len) == 0) {
+      info += "/local=" + std::string(inet_ntoa(local.sin_addr)) + ":" +
+              std::to_string(ntohs(local.sin_port));
+    } else {
+      info += "/local=?/getsockname_errno=" + std::to_string(errno);
+    }
 
     if (getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &len) == 0) {
       info += "/peer=" + std::string(inet_ntoa(peer.sin_addr)) + ":" +
               std::to_string(ntohs(peer.sin_port));
     }
 
-    if (!sockets.empty()) sockets += "; ";
-    sockets += info;
+    logger.debug("[socket] " + info);
     ++listedCount;
   }
 
   logger.debug("[sockets] detected=" + std::to_string(detectedCount) +
                " max=" + std::to_string(CONFIG_LWIP_MAX_SOCKETS) +
-               " listed=" + std::to_string(listedCount) + " [" + sockets + "]");
+               " listed=" + std::to_string(listedCount));
 }
 
 void socketLoggerTaskEntry(void* arg) {
   (void)arg;
   while (true) {
-    logOpenSockets();
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    // Disabled by default to save heap and CPU cycles
+    // logOpenSockets();
+    vTaskDelay(pdMS_TO_TICKS(60000));
   }
 }
 
@@ -145,7 +141,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   setStatusLedMode(StatusLedMode::SlowBlink);
 
   if (socketLoggerTaskHandle == nullptr) {
-    xTaskCreate(socketLoggerTaskEntry, "socket_logger_task", 1024, nullptr, 1,
+    xTaskCreate(socketLoggerTaskEntry, "socket_logger_task", 2048, nullptr, 1,
                 &socketLoggerTaskHandle);
   }
 
@@ -434,7 +430,7 @@ void WifiNetworkManager::initStatusLed() {
   gpio_config(&config);
   gpio_set_level(static_cast<gpio_num_t>(statusLedPin_), 0);
   if (statusLedTaskHandle_ == nullptr) {
-    xTaskCreate(statusLedTaskEntry, "status_led_task", 2048, nullptr, 1,
+    xTaskCreate(statusLedTaskEntry, "status_led_task", 1024, nullptr, 1,
                 &statusLedTaskHandle_);
   }
 }

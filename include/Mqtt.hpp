@@ -124,12 +124,12 @@ class Mqtt {
   bool connected_ = false;
 
   std::queue<IncomingAction> incoming_queue_;
-  std::mutex incoming_queue_mutex_;
+  mutable std::mutex incoming_queue_mutex_;
   uint32_t last_incoming_ = 0;
   uint32_t incoming_interval_ = 25;  // ms
 
   std::queue<OutgoingAction> outgoing_queue_;
-  std::mutex outgoing_queue_mutex_;
+  mutable std::mutex outgoing_queue_mutex_;
   uint32_t last_outgoing_ = 0;
   uint32_t outgoing_interval_ = 25;  // ms
 
