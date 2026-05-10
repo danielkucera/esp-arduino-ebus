@@ -275,11 +275,13 @@ char* getAppResourcesJson() {
   cJSON* root = cJSON_CreateObject();
 
   cJSON* threads = cJSON_AddObjectToObject(root, "threads");
+#if defined(EBUS_INTERNAL)
   addThreadInfo(threads, "mqtt", mqtt.getTaskHandle(), 3072);
   addThreadInfo(threads, "cron", cron.getTaskHandle(), 2048);
   addThreadInfo(threads, "logger", logger.getTaskHandle(), 2048);
   addThreadInfo(threads, "client_acceptor", client_acceptor.getTaskHandle(),
                 2048);
+#endif
   addThreadInfo(threads, "dns", captiveDnsServer.getTaskHandle(), 2048);
   addThreadInfo(threads, "espota", espOtaManager.getTaskHandle(), 8192);
   addThreadInfo(threads, "status_led",
@@ -288,8 +290,10 @@ char* getAppResourcesJson() {
                 WifiNetworkManager::getSocketLoggerTaskHandle(), 2048);
 
   cJSON* queues = cJSON_AddObjectToObject(root, "queues");
+#if defined(EBUS_INTERNAL)
   cJSON_AddNumberToObject(queues, "mqtt_in", mqtt.getIncomingQueueSize());
   cJSON_AddNumberToObject(queues, "mqtt_out", mqtt.getOutgoingQueueSize());
+#endif
   cJSON_AddNumberToObject(queues, "logger", logger.getQueueSize());
 
   char* payload = cJSON_PrintUnformatted(root);
@@ -534,7 +538,7 @@ extern "C" void app_main(void) {
   DebugSer.setDebugOutput(true);
 
   logger.info("Starting esp-ebus adapter version " AUTO_VERSION);
-  
+
 #if defined(EBUS_INTERNAL)
   // Connect library logger to app logger
   ebus::Controller::setLogSink(
