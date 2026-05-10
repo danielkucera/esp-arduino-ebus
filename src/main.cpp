@@ -535,6 +535,24 @@ extern "C" void app_main(void) {
 
   logger.info("Starting esp-ebus adapter version " AUTO_VERSION);
 
+  // Connect library logger to app logger
+  ebus::Controller::setLogSink(
+      [](ebus::LogLevel level, const std::string& msg) {
+        switch (level) {
+          case ebus::LogLevel::error:
+            logger.error("eBUS-Lib: " + msg);
+            break;
+          case ebus::LogLevel::info:
+            logger.info("eBUS-Lib: " + msg);
+            break;
+          case ebus::LogLevel::debug:
+            logger.debug("eBUS-Lib: " + msg);
+            break;
+          default:
+            break;
+        }
+      });
+
   check_reset();
 
   reset_code = rtc_get_reset_reason(0);
@@ -651,8 +669,11 @@ extern "C" void app_main(void) {
   // Logging
   getEbusConfig().runtime.diagnostics.level =
       static_cast<ebus::LogLevel>(configManager.readInt("logLevel", 1));
-  getEbusConfig().runtime.diagnostics.log_size =
-      configManager.readInt("logSize", 10);
+  int log_size = configManager.readInt("logSize", 5);
+#if defined(EBUS_LOG_HISTORY_SIZE)
+  if (log_size > EBUS_LOG_HISTORY_SIZE) log_size = EBUS_LOG_HISTORY_SIZE;
+#endif
+  getEbusConfig().runtime.diagnostics.log_size = log_size;
 
   // Network
   // ebusConfig.runtime.network.session_timeout_ms =

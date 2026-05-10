@@ -7,6 +7,10 @@
 
 #define MAX_WIFI_CLIENTS 4
 
+/* 
+ * Hardware-fixed pins on your platine. 
+ * Note: These conflict with the default UART0 console and RESET_PIN flag.
+ */
 #define UART_TX 20
 #define UART_RX 21
 #if !defined(EBUS_INTERNAL)
