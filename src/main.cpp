@@ -534,7 +534,8 @@ extern "C" void app_main(void) {
   DebugSer.setDebugOutput(true);
 
   logger.info("Starting esp-ebus adapter version " AUTO_VERSION);
-
+  
+#if defined(EBUS_INTERNAL)
   // Connect library logger to app logger
   ebus::Controller::setLogSink(
       [](ebus::LogLevel level, const std::string& msg) {
@@ -552,6 +553,7 @@ extern "C" void app_main(void) {
             break;
         }
       });
+#endif
 
   check_reset();
 
