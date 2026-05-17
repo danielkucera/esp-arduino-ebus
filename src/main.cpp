@@ -675,7 +675,7 @@ extern "C" void app_main(void) {
   // Device
   runtimeConfig.device.scan_on_startup = true;
   runtimeConfig.device.initial_delay_s = 5;
-  runtimeConfig.device.startup_interval_s = 60;
+  runtimeConfig.device.startup_interval_s = 25;
   runtimeConfig.device.max_startup_scans = 5;
 
   // Scheduler
@@ -752,7 +752,7 @@ extern "C" void app_main(void) {
 
   // Optimized callbacks: Avoid heap-heavy JSON work inside library threads
   getEbusController().setTelegramCallback([](const ebus::TelegramInfo& info) {
-    std::string msg = "" + ebus::toString(info.master_view);
+    std::string msg = ebus::toString(info.master_view);
     if (!info.slave_view.empty())
       msg += " / " + ebus::toString(info.slave_view);
 
@@ -762,10 +762,11 @@ extern "C" void app_main(void) {
   });
 
   getEbusController().setErrorCallback([](const ebus::ErrorInfo& info) {
-    std::string msg = "" + ebus::toString(info.master_view);
+    std::string msg = ebus::toString(info.master_view);
     if (!info.slave_view.empty())
-      msg += " / " + ebus::toString(info.slave_view) + " error: ";
+      msg += " / " + ebus::toString(info.slave_view);
 
+    msg += " ";
     msg += ebus::toString(info.protocol_error);
 
     logger.error(msg, false, info.session_id, info.poll_id);
@@ -778,14 +779,63 @@ extern "C" void app_main(void) {
   // This fires a broadcast message every 10 seconds.
   xTaskCreate(
       [](void*) {
-        getEbusController().getVirtualBus().addResponse(
+        // Identification (Service 07h 04h)
+        getEbusController().getVirtualBus().addSlaveReaction(
             0x01,        // Source of the master request (our controller)
             "15070400",  // Master payload: request ID from 0x15
-            "0ab54d4f434b0001020304"  // Slave response: mock ID data
+            "0ab54d4f434b0001020304",  // Slave response: mock ID data
+            0,  // 0 for infinite, -1 for disabled, > 0 finite.
+            0   // Response delay in ms
+        );
+
+        // Vaillant identification (Service B5h 09h 24h)
+        getEbusController().getVirtualBus().addSlaveReaction(
+            0x01,                    // Source of the master request
+            "15b5090124",            // Master payload: request ID from 0x15
+            "09003231313230363030",  // Slave response: mock ID data
+            0,  // 0 for infinite, -1 for disabled, > 0 finite.
+            0   // Response delay in ms
+        );
+
+        // Vaillant identification (Service B5h 09h 25h)
+        getEbusController().getVirtualBus().addSlaveReaction(
+            0x01,                    // Source of the master request
+            "15b5090125",            // Master payload: request ID from 0x15
+            "09323031303137383030",  // Slave response: mock ID data
+            0,  // 0 for infinite, -1 for disabled, > 0 finite.
+            0   // Response delay in ms
+        );
+
+        // Vaillant identification (Service B5h 09h 26h)
+        getEbusController().getVirtualBus().addSlaveReaction(
+            0x01,                    // Source of the master request
+            "15b5090126",            // Master payload: request ID from 0x15
+            "09393037303035363036",  // Slave response: mock ID data
+            0,  // 0 for infinite, -1 for disabled, > 0 finite.
+            0   // Response delay in ms
+        );
+
+        // Vaillant identification (Service B5h 09h 27h)
+        getEbusController().getVirtualBus().addSlaveReaction(
+            0x01,                    // Source of the master request
+            "15b5090127",            // Master payload: request ID from 0x15
+            "094e3600000000000000",  // Slave response: mock ID data
+            0,  // 0 for infinite, -1 for disabled, > 0 finite.
+            0   // Response delay in ms
+        );
+
+        // Example reaction to a master request for brine/outlet temperature
+        // (Service B5h 09h 03h 0Dh 08h 00h)
+        getEbusController().getVirtualBus().addSlaveReaction(
+            0x01,              // Source of the master request
+            "15b509030d0800",  // Master payload: request ID from 0x15
+            "039e0100",  // Slave response: 25.88 °C encoded as 0x9e01 (DATA2C)
+            0,           // 0 for infinite, -1 for disabled, > 0 finite.
+            0            // Response delay in ms
         );
 
         for (;;) {
-          vTaskDelay(pdMS_TO_TICKS(10000));
+          vTaskDelay(pdMS_TO_TICKS(17000));
           if (getEbusController().isRunning()) {
             // Enqueue a broadcast message every 5 seconds.
             // Example: Broadcasting of a temperature of 9.25°C
