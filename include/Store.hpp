@@ -5,6 +5,7 @@
 
 #include <ebus.hpp>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -41,7 +42,7 @@ class Store {
 
   int64_t loadCommands();
   int64_t saveCommands() const;
-  static int64_t wipeCommands();
+  int64_t wipeCommands();
 
   const std::string getCommandsJson() const;
 
@@ -64,6 +65,7 @@ class Store {
 
  private:
   // Single unified map for all commands, indexed by key
+  mutable std::recursive_mutex mutex_;
   std::unordered_map<std::string, Command> commands_;
 
   DataUpdatedCallback data_updated_callback_ = nullptr;

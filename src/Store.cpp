@@ -75,6 +75,7 @@ void Store::setCommandRemovedCallback(CommandChangedCallback callback) {
 }
 
 void Store::insertCommand(const Command& command) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   // Insert or update in commands map
   auto it = commands_.find(command.getKey());
   if (it != commands_.end()) {
@@ -87,6 +88,7 @@ void Store::insertCommand(const Command& command) {
 }
 
 void Store::removeCommand(const std::string& key) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   auto it = commands_.find(key);
   if (it != commands_.end()) {
     if (command_removed_callback_) command_removed_callback_(&it->second);
@@ -95,6 +97,7 @@ void Store::removeCommand(const std::string& key) {
 }
 
 Command* Store::findCommand(const std::string& key) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   auto it = commands_.find(key);
   if (it != commands_.end())
     return &(it->second);
@@ -103,6 +106,7 @@ Command* Store::findCommand(const std::string& key) {
 }
 
 std::vector<Command*> Store::findAllMatchingCommands(ebus::ByteView master) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<Command*> result;
   for (auto& kv : commands_) {
     Command* cmd = &kv.second;
@@ -149,6 +153,7 @@ int64_t Store::loadCommands() {
 }
 
 int64_t Store::saveCommands() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (!ensureLittlefsMounted()) return -1;
 
   std::string payload = serializeCommands();
@@ -168,6 +173,8 @@ int64_t Store::saveCommands() const {
 }
 
 int64_t Store::wipeCommands() {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  commands_.clear();
   if (!ensureLittlefsMounted()) return -1;
 
   struct stat fileStat{};
@@ -189,6 +196,7 @@ int64_t Store::wipeCommands() {
 }
 
 const std::string Store::getCommandsJson() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   cJSON* root = cJSON_CreateArray();
 
   std::vector<std::pair<std::string, Command>> orderedCommands(
@@ -212,12 +220,14 @@ const std::string Store::getCommandsJson() const {
 }
 
 const std::vector<Command*> Store::getCommands() {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<Command*> result;
   for (auto& kv : commands_) result.push_back(&(kv.second));
   return result;
 }
 
 size_t Store::getActiveCommands() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   size_t count = 0;
   for (const auto& kv : commands_) {
     if (kv.second.getActive()) count++;
@@ -226,6 +236,7 @@ size_t Store::getActiveCommands() const {
 }
 
 size_t Store::getPassiveCommands() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   size_t count = 0;
   for (const auto& kv : commands_) {
     if (!kv.second.getActive()) count++;
@@ -234,6 +245,7 @@ size_t Store::getPassiveCommands() const {
 }
 
 bool Store::active() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (const auto& kv : commands_) {
     if (kv.second.getActive()) return true;
   }
@@ -241,6 +253,7 @@ bool Store::active() const {
 }
 
 Command* Store::nextActiveCommand() {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   Command* next = nullptr;
   bool init = false;
   for (auto& kv : commands_) {
@@ -266,6 +279,7 @@ Command* Store::nextActiveCommand() {
 }
 
 std::vector<Command*> Store::findPassiveCommands(ebus::ByteView master) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<Command*> result;
   for (auto& kv : commands_) {
     Command* cmd = &kv.second;
@@ -281,6 +295,7 @@ std::vector<Command*> Store::findPassiveCommands(ebus::ByteView master) {
 std::vector<Command*> Store::updateData(Command* command,
                                         ebus::ByteView master_view,
                                         ebus::ByteView slave_view) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   auto update = [this](Command* cmd, ebus::ByteView master_view,
                        ebus::ByteView slave_view) {
     cmd->setLast((uint32_t)(esp_timer_get_time() / 1000ULL));
@@ -351,6 +366,7 @@ const std::string Store::getValueFullJson(const Command* command) {
 }
 
 const std::string Store::getValuesJson() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
   cJSON* root = cJSON_CreateArray();
 
   std::vector<std::pair<std::string, Command>> orderedCommands(

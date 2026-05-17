@@ -21,7 +21,6 @@
 #include "Logger.hpp"
 
 #if defined(EBUS_INTERNAL)
-
 #include "Cron.hpp"
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
@@ -44,10 +43,6 @@
 #include "esp_sntp.h"
 #include "http.hpp"
 
-#if defined(EBUS_INTERNAL)
-
-#endif
-
 ConfigManager configManager;
 UpgradeManager upgradeManager;
 EspOtaManager espOtaManager;
@@ -62,6 +57,10 @@ EspOtaManager espOtaManager;
 
 #define DEFAULT_SNTP_SERVER "pool.ntp.org"
 #define DEFAULT_SNTP_TIMEZONE "UTC0"
+
+#if defined(EBUS_SIMULATION)
+TaskHandle_t simTaskHandle = nullptr;
+#endif
 
 char unique_id[7]{};
 
@@ -275,6 +274,9 @@ char* getAppResourcesJson() {
   cJSON* root = cJSON_CreateObject();
 
   cJSON* threads = cJSON_AddObjectToObject(root, "threads");
+#if defined(EBUS_SIMULATION)
+  addThreadInfo(threads, "sim", simTaskHandle, 2048);
+#endif
 #if defined(EBUS_INTERNAL)
   addThreadInfo(threads, "mqtt", mqtt.getTaskHandle(), 3072);
   addThreadInfo(threads, "cron", cron.getTaskHandle(), 2048);
@@ -644,7 +646,98 @@ extern "C" void app_main(void) {
   enableTX();
 
 #if defined(EBUS_INTERNAL)
-  // TODO should we store EbusConfig as json in NVS ?
+
+#if defined(EBUS_SIMULATION)
+  logger.info("Running in eBUS simulation mode");
+
+  // RuntimeConfig
+  ebus::RuntimeConfig runtimeConfig{};
+  runtimeConfig.address = 0x01;
+  runtimeConfig.lock_counter = 3;
+  runtimeConfig.system_inquiry = false;
+  runtimeConfig.system_response = false;
+
+  // Bus
+  runtimeConfig.bus.window_us = 4300;
+  runtimeConfig.bus.offset_us = 80;
+  runtimeConfig.bus.watchdog_timeout_ms = 250;
+  runtimeConfig.bus.syn_gen = true;
+
+  // Diagnostics
+  runtimeConfig.diagnostics.level = ebus::LogLevel::debug;
+  runtimeConfig.diagnostics.log_size = 5;
+
+  // Network
+  runtimeConfig.network.session_timeout_ms = 500;
+  runtimeConfig.network.transmit_timeout_ms = 250;
+  runtimeConfig.network.outbound_buffer_size = 1024;  // Conserve heap on C3
+
+  // Device
+  runtimeConfig.device.scan_on_startup = true;
+  runtimeConfig.device.initial_delay_s = 5;
+  runtimeConfig.device.startup_interval_s = 60;
+  runtimeConfig.device.max_startup_scans = 5;
+
+  // Scheduler
+  runtimeConfig.scheduler.max_send_attempts = 1;
+  runtimeConfig.scheduler.base_backoff_ms = 100;
+  runtimeConfig.scheduler.fsm_timeout_ms = 1000;
+  runtimeConfig.scheduler.total_timeout_ms = 2000;
+
+#else
+  logger.info("Running in normal eBUS mode");
+
+  // General
+  ebus::RuntimeConfig runtimeConfig{};
+  runtimeConfig.address = uint8_t(std::strtoul(
+      configManager.readString("ebusAddress", "ff").c_str(), nullptr, 16));
+  runtimeConfig.lock_counter = configManager.readInt("lockCounter", 3);
+  runtimeConfig.system_inquiry = configManager.readBool("systemInquiry");
+  runtimeConfig.system_response = configManager.readBool("systemResponse");
+
+  // Bus
+  runtimeConfig.bus.window_us = configManager.readInt("windowUs", 4300);
+  runtimeConfig.bus.offset_us = configManager.readInt("offsetUs", 80);
+  runtimeConfig.bus.watchdog_timeout_ms =
+      configManager.readInt("watchdogTimeoutMs", 250);
+  runtimeConfig.bus.syn_gen = configManager.readBool("synGen", true);
+
+  // Logging
+  runtimeConfig.diagnostics.level =
+      static_cast<ebus::LogLevel>(configManager.readInt("logLevel", 1));
+  int log_size = configManager.readInt("logSize", 5);
+#if defined(EBUS_LOG_HISTORY_SIZE)
+  if (log_size > EBUS_LOG_HISTORY_SIZE) log_size = EBUS_LOG_HISTORY_SIZE;
+#endif
+  runtimeConfig.diagnostics.log_size = log_size;
+
+  // Network
+  // runtimeConfig.network.session_timeout_ms =
+  //     configManager.readInt("sessionTimeoutMs", 500);
+  // runtimeConfig.network.transmit_timeout_ms =
+  //     configManager.readInt("transmitTimeoutMs", 250);
+  // runtimeConfig.network.outbound_buffer_size =
+  //     configManager.readInt("outboundBufferSize", 4096);
+
+  // Device
+  runtimeConfig.device.scan_on_startup =
+      configManager.readBool("scanOnStart", false);
+  // runtimeConfig.scanner.initial_delay_s =
+  //     configManager.readInt("initialDelayS", 5);
+  // runtimeConfig.scanner.startup_interval_s =
+  //     configManager.readInt("startupIntervalS", 60);
+  // runtimeConfig.scanner.max_startup_scans =
+  //     configManager.readInt("maxStartupScans", 5);
+
+  // Scheduler
+  runtimeConfig.scheduler.max_send_attempts =
+      configManager.readInt("maxSendAttempts", 1);
+  // runtimeConfig.scheduler.base_backoff_ms =
+  //     configManager.readInt("baseBackoffMs", 100);
+  // runtimeConfig.scheduler.fsm_timeout_ms =
+  //     configManager.readInt("fsmTimeoutMs", 1000);
+  // runtimeConfig.scheduler.total_timeout_ms =
+  //     configManager.readInt("totalTimeoutMs", 2000);
 
   // BusConfig
   ebus::BusConfig busConfig = {.uart_port = UART_NUM_1,
@@ -653,93 +746,68 @@ extern "C" void app_main(void) {
                                .timer_group = 1,
                                .timer_idx = 0};
   getEbusConfig().bus = busConfig;
-
-  // General
-  getEbusConfig().runtime.address = uint8_t(std::strtoul(
-      configManager.readString("ownAddress", "ff").c_str(), nullptr, 16));
-  getEbusConfig().runtime.lock_counter =
-      configManager.readInt("lockCounter", 3);
-  getEbusConfig().runtime.system_inquiry =
-      configManager.readBool("systemInquiry");
-  getEbusConfig().runtime.system_response =
-      configManager.readBool("systemResponse");
-
-  // Bus
-  getEbusConfig().runtime.bus.window_us =
-      configManager.readInt("windowUs", 4300);
-  getEbusConfig().runtime.bus.offset_us = configManager.readInt("offsetUs", 80);
-  getEbusConfig().runtime.bus.watchdog_timeout_ms =
-      configManager.readInt("watchdogTimeoutMs", 250);
-  getEbusConfig().runtime.bus.syn_gen = configManager.readBool("synGen", true);
-
-  // Logging
-  getEbusConfig().runtime.diagnostics.level =
-      static_cast<ebus::LogLevel>(configManager.readInt("logLevel", 1));
-  int log_size = configManager.readInt("logSize", 5);
-#if defined(EBUS_LOG_HISTORY_SIZE)
-  if (log_size > EBUS_LOG_HISTORY_SIZE) log_size = EBUS_LOG_HISTORY_SIZE;
 #endif
-  getEbusConfig().runtime.diagnostics.log_size = log_size;
-
-  // Network
-  // ebusConfig.runtime.network.session_timeout_ms =
-  //     configManager.readInt("sessionTimeoutMs", 500);
-  // ebusConfig.runtime.network.transmit_timeout_ms =
-  //     configManager.readInt("transmitTimeoutMs", 250);
-  // ebusConfig.runtime.network.outbound_buffer_size =
-  //     configManager.readInt("outboundBufferSize", 4096);
-
-  // Scanner
-  getEbusConfig().runtime.scanner.scan_on_startup =
-      configManager.readBool("scanOnStart", false);
-  // ebusConfig.runtime.scanner.initial_delay_s =
-  //     configManager.readInt("initialDelayS", 5);
-  // ebusConfig.runtime.scanner.startup_interval_s =
-  //     configManager.readInt("startupIntervalS", 60);
-  // ebusConfig.runtime.scanner.max_startup_scans =
-  //     configManager.readInt("maxStartupScans", 5);
-
-  // Scheduler
-  getEbusConfig().runtime.scheduler.max_send_attempts =
-      configManager.readInt("maxSendAttempts", 1);
-  // ebusConfig.runtime.scheduler.base_backoff_ms =
-  //     configManager.readInt("baseBackoffMs", 100);
-  // ebusConfig.runtime.scheduler.fsm_timeout_ms =
-  //     configManager.readInt("fsmTimeoutMs", 1000);
-  // ebusConfig.runtime.scheduler.total_timeout_ms =
-  //     configManager.readInt("totalTimeoutMs", 2000);
-
+  getEbusConfig().runtime = runtimeConfig;
   configureEbus(getEbusConfig());
 
-  // Setup the TelegramCallback to bridge bus messages to the application store
-  // and UI
+  // Optimized callbacks: Avoid heap-heavy JSON work inside library threads
   getEbusController().setTelegramCallback([](const ebus::TelegramInfo& info) {
-    // Update the store. Passing nullptr for the command tells the store
-    // to find all matching command definitions (both active and passive).
-    // store.updateData(nullptr, info.master_view, info.slave_view);
-    std::string logMessage = info.toJson();
-    logger.debug(logMessage, true, info.session_id, info.poll_id);
+    std::string msg = "" + ebus::toString(info.master_view);
+    if (!info.slave_view.empty())
+      msg += " / " + ebus::toString(info.slave_view);
+
+    logger.info(msg, false, info.session_id, info.poll_id);
+
+    store.updateData(nullptr, info.master_view, info.slave_view);
   });
 
-  // Setup the ErrorCallback to log errors and publish them to MQTT for UI
-  // feedback
   getEbusController().setErrorCallback([](const ebus::ErrorInfo& info) {
-    // Log the error using the application's logger
-    std::string logMessage = info.toJson();
-    if (info.level == ebus::LogLevel::error) {
-      logger.error(logMessage, true, info.session_id, info.poll_id);
-    } else {
-      logger.warn(logMessage, true, info.session_id, info.poll_id);
-    }
-    // Publish the error to MQTT for UI consumption
-    mqtt.publishError(info);
+    std::string msg = "" + ebus::toString(info.master_view);
+    if (!info.slave_view.empty())
+      msg += " / " + ebus::toString(info.slave_view) + " error: ";
+
+    msg += ebus::toString(info.protocol_error);
+
+    logger.error(msg, false, info.session_id, info.poll_id);
   });
 
   startEbus();  // This will start the ebus controller
 
+#if defined(EBUS_SIMULATION)
+  // Periodic injection via VirtualBus.
+  // This fires a broadcast message every 10 seconds.
+  xTaskCreate(
+      [](void*) {
+        getEbusController().getVirtualBus().addResponse(
+            0x01,        // Source of the master request (our controller)
+            "15070400",  // Master payload: request ID from 0x15
+            "0ab54d4f434b0001020304"  // Slave response: mock ID data
+        );
+
+        for (;;) {
+          vTaskDelay(pdMS_TO_TICKS(10000));
+          if (getEbusController().isRunning()) {
+            // Enqueue a broadcast message every 5 seconds.
+            // Example: Broadcasting of a temperature of 9.25°C
+            // * Master 0x10 -> Broadcast (0xfe),
+            // * Vaillant Service (0xb5 0x16 0x03 0x01),
+            // * Data: 9.25°C - DATA2B -> 0x40, 0x09
+            const ebus::Sequence broadcastMsg = {0xfe, 0xb5, 0x16, 0x03,
+                                                 0x01, 0x40, 0x09};
+            getEbusController().getVirtualBus().injectMasterMessage(
+                0x10, broadcastMsg);
+            // logger.info(
+            //     "Simulation: Periodic broadcast injected via VirtualBus.");
+          }
+        }
+      },
+      "sim", 1536, nullptr, 1, &simTaskHandle);
+#endif
+
   client_acceptor.start();
 
   store.setDataUpdatedCallback(Mqtt::publishValue);
+
   store.setDataUpdatedLogCallback(
       [](const std::string& message) { logger.debug(message); });
 
