@@ -775,8 +775,6 @@ extern "C" void app_main(void) {
   startEbus();  // This will start the ebus controller
 
 #if defined(EBUS_SIMULATION)
-  // Periodic injection via VirtualBus.
-  // This fires a broadcast message every 10 seconds.
   xTaskCreate(
       [](void*) {
         // Identification (Service 07h 04h)
@@ -846,8 +844,6 @@ extern "C" void app_main(void) {
                                                  0x01, 0x40, 0x09};
             getEbusController().getVirtualBus().injectMasterMessage(
                 0x10, broadcastMsg);
-            // logger.info(
-            //     "Simulation: Periodic broadcast injected via VirtualBus.");
           }
         }
       },
