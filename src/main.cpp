@@ -262,18 +262,20 @@ namespace {  // Anonymous namespace for helper functions
 void addThreadInfo(cJSON* parent, const char* name, TaskHandle_t handle,
                    uint32_t stackSize) {
   if (!handle) return;
-  cJSON* obj = cJSON_AddObjectToObject(parent, name);
-  cJSON_AddNumberToObject(obj, "stack_bytes", stackSize);
+  cJSON* obj = cJSON_CreateObject();
+  cJSON_AddStringToObject(obj, "name", name);
+  cJSON_AddNumberToObject(obj, "stack_size", stackSize);
   cJSON_AddNumberToObject(
-      obj, "stack_free_bytes",
+      obj, "stack_free",
       uxTaskGetStackHighWaterMark(handle) * sizeof(StackType_t));
+  cJSON_AddItemToArray(parent, obj);
 }
 }  // namespace
 
 char* getAppResourcesJson() {
   cJSON* root = cJSON_CreateObject();
 
-  cJSON* threads = cJSON_AddObjectToObject(root, "threads");
+  cJSON* threads = cJSON_AddArrayToObject(root, "threads");
 #if defined(EBUS_SIMULATION)
   addThreadInfo(threads, "sim", simTaskHandle, 2048);
 #endif
@@ -291,12 +293,21 @@ char* getAppResourcesJson() {
   addThreadInfo(threads, "socket_logger",
                 WifiNetworkManager::getSocketLoggerTaskHandle(), 2048);
 
-  cJSON* queues = cJSON_AddObjectToObject(root, "queues");
+  cJSON* queues = cJSON_AddArrayToObject(root, "queues");
+  auto addQueue = [&](const char* qname, size_t size) {
+    cJSON* qobj = cJSON_CreateObject();
+    cJSON_AddStringToObject(qobj, "name", qname);
+    cJSON_AddNumberToObject(qobj, "size", size);
+    // App queues don't currently expose capacity, but we align the structure
+    cJSON_AddNullToObject(qobj, "capacity");
+    cJSON_AddItemToArray(queues, qobj);
+  };
+
 #if defined(EBUS_INTERNAL)
-  cJSON_AddNumberToObject(queues, "mqtt_in", mqtt.getIncomingQueueSize());
-  cJSON_AddNumberToObject(queues, "mqtt_out", mqtt.getOutgoingQueueSize());
+  addQueue("mqtt_in", mqtt.getIncomingQueueSize());
+  addQueue("mqtt_out", mqtt.getOutgoingQueueSize());
 #endif
-  cJSON_AddNumberToObject(queues, "logger", logger.getQueueSize());
+  addQueue("logger", logger.getQueueSize());
 
   char* payload = cJSON_PrintUnformatted(root);
   cJSON_Delete(root);
@@ -652,7 +663,7 @@ extern "C" void app_main(void) {
 
   // RuntimeConfig
   ebus::RuntimeConfig runtimeConfig{};
-  runtimeConfig.address = 0x01;
+  runtimeConfig.address = 0x01;  // slave address 0x06
   runtimeConfig.lock_counter = 3;
   runtimeConfig.system_inquiry = false;
   runtimeConfig.system_response = false;
@@ -752,6 +763,8 @@ extern "C" void app_main(void) {
 
   // Optimized callbacks: Avoid heap-heavy JSON work inside library threads
   getEbusController().setTelegramCallback([](const ebus::TelegramInfo& info) {
+    if (info.poll_id > 0) return;  // Ignore polling telegrams for logging
+
     std::string msg = ebus::toString(info.master_view);
     if (!info.slave_view.empty())
       msg += " / " + ebus::toString(info.slave_view);
@@ -775,12 +788,14 @@ extern "C" void app_main(void) {
   startEbus();  // This will start the ebus controller
 
 #if defined(EBUS_SIMULATION)
+  // We mimic a Vaillant device with typical reactions to identification and
+  // data requests for testing. master address: 03h, slave address: 08h
   xTaskCreate(
       [](void*) {
         // Identification (Service 07h 04h)
         getEbusController().getVirtualBus().addSlaveReaction(
             0x01,        // Source of the master request (our controller)
-            "15070400",  // Master payload: request ID from 0x15
+            "08070400",  // Master payload: requested service
             "0ab54d4f434b0001020304",  // Slave response: mock ID data
             0,  // 0 for infinite, -1 for disabled, > 0 finite.
             0   // Response delay in ms
@@ -788,27 +803,27 @@ extern "C" void app_main(void) {
 
         // Vaillant identification (Service B5h 09h 24h)
         getEbusController().getVirtualBus().addSlaveReaction(
-            0x01,                    // Source of the master request
-            "15b5090124",            // Master payload: request ID from 0x15
-            "09003231313230363030",  // Slave response: mock ID data
+            0x01,          // Source of the master request (our controller)
+            "08b5090124",  // Master payload: requested service
+            "09003231313230383030",  // Slave response: mock ID data
             0,  // 0 for infinite, -1 for disabled, > 0 finite.
             0   // Response delay in ms
         );
 
         // Vaillant identification (Service B5h 09h 25h)
         getEbusController().getVirtualBus().addSlaveReaction(
-            0x01,                    // Source of the master request
-            "15b5090125",            // Master payload: request ID from 0x15
-            "09323031303137383030",  // Slave response: mock ID data
+            0x01,          // Source of the master request (our controller)
+            "08b5090125",  // Master payload: requested service
+            "09313030303930373030",  // Slave response: mock ID data
             0,  // 0 for infinite, -1 for disabled, > 0 finite.
             0   // Response delay in ms
         );
 
         // Vaillant identification (Service B5h 09h 26h)
         getEbusController().getVirtualBus().addSlaveReaction(
-            0x01,                    // Source of the master request
-            "15b5090126",            // Master payload: request ID from 0x15
-            "09393037303035363036",  // Slave response: mock ID data
+            0x01,          // Source of the master request (our controller)
+            "08b5090126",  // Master payload: requested service
+            "09303036303035313337",  // Slave response: mock ID data
             0,  // 0 for infinite, -1 for disabled, > 0 finite.
             0   // Response delay in ms
         );
@@ -816,8 +831,8 @@ extern "C" void app_main(void) {
         // Vaillant identification (Service B5h 09h 27h)
         getEbusController().getVirtualBus().addSlaveReaction(
             0x01,                    // Source of the master request
-            "15b5090127",            // Master payload: request ID from 0x15
-            "094e3600000000000000",  // Slave response: mock ID data
+            "08b5090127",            // Master payload: requested service
+            "094e3800000000000000",  // Slave response: mock ID data
             0,  // 0 for infinite, -1 for disabled, > 0 finite.
             0   // Response delay in ms
         );
@@ -826,28 +841,56 @@ extern "C" void app_main(void) {
         // (Service B5h 09h 03h 0Dh 08h 00h)
         getEbusController().getVirtualBus().addSlaveReaction(
             0x01,              // Source of the master request
-            "15b509030d0800",  // Master payload: request ID from 0x15
-            "039e0100",  // Slave response: 25.88 °C encoded as 0x9e01 (DATA2C)
-            0,           // 0 for infinite, -1 for disabled, > 0 finite.
-            0            // Response delay in ms
+            "08b509030d0800",  // Master payload: requested service
+            "039e0100",        // Slave response: 25.88 °C encoded as 0x9e01
+            0,                 // 0 for infinite, -1 for disabled, > 0 finite.
+            0                  // Response delay in ms
         );
 
+        // Example reaction to a master request for brine/pressure
+        // (Service B5h 09h 03h 0Dh 08h 00h)
+        getEbusController().getVirtualBus().addSlaveReaction(
+            0x01,              // Source of the master request
+            "08b509030d1600",  // Master payload: requested service
+            "03170700",        // Slave response: 1.82 bar encoded as 0x1707
+            0,                 // 0 for infinite, -1 for disabled, > 0 finite.
+            0                  // Response delay in ms
+        );
+
+        // Periodic injections to simulate device updates without master
+        // requests
+        uint32_t count17 = 0;
+        uint32_t count25 = 0;
+        TickType_t xLastWakeTime = xTaskGetTickCount();
+        const TickType_t xFrequency = pdMS_TO_TICKS(1000);  // 1 second interval
+
         for (;;) {
-          vTaskDelay(pdMS_TO_TICKS(17000));
+          vTaskDelayUntil(&xLastWakeTime, xFrequency);
+
           if (getEbusController().isRunning()) {
-            // Enqueue a broadcast message every 5 seconds.
-            // Example: Broadcasting of a temperature of 9.25°C
-            // * Master 0x10 -> Broadcast (0xfe),
-            // * Vaillant Service (0xb5 0x16 0x03 0x01),
-            // * Data: 9.25°C - DATA2B -> 0x40, 0x09
-            const ebus::Sequence broadcastMsg = {0xfe, 0xb5, 0x16, 0x03,
-                                                 0x01, 0x40, 0x09};
-            getEbusController().getVirtualBus().injectMasterMessage(
-                0x10, broadcastMsg);
+            if (++count17 >= 17) {
+              count17 = 0;
+              // Example: Broadcasting of an outside temperature of 9.25°C
+              // * Master 0x10 -> Broadcast (0xfe),
+              // * Vaillant Service (0xb5 0x16 0x03 0x01),
+              // * Data: 9.25°C - DATA2B -> 0x40, 0x09
+              getEbusController().getVirtualBus().injectMasterMessage(
+                  0x10, "feb51603014009");
+            }
+
+            if (++count25 >= 25) {
+              count25 = 0;
+              // Example: Broadcasting of a brine inlet temperature of 31.44°C
+              // * Master 0x10 -> Slave (0x08)
+              // * Vaillant Service (0xb5 0x09 0x03 0x29 0x0f 0x00),
+              // * Data: 31.44°C - DATA2C -> 0xf7, 0x01
+              getEbusController().getVirtualBus().injectMasterSlaveMessage(
+                  0x10, "08b50903290f00", "050f00f70100");
+            }
           }
         }
       },
-      "sim", 1536, nullptr, 1, &simTaskHandle);
+      "sim", 2048, nullptr, 1, &simTaskHandle);
 #endif
 
   client_acceptor.start();

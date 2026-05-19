@@ -350,9 +350,13 @@ const std::string Command::isFieldValid(const cJSON* doc,
         return "Invalid type for field: " + field;
       const std::string hexStr = v->valuestring;
       if (!hexStr.empty()) {
-        std::regex hexRegex(R"(^([0-9A-Fa-f]{2})+$)");
-        if (!std::regex_match(hexStr, hexRegex))
-          return "Invalid hex string for field: " + field;
+        if (hexStr.length() % 2 != 0)
+          return "Invalid hex string length: " + field;
+        for (char c : hexStr) {
+          if (!isxdigit((unsigned char)c)) {
+            return "Invalid hex string character for field: " + field;
+          }
+        }
       }
     } break;
     case FT_Bool: {
