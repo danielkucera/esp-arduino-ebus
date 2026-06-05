@@ -277,10 +277,10 @@ char* getAppResourcesJson() {
 
   cJSON* threads = cJSON_AddArrayToObject(root, "threads");
 #if defined(EBUS_SIMULATION)
-  addThreadInfo(threads, "sim", simTaskHandle, 2048);
+  addThreadInfo(threads, "sim", simTaskHandle, 4096);
 #endif
 #if defined(EBUS_INTERNAL)
-  addThreadInfo(threads, "mqtt", mqtt.getTaskHandle(), 3072);
+  addThreadInfo(threads, "mqtt", mqtt.getTaskHandle(), 4096);
   addThreadInfo(threads, "cron", cron.getTaskHandle(), 2048);
   addThreadInfo(threads, "logger", logger.getTaskHandle(), 2048);
   addThreadInfo(threads, "client_acceptor", client_acceptor.getTaskHandle(),
@@ -554,22 +554,21 @@ extern "C" void app_main(void) {
 
 #if defined(EBUS_INTERNAL)
   // Connect library logger to app logger
-  ebus::Controller::setLogSink(
-      [](ebus::LogLevel level, const std::string& msg) {
-        switch (level) {
-          case ebus::LogLevel::error:
-            logger.error("eBUS-Lib: " + msg);
-            break;
-          case ebus::LogLevel::info:
-            logger.info("eBUS-Lib: " + msg);
-            break;
-          case ebus::LogLevel::debug:
-            logger.debug("eBUS-Lib: " + msg);
-            break;
-          default:
-            break;
-        }
-      });
+  ebus::Controller::setLogSink([](ebus::LogLevel level, std::string_view msg) {
+    switch (level) {
+      case ebus::LogLevel::error:
+        logger.error("eBUS-Lib: " + std::string(msg));
+        break;
+      case ebus::LogLevel::info:
+        logger.info("eBUS-Lib: " + std::string(msg));
+        break;
+      case ebus::LogLevel::debug:
+        logger.debug("eBUS-Lib: " + std::string(msg));
+        break;
+      default:
+        break;
+    }
+  });
 #endif
 
   check_reset();
@@ -681,7 +680,7 @@ extern "C" void app_main(void) {
   // Network
   runtimeConfig.network.session_timeout_ms = 500;
   runtimeConfig.network.transmit_timeout_ms = 250;
-  runtimeConfig.network.outbound_buffer_size = 1024;  // Conserve heap on C3
+  runtimeConfig.network.outbound_buffer_size = 2048;
 
   // Device
   runtimeConfig.device.scan_on_startup = true;
@@ -792,8 +791,15 @@ extern "C" void app_main(void) {
   // data requests for testing. master address: 03h, slave address: 08h
   xTaskCreate(
       [](void*) {
+        // Wait for controller to be fully initialized and running
+        while (!getEbusController().isRunning()) {
+          vTaskDelay(pdMS_TO_TICKS(100));
+        }
+
+        auto& vbus = getEbusController().getVirtualBus();
+
         // Identification (Service 07h 04h)
-        getEbusController().getVirtualBus().addSlaveReaction(
+        vbus.addSlaveReaction(
             0x01,        // Source of the master request (our controller)
             "08070400",  // Master payload: requested service
             "0ab54d4f434b0001020304",  // Slave response: mock ID data
@@ -802,7 +808,7 @@ extern "C" void app_main(void) {
         );
 
         // Vaillant identification (Service B5h 09h 24h)
-        getEbusController().getVirtualBus().addSlaveReaction(
+        vbus.addSlaveReaction(
             0x01,          // Source of the master request (our controller)
             "08b5090124",  // Master payload: requested service
             "09003231313230383030",  // Slave response: mock ID data
@@ -811,7 +817,7 @@ extern "C" void app_main(void) {
         );
 
         // Vaillant identification (Service B5h 09h 25h)
-        getEbusController().getVirtualBus().addSlaveReaction(
+        vbus.addSlaveReaction(
             0x01,          // Source of the master request (our controller)
             "08b5090125",  // Master payload: requested service
             "09313030303930373030",  // Slave response: mock ID data
@@ -820,7 +826,7 @@ extern "C" void app_main(void) {
         );
 
         // Vaillant identification (Service B5h 09h 26h)
-        getEbusController().getVirtualBus().addSlaveReaction(
+        vbus.addSlaveReaction(
             0x01,          // Source of the master request (our controller)
             "08b5090126",  // Master payload: requested service
             "09303036303035313337",  // Slave response: mock ID data
@@ -829,7 +835,7 @@ extern "C" void app_main(void) {
         );
 
         // Vaillant identification (Service B5h 09h 27h)
-        getEbusController().getVirtualBus().addSlaveReaction(
+        vbus.addSlaveReaction(
             0x01,                    // Source of the master request
             "08b5090127",            // Master payload: requested service
             "094e3800000000000000",  // Slave response: mock ID data
@@ -839,7 +845,7 @@ extern "C" void app_main(void) {
 
         // Example reaction to a master request for brine/outlet temperature
         // (Service B5h 09h 03h 0Dh 08h 00h)
-        getEbusController().getVirtualBus().addSlaveReaction(
+        vbus.addSlaveReaction(
             0x01,              // Source of the master request
             "08b509030d0800",  // Master payload: requested service
             "039e0100",        // Slave response: 25.88 °C encoded as 0x9e01
@@ -849,7 +855,7 @@ extern "C" void app_main(void) {
 
         // Example reaction to a master request for brine/pressure
         // (Service B5h 09h 03h 0Dh 08h 00h)
-        getEbusController().getVirtualBus().addSlaveReaction(
+        vbus.addSlaveReaction(
             0x01,              // Source of the master request
             "08b509030d1600",  // Master payload: requested service
             "03170700",        // Slave response: 1.82 bar encoded as 0x1707
@@ -874,8 +880,7 @@ extern "C" void app_main(void) {
               // * Master 0x10 -> Broadcast (0xfe),
               // * Vaillant Service (0xb5 0x16 0x03 0x01),
               // * Data: 9.25°C - DATA2B -> 0x40, 0x09
-              getEbusController().getVirtualBus().injectMasterMessage(
-                  0x10, "feb51603014009");
+              vbus.injectMasterMessage(0x10, "feb51603014009");
             }
 
             if (++count25 >= 25) {
@@ -884,13 +889,13 @@ extern "C" void app_main(void) {
               // * Master 0x10 -> Slave (0x08)
               // * Vaillant Service (0xb5 0x09 0x03 0x29 0x0f 0x00),
               // * Data: 31.44°C - DATA2C -> 0xf7, 0x01
-              getEbusController().getVirtualBus().injectMasterSlaveMessage(
-                  0x10, "08b50903290f00", "050f00f70100");
+              vbus.injectMasterSlaveMessage(0x10, "08b50903290f00",
+                                            "050f00f70100");
             }
           }
         }
       },
-      "sim", 2048, nullptr, 1, &simTaskHandle);
+      "sim", 4096, nullptr, 1, &simTaskHandle);
 #endif
 
   client_acceptor.start();

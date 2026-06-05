@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <ebus/detail/json_writer.hpp>
 #include <string>
 #include <vector>
 
@@ -627,16 +628,31 @@ esp_err_t handleDevicesPage(httpd_req_t* req) {
 }
 
 esp_err_t handleDevices(httpd_req_t* req) {
-  std::ostringstream oss;
-  oss << "[";
-  for (size_t i = 0; i < getEbusController().getDeviceInfo().size(); ++i) {
-    if (i > 0) oss << ",";
-    oss << getEbusController().getDeviceInfo()[i].toJson();
-  }
-  oss << "]";
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
 
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          oss.str());
+  ebus::detail::JsonWriter writer([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+
+  writer.startArray();
+  getEbusController().fetchDeviceInfo(
+      [&writer](const ebus::DeviceInfo& device) {
+        if (!writer.isFirst()) writer.write(",");
+        device.toJson(writer);
+      });
+  writer.endArray();
+
+  writer.flush();
+  httpd_resp_send_chunk(req, nullptr, 0);
+  return ESP_OK;
+}
+
+esp_err_t handleMetrics(httpd_req_t* req) {
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  getEbusController().fetchServiceStatus([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
@@ -800,6 +816,7 @@ void SetupHttpHandlers() {
 
   RegisterUri("/devices", HTTP_GET, handleDevicesPage);
   RegisterUri("/api/v1/devices", HTTP_GET, handleDevices);
+  RegisterUri("/api/v1/metrics", HTTP_GET, handleMetrics);
   RegisterUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
   RegisterUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
 

@@ -261,9 +261,20 @@ MqttHA::Component MqttHA::createNumber(const Command* command) const {
   c.fields["command_topic"] = commandTopic;
   c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" +
                                  command->getKey() + "\",\"value\":{{value}}}";
-  c.fields["min"] = std::to_string(command->getMin());
-  c.fields["max"] = std::to_string(command->getMax());
-  c.fields["step"] = std::to_string(command->getHAStep());
+  char buffer[64];
+  using namespace ebus::detail;
+  c.fields["min"] =
+      ebus::formatFloat(command->getMin(), 2, buffer, sizeof(buffer),
+                        FormattingLimits::float_lower_threshold,
+                        FormattingLimits::float_upper_threshold);
+  c.fields["max"] =
+      ebus::formatFloat(command->getMax(), 2, buffer, sizeof(buffer),
+                        FormattingLimits::float_lower_threshold,
+                        FormattingLimits::float_upper_threshold);
+  c.fields["step"] =
+      ebus::formatFloat(command->getHAStep(), 2, buffer, sizeof(buffer),
+                        FormattingLimits::float_lower_threshold,
+                        FormattingLimits::float_upper_threshold);
   c.fields["mode"] = command->getHAMode();
   return c;
 }

@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ebus/detail/protocol_limits.hpp>
 
 Store store;
 
@@ -48,11 +49,10 @@ std::string printJson(cJSON* node, const char* fallback) {
 
 std::string formatDouble(double value, int precision) {
   char buffer[64];
-  std::snprintf(buffer, sizeof(buffer), "%.*f", precision, value);
-  std::string s(buffer);
-  while (!s.empty() && s.back() == '0') s.pop_back();
-  if (!s.empty() && s.back() == '.') s.pop_back();
-  return s.empty() ? "0" : s;
+  return ebus::formatFloat(
+      value, precision, buffer, sizeof(buffer),
+      ebus::detail::FormattingLimits::float_lower_threshold,
+      ebus::detail::FormattingLimits::float_upper_threshold);
 }
 }  // namespace
 

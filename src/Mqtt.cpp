@@ -66,7 +66,7 @@ void Mqtt::change() {
 
 void Mqtt::startTask() {
   if (task_handle_ != nullptr) return;
-  xTaskCreate(&Mqtt::taskFunc, "mqtt_loop", 3072, this, 1, &task_handle_);
+  xTaskCreate(&Mqtt::taskFunc, "mqtt_loop", 4096, this, 1, &task_handle_); // Increased stack size to 4096 words (16KB)
 }
 
 void Mqtt::stopTask() {
@@ -190,7 +190,7 @@ void Mqtt::publishError(const ebus::ErrorInfo& info) {
   if (!mqtt.enabled_) return;
 
   // Convert ebus::ErrorInfo to JSON string using the library's utility
-  std::string payload = info.toJson();
+  std::string payload = ebus::toJson(info, 512);
   mqtt.publish("errors", 0, false, payload.c_str());
 }
 
@@ -258,10 +258,10 @@ void Mqtt::taskFunc(void* arg) {
           }
 
           case 2: {  // Phase 3: Library Resources (Internal protocol metrics)
-            std::string libRes = getEbusController().getSystemResourcesJson();
-            if (!libRes.empty() && libRes != "{}") {
+            getEbusController().fetchSystemResources([self](const ebus::SystemResources& res) {
+              std::string libRes = ebus::toJson(res, 2048);
               self->publish("resources/lib", 0, false, libRes.c_str());
-            }
+            });
             tele_phase = 0;
             break;
           }
@@ -440,9 +440,9 @@ void Mqtt::handleScan(const cJSON* doc) {
 }
 
 void Mqtt::handleDevices(const cJSON* doc) {
-  for (const auto& device : getEbusController().getDeviceInfo()) {
+  getEbusController().fetchDeviceInfo([](const ebus::DeviceInfo& device) {
     enqueueOutgoing(OutgoingAction(device));
-  }
+  });
 }
 
 void Mqtt::handleSend(const cJSON* doc) {
@@ -609,7 +609,7 @@ void Mqtt::publishCommand(const Command* command) {
 
 void Mqtt::publishDevice(const ebus::DeviceInfo& device) {
   std::string topic = "devices/" + ebus::toString(device.slave_address);
-  std::string payload = device.toJson();
+  std::string payload = ebus::toJson(device, 256);
   if (client_ != nullptr) {
     publish(topic.c_str(), 0, false, payload.c_str());
   }
