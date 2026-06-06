@@ -1,7 +1,4 @@
 #include "DNSServer.h"
-#include "Logger.hpp"
-
-#include <cstring>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -9,6 +6,10 @@
 #include <lwip/sockets.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+#include <cstring>
+
+#include "Logger.hpp"
 
 namespace {
 constexpr size_t kDnsHeaderSize = 12;
@@ -42,7 +43,7 @@ bool DNSServer::start(uint16_t port, const char* domainName,
   fcntl(socketFd_, F_SETFL, flags | O_NONBLOCK);
 
   if (taskHandle_ == nullptr) {
-    xTaskCreate(taskEntry, "dns_task", 2048, this, 1, &taskHandle_);
+    xTaskCreate(taskEntry, "dns", 2048, this, 1, &taskHandle_);
   }
 
   return true;
@@ -73,7 +74,8 @@ void DNSServer::processNextRequest() {
   int received = recvfrom(socketFd_, buffer, sizeof(buffer), 0,
                           reinterpret_cast<sockaddr*>(&client), &clientLen);
   if (received <= 0) return;
-  logger.debug("Received DNS request from " + std::string(inet_ntoa(client.sin_addr)));
+  logger.debug("Received DNS request from " +
+               std::string(inet_ntoa(client.sin_addr)));
   if (static_cast<size_t>(received) < kDnsHeaderSize) return;
 
   if (buffer[2] & 0x80) return;  // response packet

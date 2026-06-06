@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <ebus/types.hpp>
 #include <unordered_map>
 
 class Cron {
@@ -18,9 +19,9 @@ class Cron {
   void stop();
 
   int64_t loadRules();
-  int64_t replaceRules(const cJSON* doc);
+  int64_t replaceRules(std::string_view payload);
 
-  const std::string getRulesJson() const;
+  void fetchRulesJson(const ebus::JsonChunkVisitor& visitor) const;
 
   static const std::string evaluate(const cJSON* doc);
 

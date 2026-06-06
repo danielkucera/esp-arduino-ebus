@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <ebus/types.hpp>
 
 #include "UartPort.hpp"
 
@@ -19,5 +20,5 @@ int DEBUG_LOG_IMPL(const char* format, ...);
 // #define DEBUG_LOG DEBUG_LOG_IMPL
 
 void restart();
-const std::string getStatusJson();
-char* getAppResourcesJson();
+void fetchStatusJson(const ebus::JsonChunkVisitor& visitor);
+void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor);

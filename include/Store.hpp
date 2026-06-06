@@ -1,8 +1,6 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <cJSON.h>
-
 #include <ebus.hpp>
 #include <functional>
 #include <mutex>
@@ -18,10 +16,8 @@
 // available. Permanently stored commands are automatically loaded when the
 // device is restarted.
 
-using DataUpdatedCallback =
-    std::function<void(const std::string& name, const std::string& valueJson)>;
-
-using DataUpdatedLogCallback = std::function<void(const std::string& message)>;
+using DataUpdatedCallback = std::function<void(const std::string& key)>;
+using DataUpdatedLogCallback = std::function<void(const std::string& key)>;
 
 using CommandChangedCallback = std::function<void(Command* command)>;
 
@@ -44,7 +40,8 @@ class Store {
   int64_t saveCommands() const;
   int64_t wipeCommands();
 
-  const std::string getCommandsJson() const;
+  //   const std::string getCommandsJson() const;
+  void fetchCommandsJson(const ebus::JsonChunkVisitor& visitor) const;
 
   const std::vector<Command*> getCommands();
 
@@ -61,7 +58,8 @@ class Store {
 
   static const std::string getValueFullJson(const Command* command);
 
-  const std::string getValuesJson() const;
+  //   const std::string getValuesJson() const;
+  void fetchValuesJson(const ebus::JsonChunkVisitor& visitor) const;
 
  private:
   // Single unified map for all commands, indexed by key
@@ -75,7 +73,6 @@ class Store {
   CommandChangedCallback command_removed_callback_ = nullptr;
 
   // Flexible serialization/deserialization
-  const std::string serializeCommands() const;
   void deserializeCommands(const char* payload);
 };
 

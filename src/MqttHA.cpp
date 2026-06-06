@@ -1,9 +1,8 @@
 #if defined(EBUS_INTERNAL)
-#include <cJSON.h>
-
 #include <Mqtt.hpp>
 #include <MqttHA.hpp>
 #include <algorithm>
+#include <ebus/detail/json_writer.hpp>
 
 #include "Store.hpp"
 
@@ -42,13 +41,101 @@ void MqttHA::setThingConfigurationUrl(const std::string& configurationUrl) {
 }
 
 void MqttHA::publishDeviceInfo() const {
-  mqttha.publishComponent(createButtonRestart(), !enabled);
+  auto publishDiag = [this](const char* component, const char* key,
+                            const char* name, auto writeFields) {
+    std::string objectId = name;
+    std::transform(objectId.begin(), objectId.end(), objectId.begin(),
+                   ::tolower);
+    std::replace(objectId.begin(), objectId.end(), '/', '_');
+    std::replace(objectId.begin(), objectId.end(), ' ', '_');
 
-  mqttha.publishComponent(createDiagnosticResetCode(), !enabled);
-  mqttha.publishComponent(createDiagnosticUptime(), !enabled);
-  mqttha.publishComponent(createDiagnosticFreeHeap(), !enabled);
-  mqttha.publishComponent(createDiagnosticLoopDuration(), !enabled);
-  mqttha.publishComponent(createDiagnosticRSSI(), !enabled);
+    std::string topic = "homeassistant/" + std::string(component) + '/' +
+                        deviceIdentifiers + '/' + objectId + "/config";
+
+    if (!enabled) {
+      mqtt.publish(topic.c_str(), 0, true, "", false);
+      return;
+    }
+
+    mqtt.publishStream(
+        topic.c_str(), 0, true,
+        [&](const ebus::JsonChunkVisitor& v) {
+          ebus::detail::JsonWriter writer(v);
+          writer.startObject();
+          writer.writeField("unique_id", deviceIdentifiers + "_" + key);
+          writer.writeField("name", name);
+          writer.writeField("availability_topic", willTopic);
+          writer.writeField("availability_template", "{{value_json.value}}");
+
+          writer.appendKey("device");
+          writer.startObject();
+          writer.writeField("identifiers", deviceIdentifiers);
+          writer.writeField("name", thingName);
+          writer.writeField("manufacturer", thingManufacturer);
+          writer.writeField("model", thingModel);
+          writer.writeField("model_id", thingModelId);
+          writer.writeField("hw_version", thingHwVersion);
+          writer.writeField("sw_version", thingSwVersion);
+          writer.writeField("configuration_url", thingConfigurationUrl);
+          writer.endObject();
+
+          writeFields(writer);
+          writer.endObject();
+        },
+        false);
+  };
+
+  publishDiag(
+      "button", "restart", "Restart", [this](ebus::detail::JsonWriter& w) {
+        w.writeField("command_topic", commandTopic);
+        w.writeField("payload_press", "{\"id\":\"restart\",\"value\":true}");
+        w.writeField("entity_category", "config");
+      });
+
+  publishDiag("sensor", "reset_code", "Reset Code",
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template", "{{value_json.reset_code}}");
+                w.writeField("icon", "mdi:restart");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "uptime", "Uptime",
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("unit_of_measurement", "s");
+                w.writeField("value_template",
+                             "{{((value_json.uptime|float)/1000)|int}}");
+                w.writeField("icon", "mdi:clock-outline");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "free_heap", "Free Heap",
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("unit_of_measurement", "B");
+                w.writeField("value_template", "{{value_json.free_heap}}");
+                w.writeField("icon", "mdi:memory");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "loop_duration", "Loop Duration",
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("unit_of_measurement", "µs");
+                w.writeField("value_template", "{{value_json.loop_duration}}");
+                w.writeField("icon", "mdi:timelapse");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "rssi", "WiFi RSSI",
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("unit_of_measurement", "dBm");
+                w.writeField("value_template", "{{value_json.rssi}}");
+                w.writeField("icon", "mdi:wifi-strength-4");
+                w.writeField("entity_category", "diagnostic");
+              });
 }
 
 void MqttHA::publishComponents() const {
@@ -59,65 +146,109 @@ void MqttHA::publishComponents() const {
 }
 
 void MqttHA::publishComponent(const Command* command, const bool remove) const {
-  if (command->getHAComponent() == "binary_sensor") {
-    publishComponent(createBinarySensor(command), remove);
-  } else if (command->getHAComponent() == "sensor") {
-    publishComponent(createSensor(command), remove);
-  } else if (command->getHAComponent() == "number") {
-    publishComponent(createNumber(command), remove);
-  } else if (command->getHAComponent() == "select") {
-    publishComponent(createSelect(command), remove);
-  } else if (command->getHAComponent() == "switch") {
-    publishComponent(createSwitch(command), remove);
-  }
-}
+  const std::string& component = command->getHAComponent();
+  std::string objectId = command->getName();
+  std::transform(objectId.begin(), objectId.end(), objectId.begin(), ::tolower);
+  std::replace(objectId.begin(), objectId.end(), '/', '_');
+  std::replace(objectId.begin(), objectId.end(), ' ', '_');
 
-void MqttHA::publishComponent(const Component& c, const bool remove) const {
-  std::string topic = "homeassistant/" + c.component + '/' +
-                      c.deviceIdentifiers + '/' + c.objectId + "/config";
+  std::string topic = "homeassistant/" + component + '/' + deviceIdentifiers +
+                      '/' + objectId + "/config";
 
-  // Only publish config if HA support is enabled and not removing
-  if (!remove && enabled) {
-    std::string payload = getComponentJson(c);
-    mqtt.publish(topic.c_str(), 0, true, payload.c_str(), false);
-  }
-  // Only publish empty payload if removing (to remove entity in HA)
-  else if (remove) {
+  if (remove || !enabled) {
     mqtt.publish(topic.c_str(), 0, true, "", false);
-  }
-  // Otherwise, do nothing
-}
-
-const std::string MqttHA::getComponentJson(const Component& c) const {
-  cJSON* doc = cJSON_CreateObject();
-  cJSON_AddStringToObject(doc, "unique_id", c.uniqueId.c_str());
-  cJSON_AddStringToObject(doc, "name", c.name.c_str());
-
-  // fields
-  for (const auto& kv : c.fields) {
-    cJSON_AddStringToObject(doc, kv.first.c_str(), kv.second.c_str());
+    return;
   }
 
-  // options
-  if (!c.options.empty()) {
-    cJSON* options = cJSON_AddArrayToObject(doc, "options");
-    for (const auto& opt : c.options) {
-      cJSON_AddItemToArray(options, cJSON_CreateString(opt.c_str()));
-    }
-  }
+  mqtt.publishStream(
+      topic.c_str(), 0, true,
+      [&](const ebus::JsonChunkVisitor& v) {
+        ebus::detail::JsonWriter writer(v);
+        writer.startObject();
 
-  // device
-  cJSON* device = cJSON_AddObjectToObject(doc, "device");
-  cJSON_AddStringToObject(device, "identifiers", c.deviceIdentifiers.c_str());
-  for (const auto& kv : c.device) {
-    cJSON_AddStringToObject(device, kv.first.c_str(), kv.second.c_str());
-  }
+        std::string prettyName = command->getName();
+        std::replace(prettyName.begin(), prettyName.end(), '/', ' ');
+        std::replace(prettyName.begin(), prettyName.end(), '_', ' ');
 
-  char* printed = cJSON_PrintUnformatted(doc);
-  std::string payload = printed != nullptr ? printed : "{}";
-  if (printed != nullptr) cJSON_free(printed);
-  cJSON_Delete(doc);
-  return payload;
+        writer.writeField("unique_id",
+                          deviceIdentifiers + "_" + command->getKey());
+        writer.writeField("name", prettyName);
+        writer.writeField("availability_topic", willTopic);
+        writer.writeField("availability_template", "{{value_json.value}}");
+
+        writer.appendKey("device");
+        writer.startObject();
+        writer.writeField("identifiers", deviceIdentifiers);
+        writer.endObject();
+
+        writer.writeField("state_topic",
+                          createStateTopic("values", command->getName()));
+
+        if (!command->getHADeviceClass().empty())
+          writer.writeField("device_class", command->getHADeviceClass());
+        if (!command->getHAEntityCategory().empty())
+          writer.writeField("entity_category", command->getHAEntityCategory());
+
+        if (component == "binary_sensor" || component == "switch") {
+          writer.writeField("payload_on",
+                            std::to_string(command->getHAPayloadOn()));
+          writer.writeField("payload_off",
+                            std::to_string(command->getHAPayloadOff()));
+          writer.writeField("value_template", "{{value_json.value}}");
+        }
+
+        if (component == "switch" || component == "number" ||
+            component == "select") {
+          writer.writeField("command_topic", commandTopic);
+        }
+
+        if (component == "sensor") {
+          if (!command->getHAStateClass().empty())
+            writer.writeField("state_class", command->getHAStateClass());
+          if (!command->getUnit().empty())
+            writer.writeField("unit_of_measurement", command->getUnit());
+        }
+
+        if (component == "number") {
+          if (!command->getUnit().empty())
+            writer.writeField("unit_of_measurement", command->getUnit());
+          writer.writeField("value_template", "{{value_json.value}}");
+          writer.writeField("command_template", "{\"id\":\"write\",\"key\":\"" +
+                                                    command->getKey() +
+                                                    "\",\"value\":{{value}}}");
+          writer.writeFieldFloat("min", command->getMin());
+          writer.writeFieldFloat("max", command->getMax());
+          writer.writeFieldFloat("step", command->getHAStep());
+          writer.writeField("mode", command->getHAMode());
+        }
+
+        if (component == "switch") {
+          writer.writeField("command_template", "{\"id\":\"write\",\"key\":\"" +
+                                                    command->getKey() +
+                                                    "\",\"value\":{{value}}}");
+        }
+
+        if (!command->getHAKeyValueMap().empty()) {
+          auto opt = createOptions(command->getHAKeyValueMap(),
+                                   command->getHADefaultKey());
+          if (component == "select") {
+            writer.appendKey("options");
+            writer.startArray();
+            for (const auto& s : opt.options) writer.writeValue(s);
+            writer.endArray();
+            writer.writeField("command_template",
+                              "{\"id\":\"write\",\"key\":\"" +
+                                  command->getKey() +
+                                  "\",\"value\":" + opt.cmdMap + "}");
+          }
+          writer.writeField("value_template", opt.valueMap);
+        } else if (component == "sensor") {
+          writer.writeField("value_template", "{{value_json.value}}");
+        }
+
+        writer.endObject();
+      },
+      false);
 }
 
 std::string MqttHA::createStateTopic(const std::string& prefix,
@@ -126,36 +257,6 @@ std::string MqttHA::createStateTopic(const std::string& prefix,
   std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
                  [](unsigned char c) { return std::tolower(c); });
   return rootTopic + prefix + (prefix.empty() ? "" : "/") + stateTopic;
-}
-
-MqttHA::Component MqttHA::createComponent(const std::string& component,
-                                          const std::string& uniqueIdKey,
-                                          const std::string& name) const {
-  std::string objectId = name;
-  std::transform(objectId.begin(), objectId.end(), objectId.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  std::replace(objectId.begin(), objectId.end(), '/', '_');
-  std::replace(objectId.begin(), objectId.end(), ' ', '_');
-
-  std::string key = uniqueIdKey;
-  std::transform(key.begin(), key.end(), key.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  std::replace(key.begin(), key.end(), '/', '_');
-  std::replace(key.begin(), key.end(), ' ', '_');
-
-  std::string prettyName = name;
-  std::replace(prettyName.begin(), prettyName.end(), '/', ' ');
-  std::replace(prettyName.begin(), prettyName.end(), '_', ' ');
-
-  Component c;
-  c.component = component;
-  c.objectId = objectId;
-  c.uniqueId = deviceIdentifiers + '_' + key;
-  c.name = prettyName;
-  c.deviceIdentifiers = deviceIdentifiers;
-  c.fields["availability_topic"] = willTopic;
-  c.fields["availability_template"] = "{{value_json.value}}";
-  return c;
 }
 
 MqttHA::KeyValueMapping MqttHA::createOptions(
@@ -208,182 +309,6 @@ MqttHA::KeyValueMapping MqttHA::createOptions(
             std::to_string(defaultOptionValue) + " }}";
 
   return KeyValueMapping{options, valueMap, cmdMap};
-}
-
-MqttHA::Component MqttHA::createBinarySensor(const Command* command) const {
-  Component c =
-      createComponent("binary_sensor", command->getKey(), command->getName());
-  c.fields["state_topic"] = createStateTopic("values", command->getName());
-  if (!command->getHADeviceClass().empty())
-    c.fields["device_class"] = command->getHADeviceClass();
-  if (!command->getHAEntityCategory().empty())
-    c.fields["entity_category"] = command->getHAEntityCategory();
-  c.fields["payload_on"] = std::to_string(command->getHAPayloadOn());
-  c.fields["payload_off"] = std::to_string(command->getHAPayloadOff());
-  c.fields["value_template"] = "{{value_json.value}}";
-  return c;
-}
-
-MqttHA::Component MqttHA::createSensor(const Command* command) const {
-  Component c =
-      createComponent("sensor", command->getKey(), command->getName());
-  c.fields["state_topic"] = createStateTopic("values", command->getName());
-  if (!command->getHADeviceClass().empty())
-    c.fields["device_class"] = command->getHADeviceClass();
-  if (!command->getHAEntityCategory().empty())
-    c.fields["entity_category"] = command->getHAEntityCategory();
-  if (!command->getHAStateClass().empty())
-    c.fields["state_class"] = command->getHAStateClass();
-  if (!command->getUnit().empty())
-    c.fields["unit_of_measurement"] = command->getUnit();
-
-  if (!command->getHAKeyValueMap().empty()) {
-    KeyValueMapping optionsResult =
-        createOptions(command->getHAKeyValueMap(), command->getHADefaultKey());
-    c.fields["value_template"] = optionsResult.valueMap;
-  } else {
-    c.fields["value_template"] = "{{value_json.value}}";
-  }
-  return c;
-}
-
-MqttHA::Component MqttHA::createNumber(const Command* command) const {
-  Component c =
-      createComponent("number", command->getKey(), command->getName());
-  c.fields["state_topic"] = createStateTopic("values", command->getName());
-  if (!command->getHADeviceClass().empty())
-    c.fields["device_class"] = command->getHADeviceClass();
-  if (!command->getHAEntityCategory().empty())
-    c.fields["entity_category"] = command->getHAEntityCategory();
-  if (!command->getUnit().empty())
-    c.fields["unit_of_measurement"] = command->getUnit();
-  c.fields["value_template"] = "{{value_json.value}}";
-  c.fields["command_topic"] = commandTopic;
-  c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" +
-                                 command->getKey() + "\",\"value\":{{value}}}";
-  char buffer[64];
-  using namespace ebus::detail;
-  c.fields["min"] =
-      ebus::formatFloat(command->getMin(), 2, buffer, sizeof(buffer),
-                        FormattingLimits::float_lower_threshold,
-                        FormattingLimits::float_upper_threshold);
-  c.fields["max"] =
-      ebus::formatFloat(command->getMax(), 2, buffer, sizeof(buffer),
-                        FormattingLimits::float_lower_threshold,
-                        FormattingLimits::float_upper_threshold);
-  c.fields["step"] =
-      ebus::formatFloat(command->getHAStep(), 2, buffer, sizeof(buffer),
-                        FormattingLimits::float_lower_threshold,
-                        FormattingLimits::float_upper_threshold);
-  c.fields["mode"] = command->getHAMode();
-  return c;
-}
-
-MqttHA::Component MqttHA::createSelect(const Command* command) const {
-  Component c =
-      createComponent("select", command->getKey(), command->getName());
-  c.fields["state_topic"] = createStateTopic("values", command->getName());
-  if (!command->getHADeviceClass().empty())
-    c.fields["device_class"] = command->getHADeviceClass();
-  if (!command->getHAEntityCategory().empty())
-    c.fields["entity_category"] = command->getHAEntityCategory();
-  c.fields["command_topic"] = commandTopic;
-
-  KeyValueMapping optionsResult =
-      createOptions(command->getHAKeyValueMap(), command->getHADefaultKey());
-  c.options = optionsResult.options;
-  c.fields["value_template"] = optionsResult.valueMap;
-  c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" +
-                                 command->getKey() +
-                                 "\",\"value\":" + optionsResult.cmdMap + "}";
-
-  return c;
-}
-
-MqttHA::Component MqttHA::createSwitch(const Command* command) const {
-  Component c =
-      createComponent("switch", command->getKey(), command->getName());
-  c.fields["state_topic"] = createStateTopic("values", command->getName());
-  if (!command->getHADeviceClass().empty())
-    c.fields["device_class"] = command->getHADeviceClass();
-  if (!command->getHAEntityCategory().empty())
-    c.fields["entity_category"] = command->getHAEntityCategory();
-  c.fields["payload_on"] = std::to_string(command->getHAPayloadOn());
-  c.fields["payload_off"] = std::to_string(command->getHAPayloadOff());
-  c.fields["value_template"] = "{{value_json.value}}";
-  c.fields["command_topic"] = commandTopic;
-  c.fields["command_template"] = "{\"id\":\"write\",\"key\":\"" +
-                                 command->getKey() + "\",\"value\":{{value}}}";
-  return c;
-}
-
-MqttHA::Component MqttHA::createButtonRestart() const {
-  Component c = createComponent("button", "restart", "Restart");
-  c.fields["command_topic"] = commandTopic;
-  c.fields["payload_press"] = "{\"id\":\"restart\",\"value\":true}";
-  c.fields["entity_category"] = "config";
-  return c;
-}
-
-MqttHA::Component MqttHA::createDiagnostic(const std::string& component,
-                                           const std::string& uniqueIdKey,
-                                           const std::string& name) const {
-  Component c = createComponent(component, uniqueIdKey, name);
-  c.fields["entity_category"] = "diagnostic";
-  return c;
-}
-
-MqttHA::Component MqttHA::createDiagnosticResetCode() const {
-  Component c = createDiagnostic("sensor", "reset_code", "Reset Code");
-  c.fields["state_topic"] = createStateTopic("", "state");
-  c.fields["value_template"] = "{{value_json.reset_code}}";
-  c.fields["icon"] = "mdi:restart";
-  return c;
-}
-
-MqttHA::Component MqttHA::createDiagnosticUptime() const {
-  Component c = createDiagnostic("sensor", "uptime", "Uptime");
-  c.fields["state_topic"] = createStateTopic("", "state");
-  c.fields["unit_of_measurement"] = "s";
-  c.fields["value_template"] = "{{((value_json.uptime|float)/1000)|int}}";
-  c.fields["icon"] = "mdi:clock-outline";
-
-  c.device["name"] = thingName;
-  c.device["manufacturer"] = thingManufacturer;
-  c.device["model"] = thingModel;
-  c.device["model_id"] = thingModelId;
-  c.device["serial_number"] = uniqueId;
-  c.device["hw_version"] = thingHwVersion;
-  c.device["sw_version"] = thingSwVersion;
-  c.device["configuration_url"] = thingConfigurationUrl;
-  return c;
-}
-
-MqttHA::Component MqttHA::createDiagnosticFreeHeap() const {
-  Component c = createDiagnostic("sensor", "free_heap", "Free Heap");
-  c.fields["state_topic"] = createStateTopic("", "state");
-  c.fields["unit_of_measurement"] = "B";
-  c.fields["value_template"] = "{{value_json.free_heap}}";
-  c.fields["icon"] = "mdi:memory";
-  return c;
-}
-
-MqttHA::Component MqttHA::createDiagnosticLoopDuration() const {
-  Component c = createDiagnostic("sensor", "loop_duration", "Loop Duration");
-  c.fields["state_topic"] = createStateTopic("", "state");
-  c.fields["unit_of_measurement"] = "µs";
-  c.fields["value_template"] = "{{value_json.loop_duration}}";
-  c.fields["icon"] = "mdi:timelapse";
-  return c;
-}
-
-MqttHA::Component MqttHA::createDiagnosticRSSI() const {
-  Component c = createDiagnostic("sensor", "rssi", "WiFi RSSI");
-  c.fields["state_topic"] = createStateTopic("", "state");
-  c.fields["unit_of_measurement"] = "dBm";
-  c.fields["value_template"] = "{{value_json.rssi}}";
-  c.fields["icon"] = "mdi:wifi-strength-4";
-  return c;
 }
 
 #endif

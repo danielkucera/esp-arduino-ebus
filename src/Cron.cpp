@@ -20,6 +20,32 @@
 Cron cron;
 
 namespace {
+
+void writeCJsonToWriter(ebus::detail::JsonWriter& writer, const cJSON* node) {
+  if (!node || cJSON_IsInvalid(node)) return;
+  if (cJSON_IsBool(node)) {
+    writer.writeValue(cJSON_IsTrue(node) != 0);
+  } else if (cJSON_IsNumber(node)) {
+    writer.writeValueFloat(static_cast<float>(node->valuedouble));
+  } else if (cJSON_IsString(node)) {
+    writer.writeValue(node->valuestring);
+  } else if (cJSON_IsNull(node)) {
+    writer.writeRaw("null");
+  } else if (cJSON_IsArray(node)) {
+    writer.startArray();
+    cJSON* child = nullptr;
+    cJSON_ArrayForEach(child, node) { writeCJsonToWriter(writer, child); }
+    writer.endArray();
+  } else if (cJSON_IsObject(node)) {
+    writer.startObject();
+    for (cJSON* child = node->child; child != nullptr; child = child->next) {
+      writer.appendKey(child->string);
+      writeCJsonToWriter(writer, child);
+    }
+    writer.endObject();
+  }
+}
+
 constexpr const char* kCronFilePath = "/littlefs/cron.json";
 
 std::string printJson(cJSON* node, const char* fallback) {
@@ -233,7 +259,7 @@ bool Cron::initFileSystem() { return store.initFileSystem(); }
 void Cron::start() {
   stop_runner_ = false;
   if (task_handle_ == nullptr) {
-    xTaskCreate(&Cron::taskFunc, "cronRunner", 2048, this, 2, &task_handle_);
+    xTaskCreate(&Cron::taskFunc, "cron", 1536, this, 2, &task_handle_);
   }
 }
 
@@ -246,11 +272,11 @@ Cron::Rule Cron::ruleFromJson(const cJSON* doc) {
   rule.command_key = getStringField(doc, "command_key");
   rule.enabled = getBoolField(doc, "enabled", true);
 
-  const cJSON* valueNode = getField(doc, "value");
-  if (valueNode != nullptr) {
-    cJSON* clone = cJSON_Duplicate(const_cast<cJSON*>(valueNode), 1);
-    rule.value_json = printJson(clone, "null");
-    if (clone != nullptr) cJSON_Delete(clone);
+  const cJSON* val = getField(doc, "value");
+  if (val) {
+    ebus::detail::JsonWriter writer(
+        [&rule](std::string_view s) { rule.value_json.append(s); });
+    writeCJsonToWriter(writer, val);
   } else {
     rule.value_json = "null";
   }
@@ -316,39 +342,50 @@ int64_t Cron::loadRules() {
   return static_cast<int64_t>(payload.size());
 }
 
-int64_t Cron::replaceRules(const cJSON* doc) {
-  if (!cJSON_IsArray(doc)) return -1;
-
+int64_t Cron::replaceRules(std::string_view payload) {
   std::unordered_map<std::string, Rule> nextRules;
-  cJSON* entry = nullptr;
-  cJSON_ArrayForEach(entry, doc) {
-    if (!cJSON_IsObject(entry)) continue;
-    Rule rule = ruleFromJson(entry);
-    nextRules[rule.id] = std::move(rule);
+
+  // Iterate through the array without parsing the whole list into heap
+  size_t pos = 0;
+  while (pos < payload.size()) {
+    size_t start_obj = payload.find('{', pos);
+    if (start_obj == std::string_view::npos) break;
+
+    int depth = 0;
+    size_t end_obj = std::string_view::npos;
+    for (size_t i = start_obj; i < payload.size(); ++i) {
+      if (payload[i] == '{')
+        depth++;
+      else if (payload[i] == '}') {
+        depth--;
+        if (depth == 0) {
+          end_obj = i;
+          break;
+        }
+      }
+    }
+    if (end_obj == std::string_view::npos) break;
+
+    std::string_view rule_sv =
+        payload.substr(start_obj, end_obj - start_obj + 1);
+    cJSON* doc = cJSON_ParseWithLength(rule_sv.data(), rule_sv.size());
+    if (doc) {
+      if (evaluate(doc).empty()) {
+        Rule rule = ruleFromJson(doc);
+        nextRules[rule.id] = std::move(rule);
+      }
+      cJSON_Delete(doc);
+    }
+    pos = end_obj + 1;
   }
 
   setRules(std::move(nextRules));
   return saveRules();
 }
 
-int64_t Cron::saveRules() const {
-  if (!store.initFileSystem()) return -1;
-
-  std::string payload = getRulesJson();
-  size_t size = payload.size();
-
-  FILE* file = std::fopen(kCronFilePath, "wb");
-  if (file == nullptr) return -1;
-
-  size_t bytesWritten = std::fwrite(payload.data(), 1, size, file);
-  std::fclose(file);
-  if (bytesWritten != size) return -1;
-
-  return static_cast<int64_t>(size);
-}
-
-const std::string Cron::getRulesJson() const {
-  cJSON* root = cJSON_CreateArray();
+void Cron::fetchRulesJson(const ebus::JsonChunkVisitor& visitor) const {
+  ebus::detail::JsonWriter writer(visitor);
+  writer.startArray();
 
   std::vector<Rule> ordered;
   portENTER_CRITICAL(&rules_mux_);
@@ -359,24 +396,34 @@ const std::string Cron::getRulesJson() const {
             [](const Rule& a, const Rule& b) { return a.id < b.id; });
 
   for (const Rule& rule : ordered) {
-    cJSON* item = cJSON_CreateObject();
-    cJSON_AddStringToObject(item, "id", rule.id.c_str());
-    cJSON_AddStringToObject(item, "schedule", rule.schedule.c_str());
-    cJSON_AddStringToObject(item, "command_key", rule.command_key.c_str());
-    cJSON_AddBoolToObject(item, "enabled", rule.enabled);
-
-    cJSON* valueNode = cJSON_Parse(rule.value_json.c_str());
-    if (valueNode != nullptr)
-      cJSON_AddItemToObject(item, "value", valueNode);
+    writer.startObject();
+    writer.writeField("id", rule.id);
+    writer.writeField("schedule", rule.schedule);
+    writer.writeField("command_key", rule.command_key);
+    writer.writeField("enabled", rule.enabled);
+    writer.appendKey("value");
+    if (rule.value_json == "null")
+      writer.writeRaw("null");
     else
-      cJSON_AddNullToObject(item, "value");
-
-    cJSON_AddItemToArray(root, item);
+      writer.writeRaw(rule.value_json);
+    writer.endObject();
   }
+  writer.endArray();
+}
 
-  std::string payload = printJson(root, "[]");
-  cJSON_Delete(root);
-  return payload;
+int64_t Cron::saveRules() const {
+  if (!store.initFileSystem()) return -1;
+
+  FILE* file = std::fopen(kCronFilePath, "wb");
+  if (file == nullptr) return -1;
+
+  size_t total = 0;
+  fetchRulesJson([file, &total](std::string_view s) {
+    total += std::fwrite(s.data(), 1, s.size(), file);
+  });
+  std::fclose(file);
+
+  return static_cast<int64_t>(total);
 }
 
 const std::string Cron::evaluate(const cJSON* doc) {
@@ -443,12 +490,12 @@ const std::string Cron::evaluate(const cJSON* doc) {
     return std::string("Command '") + commandKey + "' has no write_cmd";
   }
 
-  cJSON* wrapper = cJSON_CreateObject();
-  cJSON_AddItemToObject(wrapper, "value",
-                        cJSON_Duplicate(const_cast<cJSON*>(valueNode), 1));
+  std::string val_str;
+  ebus::detail::JsonWriter writer(
+      [&val_str](std::string_view s) { val_str.append(s); });
+  writeCJsonToWriter(writer, valueNode);
   const std::vector<uint8_t> valueBytes =
-      command->getVectorFromJson(wrapper).toVector();
-  cJSON_Delete(wrapper);
+      command->getVectorFromValue(val_str).toVector();
 
   if (valueBytes.empty()) {
     return std::string("Invalid value for command '") + commandKey + "'";
@@ -506,19 +553,8 @@ void Cron::tick() {
       continue;
     }
 
-    cJSON* valueNode = cJSON_Parse(pendingRule.value_json.c_str());
-    if (valueNode == nullptr) {
-      logger.warn(std::string("Cron skipped, invalid value for rule: ") +
-                  pendingRule.id);
-      continue;
-    }
-
-    cJSON* wrapper = cJSON_CreateObject();
-    cJSON_AddItemToObject(wrapper, "value", valueNode);
-
     std::vector<uint8_t> valueBytes =
-        command->getVectorFromJson(wrapper).toVector();
-    cJSON_Delete(wrapper);
+        command->getVectorFromValue(pendingRule.value_json).toVector();
 
     if (valueBytes.empty()) {
       logger.warn(std::string("Cron skipped, value out of range for rule: ") +

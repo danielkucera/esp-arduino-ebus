@@ -1,6 +1,7 @@
 #if defined(EBUS_INTERNAL)
 #include "Store.hpp"
 
+#include <cJSON.h>
 #include <esp_littlefs.h>
 #include <esp_timer.h>
 #include <sys/stat.h>
@@ -9,7 +10,10 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ebus/detail/json_writer.hpp>
 #include <ebus/detail/protocol_limits.hpp>
+
+#include "Mqtt.hpp"
 
 Store store;
 
@@ -40,20 +44,6 @@ bool ensureLittlefsMounted() {
   return false;
 }
 
-std::string printJson(cJSON* node, const char* fallback) {
-  char* printed = cJSON_PrintUnformatted(node);
-  std::string out = printed != nullptr ? printed : fallback;
-  if (printed != nullptr) cJSON_free(printed);
-  return out;
-}
-
-std::string formatDouble(double value, int precision) {
-  char buffer[64];
-  return ebus::formatFloat(
-      value, precision, buffer, sizeof(buffer),
-      ebus::detail::FormattingLimits::float_lower_threshold,
-      ebus::detail::FormattingLimits::float_upper_threshold);
-}
 }  // namespace
 
 bool Store::initFileSystem() { return ensureLittlefsMounted(); }
@@ -155,21 +145,57 @@ int64_t Store::loadCommands() {
 int64_t Store::saveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (!ensureLittlefsMounted()) return -1;
-
-  std::string payload = serializeCommands();
-  size_t size = payload.size();
-  if (size <= 2) {  // 2 = empty json array "[]"
-    return 0;
-  }
+  if (commands_.empty()) return 0;
 
   FILE* file = std::fopen(kCommandsFilePath, "wb");
   if (file == nullptr) return -1;
 
-  size_t bytesWritten = std::fwrite(payload.data(), 1, size, file);
-  std::fclose(file);
-  if (bytesWritten != size) return -1;
+  size_t bytes_written = 0;
+  ebus::detail::JsonWriter writer([file, &bytes_written](std::string_view s) {
+    bytes_written += std::fwrite(s.data(), 1, s.size(), file);
+  });
 
-  return static_cast<int64_t>(size);
+  writer.startArray();
+  // Header row
+  writer.startArray();
+  static const char* fields[] = {"key",
+                                 "name",
+                                 "read_cmd",
+                                 "write_cmd",
+                                 "active",
+                                 "interval",
+                                 "master",
+                                 "position",
+                                 "datatype",
+                                 "divider",
+                                 "min",
+                                 "max",
+                                 "digits",
+                                 "unit",
+                                 "ha",
+                                 "ha_component",
+                                 "ha_device_class",
+                                 "ha_entity_category",
+                                 "ha_mode",
+                                 "ha_key_value_map",
+                                 "ha_default_key",
+                                 "ha_payload_on",
+                                 "ha_payload_off",
+                                 "ha_state_class",
+                                 "ha_step"};
+  for (const auto& f : fields) writer.writeValue(f);
+  writer.endArray();
+
+  // Data rows
+  for (const auto& kv : commands_) {
+    kv.second.writePersistenceRow(writer);
+  }
+
+  writer.endArray();
+  writer.flush();
+  std::fclose(file);
+
+  return static_cast<int64_t>(bytes_written);
 }
 
 int64_t Store::wipeCommands() {
@@ -195,28 +221,22 @@ int64_t Store::wipeCommands() {
   return static_cast<int64_t>(fileStat.st_size);
 }
 
-const std::string Store::getCommandsJson() const {
+void Store::fetchCommandsJson(const ebus::JsonChunkVisitor& visitor) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  cJSON* root = cJSON_CreateArray();
+  ebus::detail::JsonWriter writer(visitor);
+  writer.startArray();
 
-  std::vector<std::pair<std::string, Command>> orderedCommands(
-      commands_.begin(), commands_.end());
-
-  std::sort(orderedCommands.begin(), orderedCommands.end(),
-            [](const std::pair<std::string, Command>& a,
-               const std::pair<std::string, Command>& b) {
-              // Compare based on keys
-              return a.first < b.first;
+  std::vector<const Command*> ordered;
+  for (const auto& kv : commands_) ordered.push_back(&kv.second);
+  std::sort(ordered.begin(), ordered.end(),
+            [](const Command* a, const Command* b) {
+              return a->getKey() < b->getKey();
             });
 
-  for (const auto& kv : orderedCommands) {
-    cJSON* cmd = cJSON_Parse(kv.second.toJson().c_str());
-    if (cmd != nullptr) cJSON_AddItemToArray(root, cmd);
+  for (const Command* cmd : ordered) {
+    writer.writeValue(*cmd);
   }
-
-  std::string payload = printJson(root, "[]");
-  cJSON_Delete(root);
-  return payload;
+  writer.endArray();
 }
 
 const std::vector<Command*> Store::getCommands() {
@@ -306,20 +326,15 @@ std::vector<Command*> Store::updateData(Command* command,
       cmd->setData(
           ebus::range(slave_view, cmd->getPosition(), cmd->getLength()));
     }
-    std::string valueJson = cmd->getValueJson();
-    if (data_updated_callback_)
-      data_updated_callback_(cmd->getName(), valueJson);
+
+    // Offload heavy JSON and string work to background task via key-only
+    // callback
+    if (data_updated_callback_) {
+      data_updated_callback_(cmd->getKey());
+    }
 
     if (data_updated_log_callback_) {
-      std::string valStr =
-          cmd->getNumeric()
-              ? formatDouble(cmd->getDoubleFromVector(), cmd->getDigits())
-              : cmd->getStringFromVector();
-      std::string payload = " '" + ebus::toString(cmd->getReadCmd()) + "' [" +
-                            cmd->getName() + "] " +
-                            ebus::toString(cmd->getData()) + " -> " + valStr +
-                            " " + cmd->getUnit();
-      data_updated_log_callback_(payload);
+      data_updated_log_callback_(cmd->getKey());
     }
   };
 
@@ -335,99 +350,45 @@ std::vector<Command*> Store::updateData(Command* command,
 
   return matchingCommands;
 }
-const std::string Store::getValueFullJson(const Command* command) {
-  cJSON* doc = cJSON_CreateObject();
 
-  cJSON_AddStringToObject(doc, "key", command->getKey().c_str());
-  cJSON_AddStringToObject(doc, "name", command->getName().c_str());
-
-  cJSON* valueDoc = cJSON_Parse(command->getValueJson().c_str());
-  cJSON* valueNode =
-      valueDoc ? cJSON_GetObjectItemCaseSensitive(valueDoc, "value") : nullptr;
-  if (valueNode) {
-    cJSON_AddItemToObject(doc, "value", cJSON_Duplicate(valueNode, 1));
-  } else {
-    cJSON_AddNullToObject(doc, "value");
-  }
-  if (valueDoc) cJSON_Delete(valueDoc);
-
-  cJSON_AddStringToObject(doc, "unit", command->getUnit().c_str());
-  cJSON_AddNumberToObject(
-      doc, "age",
-      static_cast<uint32_t>(
-          ((uint32_t)(esp_timer_get_time() / 1000ULL) - command->getLast()) /
-          1000));
-  cJSON_AddBoolToObject(doc, "write", !command->getWriteCmd().empty());
-  cJSON_AddBoolToObject(doc, "active", command->getActive());
-
-  std::string payload = printJson(doc, "{}");
-  cJSON_Delete(doc);
-  return payload;
-}
-
-const std::string Store::getValuesJson() const {
+void Store::fetchValuesJson(const ebus::JsonChunkVisitor& visitor) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  cJSON* root = cJSON_CreateArray();
+  ebus::detail::JsonWriter writer(visitor);
+  writer.startArray();
 
-  std::vector<std::pair<std::string, Command>> orderedCommands(
-      commands_.begin(), commands_.end());
-
-  std::sort(orderedCommands.begin(), orderedCommands.end(),
-            [](const std::pair<std::string, Command>& a,
-               const std::pair<std::string, Command>& b) {
-              return a.first < b.first;
+  std::vector<const Command*> ordered;
+  for (const auto& kv : commands_) ordered.push_back(&kv.second);
+  std::sort(ordered.begin(), ordered.end(),
+            [](const Command* a, const Command* b) {
+              return a->getKey() < b->getKey();
             });
 
-  for (const auto& kv : orderedCommands) {
-    cJSON* value = cJSON_Parse(getValueFullJson(&kv.second).c_str());
-    if (value != nullptr) cJSON_AddItemToArray(root, value);
-  }
+  uint32_t now = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
+  for (const Command* cmd : ordered) {
+    writer.startObject(); // Manual construction requires startObject
+    writer.writeField("key", cmd->getKey());
+    writer.writeField("name", cmd->getName());
 
-  std::string payload = printJson(root, "[]");
-  cJSON_Delete(root);
-  return payload;
-}
-
-const std::string Store::serializeCommands() const {
-  cJSON* doc = cJSON_CreateArray();
-
-  // Define field names (order matters)
-  std::vector<std::string> fields = {
-      // Command Fields
-      "key", "name", "read_cmd", "write_cmd", "active", "interval",
-      // Data Fields
-      "master", "position", "datatype", "divider", "min", "max", "digits",
-      "unit",
-      // Home Assistant
-      "ha", "ha_component", "ha_device_class", "ha_entity_category", "ha_mode",
-      "ha_key_value_map", "ha_default_key", "ha_payload_on", "ha_payload_off",
-      "ha_state_class", "ha_step"};
-
-  // Add header as first entry
-  cJSON* header = cJSON_CreateArray();
-  for (const auto& field : fields)
-    cJSON_AddItemToArray(header, cJSON_CreateString(field.c_str()));
-  cJSON_AddItemToArray(doc, header);
-
-  // Add each command as an array of values in the same order as header
-  for (const auto& cmd : commands_) {
-    cJSON* cmdDoc = cmd.second.toCJson();
-    cJSON* row = cJSON_CreateArray();
-    for (const auto& field : fields) {
-      cJSON* item = cJSON_GetObjectItemCaseSensitive(cmdDoc, field.c_str());
-      if (item)
-        cJSON_AddItemToArray(row, cJSON_Duplicate(item, 1));
+    // Optimized Value fetching
+    auto decoded = ebus::decode(cmd->getDatatype(), cmd->getData());
+    writer.appendKey("value");
+    if (!decoded || ebus::isNull(*decoded)) {
+      writer.writeRaw("null");
+    } else {
+      if (cmd->getNumeric())
+        writer.writeValueFloat(static_cast<float>(cmd->getDoubleFromVector()));
       else
-        cJSON_AddItemToArray(row, cJSON_CreateNull());
+        writer.writeValue(cmd->getStringFromVector());
     }
 
-    cJSON_AddItemToArray(doc, row);
-    cJSON_Delete(cmdDoc);
+    writer.writeField("unit", cmd->getUnit());
+    writer.writeField("age",
+                      (cmd->getLast() > 0) ? (now - cmd->getLast()) / 1000 : 0);
+    writer.writeField("write", !cmd->getWriteCmd().empty());
+    writer.writeField("active", cmd->getActive());
+    writer.endObject();
   }
-
-  std::string payload = printJson(doc, "[]");
-  cJSON_Delete(doc);
-  return payload;
+  writer.endArray();
 }
 
 void Store::deserializeCommands(const char* payload) {

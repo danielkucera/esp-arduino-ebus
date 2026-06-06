@@ -5,32 +5,35 @@
 #include <freertos/task.h>
 
 #include <cstdint>
+#include <ebus/types.hpp>
+#include <string_view>
 #include <string>
 #include <vector>
 
 // Simple circular buffer logger
 
-inline constexpr size_t LOG_MSG_MAX_LEN = 384;
+inline constexpr size_t LOG_MSG_MAX_LEN = 256;
 
 class Logger {
  public:
-  explicit Logger(size_t maxEntries = 35);
+  explicit Logger(size_t maxEntries = 20);
   ~Logger();
 
   Logger(const Logger& other) = delete;             // Prevent copying
   Logger& operator=(const Logger& other) = delete;  // Prevent assignment
 
-  void error(std::string message, bool is_json = false, uint32_t session_id = 0,
+  void error(std::string_view message, bool is_json = false, uint32_t session_id = 0,
              uint32_t poll_id = 0);
-  void warn(std::string message, bool is_json = false, uint32_t session_id = 0,
+  void warn(std::string_view message, bool is_json = false, uint32_t session_id = 0,
             uint32_t poll_id = 0);
-  void info(std::string message, bool is_json = false, uint32_t session_id = 0,
+  void info(std::string_view message, bool is_json = false, uint32_t session_id = 0,
             uint32_t poll_id = 0);
-  void debug(std::string message, bool is_json = false, uint32_t session_id = 0,
+  void debug(std::string_view message, bool is_json = false, uint32_t session_id = 0,
              uint32_t poll_id = 0);
 
-  const std::string getLogs(uint64_t sinceMillis = 0) const;
-  const std::string getTimeRelation() const;
+  void fetchLogsJson(const ebus::JsonChunkVisitor& visitor,
+                     uint64_t sinceMillis = 0) const;
+  void fetchTimeRelationJson(const ebus::JsonChunkVisitor& visitor) const;
 
   TaskHandle_t getTaskHandle() const { return printTask; }
   size_t getQueueSize() const;
@@ -58,7 +61,7 @@ class Logger {
   static void printTaskEntry(void* arg);
   void printTaskLoop();
 
-  void log(LogLevel level, std::string message, bool is_json,
+  void log(LogLevel level, std::string_view message, bool is_json,
            uint32_t session_id, uint32_t poll_id);
 
   mutable portMUX_TYPE mux;  // Mutex for thread safety

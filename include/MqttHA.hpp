@@ -2,12 +2,15 @@
 
 #if defined(EBUS_INTERNAL)
 #include <Command.hpp>
+#include <map>
 #include <string>
+#include <vector>
 
 // Home Assistant MQTT class for auto discovery
 
 class MqttHA {
  public:
+  MqttHA() = default;
   void setUniqueId(const std::string& id);
   void setRootTopic(const std::string& topic);
   void setWillTopic(const std::string& topic);
@@ -45,24 +48,6 @@ class MqttHA {
   std::string thingHwVersion;
   std::string thingConfigurationUrl = "http://esp-ebus.local/";
 
-  struct Component {
-    // Mandatory Home Assistant config fields
-    std::string component;  // "sensor", "number", "select"
-    std::string objectId;   // name (lowercase, space and / replaced by  _)
-    std::string uniqueId;   // uniqueId + key / postfix
-    std::string name;       // display name
-    std::string deviceIdentifiers;  // e.g. "ebus8406ac" (node identifier)
-
-    // Home Assistant config fields
-    std::map<std::string, std::string> fields;
-    std::vector<std::string> options;
-    std::map<std::string, std::string> device;
-  };
-
-  void publishComponent(const Component& c, const bool remove) const;
-
-  const std::string getComponentJson(const Component& c) const;
-
   std::string createStateTopic(const std::string& prefix,
                                const std::string& topic) const;
 
@@ -75,28 +60,6 @@ class MqttHA {
   static KeyValueMapping createOptions(
       const std::map<int, std::string>& ha_key_value_map,
       const int& ha_default_key);
-
-  Component createComponent(const std::string& component,
-                            const std::string& uniqueIdKey,
-                            const std::string& name) const;
-
-  Component createBinarySensor(const Command* command) const;
-  Component createSensor(const Command* command) const;
-  Component createNumber(const Command* command) const;
-  Component createSelect(const Command* command) const;
-  Component createSwitch(const Command* command) const;
-
-  Component createButtonRestart() const;
-
-  Component createDiagnostic(const std::string& component,
-                             const std::string& uniqueIdKey,
-                             const std::string& name) const;
-
-  Component createDiagnosticResetCode() const;
-  Component createDiagnosticUptime() const;
-  Component createDiagnosticFreeHeap() const;
-  Component createDiagnosticLoopDuration() const;
-  Component createDiagnosticRSSI() const;
 };
 
 extern MqttHA mqttha;

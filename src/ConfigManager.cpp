@@ -1,11 +1,13 @@
 #include "ConfigManager.hpp"
 
-#include <cstdio>
-#include <cstdlib>
 #include <cJSON.h>
 #include <esp_err.h>
 #include <nvs.h>
 #include <nvs_flash.h>
+
+#include <cstdio>
+#include <cstdlib>
+#include <ebus/detail/json_writer.hpp>
 #include <string>
 #include <vector>
 
@@ -47,12 +49,12 @@ std::string readString(nvs_handle_t handle, const char* key,
   return std::string(buffer.data());
 }
 
-bool writeString(nvs_handle_t handle, const char* key,
-                 const std::string& value, std::string& error) {
+bool writeString(nvs_handle_t handle, const char* key, const std::string& value,
+                 std::string& error) {
   const esp_err_t err = nvs_set_str(handle, key, value.c_str());
   if (err != ESP_OK) {
-    error = std::string("Failed to write key '") + key + "': " +
-            esp_err_to_name(err);
+    error = std::string("Failed to write key '") + key +
+            "': " + esp_err_to_name(err);
     return false;
   }
   return true;
@@ -123,7 +125,7 @@ bool readEntryValueAsString(nvs_handle_t handle, const nvs_entry_info_t& info,
   }
 }
 
-void fillJsonFromNvs(cJSON* configNode, nvs_handle_t handle) {
+void fillJsonFromNvs(ebus::detail::JsonWriter& writer, nvs_handle_t handle) {
   nvs_iterator_t it = nullptr;
   if (nvs_entry_find("nvs", kNvsNamespace, NVS_TYPE_ANY, &it) != ESP_OK) {
     return;
@@ -134,7 +136,7 @@ void fillJsonFromNvs(cJSON* configNode, nvs_handle_t handle) {
 
     std::string value;
     if (readEntryValueAsString(handle, info, value)) {
-      cJSON_AddStringToObject(configNode, info.key, value.c_str());
+      writer.writeField(info.key, value);
     }
 
     if (nvs_entry_next(&it) != ESP_OK) {
@@ -153,14 +155,14 @@ bool writeFromFlatPayload(cJSON* bodyDoc, nvs_handle_t handle,
 
   for (cJSON* item = bodyDoc->child; item != nullptr; item = item->next) {
     if (cJSON_IsString(item) && item->valuestring != nullptr) {
-      if (!writeString(handle, item->string,
-                       std::string(item->valuestring), error)) {
+      if (!writeString(handle, item->string, std::string(item->valuestring),
+                       error)) {
         return false;
       }
       dirty = true;
     } else {
-      error = std::string("Unsupported value type for key '") + item->string +
-              "'";
+      error =
+          std::string("Unsupported value type for key '") + item->string + "'";
       return false;
     }
   }
@@ -267,23 +269,28 @@ void ConfigManager::begin() {
   RegisterUri("/api/v1/config/reset", HTTP_POST, handleConfigReset);
 }
 
-std::string ConfigManager::readConfigJson() {
-  if (!ensureNvsReady()) return "{}";
+void ConfigManager::fetchConfigJson(const ebus::JsonChunkVisitor& visitor) {
+  if (!ensureNvsReady()) {
+    visitor("{}");
+    return;
+  }
 
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
-  if (openErr != ESP_OK) return "{}";
+  if (openErr != ESP_OK) {
+    visitor("{}");
+    return;
+  }
 
-  cJSON* root = cJSON_CreateObject();
-  cJSON* config = cJSON_AddObjectToObject(root, "config");
-  fillJsonFromNvs(config, handle);
+  ebus::detail::JsonWriter writer(visitor);
+  writer.startObject();
+  writer.appendKey("config");
+  writer.startObject();
+  fillJsonFromNvs(writer, handle);
+  writer.endObject();  // end config object
+  writer.endObject();  // end root object
+  writer.flush();
   nvs_close(handle);
-
-  char* printed = cJSON_PrintUnformatted(root);
-  std::string payload = printed != nullptr ? printed : "{}";
-  if (printed != nullptr) cJSON_free(printed);
-  cJSON_Delete(root);
-  return payload;
 }
 
 bool ConfigManager::writeConfigJson(const std::string& body,
@@ -296,8 +303,8 @@ bool ConfigManager::writeConfigJson(const std::string& body,
   cJSON* bodyDoc = cJSON_Parse(body.c_str());
   if (bodyDoc == nullptr) {
     const char* parseError = cJSON_GetErrorPtr();
-    error =
-        std::string("Invalid JSON: ") + (parseError != nullptr ? parseError : "");
+    error = std::string("Invalid JSON: ") +
+            (parseError != nullptr ? parseError : "");
     return false;
   }
 
@@ -322,7 +329,8 @@ bool ConfigManager::writeConfigJson(const std::string& body,
     if (commitErr != ESP_OK) {
       cJSON_Delete(bodyDoc);
       nvs_close(handle);
-      error = std::string("Failed to commit NVS: ") + esp_err_to_name(commitErr);
+      error =
+          std::string("Failed to commit NVS: ") + esp_err_to_name(commitErr);
       return false;
     }
   }
@@ -332,25 +340,54 @@ bool ConfigManager::writeConfigJson(const std::string& body,
 }
 
 esp_err_t ConfigManager::handleGet(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          readConfigJson());
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  fetchConfigJson([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
 esp_err_t ConfigManager::handleSet(httpd_req_t* req) {
   std::string error;
   const std::string body = HttpUtils::readBody(req);
-  if (!writeConfigJson(body, error)) {
-    HttpUtils::sendResponse(req, "400 Bad Request", "text/plain", error);
-    return ESP_OK;
-  }
+  bool success = writeConfigJson(body, error);
 
-  HttpUtils::sendResponse(req, "200 OK", "text/plain", "Config saved to NVS");
+  httpd_resp_set_status(req, success ? "200 OK" : "400 Bad Request");
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  {
+    ebus::detail::JsonWriter writer([req](std::string_view chunk) {
+      httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+    });
+    writer.startObject();
+    writer.writeField("id", "config_set");
+    if (success) {
+      writer.writeField("status", "successful");
+      writer.writeField("message", "Config saved to NVS");
+    } else {
+      writer.writeField("status", "failed");
+      writer.writeField("error", error);
+    }
+    writer.endObject();
+  }
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
 esp_err_t ConfigManager::handleReset(httpd_req_t* req) {
   resetConfig();
-  HttpUtils::sendResponse(req, "200 OK", "text/plain", "Config reset");
+  httpd_resp_set_status(req, "200 OK");
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  {
+    ebus::detail::JsonWriter writer([req](std::string_view chunk) {
+      httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+    });
+    writer.startObject();
+    writer.writeField("id", "config_reset");
+    writer.writeField("status", "successful");
+    writer.writeField("message", "Config reset");
+    writer.endObject();
+  }
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }

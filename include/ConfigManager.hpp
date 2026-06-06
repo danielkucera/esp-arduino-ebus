@@ -2,6 +2,7 @@
 
 #include <esp_http_server.h>
 
+#include <ebus/types.hpp>
 #include <string>
 
 class ConfigManager {
@@ -17,8 +18,9 @@ class ConfigManager {
   esp_err_t handleSet(httpd_req_t* req);
   esp_err_t handleReset(httpd_req_t* req);
 
+  void fetchConfigJson(const ebus::JsonChunkVisitor& visitor);
+
  private:
-  std::string readConfigJson();
   bool writeConfigJson(const std::string& body, std::string& error);
 };
 

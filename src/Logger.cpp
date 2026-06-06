@@ -4,38 +4,11 @@
 #include <sys/time.h>
 
 #include <cstring>
+#include <ebus/detail/json_writer.hpp>
 
 namespace {
 constexpr size_t kPrintQueueLen = 32;
 constexpr size_t kPrintMsgMaxLen = 384;
-
-std::string jsonEscape(const std::string& input) {
-  std::string escaped;
-  escaped.reserve(input.size() + 8);
-  for (char c : input) {
-    switch (c) {
-      case '\\':
-        escaped += "\\\\";
-        break;
-      case '"':
-        escaped += "\\\"";
-        break;
-      case '\n':
-        escaped += "\\n";
-        break;
-      case '\r':
-        escaped += "\\r";
-        break;
-      case '\t':
-        escaped += "\\t";
-        break;
-      default:
-        escaped += c;
-        break;
-    }
-  }
-  return escaped;
-}
 }  // namespace
 
 Logger logger;
@@ -50,8 +23,7 @@ Logger::Logger(size_t maxEntries)
   buffer_ = std::vector<LogEntry>(maxEntries);  // Initialize std::vector
   printQueue = xQueueCreate(kPrintQueueLen, kPrintMsgMaxLen);
   if (printQueue != nullptr) {
-    xTaskCreate(Logger::printTaskEntry, "logger_print", 2048, this, 1,
-                &printTask);
+    xTaskCreate(Logger::printTaskEntry, "logger", 1536, this, 1, &printTask);
   }
 }
 
@@ -71,75 +43,79 @@ size_t Logger::getQueueSize() const {
   return uxQueueMessagesWaiting(printQueue);
 }
 
-void Logger::error(std::string message, bool is_json, uint32_t sid,
+void Logger::error(std::string_view message, bool is_json, uint32_t sid,
                    uint32_t pid) {
   log(LogLevel::ERROR, message, is_json, sid, pid);
 }
-void Logger::warn(std::string message, bool is_json, uint32_t sid,
+void Logger::warn(std::string_view message, bool is_json, uint32_t sid,
                   uint32_t pid) {
   log(LogLevel::WARN, message, is_json, sid, pid);
 }
-void Logger::info(std::string message, bool is_json, uint32_t sid,
+void Logger::info(std::string_view message, bool is_json, uint32_t sid,
                   uint32_t pid) {
   log(LogLevel::INFO, message, is_json, sid, pid);
 }
-void Logger::debug(std::string message, bool is_json, uint32_t sid,
+void Logger::debug(std::string_view message, bool is_json, uint32_t sid,
                    uint32_t pid) {
   log(LogLevel::DEBUG, message, is_json, sid, pid);
 }
 
-const std::string Logger::getLogs(uint64_t sinceMillis) const {
-  std::string response = "{\"logs\":[";
-
-  bool first = true;
+void Logger::fetchLogsJson(const ebus::JsonChunkVisitor& visitor,
+                           uint64_t sinceMillis) const {
+  std::vector<LogEntry> copy;
   portENTER_CRITICAL(&mux);
+  copy.reserve(entries);
   for (size_t i = 0; i < entries; i++) {
     const size_t logIndex = (index - entries + i + maxEntries) % maxEntries;
-    const LogEntry& entry = buffer_[logIndex];
-    if (entry.timestamp < sinceMillis) continue;
-
-    if (!first) response += ",";
-    first = false;
-    response += "{\"millis\":" + std::to_string(entry.timestamp);
-    response += ",\"level\":\"" + std::string(logLevelText(entry.level)) + "\"";
-    if (entry.session_id > 0)
-      response += ",\"sid\":" + std::to_string(entry.session_id);
-    if (entry.poll_id > 0)
-      response += ",\"pid\":" + std::to_string(entry.poll_id);
-    response += ",\"message\":";
-    if (entry.is_json_message) {
-      // If it's already JSON, insert it raw (assuming it's valid JSON)
-      response += std::string(entry.message);
-    } else {
-      response += "\"" + jsonEscape(std::string(entry.message)) + "\"";
+    if (buffer_[logIndex].timestamp >= sinceMillis) {
+      copy.push_back(buffer_[logIndex]);
     }
-    response += "}";
   }
   portEXIT_CRITICAL(&mux);
 
-  response += "]}";
-  return response;
+  ebus::detail::JsonWriter writer(visitor);
+  writer.startObject();
+  writer.appendKey("logs");
+  writer.startArray();
+
+  for (const auto& entry : copy) {
+    writer.startObject();
+    writer.writeField("millis", entry.timestamp);
+    writer.writeField("level", logLevelText(entry.level));
+    if (entry.session_id > 0) writer.writeField("sid", entry.session_id);
+    if (entry.poll_id > 0) writer.writeField("pid", entry.poll_id);
+    writer.appendKey("message");
+    if (entry.is_json_message) {
+      writer.writeRaw(entry.message);
+    } else {
+      writer.writeValue(entry.message);
+    }
+    writer.endObject();
+  }
+
+  writer.endArray();
+  writer.endObject();
 }
 
-const std::string Logger::getTimeRelation() const {
+void Logger::fetchTimeRelationJson(
+    const ebus::JsonChunkVisitor& visitor) const {
   uint64_t currentMillis = 0;
   int64_t currentTimeMillis = 0;
   const bool hasTimeRelation =
       currentMillisTimeRelation(currentMillis, currentTimeMillis);
 
-  std::string response = "{";
+  ebus::detail::JsonWriter writer(visitor);
+  writer.startObject();
   if (hasTimeRelation) {
-    response += "\"timeRelation\":{\"millis\":";
-    response += std::to_string(currentMillis);
-    response += ",\"time\":";
-    response += std::to_string(currentTimeMillis);
-    response += "}";
+    writer.appendKey("timeRelation");
+    writer.startObject();
+    writer.writeField("millis", currentMillis);
+    writer.writeField("time", currentTimeMillis);
+    writer.endObject();
   } else {
-    response += "\"millis\":";
-    response += std::to_string(currentMillis);
+    writer.writeField("millis", currentMillis);
   }
-  response += "}";
-  return response;
+  writer.endObject();
 }
 
 const char* Logger::logLevelText(LogLevel logLevel) {
@@ -160,13 +136,14 @@ bool Logger::currentMillisTimeRelation(uint64_t& currentMillis,
   return currentTimeMillis >= kMinValidEpochMs;
 }
 
-void Logger::log(LogLevel level, std::string message, bool is_json,
+void Logger::log(LogLevel level, std::string_view message, bool is_json,
                  uint32_t session_id, uint32_t poll_id) {
   if (printQueue != nullptr &&
       printTask != nullptr) {  // Ensure task is running before sending to queue
     char msg[kPrintMsgMaxLen]{};
-    std::strncpy(msg, message.c_str(), sizeof(msg) - 1);
-    msg[sizeof(msg) - 1] = '\0';
+    size_t len = std::min(message.size(), sizeof(msg) - 1);
+    std::memcpy(msg, message.data(), len);
+    msg[len] = '\0';
     xQueueSend(printQueue, msg, 0);
   }
 
@@ -174,8 +151,12 @@ void Logger::log(LogLevel level, std::string message, bool is_json,
   buffer_[index].timestamp =
       static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
   buffer_[index].level = level;
-  std::strncpy(buffer_[index].message, message.c_str(), LOG_MSG_MAX_LEN - 1);
-  buffer_[index].message[LOG_MSG_MAX_LEN - 1] = '\0';
+
+  size_t msg_len =
+      std::min(message.size(), static_cast<size_t>(LOG_MSG_MAX_LEN - 1));
+  std::memcpy(buffer_[index].message, message.data(), msg_len);
+  buffer_[index].message[msg_len] = '\0';
+
   buffer_[index].is_json_message = is_json;
   buffer_[index].session_id = session_id;
   buffer_[index].poll_id = poll_id;

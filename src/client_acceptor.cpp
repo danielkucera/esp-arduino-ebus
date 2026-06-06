@@ -22,7 +22,7 @@ void ClientAcceptor::start() {
   createListenSocket(enhanced_server_);
 
   // Start the clientManagerRunner task
-  xTaskCreate(&ClientAcceptor::taskFunc, "clientAcceptorRunner", 2048, this, 3,
+  xTaskCreate(&ClientAcceptor::taskFunc, "client_acceptor", 1536, this, 3,
               &client_acceptor_task_handle_);
 }
 

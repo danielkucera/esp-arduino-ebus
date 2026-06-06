@@ -39,7 +39,7 @@ extern const char commands_html_start[] asm("_binary_commands_html_start");
 extern const char cron_html_start[] asm("_binary_cron_html_start");
 extern const char values_html_start[] asm("_binary_values_html_start");
 extern const char devices_html_start[] asm("_binary_devices_html_start");
-extern const char statistics_html_start[] asm("_binary_statistics_html_start");
+extern const char metrics_html_start[] asm("_binary_metrics_html_start");
 extern const char logs_html_start[] asm("_binary_logs_html_start");
 
 void sendStatic(httpd_req_t* req, const char* contentType, const char* data) {
@@ -71,7 +71,7 @@ uint32_t parseAdcChannelMask(httpd_req_t* req) {
   if (httpd_req_get_url_query_str(req, query, sizeof(query)) != ESP_OK)
     return 0x03;
 
-  char value[128] = {};
+  char value[128] = {0};
   if (httpd_query_key_value(query, "channels", value, sizeof(value)) != ESP_OK)
     return 0x03;
 
@@ -87,12 +87,26 @@ uint32_t parseAdcChannelMask(httpd_req_t* req) {
     else
       break;
   }
-
   return mask == 0 ? 0x03 : mask;
+}
+
+esp_err_t handleCommonCss(httpd_req_t* req) {
+  sendStatic(req, "text/css", common_css_start);
+  return ESP_OK;
+}
+
+esp_err_t handleCommonJs(httpd_req_t* req) {
+  sendStatic(req, "application/javascript", common_js_start);
+  return ESP_OK;
 }
 
 esp_err_t handleRoot(httpd_req_t* req) {
   sendStatic(req, "text/html", root_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleConfigPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", config_html_start);
   return ESP_OK;
 }
 
@@ -103,6 +117,15 @@ esp_err_t handleStatusPage(httpd_req_t* req) {
 
 esp_err_t handleAdcPage(httpd_req_t* req) {
   sendStatic(req, "text/html", adc_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleStatusApi(httpd_req_t* req) {
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  fetchStatusJson([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
@@ -162,129 +185,85 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
   return ESP_OK;
 }
 
+esp_err_t handleAdcState(httpd_req_t* req) {
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("running", adc.isRunning());
+  writer.endObject();
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
+  return ESP_OK;
+}
+
 esp_err_t handleAdcEnable(httpd_req_t* req) {
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "adc_enable");
   const bool started = adc.begin();
-  if (started)
-    HttpUtils::sendResponse(req, "200 OK", "text/plain", "ADC enabled");
-  else
-    HttpUtils::sendResponse(req, "500 Internal Server Error", "text/plain",
-                            "ADC enable failed");
+  if (started) {
+    writer.writeField("status", "successful");
+  } else {
+    writer.writeField("status", "failed");
+    writer.writeField("error", "ADC enable failed");
+  }
+  writer.endObject();
+  HttpUtils::sendResponse(req, started ? "200 OK" : "500 Internal Server Error",
+                          "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
 esp_err_t handleAdcDisable(httpd_req_t* req) {
   adc.stop();
-  HttpUtils::sendResponse(req, "200 OK", "text/plain", "ADC disabled");
-  return ESP_OK;
-}
-
-esp_err_t handleAdcState(httpd_req_t* req) {
-  cJSON* root = cJSON_CreateObject();
-  cJSON_AddBoolToObject(root, "running", adc.isRunning());
-  char* out = cJSON_PrintUnformatted(root);
-  cJSON_Delete(root);
-  if (out == nullptr) {
-    HttpUtils::sendResponse(req, "500 Internal Server Error",
-                            "application/json;charset=utf-8",
-                            "{\"error\":\"json allocation failed\"}");
-    return ESP_OK;
-  }
-
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
-  free(out);
-  return ESP_OK;
-}
-
-esp_err_t handleStatusApi(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          getStatusJson());
-  return ESP_OK;
-}
-
-esp_err_t handleConfigPage(httpd_req_t* req) {
-  sendStatic(req, "text/html", config_html_start);
-  return ESP_OK;
-}
-
-esp_err_t handleUpgradePage(httpd_req_t* req) {
-  sendStatic(req, "text/html", upgrade_html_start);
-  return ESP_OK;
-}
-
-esp_err_t handleCommonCss(httpd_req_t* req) {
-  sendStatic(req, "text/css", common_css_start);
-  return ESP_OK;
-}
-
-esp_err_t handleCommonJs(httpd_req_t* req) {
-  sendStatic(req, "application/javascript", common_js_start);
-  return ESP_OK;
-}
-
-esp_err_t handleRestart(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "text/html", "Restarting...");
-  vTaskDelay(pdMS_TO_TICKS(500));
-  restart();
+                          "{\"id\":\"adc_disable\",\"status\":\"successful\"}");
   return ESP_OK;
 }
 
 esp_err_t handleWifiScan(httpd_req_t* req) {
-  // Start WiFi scan
-  wifi_scan_config_t scanConfig = {
-      .ssid = nullptr,
-      .bssid = nullptr,
-      .channel = 0,
-      .show_hidden = true,
-      .scan_type = WIFI_SCAN_TYPE_ACTIVE,
-      .scan_time = {.active = {.min = 0, .max = 0}, .passive = 100}};
+  wifi_scan_config_t scanConfig = {};
+  scanConfig.show_hidden = true;
+  scanConfig.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+  scanConfig.scan_time.active.min = 0;
+  scanConfig.scan_time.active.max = 0;
+  scanConfig.scan_time.passive = 100;
 
   esp_err_t err = esp_wifi_scan_start(&scanConfig, true);
   if (err != ESP_OK) {
     HttpUtils::sendResponse(req, "500 Internal Server Error",
-                            "application/json",
-                            "{\"error\":\"WiFi scan failed\"}");
+                            "application/json;charset=utf-8",
+                            "{\"id\":\"wifi_scan\",\"status\":\"failed\","
+                            "\"error\":\"WiFi scan failed\"}");
     return ESP_OK;
   }
 
-  // Get scan results
   uint16_t apCount = 0;
   esp_wifi_scan_get_ap_num(&apCount);
-
-  if (apCount == 0) {
-    HttpUtils::sendResponse(req, "200 OK", "application/json", "[]");
-    return ESP_OK;
-  }
 
   std::vector<wifi_ap_record_t> aps(apCount);
   esp_wifi_scan_get_ap_records(&apCount, aps.data());
 
-  // Build JSON response
-  cJSON* root = cJSON_CreateArray();
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  ebus::detail::JsonWriter writer([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
 
-  for (uint16_t i = 0; i < apCount; ++i) {
-    const wifi_ap_record_t& ap = aps[i];
-
-    cJSON* item = cJSON_CreateObject();
-
-    // SSID
+  writer.startArray();
+  for (const auto& ap : aps) {
+    writer.startObject();
     std::string ssid(reinterpret_cast<const char*>(ap.ssid),
                      strnlen(reinterpret_cast<const char*>(ap.ssid), 32));
-    cJSON_AddStringToObject(item, "ssid", ssid.c_str());
-
-    // BSSID (MAC address)
+    writer.writeField("ssid", ssid);
     char bssidStr[18];
     snprintf(bssidStr, sizeof(bssidStr), "%02x:%02x:%02x:%02x:%02x:%02x",
              ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4],
              ap.bssid[5]);
-    cJSON_AddStringToObject(item, "bssid", bssidStr);
+    writer.writeField("bssid", bssidStr);
+    writer.writeField("rssi", ap.rssi);
+    writer.writeField("channel", ap.primary);
 
-    // Signal strength (RSSI)
-    cJSON_AddNumberToObject(item, "rssi", ap.rssi);
-
-    // Channel
-    cJSON_AddNumberToObject(item, "channel", ap.primary);
-
-    // Security type
     const char* authMode = "UNKNOWN";
     switch (ap.authmode) {
       case WIFI_AUTH_OPEN:
@@ -314,20 +293,18 @@ esp_err_t handleWifiScan(httpd_req_t* req) {
       default:
         break;
     }
-    cJSON_AddStringToObject(item, "authMode", authMode);
-
-    cJSON_AddItemToArray(root, item);
+    writer.writeField("authMode", authMode);
+    writer.endObject();
   }
-
-  // Convert JSON to string and send response
-  char* jsonString = cJSON_Print(root);
-  HttpUtils::sendResponse(req, "200 OK", "application/json", jsonString);
-
-  cJSON_Delete(root);
-  free(jsonString);
-
+  writer.endArray();
+  writer.flush();
+  httpd_resp_send_chunk(req, nullptr, 0);
   esp_wifi_clear_ap_list();
+  return ESP_OK;
+}
 
+esp_err_t handleUpgradePage(httpd_req_t* req) {
+  sendStatic(req, "text/html", upgrade_html_start);
   return ESP_OK;
 }
 
@@ -338,122 +315,163 @@ esp_err_t handleCommandsPage(httpd_req_t* req) {
 }
 
 esp_err_t handleCommands(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          store.getCommandsJson());
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  store.fetchCommandsJson([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
 esp_err_t handleCommandsEvaluate(httpd_req_t* req) {
-  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
-  if (!cJSON_IsArray(doc)) {
-    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
+  std::string body = HttpUtils::readBody(req);
+  cJSON* doc = cJSON_Parse(body.c_str());
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "evaluate");
+  if (doc == nullptr || !cJSON_IsArray(doc)) {
+    writer.writeField("status", "failed");
+    writer.writeField("error", "JSON root must be an array");
   } else {
-    cJSON* command = nullptr;
-    cJSON_ArrayForEach(command, doc) {
-      std::string evalError = Command::evaluate(command);
-      if (!evalError.empty()) {
-        cJSON_Delete(doc);
-        HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
-                                evalError.c_str());
-        return ESP_OK;
-      }
+    cJSON* cmd_node = nullptr;
+    std::string evalError;
+    cJSON_ArrayForEach(cmd_node, doc) {
+      evalError = Command::evaluate(cmd_node);
+      if (!evalError.empty()) break;
     }
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
+    if (evalError.empty()) {
+      writer.writeField("status", "successful");
+    } else {
+      writer.writeField("status", "failed");
+      writer.writeField("error", evalError);
+    }
   }
+  writer.endObject();
   if (doc) cJSON_Delete(doc);
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
 esp_err_t handleCommandsInsert(httpd_req_t* req) {
-  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
-  if (!cJSON_IsArray(doc)) {
-    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
+  std::string body = HttpUtils::readBody(req);
+  cJSON* doc = cJSON_Parse(body.c_str());
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "insert");
+  if (doc == nullptr || !cJSON_IsArray(doc)) {
+    writer.writeField("status", "failed");
+    writer.writeField("error", "JSON root must be an array");
   } else {
-    cJSON* command = nullptr;
-    cJSON_ArrayForEach(command, doc) {
-      std::string evalError = Command::evaluate(command);
-      if (evalError.empty()) {
-        store.insertCommand(Command::fromJson(command));
-      } else {
-        cJSON_Delete(doc);
-        HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
-                                evalError.c_str());
-        return ESP_OK;
-      }
+    cJSON* cmd_node = nullptr;
+    std::string evalError;
+    cJSON_ArrayForEach(cmd_node, doc) {
+      evalError = Command::evaluate(cmd_node);
+      if (!evalError.empty()) break;
     }
-    if (mqttha.isEnabled()) mqttha.publishComponents();
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
+    if (evalError.empty()) {
+      cJSON_ArrayForEach(cmd_node, doc) {
+        store.insertCommand(Command::fromJson(cmd_node));
+      }
+      if (mqttha.isEnabled()) mqttha.publishComponents();
+      writer.writeField("status", "successful");
+    } else {
+      writer.writeField("status", "failed");
+      writer.writeField("error", evalError);
+    }
   }
+  writer.endObject();
   if (doc) cJSON_Delete(doc);
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
 esp_err_t handleCommandsRemove(httpd_req_t* req) {
-  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
-  if (!cJSON_IsObject(doc)) {
-    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
+  std::string body = HttpUtils::readBody(req);
+  std::string_view keys_part = ebus::extractSub(body, "keys");
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "remove");
+  if (keys_part.empty() || keys_part == "[]") {
+    auto cmds = store.getCommands();
+    for (const Command* cmd : cmds) store.removeCommand(cmd->getKey());
   } else {
-    cJSON* keys = cJSON_GetObjectItemCaseSensitive(doc, "keys");
-    if (cJSON_IsArray(keys) && cJSON_GetArraySize(keys) > 0) {
-      cJSON* key = nullptr;
-      cJSON_ArrayForEach(key, keys) {
-        if (!cJSON_IsString(key) || key->valuestring == nullptr) continue;
-        const Command* cmd = store.findCommand(key->valuestring);
-        if (cmd) {
-          if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
-          store.removeCommand(key->valuestring);
-        }
-      }
-      HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
-    } else if (store.getActiveCommands() + store.getPassiveCommands() > 0) {
-      for (const Command* cmd : store.getCommands()) {
-        if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
-        store.removeCommand(cmd->getKey());
-      }
-      HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
-    } else {
-      HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "No commands");
+    size_t pos = 0;
+    while (pos < keys_part.size()) {
+      size_t s = keys_part.find('"', pos);
+      if (s == std::string_view::npos) break;
+      size_t e = keys_part.find('"', s + 1);
+      if (e == std::string_view::npos) break;
+      store.removeCommand(std::string(keys_part.substr(s + 1, e - s - 1)));
+      pos = e + 1;
     }
   }
-  if (doc) cJSON_Delete(doc);
+  writer.writeField("status", "successful");
+  writer.endObject();
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
 esp_err_t handleCommandsLoad(httpd_req_t* req) {
   int64_t bytes = store.loadCommands();
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "load");
   if (bytes > 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html",
-                            std::to_string(bytes) + " bytes loaded");
+    writer.writeField("status", "successful");
   else if (bytes < 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "Loading failed");
+    writer.writeField("status", "failed");
   else
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "No data loaded");
-
+    writer.writeField("status", "no data");
+  if (bytes > 0) writer.writeField("bytes", static_cast<uint32_t>(bytes));
+  writer.endObject();
   if (mqttha.isEnabled()) mqttha.publishComponents();
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
 esp_err_t handleCommandsSave(httpd_req_t* req) {
   int64_t bytes = store.saveCommands();
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "save");
   if (bytes > 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html",
-                            std::to_string(bytes) + " bytes saved");
+    writer.writeField("status", "successful");
   else if (bytes < 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "Saving failed");
+    writer.writeField("status", "failed");
   else
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "No data saved");
+    writer.writeField("status", "no data");
+  if (bytes > 0) writer.writeField("bytes", static_cast<uint32_t>(bytes));
+  writer.endObject();
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
 esp_err_t handleCommandsWipe(httpd_req_t* req) {
   int64_t bytes = store.wipeCommands();
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "wipe");
   if (bytes > 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html",
-                            std::to_string(bytes) + " bytes wiped");
+    writer.writeField("status", "successful");
   else if (bytes < 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "Wiping failed");
+    writer.writeField("status", "failed");
   else
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "No data wiped");
+    writer.writeField("status", "no data");
+  if (bytes > 0) writer.writeField("bytes", static_cast<uint32_t>(bytes));
+  writer.endObject();
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
@@ -463,69 +481,83 @@ esp_err_t handleCronPage(httpd_req_t* req) {
 }
 
 esp_err_t handleCron(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          cron.getRulesJson());
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  cron.fetchRulesJson([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
 esp_err_t handleCronEvaluate(httpd_req_t* req) {
-  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
-  if (!cJSON_IsArray(doc)) {
-    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
-  } else {
-    cJSON* rule = nullptr;
-    cJSON_ArrayForEach(rule, doc) {
-      std::string evalError = Cron::evaluate(rule);
-      if (!evalError.empty()) {
-        cJSON_Delete(doc);
-        HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
-                                evalError.c_str());
-        return ESP_OK;
+  std::string body = HttpUtils::readBody(req);
+  cJSON* doc = cJSON_Parse(body.c_str());
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  {
+    ebus::detail::JsonWriter writer([req](std::string_view chunk) {
+      httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+    });
+    writer.startObject();
+    writer.writeField("id", "evaluate");
+    if (!cJSON_IsArray(doc)) {
+      writer.writeField("status", "failed");
+      writer.writeField("error", "JSON root must be an array");
+    } else {
+      cJSON* rule = nullptr;
+      std::string evalError;
+      cJSON_ArrayForEach(rule, doc) {
+        evalError = Cron::evaluate(rule);
+        if (!evalError.empty()) break;
+      }
+      if (evalError.empty()) {
+        writer.writeField("status", "successful");
+      } else {
+        writer.writeField("status", "failed");
+        writer.writeField("error", evalError);
       }
     }
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
+    writer.endObject();
   }
   if (doc) cJSON_Delete(doc);
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
 esp_err_t handleCronSave(httpd_req_t* req) {
-  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
-  if (!cJSON_IsArray(doc)) {
-    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
-  } else {
-    cJSON* rule = nullptr;
-    cJSON_ArrayForEach(rule, doc) {
-      std::string evalError = Cron::evaluate(rule);
-      if (!evalError.empty()) {
-        cJSON_Delete(doc);
-        HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
-                                evalError.c_str());
-        return ESP_OK;
-      }
-    }
-    int64_t bytes = cron.replaceRules(doc);
-    if (bytes >= 0) {
-      HttpUtils::sendResponse(req, "200 OK", "text/html",
-                              std::to_string(bytes) + " bytes saved");
-    } else {
-      HttpUtils::sendResponse(req, "500 Internal Server Error", "text/html",
-                              "Saving failed");
-    }
-  }
-  if (doc) cJSON_Delete(doc);
+  int64_t bytes = cron.replaceRules(HttpUtils::readBody(req));
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "save");
+  if (bytes >= 0)
+    writer.writeField("status", "successful");
+  else
+    writer.writeField("status", "failed");
+  if (bytes > 0) writer.writeField("bytes", static_cast<uint32_t>(bytes));
+  writer.endObject();
+  HttpUtils::sendResponse(req,
+                          bytes >= 0 ? "200 OK" : "500 Internal Server Error",
+                          "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
 esp_err_t handleCronLoad(httpd_req_t* req) {
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "load");
   int64_t bytes = cron.loadRules();
   if (bytes > 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html",
-                            std::to_string(bytes) + " bytes loaded");
+    writer.writeField("status", "successful");
   else if (bytes < 0)
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "Loading failed");
+    writer.writeField("status", "failed");
   else
-    HttpUtils::sendResponse(req, "200 OK", "text/html", "No data loaded");
+    writer.writeField("status", "no data");
+  if (bytes > 0) writer.writeField("bytes", static_cast<uint32_t>(bytes));
+  writer.endObject();
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
@@ -535,90 +567,79 @@ esp_err_t handleValuesPage(httpd_req_t* req) {
 }
 
 esp_err_t handleValues(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          store.getValuesJson());
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  store.fetchValuesJson([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
 esp_err_t handleValuesWrite(httpd_req_t* req) {
-  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
-  if (!cJSON_IsObject(doc)) {
-    HttpUtils::sendResponse(req, "403 Forbidden", "text/html", "Json invalid");
+  std::string body = HttpUtils::readBody(req);
+  std::string_view key_view = ebus::extract(body, "key");
+  if (key_view.size() >= 2 && key_view.front() == '"' &&
+      key_view.back() == '"') {
+    key_view.remove_prefix(1);
+    key_view.remove_suffix(1);
+  }
+  std::string key(key_view);
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "write");
+  Command* command = store.findCommand(key);
+  if (command == nullptr) {
+    writer.writeField("status", "failed");
+    writer.writeField("error", "Key '" + key + "' not found");
   } else {
-    cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(doc, "key");
-    std::string key =
-        (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
-            ? keyNode->valuestring
-            : "";
-    Command* command = store.findCommand(key);
-    if (command != nullptr) {
-      ebus::Sequence valueBytes = command->getVectorFromJson(doc);
-      if (!valueBytes.empty()) {
-        ebus::Sequence fullWrite = command->getWriteCmd();
-        fullWrite.append(valueBytes);
-
-        getEbusController().enqueue(PRIO_SEND, fullWrite);
-        HttpUtils::sendResponse(req, "200 OK", "text/html", "Ok");
-        command->setLast(0);  // Mark as stale to trigger immediate poll
-      } else {
-        HttpUtils::sendResponse(
-            req, "403 Forbidden", "text/html",
-            std::string("Invalid value for key '") + key + "'");
-      }
+    ebus::Sequence valueBytes = command->getVectorFromJson(body);
+    if (!valueBytes.empty()) {
+      ebus::Sequence fullWrite = command->getWriteCmd();
+      fullWrite.append(valueBytes);
+      getEbusController().enqueue(PRIO_SEND, fullWrite);
+      command->setLast(0);
+      writer.writeField("status", "successful");
     } else {
-      HttpUtils::sendResponse(req, "403 Forbidden", "text/html",
-                              std::string("Key '") + key + "' not found");
+      writer.writeField("status", "failed");
+      writer.writeField("error", "Invalid value for key '" + key + "'");
     }
   }
-  if (doc) cJSON_Delete(doc);
+  writer.endObject();
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
 esp_err_t handleValuesRead(httpd_req_t* req) {
-  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
-  if (!cJSON_IsObject(doc)) {
-    cJSON* errDoc = cJSON_CreateObject();
-    cJSON_AddStringToObject(errDoc, "id", "read");
-    cJSON_AddStringToObject(errDoc, "status", "invalid json payload");
-    char* printed = cJSON_PrintUnformatted(errDoc);
-    std::string payload = printed != nullptr ? printed : "{}";
-    if (printed != nullptr) cJSON_free(printed);
-    cJSON_Delete(errDoc);
-    HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                            payload.c_str());
+  std::string body = HttpUtils::readBody(req);
+  std::string_view key_view = ebus::extract(body, "key");
+  if (key_view.size() >= 2 && key_view.front() == '"' &&
+      key_view.back() == '"') {
+    key_view.remove_prefix(1);
+    key_view.remove_suffix(1);
+  }
+  std::string key(key_view);
+  std::string out;
+  ebus::detail::JsonWriter writer(
+      [&out](std::string_view s) { out.append(s); });
+  writer.startObject();
+  writer.writeField("id", "read");
+  if (key.empty()) {
+    writer.writeField("status", "failed");
+    writer.writeField("error", "invalid json payload");
   } else {
-    cJSON* keyNode = cJSON_GetObjectItemCaseSensitive(doc, "key");
-    std::string key =
-        (cJSON_IsString(keyNode) && keyNode->valuestring != nullptr)
-            ? keyNode->valuestring
-            : "";
     Command* command = store.findCommand(key);
     if (command != nullptr) {
       command->setLast(0);
-      cJSON* resp = cJSON_CreateObject();
-      cJSON_AddStringToObject(resp, "id", "read");
-      cJSON_AddStringToObject(resp, "status", "requested");
-      char* printed = cJSON_PrintUnformatted(resp);
-      std::string payload = printed != nullptr ? printed : "{}";
-      if (printed != nullptr) cJSON_free(printed);
-      cJSON_Delete(resp);
-      HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                              payload.c_str());
+      writer.writeField("status", "requested");
     } else {
-      cJSON* errDoc = cJSON_CreateObject();
-      cJSON_AddStringToObject(errDoc, "id", "read");
-      cJSON_AddStringToObject(
-          errDoc, "status",
-          (std::string("Key '") + key + "' not found").c_str());
-      char* printed = cJSON_PrintUnformatted(errDoc);
-      std::string payload = printed != nullptr ? printed : "{}";
-      if (printed != nullptr) cJSON_free(printed);
-      cJSON_Delete(errDoc);
-      HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                              payload.c_str());
+      writer.writeField("status", "failed");
+      writer.writeField("error", "Key '" + key + "' not found");
     }
   }
-  if (doc) cJSON_Delete(doc);
+  writer.endObject();
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
   return ESP_OK;
 }
 
@@ -629,25 +650,41 @@ esp_err_t handleDevicesPage(httpd_req_t* req) {
 
 esp_err_t handleDevices(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
-
   ebus::detail::JsonWriter writer([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
-
   writer.startArray();
   getEbusController().fetchDeviceInfo(
-      [&writer](const ebus::DeviceInfo& device) {
-        if (!writer.isFirst()) writer.write(",");
-        device.toJson(writer);
-      });
+      [&writer](const ebus::DeviceInfo& device) { device.toJson(writer); });
   writer.endArray();
-
   writer.flush();
   httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
-esp_err_t handleMetrics(httpd_req_t* req) {
+esp_err_t handleDevicesScan(httpd_req_t* req) {
+  getEbusController().scanObservedDevices();
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  httpd_resp_sendstr_chunk(req, "{\"id\":\"scan\",\"status\":\"initiated\"}");
+  httpd_resp_send_chunk(req, nullptr, 0);
+  return ESP_OK;
+}
+
+esp_err_t handleDevicesScanFull(httpd_req_t* req) {
+  getEbusController().initFullScan(true);
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  httpd_resp_sendstr_chunk(req,
+                           "{\"id\":\"scan_full\",\"status\":\"initiated\"}");
+  httpd_resp_send_chunk(req, nullptr, 0);
+  return ESP_OK;
+}
+
+esp_err_t handleMetricsPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", metrics_html_start);
+  return ESP_OK;
+}
+
+esp_err_t handleMetricsApi(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   getEbusController().fetchServiceStatus([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
@@ -656,40 +693,10 @@ esp_err_t handleMetrics(httpd_req_t* req) {
   return ESP_OK;
 }
 
-esp_err_t handleDevicesScan(httpd_req_t* req) {
-  getEbusController().scanObservedDevices();
-  HttpUtils::sendResponse(req, "200 OK", "text/html", "Scan initiated");
-  return ESP_OK;
-}
-
-esp_err_t handleDevicesScanFull(httpd_req_t* req) {
-  getEbusController().initFullScan(true);
-  HttpUtils::sendResponse(req, "200 OK", "text/html", "Full scan initiated");
-  return ESP_OK;
-}
-
-esp_err_t handleStatisticsPage(httpd_req_t* req) {
-  sendStatic(req, "text/html", statistics_html_start);
-  return ESP_OK;
-}
-
-esp_err_t handleStatisticsCounter(httpd_req_t* req) {
-  // HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-  //                         schedule.getCounterJson());
-  return ESP_OK;
-}
-
-esp_err_t handleStatisticsTiming(httpd_req_t* req) {
-  // HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-  //                         schedule.getTimingJson());
-  return ESP_OK;
-}
-
-esp_err_t handleStatisticsReset(httpd_req_t* req) {
-  // deviceManager.resetAddresses();
-  // schedule.resetCounter();
-  // schedule.resetTiming();
-  // HttpUtils::sendResponse(req, "200 OK", "text/html", "Statistics reset");
+esp_err_t handleMetricsReset(httpd_req_t* req) {
+  getEbusController().resetMetrics();
+  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
+                          "{\"id\":\"reset\",\"status\":\"successful\"}");
   return ESP_OK;
 }
 
@@ -700,35 +707,44 @@ esp_err_t handleLogsPage(httpd_req_t* req) {
 
 esp_err_t handleLogs(httpd_req_t* req) {
   uint64_t sinceMillis = 0;
-
   const size_t queryLen = httpd_req_get_url_query_len(req);
   if (queryLen > 0) {
     std::vector<char> query(queryLen + 1, '\0');
     if (httpd_req_get_url_query_str(req, query.data(), query.size()) ==
         ESP_OK) {
-      char sinceBuffer[32] = {'\0'};
+      char sinceBuffer[32] = {0};
       if (httpd_query_key_value(query.data(), "since", sinceBuffer,
                                 sizeof(sinceBuffer)) == ESP_OK) {
-        char* end = nullptr;
-        const unsigned long long parsed = std::strtoull(sinceBuffer, &end, 10);
-        if (end != sinceBuffer && *end == '\0') {
-          sinceMillis = static_cast<uint64_t>(parsed);
-        }
+        sinceMillis = std::strtoull(sinceBuffer, nullptr, 10);
       }
     }
   }
-
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          logger.getLogs(sinceMillis));
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  logger.fetchLogsJson(
+      [req](std::string_view chunk) {
+        httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+      },
+      sinceMillis);
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
 esp_err_t handleLogsTimeRelation(httpd_req_t* req) {
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8",
-                          logger.getTimeRelation());
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  logger.fetchTimeRelationJson([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 #endif
+
+esp_err_t handleRestart(httpd_req_t* req) {
+  HttpUtils::sendResponse(req, "200 OK", "text/html", "Restarting...");
+  vTaskDelay(pdMS_TO_TICKS(500));
+  restart();
+  return ESP_OK;
+}
 
 esp_err_t handleNotFound(httpd_req_t* req) {
   if (!WifiNetworkManager::isStaConnected() &&
@@ -743,7 +759,6 @@ esp_err_t handleNotFound(httpd_req_t* req) {
   HttpUtils::sendResponse(req, "404 Not Found", "text/plain", "Not found");
   return ESP_OK;
 }
-
 }  // namespace
 
 httpd_handle_t GetHttpServer() { return configServer; }
@@ -769,8 +784,8 @@ void SetupHttpHandlers() {
   config.stack_size = 4096;
   // Resilience: Enable LRU purge to reclaim sockets from stalled clients
   config.lru_purge_enable = true;
-  // Reduce socket count to conserve pbufs/heap on weak links (RSSI -86)
-  config.max_open_sockets = 4;
+  // CRITICAL for C3: Reduce socket count to save heap
+  config.max_open_sockets = 2;
   // Give the networking stack more time to recover from packet loss
   config.recv_wait_timeout = 10;
   config.send_wait_timeout = 10;
@@ -807,6 +822,7 @@ void SetupHttpHandlers() {
   RegisterUri("/cron", HTTP_GET, handleCronPage);
   RegisterUri("/api/v1/cron", HTTP_GET, handleCron);
   RegisterUri("/api/v1/cron", HTTP_POST, handleCronSave);
+  RegisterUri("/api/v1/cron/load", HTTP_POST, handleCronLoad);
   RegisterUri("/api/v1/cron/evaluate", HTTP_POST, handleCronEvaluate);
 
   RegisterUri("/values", HTTP_GET, handleValuesPage);
@@ -816,14 +832,12 @@ void SetupHttpHandlers() {
 
   RegisterUri("/devices", HTTP_GET, handleDevicesPage);
   RegisterUri("/api/v1/devices", HTTP_GET, handleDevices);
-  RegisterUri("/api/v1/metrics", HTTP_GET, handleMetrics);
   RegisterUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
   RegisterUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
 
-  RegisterUri("/statistics", HTTP_GET, handleStatisticsPage);
-  RegisterUri("/api/v1/statistics/counter", HTTP_GET, handleStatisticsCounter);
-  RegisterUri("/api/v1/statistics/timing", HTTP_GET, handleStatisticsTiming);
-  RegisterUri("/api/v1/statistics/reset", HTTP_POST, handleStatisticsReset);
+  RegisterUri("/metrics", HTTP_GET, handleMetricsPage);
+  RegisterUri("/api/v1/metrics", HTTP_GET, handleMetricsApi);
+  RegisterUri("/api/v1/metrics/reset", HTTP_POST, handleMetricsReset);
 
   RegisterUri("/logs", HTTP_GET, handleLogsPage);
   RegisterUri("/api/v1/logs", HTTP_GET, handleLogs);
@@ -831,7 +845,7 @@ void SetupHttpHandlers() {
 #endif
 
   RegisterUri("/restart", HTTP_GET, handleRestart);
-}
+}  // namespace
 
 void SetupHttpFallbackHandlers() {
   if (configServer == nullptr || fallbackHandlersRegistered) return;

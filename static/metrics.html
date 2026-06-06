@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>esp-eBus Metrics</title>
+    <link rel="stylesheet" href="common.css">
+</head>
+
+<body>
+    <h1>Metrics</h1>
+    <div class="controls">
+        <button id="btnHome">Home</button>
+        <button id="btnRefresh">Refresh</button>
+        <button id="btnReset" class="danger">Reset Stats</button>
+        <span id="status">...</span>
+    </div>
+    <div class="container" id="metricsContainer"></div>
+    <script src="common.js"></script>
+    <script>
+        function loadMetrics() {
+            fetchJson('/api/v1/metrics', data => renderNestedSections(data, 'metricsContainer', true, 16));
+        }
+        document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnRefresh').addEventListener('click', loadMetrics);
+        document.getElementById('btnReset').addEventListener('click', () => postSimple('/api/v1/metrics/reset').then(loadMetrics));
+
+        // Initial load
+        loadMetrics();
+    </script>
+</body>
+
+</html>

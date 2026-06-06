@@ -1,8 +1,5 @@
 #include "EspOtaManager.hpp"
 
-#include <cerrno>
-#include <cstdio>
-#include <cstring>
 #include <esp_err.h>
 #include <esp_ota_ops.h>
 #include <esp_system.h>
@@ -13,6 +10,9 @@
 #include <lwip/sockets.h>
 #include <unistd.h>
 
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 #include <string>
 
 #ifdef INADDR_NONE
@@ -60,8 +60,8 @@ void EspOtaManager::begin(uint16_t port) {
   addr.sin_port = htons(port_);
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
   if (bind(udpSock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
-    logger.error("ESPOTA: failed to bind UDP port " +
-                 std::to_string(port_) + " errno=" + std::to_string(errno));
+    logger.error("ESPOTA: failed to bind UDP port " + std::to_string(port_) +
+                 " errno=" + std::to_string(errno));
     close(udpSock_);
     udpSock_ = -1;
     return;
@@ -70,9 +70,8 @@ void EspOtaManager::begin(uint16_t port) {
   logger.info("ESPOTA: listening on UDP port " + std::to_string(port_));
 
   if (taskHandle_ == nullptr) {
-    BaseType_t taskResult =
-        xTaskCreate(taskEntry, "espota_task", kEspOtaTaskStackSize, this, 1,
-                    &taskHandle_);
+    BaseType_t taskResult = xTaskCreate(
+        taskEntry, "espota", kEspOtaTaskStackSize, this, 1, &taskHandle_);
     if (taskResult != pdPASS) {
       logger.error("ESPOTA: failed to start task");
       taskHandle_ = nullptr;
@@ -160,8 +159,8 @@ bool EspOtaManager::handleInvitation() {
                          expectedSize);
 }
 
-bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPort,
-                                    size_t expectedSize) {
+bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr,
+                                    uint16_t hostPort, size_t expectedSize) {
   prepareForUpgrade();
 
   if (udpSock_ >= 0) {
@@ -188,7 +187,8 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
   timeval recvTimeout{};
   recvTimeout.tv_sec = 1;
   recvTimeout.tv_usec = 0;
-  setsockopt(tcpSock, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout, sizeof(recvTimeout));
+  setsockopt(tcpSock, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout,
+             sizeof(recvTimeout));
 
   const esp_partition_t* partition = esp_ota_get_next_update_partition(nullptr);
   if (partition == nullptr) {
@@ -213,12 +213,14 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
   size_t totalReceived = 0;
   bool checkedMagic = false;
   int nextProgressPercent = 10;
-  uint32_t transferDeadline = (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
+  uint32_t transferDeadline =
+      (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
 
   while (totalReceived < expectedSize) {
     int bytesRead = recv(tcpSock, buffer, sizeof(buffer), 0);
     if (bytesRead <= 0) {
-      if (bytesRead == 0 || (uint32_t)(esp_timer_get_time() / 1000ULL) > transferDeadline) {
+      if (bytesRead == 0 ||
+          (uint32_t)(esp_timer_get_time() / 1000ULL) > transferDeadline) {
         esp_ota_abort(handle);
         fail("transfer timeout/disconnect");
         const char* msg = "ERROR[3]: timeout";
@@ -238,7 +240,8 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
       return false;
     }
 
-    transferDeadline = (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
+    transferDeadline =
+        (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
 
     if (!checkedMagic) {
       checkedMagic = true;
@@ -255,7 +258,8 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr, uint16_t hostPo
     esp_err_t writeResult = esp_ota_write(handle, buffer, bytesRead);
     if (writeResult != ESP_OK) {
       esp_ota_abort(handle);
-      fail(std::string("esp_ota_write failed: ") + esp_err_to_name(writeResult));
+      fail(std::string("esp_ota_write failed: ") +
+           esp_err_to_name(writeResult));
       const char* msg = "ERROR[5]: write";
       send(tcpSock, msg, strlen(msg), 0);
       close(tcpSock);

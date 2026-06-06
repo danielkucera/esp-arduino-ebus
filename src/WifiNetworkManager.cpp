@@ -43,8 +43,8 @@ esp_netif_t* WifiNetworkManager::apNetif_ = nullptr;
 
 namespace {
 
-TaskHandle_t socketLoggerTaskHandle = nullptr;
-
+TaskHandle_t socketLoggerTaskHandle_ = nullptr;
+#if 0
 void logOpenSockets() {
   int detectedCount = 0;
   int listedCount = 0;
@@ -86,6 +86,7 @@ void logOpenSockets() {
                " max=" + std::to_string(CONFIG_LWIP_MAX_SOCKETS) +
                " listed=" + std::to_string(listedCount));
 }
+#endif
 
 void socketLoggerTaskEntry(void* arg) {
   (void)arg;
@@ -140,9 +141,9 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   initStatusLed();
   setStatusLedMode(StatusLedMode::SlowBlink);
 
-  if (socketLoggerTaskHandle == nullptr) {
-    xTaskCreate(socketLoggerTaskEntry, "socket_logger_task", 2048, nullptr, 1,
-                &socketLoggerTaskHandle);
+  if (socketLoggerTaskHandle_ == nullptr) {
+    xTaskCreate(socketLoggerTaskEntry, "socket_logger", 2048, nullptr, 1,
+                &socketLoggerTaskHandle_);
   }
 
   std::string apPassword =
@@ -430,7 +431,7 @@ void WifiNetworkManager::initStatusLed() {
   gpio_config(&config);
   gpio_set_level(static_cast<gpio_num_t>(statusLedPin_), 0);
   if (statusLedTaskHandle_ == nullptr) {
-    xTaskCreate(statusLedTaskEntry, "status_led_task", 1024, nullptr, 1,
+    xTaskCreate(statusLedTaskEntry, "status_led", 1024, nullptr, 1,
                 &statusLedTaskHandle_);
   }
 }
@@ -519,7 +520,7 @@ TaskHandle_t WifiNetworkManager::getStatusLedTaskHandle() {
 }
 
 TaskHandle_t WifiNetworkManager::getSocketLoggerTaskHandle() {
-  return socketLoggerTaskHandle;
+  return socketLoggerTaskHandle_;
 }
 
 void WifiNetworkManager::configureStaticIpIfEnabled() {

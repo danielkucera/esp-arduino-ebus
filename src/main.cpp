@@ -1,6 +1,5 @@
 #include "main.hpp"
 
-#include <cJSON.h>
 #include <driver/gpio.h>
 #include <driver/ledc.h>
 #include <esp_chip_info.h>
@@ -17,6 +16,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <ebus/detail/json_writer.hpp>
 
 #include "Logger.hpp"
 
@@ -65,6 +65,136 @@ TaskHandle_t simTaskHandle = nullptr;
 char unique_id[7]{};
 
 namespace {
+
+// status
+uint32_t reset_code = 0;
+
+struct StatusInfo {
+  void toJson(ebus::detail::JsonWriter& writer) const {
+    writer.startObject();
+    writer.writeField("Reset_Code", reset_code);
+    writer.writeField("Uptime",
+                      static_cast<uint32_t>(esp_timer_get_time() / 1000ULL));
+    writer.writeField("Free_Heap", esp_get_free_heap_size());
+    writer.endObject();
+  }
+};
+
+#if !defined(EBUS_INTERNAL)
+struct ArbitrationInfo {
+  void toJson(ebus::detail::JsonWriter& writer) const {
+    writer.startObject();
+    writer.writeField("Total", static_cast<int>(Bus._nbrArbitrations));
+    writer.writeField("Restarts1", static_cast<int>(Bus._nbrRestarts1));
+    writer.writeField("Restarts2", static_cast<int>(Bus._nbrRestarts2));
+    writer.writeField("Won1", static_cast<int>(Bus._nbrWon1));
+    writer.writeField("Won2", static_cast<int>(Bus._nbrWon2));
+    writer.writeField("Lost1", static_cast<int>(Bus._nbrLost1));
+    writer.writeField("Lost2", static_cast<int>(Bus._nbrLost2));
+    writer.writeField("Late", static_cast<int>(Bus._nbrLate));
+    writer.writeField("Errors", static_cast<int>(Bus._nbrErrors));
+    writer.endObject();
+  }
+};
+#endif
+
+struct FirmwareStatus {
+  void toJson(ebus::detail::JsonWriter& writer) const {
+    writer.startObject();
+    writer.writeField("Version", AUTO_VERSION);
+    writer.writeField("SDK", esp_get_idf_version());
+#if !defined(EBUS_INTERNAL)
+    writer.writeField("Async", static_cast<bool>(USE_ASYNCHRONOUS));
+    writer.writeField("Software_Serial",
+                      static_cast<bool>(USE_SOFTWARE_SERIAL));
+#endif
+    writer.writeField("Unique_ID", unique_id);
+    writer.writeField("Adapter_HW_Version", getAdapterHwVersionString());
+    writer.writeField("Adapter_HW_Version_Raw", getAdapterHwVersionRaw());
+    writer.writeField("Clock_Speed", esp_clk_cpu_freq() / 1000000U);
+    writer.writeField("Apb_Speed", esp_clk_apb_freq());
+    writer.endObject();
+  }
+};
+
+struct ChipStatus {
+  void toJson(ebus::detail::JsonWriter& writer) const {
+    writer.startObject();
+    esp_chip_info_t chip_info{};
+    esp_chip_info(&chip_info);
+    uint32_t flash_size = 0;
+    if (esp_flash_default_chip != nullptr)
+      esp_flash_get_size(esp_flash_default_chip, &flash_size);
+    writer.writeField("Chip_Revision", static_cast<int>(chip_info.revision));
+    writer.writeField("Flash_Chip_Size", flash_size);
+    writer.endObject();
+  }
+};
+
+struct WifiStatus {
+  void toJson(ebus::detail::JsonWriter& writer) const {
+    writer.startObject();
+    writer.writeField("Last_Connect", WifiNetworkManager::getLastConnect());
+    writer.writeField("Reconnect_Count",
+                      WifiNetworkManager::getReconnectCount());
+    writer.writeField("RSSI", WifiNetworkManager::RSSI());
+    if (WifiNetworkManager::isStaticIpEnabled()) {
+      writer.writeField("Static_IP", true);
+      writer.writeField("IP_Address",
+                        WifiNetworkManager::getConfiguredIpAddress());
+      writer.writeField("Gateway", WifiNetworkManager::getConfiguredGateway());
+      writer.writeField("Netmask", WifiNetworkManager::getConfiguredNetmask());
+      writer.writeField("DNS1", WifiNetworkManager::getConfiguredDns1());
+      writer.writeField("DNS2", WifiNetworkManager::getConfiguredDns2());
+    } else {
+      esp_netif_ip_info_t staIpInfo{};
+      const bool hasStaIp = WifiNetworkManager::getStaIpInfo(&staIpInfo);
+      esp_ip4_addr_t dnsMain{}, dnsBackup{};
+      const bool hasDnsMain = WifiNetworkManager::getDnsIp(0, &dnsMain);
+      const bool hasDnsBackup = WifiNetworkManager::getDnsIp(1, &dnsBackup);
+      writer.writeField("Static_IP", false);
+      writer.writeField(
+          "IP_Address",
+          hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.ip) : "");
+      writer.writeField(
+          "Gateway",
+          hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.gw) : "");
+      writer.writeField(
+          "Netmask",
+          hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.netmask) : "");
+      writer.writeField(
+          "DNS1", hasDnsMain ? WifiNetworkManager::ipToString(dnsMain) : "");
+      writer.writeField("DNS2", hasDnsBackup
+                                    ? WifiNetworkManager::ipToString(dnsBackup)
+                                    : "");
+    }
+    writer.writeField("SSID", WifiNetworkManager::SSID());
+    writer.writeField("BSSID", WifiNetworkManager::BSSIDstr());
+    writer.writeField("Channel", WifiNetworkManager::channel());
+    writer.writeField("Hostname", WifiNetworkManager::getHostname());
+    writer.writeField("MAC_Address", WifiNetworkManager::macAddress());
+    writer.endObject();
+  }
+};
+
+#if defined(EBUS_INTERNAL)
+struct SntpStatus {
+  void toJson(ebus::detail::JsonWriter& writer) const {
+    writer.startObject();
+    writer.writeField("Enabled", configManager.readBool("sntpEnabled"));
+    const char* activeSntpServer = esp_sntp_getservername(0);
+    if (activeSntpServer != nullptr) {
+      writer.writeField("Server", activeSntpServer);
+    } else {
+      writer.writeField("Server", configManager.readString(
+                                      "sntpServer", DEFAULT_SNTP_SERVER));
+    }
+    writer.writeField("Timezone", configManager.readString(
+                                      "sntpTimezone", DEFAULT_SNTP_TIMEZONE));
+    writer.endObject();
+  }
+};
+#endif
 
 constexpr uint16_t kCaptiveDnsPort = 53;
 constexpr const char* kCaptiveDnsIpString = "192.168.4.1";
@@ -139,9 +269,6 @@ void prepareRuntimeForUpgrade() {
 }
 
 }  // namespace
-
-// status
-uint32_t reset_code = 0;
 
 inline void disableTX() {
 #if defined(TX_DISABLE_PIN)
@@ -238,84 +365,70 @@ void setTimezone(const char* timezone) {
   }
 }
 
-const std::string getMqttStatusJson() {
+void fetchMqttStatusJson(const ebus::JsonChunkVisitor& visitor) {
   const uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
   ssize_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
   ssize_t min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
 
-  cJSON* doc = cJSON_CreateObject();
-  cJSON_AddNumberToObject(doc, "reset_code", reset_code);
-  cJSON_AddNumberToObject(doc, "uptime", uptime);
-  cJSON_AddNumberToObject(doc, "free_heap", free_heap);
-  cJSON_AddNumberToObject(doc, "min_free_heap", min_free_heap);
-  cJSON_AddNumberToObject(doc, "rssi", WifiNetworkManager::RSSI());
-
-  char* printed = cJSON_PrintUnformatted(doc);
-  std::string payload = printed != nullptr ? printed : "{}";
-  if (printed != nullptr) cJSON_free(printed);
-  cJSON_Delete(doc);
-  return payload;
+  ebus::detail::JsonWriter writer(visitor);
+  writer.startObject();
+  writer.writeField("reset_code", reset_code);
+  writer.writeField("uptime", uptime);
+  writer.writeField("free_heap", static_cast<uint32_t>(free_heap));
+  writer.writeField("min_free_heap", static_cast<uint32_t>(min_free_heap));
+  writer.writeField("rssi", WifiNetworkManager::RSSI());
+  writer.endObject();
 }
 #endif
 
-namespace {  // Anonymous namespace for helper functions
-void addThreadInfo(cJSON* parent, const char* name, TaskHandle_t handle,
-                   uint32_t stackSize) {
-  if (!handle) return;
-  cJSON* obj = cJSON_CreateObject();
-  cJSON_AddStringToObject(obj, "name", name);
-  cJSON_AddNumberToObject(obj, "stack_size", stackSize);
-  cJSON_AddNumberToObject(
-      obj, "stack_free",
-      uxTaskGetStackHighWaterMark(handle) * sizeof(StackType_t));
-  cJSON_AddItemToArray(parent, obj);
-}
-}  // namespace
+void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor) {
+  ebus::detail::JsonWriter writer(visitor);
+  writer.startObject();
 
-char* getAppResourcesJson() {
-  cJSON* root = cJSON_CreateObject();
+  auto addThread = [&](const char* name, TaskHandle_t handle,
+                       uint32_t stack_size) {
+    if (!handle) return;
+    ebus::ThreadStatus ts(
+        name, static_cast<int32_t>(stack_size),
+        static_cast<int32_t>(uxTaskGetStackHighWaterMark(handle) *
+                             sizeof(StackType_t)));
+    writer.writeValue(ts);
+  };
 
-  cJSON* threads = cJSON_AddArrayToObject(root, "threads");
+  writer.appendKey("threads");
+  writer.startArray();
 #if defined(EBUS_SIMULATION)
-  addThreadInfo(threads, "sim", simTaskHandle, 4096);
+  addThread("sim", simTaskHandle, 2048);
 #endif
 #if defined(EBUS_INTERNAL)
-  addThreadInfo(threads, "mqtt", mqtt.getTaskHandle(), 4096);
-  addThreadInfo(threads, "cron", cron.getTaskHandle(), 2048);
-  addThreadInfo(threads, "logger", logger.getTaskHandle(), 2048);
-  addThreadInfo(threads, "client_acceptor", client_acceptor.getTaskHandle(),
-                2048);
+  addThread("mqtt", mqtt.getTaskHandle(), 4096);
+  addThread("cron", cron.getTaskHandle(), 1024);
+  addThread("logger", logger.getTaskHandle(), 1536);
+  addThread("client_acceptor", client_acceptor.getTaskHandle(), 1536);
 #endif
-  addThreadInfo(threads, "dns", captiveDnsServer.getTaskHandle(), 2048);
-  addThreadInfo(threads, "espota", espOtaManager.getTaskHandle(), 8192);
-  addThreadInfo(threads, "status_led",
-                WifiNetworkManager::getStatusLedTaskHandle(), 1024);
-  addThreadInfo(threads, "socket_logger",
-                WifiNetworkManager::getSocketLoggerTaskHandle(), 2048);
+  addThread("dns", captiveDnsServer.getTaskHandle(), 2048);
+  addThread("espota", espOtaManager.getTaskHandle(), 8192);
+  addThread("status_led", WifiNetworkManager::getStatusLedTaskHandle(), 1024);
+  addThread("socket_logger", WifiNetworkManager::getSocketLoggerTaskHandle(),
+            2048);
+  writer.endArray();
 
-  cJSON* queues = cJSON_AddArrayToObject(root, "queues");
-  auto addQueue = [&](const char* qname, size_t size) {
-    cJSON* qobj = cJSON_CreateObject();
-    cJSON_AddStringToObject(qobj, "name", qname);
-    cJSON_AddNumberToObject(qobj, "size", size);
-    // App queues don't currently expose capacity, but we align the structure
-    cJSON_AddNullToObject(qobj, "capacity");
-    cJSON_AddItemToArray(queues, qobj);
+  writer.appendKey("queues");
+  writer.startArray();
+  auto addQueue = [&](const char* qname, size_t size, size_t cap) {
+    ebus::QueueStatus qs(qname, size, cap, 0);
+    writer.writeValue(qs);
   };
 
 #if defined(EBUS_INTERNAL)
-  addQueue("mqtt_in", mqtt.getIncomingQueueSize());
-  addQueue("mqtt_out", mqtt.getOutgoingQueueSize());
+  addQueue("mqtt_in", mqtt.getIncomingQueueSize(),
+           mqtt.getIncomingQueueCapacity());
+  addQueue("mqtt_out", mqtt.getOutgoingQueueSize(),
+           mqtt.getOutgoingQueueCapacity());
 #endif
-  addQueue("logger", logger.getQueueSize());
-
-  char* payload = cJSON_PrintUnformatted(root);
-  cJSON_Delete(root);
-  if (payload == nullptr) {
-    // Return a heap-allocated empty JSON string if printing failed
-    return strdup("{}");  // strdup allocates memory, caller must free
-  }
-  return payload;
+  addQueue("logger", logger.getQueueSize(), 32);  // kPrintQueueLen is 32
+  writer.endArray();
+  writer.endObject();
 }
 
 void saveParamsCallback() {
@@ -365,185 +478,75 @@ void saveParamsCallback() {
 #endif
 }
 
-const std::string getStatusJson() {
-  const uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
-  const uint32_t free_heap = esp_get_free_heap_size();
-
-  cJSON* doc = cJSON_CreateObject();
-  cJSON* status = cJSON_AddObjectToObject(doc, "Status");
-  cJSON_AddNumberToObject(status, "Reset_Code", reset_code);
-  cJSON_AddNumberToObject(status, "Uptime", uptime);
-  cJSON_AddNumberToObject(status, "Free_Heap", free_heap);
+void fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
+  ebus::detail::JsonWriter writer(visitor);
+  writer.startObject();
+  writer.writeField("Status", StatusInfo{});
 
 #if !defined(EBUS_INTERNAL)
-  // Arbitration
-  cJSON* arbitration = cJSON_AddObjectToObject(doc, "Arbitration");
-  cJSON_AddNumberToObject(arbitration, "Total",
-                          static_cast<int>(Bus._nbrArbitrations));
-  cJSON_AddNumberToObject(arbitration, "Restarts1",
-                          static_cast<int>(Bus._nbrRestarts1));
-  cJSON_AddNumberToObject(arbitration, "Restarts2",
-                          static_cast<int>(Bus._nbrRestarts2));
-  cJSON_AddNumberToObject(arbitration, "Won1", static_cast<int>(Bus._nbrWon1));
-  cJSON_AddNumberToObject(arbitration, "Won2", static_cast<int>(Bus._nbrWon2));
-  cJSON_AddNumberToObject(arbitration, "Lost1",
-                          static_cast<int>(Bus._nbrLost1));
-  cJSON_AddNumberToObject(arbitration, "Lost2",
-                          static_cast<int>(Bus._nbrLost2));
-  cJSON_AddNumberToObject(arbitration, "Late", static_cast<int>(Bus._nbrLate));
-  cJSON_AddNumberToObject(arbitration, "Errors",
-                          static_cast<int>(Bus._nbrErrors));
+  writer.writeField("Arbitration", ArbitrationInfo{});
 #endif
+  writer.writeField("Firmware", FirmwareStatus{});
+  writer.writeField("Chip", ChipStatus{});
+  writer.writeField("WIFI", WifiStatus{});
 
-  // Firmware
-  cJSON* firmware = cJSON_AddObjectToObject(doc, "Firmware");
-  cJSON_AddStringToObject(firmware, "Version", AUTO_VERSION);
-  cJSON_AddStringToObject(firmware, "SDK", esp_get_idf_version());
-#if !defined(EBUS_INTERNAL)
-  cJSON_AddBoolToObject(firmware, "Async", USE_ASYNCHRONOUS ? true : false);
-  cJSON_AddBoolToObject(firmware, "Software_Serial",
-                        USE_SOFTWARE_SERIAL ? true : false);
-#endif
-  cJSON_AddStringToObject(firmware, "Unique_ID", unique_id);
-  cJSON_AddStringToObject(firmware, "Adapter_HW_Version",
-                          getAdapterHwVersionString().c_str());
-  cJSON_AddNumberToObject(firmware, "Adapter_HW_Version_Raw",
-                          getAdapterHwVersionRaw());
-  cJSON_AddNumberToObject(firmware, "Clock_Speed",
-                          esp_clk_cpu_freq() / 1000000U);
-  cJSON_AddNumberToObject(firmware, "Apb_Speed", esp_clk_apb_freq());
-
-  // Chip
-  cJSON* chip = cJSON_AddObjectToObject(doc, "Chip");
-  esp_chip_info_t chip_info_json{};
-  esp_chip_info(&chip_info_json);
-  uint32_t flash_size_json = 0;
-  if (esp_flash_default_chip != nullptr) {
-    esp_flash_get_size(esp_flash_default_chip, &flash_size_json);
-  }
-  cJSON_AddNumberToObject(chip, "Chip_Revision", chip_info_json.revision);
-  cJSON_AddNumberToObject(chip, "Flash_Chip_Size", flash_size_json);
-
-  // WIFI
-  cJSON* wifi = cJSON_AddObjectToObject(doc, "WIFI");
-  cJSON_AddNumberToObject(wifi, "Last_Connect",
-                          WifiNetworkManager::getLastConnect());
-  cJSON_AddNumberToObject(wifi, "Reconnect_Count",
-                          WifiNetworkManager::getReconnectCount());
-  cJSON_AddNumberToObject(wifi, "RSSI", WifiNetworkManager::RSSI());
-
-  if (WifiNetworkManager::isStaticIpEnabled()) {
-    cJSON_AddBoolToObject(wifi, "Static_IP", true);
-    cJSON_AddStringToObject(
-        wifi, "IP_Address",
-        WifiNetworkManager::getConfiguredIpAddress().c_str());
-    cJSON_AddStringToObject(wifi, "Gateway",
-                            WifiNetworkManager::getConfiguredGateway().c_str());
-    cJSON_AddStringToObject(wifi, "Netmask",
-                            WifiNetworkManager::getConfiguredNetmask().c_str());
-    cJSON_AddStringToObject(wifi, "DNS1",
-                            WifiNetworkManager::getConfiguredDns1().c_str());
-    cJSON_AddStringToObject(wifi, "DNS2",
-                            WifiNetworkManager::getConfiguredDns2().c_str());
-  } else {
-    esp_netif_ip_info_t staIpInfo{};
-    const bool hasStaIp = WifiNetworkManager::getStaIpInfo(&staIpInfo);
-    esp_ip4_addr_t dnsMain{};
-    const bool hasDnsMain = WifiNetworkManager::getDnsIp(0, &dnsMain);
-    esp_ip4_addr_t dnsBackup{};
-    const bool hasDnsBackup = WifiNetworkManager::getDnsIp(1, &dnsBackup);
-
-    cJSON_AddBoolToObject(wifi, "Static_IP", false);
-    cJSON_AddStringToObject(
-        wifi, "IP_Address",
-        hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.ip).c_str() : "");
-    cJSON_AddStringToObject(
-        wifi, "Gateway",
-        hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.gw).c_str() : "");
-    cJSON_AddStringToObject(
-        wifi, "Netmask",
-        hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.netmask).c_str()
-                 : "");
-    cJSON_AddStringToObject(
-        wifi, "DNS1",
-        hasDnsMain ? WifiNetworkManager::ipToString(dnsMain).c_str() : "");
-    cJSON_AddStringToObject(
-        wifi, "DNS2",
-        hasDnsBackup ? WifiNetworkManager::ipToString(dnsBackup).c_str() : "");
-  }
-  cJSON_AddStringToObject(wifi, "SSID", WifiNetworkManager::SSID().c_str());
-  cJSON_AddStringToObject(wifi, "BSSID",
-                          WifiNetworkManager::BSSIDstr().c_str());
-  cJSON_AddNumberToObject(wifi, "Channel", WifiNetworkManager::channel());
-  cJSON_AddStringToObject(wifi, "Hostname", WifiNetworkManager::getHostname());
-  cJSON_AddStringToObject(wifi, "MAC_Address",
-                          WifiNetworkManager::macAddress().c_str());
-
-// SNTP
 #if defined(EBUS_INTERNAL)
-  cJSON* sntp = cJSON_AddObjectToObject(doc, "SNTP");
-  cJSON_AddBoolToObject(sntp, "Enabled", configManager.readBool("sntpEnabled"));
-  const char* activeSntpServer = esp_sntp_getservername(0);
-  if (activeSntpServer != nullptr) {
-    cJSON_AddStringToObject(sntp, "Server", activeSntpServer);
-  } else {
-    cJSON_AddStringToObject(
-        sntp, "Server",
-        configManager.readString("sntpServer", DEFAULT_SNTP_SERVER).c_str());
-  }
-  cJSON_AddStringToObject(
-      sntp, "Timezone",
-      configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE).c_str());
+  writer.writeField("SNTP", SntpStatus{});
+
+  struct EbusStatus {
+    void toJson(ebus::detail::JsonWriter& w) const {
+      w.startObject();
+      w.writeField("PWM", get_pwm());
+      w.writeField("Ebus_Address",
+                   configManager.readString("ebusAddress", "ff"));
+      w.writeField("BusIsr_Window",
+                   configManager.readInt("busisrWindow", 4300));
+      w.writeField("BusIsr_Offset", configManager.readInt("busisrOffset", 80));
+      w.endObject();
+    }
+  };
+  writer.writeField("eBUS", EbusStatus{});
+
+  struct ScheduleStatus {
+    void toJson(ebus::detail::JsonWriter& w) const {
+      w.startObject();
+      w.writeField("Inquiry_Of_Existence",
+                   configManager.readBool("inquiryExistPrm"));
+      w.writeField("Scan_On_Startup", configManager.readBool("scanOnStartPrm"));
+      w.writeField("First_Command_After_Start",
+                   configManager.readInt("firstCmdAfterSt", 10));
+      w.writeField("Active_Commands",
+                   static_cast<uint32_t>(store.getActiveCommands()));
+      w.writeField("Passive_Commands",
+                   static_cast<uint32_t>(store.getPassiveCommands()));
+      w.endObject();
+    }
+  };
+  writer.writeField("Schedule", ScheduleStatus{});
+
+  struct MqttStatus {
+    void toJson(ebus::detail::JsonWriter& w) const {
+      w.startObject();
+      w.writeField("Enabled", mqtt.isEnabled());
+      w.writeField("Server", configManager.readString("mqttServer"));
+      w.writeField("User", configManager.readString("mqttUser"));
+      w.writeField("Connected", mqtt.isConnected());
+      w.endObject();
+    }
+  };
+  writer.writeField("MQTT", MqttStatus{});
+
+  struct HaStatus {
+    void toJson(ebus::detail::JsonWriter& w) const {
+      w.startObject();
+      w.writeField("Enabled", mqttha.isEnabled());
+      w.endObject();
+    }
+  };
+  writer.writeField("Home_Assistant", HaStatus{});
 #endif
 
-  // eBUS
-  cJSON* ebus = cJSON_AddObjectToObject(doc, "eBUS");
-  cJSON_AddNumberToObject(ebus, "PWM", get_pwm());
-#if defined(EBUS_INTERNAL)
-  cJSON_AddStringToObject(
-      ebus, "Ebus_Address",
-      configManager.readString("ebusAddress", "ff").c_str());
-  cJSON_AddNumberToObject(ebus, "BusIsr_Window",
-                          configManager.readInt("busisrWindow", 4300));
-  cJSON_AddNumberToObject(ebus, "BusIsr_Offset",
-                          configManager.readInt("busisrOffset", 80));
-
-  // Schedule
-  cJSON* scheduleObj = cJSON_AddObjectToObject(doc, "Schedule");
-  cJSON_AddBoolToObject(scheduleObj, "Inquiry_Of_Existence",
-                        configManager.readBool("inquiryExistPrm"));
-  cJSON_AddBoolToObject(scheduleObj, "Scan_On_Startup",
-                        configManager.readBool("scanOnStartPrm"));
-  cJSON_AddNumberToObject(scheduleObj, "First_Command_After_Start",
-                          configManager.readInt("firstCmdAfterSt", 10));
-  cJSON_AddNumberToObject(scheduleObj, "Active_Commands",
-                          store.getActiveCommands());
-  cJSON_AddNumberToObject(scheduleObj, "Passive_Commands",
-                          store.getPassiveCommands());
-
-  // MQTT
-  cJSON* mqttObj = cJSON_AddObjectToObject(doc, "MQTT");
-  cJSON_AddBoolToObject(mqttObj, "Enabled", mqtt.isEnabled());
-  cJSON_AddStringToObject(mqttObj, "Server",
-                          configManager.readString("mqttServer").c_str());
-  cJSON_AddStringToObject(mqttObj, "User",
-                          configManager.readString("mqttUser").c_str());
-  cJSON_AddBoolToObject(mqttObj, "Connected", mqtt.isConnected());
-  // cJSON_AddBoolToObject(mqttObj, "Publish_Counter",
-  //                       schedule.getPublishCounter());
-  // cJSON_AddBoolToObject(mqttObj, "Publish_Timing",
-  // schedule.getPublishTiming());
-
-  // HomeAssistant
-  cJSON* homeAssistant = cJSON_AddObjectToObject(doc, "Home_Assistant");
-  cJSON_AddBoolToObject(homeAssistant, "Enabled", mqttha.isEnabled());
-#endif
-
-  char* printed = cJSON_PrintUnformatted(doc);
-  std::string payload = printed != nullptr ? printed : "{}";
-  if (printed != nullptr) cJSON_free(printed);
-  cJSON_Delete(doc);
-  return payload;
+  writer.endObject();
 }
 
 extern "C" void app_main(void) {
@@ -555,15 +558,21 @@ extern "C" void app_main(void) {
 #if defined(EBUS_INTERNAL)
   // Connect library logger to app logger
   ebus::Controller::setLogSink([](ebus::LogLevel level, std::string_view msg) {
+    char buf[LOG_MSG_MAX_LEN];
+    int n = snprintf(buf, sizeof(buf), "eBUS-Lib: %.*s", (int)msg.size(),
+                     msg.data());
+    if (n < 0) return;
+    std::string_view out(buf, std::min((size_t)n, sizeof(buf) - 1));
+
     switch (level) {
       case ebus::LogLevel::error:
-        logger.error("eBUS-Lib: " + std::string(msg));
+        logger.error(out);
         break;
       case ebus::LogLevel::info:
-        logger.info("eBUS-Lib: " + std::string(msg));
+        logger.info(out);
         break;
       case ebus::LogLevel::debug:
-        logger.debug("eBUS-Lib: " + std::string(msg));
+        logger.debug(out);
         break;
       default:
         break;
@@ -628,7 +637,7 @@ extern "C" void app_main(void) {
     mqtt.setRootTopic(rootTopicValue);
   }
   mqtt.start();
-  mqtt.setStatusProvider([]() { return getMqttStatusJson(); });
+  mqtt.setStatusProvider(fetchMqttStatusJson);
 
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
@@ -670,17 +679,18 @@ extern "C" void app_main(void) {
   // Bus
   runtimeConfig.bus.window_us = 4300;
   runtimeConfig.bus.offset_us = 80;
-  runtimeConfig.bus.watchdog_timeout_ms = 250;
+  runtimeConfig.bus.watchdog_timeout_ms =
+      1000;  // Allow more headroom under load
   runtimeConfig.bus.syn_gen = true;
 
   // Diagnostics
-  runtimeConfig.diagnostics.level = ebus::LogLevel::debug;
-  runtimeConfig.diagnostics.log_size = 5;
+  runtimeConfig.diagnostics.level = ebus::LogLevel::info;
+  runtimeConfig.diagnostics.log_size = 1;
 
   // Network
   runtimeConfig.network.session_timeout_ms = 500;
   runtimeConfig.network.transmit_timeout_ms = 250;
-  runtimeConfig.network.outbound_buffer_size = 2048;
+  runtimeConfig.network.outbound_buffer_size = 512;
 
   // Device
   runtimeConfig.device.scan_on_startup = true;
@@ -693,7 +703,6 @@ extern "C" void app_main(void) {
   runtimeConfig.scheduler.base_backoff_ms = 100;
   runtimeConfig.scheduler.fsm_timeout_ms = 1000;
   runtimeConfig.scheduler.total_timeout_ms = 2000;
-
 #else
   logger.info("Running in normal eBUS mode");
 
@@ -758,37 +767,52 @@ extern "C" void app_main(void) {
   getEbusConfig().bus = busConfig;
 #endif
   getEbusConfig().runtime = runtimeConfig;
-  configureEbus(getEbusConfig());
+
+  // CRITICAL: Ensure configuration is applied or we will crash on null
+  // virtual_bus
+  if (!getEbusController().configure(getEbusConfig())) {
+    logger.error("eBUS: Global Configuration failed! Simulation may crash.");
+  }
 
   // Optimized callbacks: Avoid heap-heavy JSON work inside library threads
   getEbusController().setTelegramCallback([](const ebus::TelegramInfo& info) {
     if (info.poll_id > 0) return;  // Ignore polling telegrams for logging
 
-    std::string msg = ebus::toString(info.master_view);
-    if (!info.slave_view.empty())
-      msg += " / " + ebus::toString(info.slave_view);
+    // std::string msg = ebus::toString(info.master_view);
+    // if (!info.slave_view.empty())
+    //   msg += " / " + ebus::toString(info.slave_view);
 
-    logger.info(msg, false, info.session_id, info.poll_id);
+    // logger.info(msg, false, info.session_id, info.poll_id);
 
     store.updateData(nullptr, info.master_view, info.slave_view);
   });
 
   getEbusController().setErrorCallback([](const ebus::ErrorInfo& info) {
-    std::string msg = ebus::toString(info.master_view);
-    if (!info.slave_view.empty())
-      msg += " / " + ebus::toString(info.slave_view);
+    // std::string msg = ebus::toString(info.master_view);
+    // if (!info.slave_view.empty())
+    //   msg += " / " + ebus::toString(info.slave_view);
 
-    msg += " ";
-    msg += ebus::toString(info.protocol_error);
+    // msg += " ";
+    // msg += ebus::toString(info.protocol_error);
 
-    logger.error(msg, false, info.session_id, info.poll_id);
+    // logger.error(msg, false, info.session_id, info.poll_id);
   });
 
   startEbus();  // This will start the ebus controller
 
 #if defined(EBUS_SIMULATION)
-  // We mimic a Vaillant device with typical reactions to identification and
-  // data requests for testing. master address: 03h, slave address: 08h
+  if (getEbusController().isConfigured()) {
+    auto& vbus = getEbusController().getVirtualBus();
+    // We mimic a Vaillant device reactions
+    vbus.addSlaveReaction(0x01, "08070400", "0ab54d4f434b0001020304", 0, 0);
+    vbus.addSlaveReaction(0x01, "08b5090124", "09003231313230383030", 0, 0);
+    vbus.addSlaveReaction(0x01, "08b5090125", "09313030303930373030", 0, 0);
+    vbus.addSlaveReaction(0x01, "08b5090126", "09303036303035313337", 0, 0);
+    vbus.addSlaveReaction(0x01, "08b5090127", "094e3800000000000000", 0, 0);
+    vbus.addSlaveReaction(0x01, "08b509030d0800", "039e0100", 0, 0);
+    vbus.addSlaveReaction(0x01, "08b509030d1600", "03170700", 0, 0);
+  }
+
   xTaskCreate(
       [](void*) {
         // Wait for controller to be fully initialized and running
@@ -796,79 +820,13 @@ extern "C" void app_main(void) {
           vTaskDelay(pdMS_TO_TICKS(100));
         }
 
-        auto& vbus = getEbusController().getVirtualBus();
-
-        // Identification (Service 07h 04h)
-        vbus.addSlaveReaction(
-            0x01,        // Source of the master request (our controller)
-            "08070400",  // Master payload: requested service
-            "0ab54d4f434b0001020304",  // Slave response: mock ID data
-            0,  // 0 for infinite, -1 for disabled, > 0 finite.
-            0   // Response delay in ms
-        );
-
-        // Vaillant identification (Service B5h 09h 24h)
-        vbus.addSlaveReaction(
-            0x01,          // Source of the master request (our controller)
-            "08b5090124",  // Master payload: requested service
-            "09003231313230383030",  // Slave response: mock ID data
-            0,  // 0 for infinite, -1 for disabled, > 0 finite.
-            0   // Response delay in ms
-        );
-
-        // Vaillant identification (Service B5h 09h 25h)
-        vbus.addSlaveReaction(
-            0x01,          // Source of the master request (our controller)
-            "08b5090125",  // Master payload: requested service
-            "09313030303930373030",  // Slave response: mock ID data
-            0,  // 0 for infinite, -1 for disabled, > 0 finite.
-            0   // Response delay in ms
-        );
-
-        // Vaillant identification (Service B5h 09h 26h)
-        vbus.addSlaveReaction(
-            0x01,          // Source of the master request (our controller)
-            "08b5090126",  // Master payload: requested service
-            "09303036303035313337",  // Slave response: mock ID data
-            0,  // 0 for infinite, -1 for disabled, > 0 finite.
-            0   // Response delay in ms
-        );
-
-        // Vaillant identification (Service B5h 09h 27h)
-        vbus.addSlaveReaction(
-            0x01,                    // Source of the master request
-            "08b5090127",            // Master payload: requested service
-            "094e3800000000000000",  // Slave response: mock ID data
-            0,  // 0 for infinite, -1 for disabled, > 0 finite.
-            0   // Response delay in ms
-        );
-
-        // Example reaction to a master request for brine/outlet temperature
-        // (Service B5h 09h 03h 0Dh 08h 00h)
-        vbus.addSlaveReaction(
-            0x01,              // Source of the master request
-            "08b509030d0800",  // Master payload: requested service
-            "039e0100",        // Slave response: 25.88 °C encoded as 0x9e01
-            0,                 // 0 for infinite, -1 for disabled, > 0 finite.
-            0                  // Response delay in ms
-        );
-
-        // Example reaction to a master request for brine/pressure
-        // (Service B5h 09h 03h 0Dh 08h 00h)
-        vbus.addSlaveReaction(
-            0x01,              // Source of the master request
-            "08b509030d1600",  // Master payload: requested service
-            "03170700",        // Slave response: 1.82 bar encoded as 0x1707
-            0,                 // 0 for infinite, -1 for disabled, > 0 finite.
-            0                  // Response delay in ms
-        );
-
         // Periodic injections to simulate device updates without master
         // requests
         uint32_t count17 = 0;
         uint32_t count25 = 0;
         TickType_t xLastWakeTime = xTaskGetTickCount();
         const TickType_t xFrequency = pdMS_TO_TICKS(1000);  // 1 second interval
+        auto& vbus = getEbusController().getVirtualBus();
 
         for (;;) {
           vTaskDelayUntil(&xLastWakeTime, xFrequency);
@@ -895,15 +853,16 @@ extern "C" void app_main(void) {
           }
         }
       },
-      "sim", 4096, nullptr, 1, &simTaskHandle);
+      "sim", 2048, nullptr, 1, &simTaskHandle);
 #endif
 
   client_acceptor.start();
 
   store.setDataUpdatedCallback(Mqtt::publishValue);
 
-  store.setDataUpdatedLogCallback(
-      [](const std::string& message) { logger.debug(message); });
+  store.setDataUpdatedLogCallback([](const std::string& key) {
+    // Now handled asynchronously within the Mqtt Update action
+  });
 
   // Setup lifecycle listeners to keep ebusController in sync with the Store
   store.setCommandChangedCallback([](Command* cmd) {

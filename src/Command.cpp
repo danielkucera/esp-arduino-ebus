@@ -3,7 +3,9 @@
 
 #include <cerrno>
 #include <cmath>
+#include <charconv>
 #include <cstdlib>
+#include <ebus/detail/json_writer.hpp>
 #include <ebus/utils.hpp>
 #include <limits>
 #include <regex>
@@ -82,92 +84,174 @@ bool Command::matches(ebus::ByteView master_view) const {
   return ebus::contains(master_view, read_cmd);
 }
 
-const std::string Command::getValueJson() const {
-  cJSON* doc = cJSON_CreateObject();
+void Command::getValueJson(ebus::detail::JsonWriter& writer) const {
+  writer.startObject();
+  writer.appendKey("value");
+
   auto decoded = ebus::decode(datatype, data);
   if (!decoded || ebus::isNull(*decoded)) {
-    cJSON_AddNullToObject(doc, "value");
+    writer.writeRaw("null");
   } else {
-    if (numeric)
-      cJSON_AddNumberToObject(doc, "value", getDoubleFromVector());
-    else
-      cJSON_AddStringToObject(doc, "value", getStringFromVector().c_str());
+    if (numeric) {
+      // Optimization: Calculate directly from the decoded value to avoid double decoding
+      float val = ebus::roundDigits(ebus::asFloat(*decoded) / divider, digits);
+      writer.writeValueFloat(val);
+    } else {
+      const auto meta = getMetaCached();
+      if (meta && std::string_view(meta->name).find("HEX") == 0) {
+        // Use hex stringifier; this still creates a temporary string but avoids redundant metadata lookup
+        writer.writeValue(ebus::toHexString(*decoded, 0));
+      } else {
+        // asString returns a const reference to the string inside the variant; zero-copy to JsonWriter
+        writer.writeValue(ebus::asString(*decoded));
+      }
+    }
   }
-
-  char* printed = cJSON_PrintUnformatted(doc);
-  std::string payload = printed != nullptr ? printed : "{}";
-  if (printed != nullptr) cJSON_free(printed);
-  cJSON_Delete(doc);
-  return payload;
+  writer.endObject();
 }
 
-ebus::Sequence Command::getVectorFromJson(const cJSON* doc) const {
+ebus::Sequence Command::getVectorFromJson(std::string_view json) const {
+  return getVectorFromValue(ebus::extract(json, "value"));
+}
+
+ebus::Sequence Command::getVectorFromValue(std::string_view val_view) const {
   ebus::Sequence result;
+  if (val_view.empty()) return result;
 
-  if (doc == nullptr) return result;
-  cJSON* valueNode = cJSON_GetObjectItemCaseSensitive(doc, "value");
-  if (valueNode == nullptr) return result;
-
-  if (numeric && cJSON_IsNumber(valueNode)) {
-    double value = valueNode->valuedouble;
-    if ((value >= min) && (value <= max)) result = getVectorFromDouble(value);
-  } else if (!numeric && cJSON_IsString(valueNode) &&
-             valueNode->valuestring != nullptr) {
-    result = getVectorFromString(valueNode->valuestring);
+  if (numeric) {
+    // val_view is the raw JSON representation of a number. std::atof is okay for ESP-IDF
+    double val = std::atof(std::string(val_view).c_str());
+    if ((val >= min) && (val <= max)) {
+      result = getVectorFromDouble(val);
+    }
+  } else {
+    // For strings, strip potential quotes
+    if (val_view.size() >= 2 && val_view.front() == '"' &&
+        val_view.back() == '"') {
+      val_view.remove_prefix(1);
+      val_view.remove_suffix(1);
+    }
+    result = getVectorFromString(std::string(val_view));
   }
 
   return result;
 }
 
-const std::string Command::toJson() const {
-  cJSON* doc = toCJson();
-  char* printed = cJSON_PrintUnformatted(doc);
-  std::string payload = printed != nullptr ? printed : "{}";
-  if (printed != nullptr) cJSON_free(printed);
-  cJSON_Delete(doc);
-  return payload;
+double Command::getDoubleFromVector() const {
+  if (data.empty()) return 0.0;
+  auto decoded = ebus::decode(datatype, data);
+  if (!decoded) return 0.0;
+
+  return ebus::roundDigits(ebus::asFloat(*decoded) / divider, digits);
 }
 
-cJSON* Command::toCJson() const {
-  cJSON* doc = cJSON_CreateObject();
+const std::string Command::getStringFromVector() const {
+  if (data.empty()) return "";
+  auto decoded = ebus::decode(datatype, data);
+  if (!decoded) return "";
+
+  const auto meta = getMetaCached();
+  if (meta && std::string(meta->name).find("HEX") == 0) {
+    return ebus::toHexString(*decoded, 0);
+  }
+  return ebus::asString(*decoded);
+}
+
+void Command::toJson(ebus::detail::JsonWriter& writer) const {
+  writer.startObject();
   // Command Fields
-  cJSON_AddStringToObject(doc, "key", key.c_str());
-  cJSON_AddStringToObject(doc, "name", name.c_str());
-  cJSON_AddStringToObject(doc, "read_cmd", read_cmd.toString().c_str());
-  cJSON_AddStringToObject(doc, "write_cmd", write_cmd.toString().c_str());
-  cJSON_AddBoolToObject(doc, "active", active);
-  cJSON_AddNumberToObject(doc, "interval", interval);
+  writer.writeField("key", key);
+  writer.writeField("name", name);
+  writer.writeHexField("read_cmd", read_cmd);
+  writer.writeHexField("write_cmd", write_cmd);
+  writer.writeField("active", active);
+  writer.writeField("interval", interval);
 
   // Data Fields
-  cJSON_AddBoolToObject(doc, "master", master);
-  cJSON_AddNumberToObject(doc, "position", static_cast<double>(position));
-  cJSON_AddStringToObject(doc, "datatype", ebus::dataTypeToString(datatype));
-  cJSON_AddNumberToObject(doc, "divider", divider);
-  cJSON_AddNumberToObject(doc, "min", min);
-  cJSON_AddNumberToObject(doc, "max", max);
-  cJSON_AddNumberToObject(doc, "digits", digits);
-  cJSON_AddStringToObject(doc, "unit", unit.c_str());
+  writer.writeField("master", master);
+  writer.writeField("position", position);
+  writer.writeField("datatype", ebus::dataTypeToString(datatype));
+  writer.writeFieldFloat("divider", divider);
+  writer.writeFieldFloat("min", min);
+  writer.writeFieldFloat("max", max);
+  writer.writeField("digits", digits);
+  writer.writeField("unit", unit);
 
   // Home Assistant
-  cJSON_AddBoolToObject(doc, "ha", ha);
-  cJSON_AddStringToObject(doc, "ha_component", ha_component.c_str());
-  cJSON_AddStringToObject(doc, "ha_device_class", ha_device_class.c_str());
-  cJSON_AddStringToObject(doc, "ha_entity_category",
-                          ha_entity_category.c_str());
-  cJSON_AddStringToObject(doc, "ha_mode", ha_mode.c_str());
+  writer.writeField("ha", ha);
+  writer.writeField("ha_component", ha_component);
+  writer.writeField("ha_device_class", ha_device_class);
+  writer.writeField("ha_entity_category", ha_entity_category);
+  writer.writeField("ha_mode", ha_mode);
 
-  cJSON* haMap = cJSON_AddObjectToObject(doc, "ha_key_value_map");
-  for (const auto& kv : ha_key_value_map)
-    cJSON_AddStringToObject(haMap, std::to_string(kv.first).c_str(),
-                            kv.second.c_str());
+  writer.appendKey("ha_key_value_map");
+  writer.startObject();
+  for (const auto& kv : ha_key_value_map) {
+    // Optimization: Avoid std::to_string heap allocation for every map entry
+    char keyBuf[12];
+    auto [ptr, ec] = std::to_chars(keyBuf, keyBuf + sizeof(keyBuf), kv.first);
+    if (ec == std::errc{}) {
+      writer.writeField(std::string_view(keyBuf, ptr - keyBuf), kv.second);
+    }
+  }
+  writer.endObject();
 
-  cJSON_AddNumberToObject(doc, "ha_default_key", ha_default_key);
-  cJSON_AddNumberToObject(doc, "ha_payload_on", ha_payload_on);
-  cJSON_AddNumberToObject(doc, "ha_payload_off", ha_payload_off);
-  cJSON_AddStringToObject(doc, "ha_state_class", ha_state_class.c_str());
-  cJSON_AddNumberToObject(doc, "ha_step", ha_step);
+  writer.writeField("ha_default_key", ha_default_key);
+  writer.writeField("ha_payload_on", ha_payload_on);
+  writer.writeField("ha_payload_off", ha_payload_off);
+  writer.writeField("ha_state_class", ha_state_class);
+  writer.writeFieldFloat("ha_step", ha_step);
+  writer.endObject();
+}
 
-  return doc;
+// This method is still needed by Store::serializeCommands, so we keep it.
+// It can now internally use the JsonWriter version to build the string.
+const std::string Command::toJson() const {
+  std::string json_str;
+  json_str.reserve(512);  // Avoid reallocations for a typical command payload
+  ebus::detail::JsonWriter writer(
+      [&json_str](std::string_view s) { json_str.append(s); });
+  toJson(writer);  // Call the JsonWriter version
+  return json_str;
+}
+
+void Command::writePersistenceRow(ebus::detail::JsonWriter& writer) const {
+  writer.startArray();
+  writer.writeValue(key);                               // 0
+  writer.writeValue(name);                              // 1
+  writer.writeValue(read_cmd.toString());               // 2
+  writer.writeValue(write_cmd.toString());              // 3
+  writer.writeValue(active);                            // 4
+  writer.writeValue(interval);                          // 5
+  writer.writeValue(master);                            // 6
+  writer.writeValue(position);                          // 7
+  writer.writeValue(ebus::dataTypeToString(datatype));  // 8
+  writer.writeValueFloat(divider);                      // 9
+  writer.writeValueFloat(min);                          // 10
+  writer.writeValueFloat(max);                          // 11
+  writer.writeValue(digits);                           // 12
+  writer.writeValue(unit);                              // 13
+  writer.writeValue(ha);                                // 14
+  writer.writeValue(ha_component);                      // 15
+  writer.writeValue(ha_device_class);                   // 16
+  writer.writeValue(ha_entity_category);                // 17
+  writer.writeValue(ha_mode);                           // 18
+  
+  // ha_key_value_map (index 19)
+  writer.startObject();
+  for (const auto& kv : ha_key_value_map) {
+    char keyBuf[12];
+    auto [ptr, ec] = std::to_chars(keyBuf, keyBuf + sizeof(keyBuf), kv.first);
+    if (ec == std::errc{}) writer.writeField(std::string_view(keyBuf, ptr - keyBuf), kv.second);
+  }
+  writer.endObject();
+
+  writer.writeValue(ha_default_key);                    // 20
+  writer.writeValue(ha_payload_on);                     // 21
+  writer.writeValue(ha_payload_off);                    // 22
+  writer.writeValue(ha_state_class);                    // 23
+  writer.writeValueFloat(ha_step);                      // 24
+  writer.endArray();
 }
 
 Command Command::fromJson(const cJSON* doc) {
@@ -184,12 +268,6 @@ Command Command::fromJson(const cJSON* doc) {
   auto getBool = [doc](const char* key, bool def = false) {
     cJSON* node = cJSON_GetObjectItemCaseSensitive(doc, key);
     if (cJSON_IsBool(node)) return cJSON_IsTrue(node) != 0;
-    return def;
-  };
-
-  auto getDouble = [doc](const char* key, double def = 0.0) {
-    cJSON* node = cJSON_GetObjectItemCaseSensitive(doc, key);
-    if (cJSON_IsNumber(node)) return node->valuedouble;
     return def;
   };
 
@@ -436,26 +514,6 @@ const ebus::DataTypeInfo* Command::getMetaCached() const {
     _cachedMeta = ebus::getMeta(datatype);
   }
   return _cachedMeta.has_value() ? &_cachedMeta.value() : nullptr;
-}
-
-double Command::getDoubleFromVector() const {
-  if (data.empty()) return 0.0;
-  auto decoded = ebus::decode(datatype, data);
-  if (!decoded) return 0.0;
-
-  return ebus::roundDigits(ebus::asFloat(*decoded) / divider, digits);
-}
-
-const std::string Command::getStringFromVector() const {
-  if (data.empty()) return "";
-  auto decoded = ebus::decode(datatype, data);
-  if (!decoded) return "";
-
-  const auto meta = getMetaCached();
-  if (meta && std::string(meta->name).find("HEX") == 0) {
-    return ebus::toHexString(*decoded, 0);
-  }
-  return ebus::asString(*decoded);
 }
 
 ebus::Sequence Command::getVectorFromDouble(double value) const {

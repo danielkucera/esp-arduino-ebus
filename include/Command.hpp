@@ -8,6 +8,11 @@
 #include <string>
 #include <vector>
 
+// Forward declaration for JsonWriter
+namespace ebus::detail {
+class JsonWriter;
+}
+
 // This class represents a command configuration and its associated data
 
 class Command {
@@ -65,19 +70,29 @@ class Command {
   bool matches(ebus::ByteView master_view) const;
 
   // Data conversion
-  const std::string getValueJson() const;
-  ebus::Sequence getVectorFromJson(const cJSON* doc) const;
+  void getValueJson(ebus::detail::JsonWriter& writer) const;
+  ebus::Sequence getVectorFromJson(std::string_view json) const;
+  ebus::Sequence getVectorFromValue(std::string_view value_json) const;
+
+  ebus::Sequence getVectorFromDouble(double value) const;
+  ebus::Sequence getVectorFromString(const std::string& value) const;
 
   // Helpers for direct value access to avoid JSON overhead
   double getDoubleFromVector() const;
   const std::string getStringFromVector() const;
 
   // Serialization / Deserialization
+  void toJson(ebus::detail::JsonWriter& writer) const;
   const std::string toJson() const;
-  cJSON* toCJson() const;
   static Command fromJson(const cJSON* doc);
 
   static const std::string evaluate(const cJSON* doc);
+  const ebus::DataTypeInfo* getMetaCached() const;
+
+  /**
+   * @brief Writes a compact array-row for flash persistence.
+   */
+  void writePersistenceRow(ebus::detail::JsonWriter& writer) const;
 
  private:
   // Internal fields
@@ -174,11 +189,8 @@ class Command {
                                         FieldType type);
   static const std::string isKeyValueMapValid(const cJSON* ha_key_value_map);
 
-  ebus::Sequence getVectorFromDouble(double value) const;
-  ebus::Sequence getVectorFromString(const std::string& value) const;
-
   mutable std::optional<ebus::DataTypeInfo> _cachedMeta;
-  const ebus::DataTypeInfo* getMetaCached() const;
+
 };
 
 #endif

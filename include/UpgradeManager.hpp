@@ -4,6 +4,7 @@
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 
+#include <ebus/types.hpp>
 #include <functional>
 #include <string>
 
@@ -17,11 +18,13 @@ class UpgradeManager {
   esp_err_t handleUpload(httpd_req_t* req);
   esp_err_t handleHttpUpgrade(httpd_req_t* req);
   esp_err_t handleStatus(httpd_req_t* req);
+  void fetchStatusJson(const ebus::JsonChunkVisitor& visitor);
 
  private:
   bool performHttpUpgrade(const std::string& url, std::string& error);
   void prepareForUpgrade();
-  void sendAndRestart(httpd_req_t* req, const char* message);
+  void sendAndRestart(httpd_req_t* req, const char* message,
+                      const char* id = "upgrade");
   void resetUploadState();
 
   PreUpgradeHook preUpgradeHook_;
