@@ -12,19 +12,20 @@
     <h1>Status</h1>
     <div class="controls">
         <button id="btnHome">Home</button>
-        <button id="btnStatus">Status</button>
+        <button id="btnRefresh">Refresh</button>
         <span id="status">...</span>
     </div>
     <div class="container" id="statusContainer"></div>
     <script src="common.js"></script>
     <script>
+        function loadStatus() {
+            fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'));
+        }
         document.getElementById('btnHome').addEventListener('click', handleHome);
-        document.getElementById('btnStatus').addEventListener('click', () =>
-            fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'))
-        );
+        document.getElementById('btnRefresh').addEventListener('click', loadStatus);
 
         // Initial load
-        fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'));
+        loadStatus();
     </script>
 </body>
 

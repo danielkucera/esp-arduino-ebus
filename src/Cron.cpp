@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <ebus/detail/json_reader.hpp>
 #include <string>
 #include <vector>
 
@@ -20,40 +21,7 @@
 Cron cron;
 
 namespace {
-
-void writeCJsonToWriter(ebus::detail::JsonWriter& writer, const cJSON* node) {
-  if (!node || cJSON_IsInvalid(node)) return;
-  if (cJSON_IsBool(node)) {
-    writer.writeValue(cJSON_IsTrue(node) != 0);
-  } else if (cJSON_IsNumber(node)) {
-    writer.writeValueFloat(static_cast<float>(node->valuedouble));
-  } else if (cJSON_IsString(node)) {
-    writer.writeValue(node->valuestring);
-  } else if (cJSON_IsNull(node)) {
-    writer.writeRaw("null");
-  } else if (cJSON_IsArray(node)) {
-    writer.startArray();
-    cJSON* child = nullptr;
-    cJSON_ArrayForEach(child, node) { writeCJsonToWriter(writer, child); }
-    writer.endArray();
-  } else if (cJSON_IsObject(node)) {
-    writer.startObject();
-    for (cJSON* child = node->child; child != nullptr; child = child->next) {
-      writer.appendKey(child->string);
-      writeCJsonToWriter(writer, child);
-    }
-    writer.endObject();
-  }
-}
-
 constexpr const char* kCronFilePath = "/littlefs/cron.json";
-
-std::string printJson(cJSON* node, const char* fallback) {
-  char* printed = cJSON_PrintUnformatted(node);
-  std::string out = printed != nullptr ? printed : fallback;
-  if (printed != nullptr) cJSON_free(printed);
-  return out;
-}
 
 std::vector<std::string> split(const std::string& input, const char sep) {
   std::vector<std::string> parts;
@@ -236,20 +204,65 @@ bool matchSchedule(const std::string& schedule, const tm& localTime) {
          matchField(fields[4], localTime.tm_wday, 0, 6, true);
 }
 
-const cJSON* getField(const cJSON* doc, const char* name) {
-  return cJSON_GetObjectItemCaseSensitive(const_cast<cJSON*>(doc), name);
-}
+std::string validateRule(const Cron::Rule& rule) {
+  if (rule.id.empty()) return "Missing or invalid 'id'";
+  if (rule.schedule.empty()) return "Missing or invalid 'schedule'";
+  if (rule.command_key.empty()) return "Missing or invalid 'command_key'";
+  if (rule.value_json.empty()) return "Missing field 'value'";
 
-std::string getStringField(const cJSON* doc, const char* name) {
-  const cJSON* node = getField(doc, name);
-  if (!cJSON_IsString(node) || node->valuestring == nullptr) return "";
-  return node->valuestring;
-}
+  tm sample = {};
+  sample.tm_min = 0;
+  sample.tm_hour = 0;
+  sample.tm_mday = 1;
+  sample.tm_mon = 0;
+  sample.tm_wday = 0;
 
-bool getBoolField(const cJSON* doc, const char* name, bool fallback) {
-  const cJSON* node = getField(doc, name);
-  if (cJSON_IsBool(node)) return cJSON_IsTrue(node);
-  return fallback;
+  if (!matchSchedule(rule.schedule, sample) &&
+      rule.schedule.find('*') == std::string::npos &&
+      rule.schedule.find('/') == std::string::npos &&
+      rule.schedule.find(',') == std::string::npos &&
+      rule.schedule.find('-') == std::string::npos) {
+    return "Invalid schedule expression";
+  }
+
+  std::vector<std::string> fields;
+  std::string current;
+  for (const char c : rule.schedule) {
+    if (c == ' ' || c == '\t') {
+      if (!current.empty()) {
+        fields.push_back(current);
+        current.clear();
+      }
+    } else {
+      current.push_back(c);
+    }
+  }
+  if (!current.empty()) fields.push_back(current);
+  if (fields.size() != 5) return "Schedule must have 5 fields";
+
+  if (!validateFieldExpression(fields[0], 0, 59, false))
+    return "Invalid minute field";
+  if (!validateFieldExpression(fields[1], 0, 23, false))
+    return "Invalid hour field";
+  if (!validateFieldExpression(fields[2], 1, 31, false))
+    return "Invalid day-of-month field";
+  if (!validateFieldExpression(fields[3], 1, 12, false))
+    return "Invalid month field";
+  if (!validateFieldExpression(fields[4], 0, 6, true))
+    return "Invalid day-of-week field";
+
+  Command* command = store.findCommand(rule.command_key);
+  if (command == nullptr)
+    return "Command key '" + rule.command_key + "' not found";
+  if (command->getWriteCmd().empty())
+    return "Command '" + rule.command_key + "' has no write_cmd";
+
+  const std::vector<uint8_t> valueBytes =
+      command->getVectorFromValue(rule.value_json).toVector();
+  if (valueBytes.empty())
+    return "Invalid value for command '" + rule.command_key + "'";
+
+  return "";
 }
 
 }  // namespace
@@ -265,22 +278,34 @@ void Cron::start() {
 
 void Cron::stop() { stop_runner_ = true; }
 
-Cron::Rule Cron::ruleFromJson(const cJSON* doc) {
+Cron::Rule Cron::ruleFromReader(ebus::detail::JsonReader& reader) {
   Rule rule;
-  rule.id = getStringField(doc, "id");
-  rule.schedule = getStringField(doc, "schedule");
-  rule.command_key = getStringField(doc, "command_key");
-  rule.enabled = getBoolField(doc, "enabled", true);
+  while (true) {
+    auto token = reader.next();
+    if (token == ebus::detail::JsonReader::Token::ObjectEnd ||
+        token == ebus::detail::JsonReader::Token::End ||
+        token == ebus::detail::JsonReader::Token::Error)
+      break;
 
-  const cJSON* val = getField(doc, "value");
-  if (val) {
-    ebus::detail::JsonWriter writer(
-        [&rule](std::string_view s) { rule.value_json.append(s); });
-    writeCJsonToWriter(writer, val);
-  } else {
-    rule.value_json = "null";
+    if (token == ebus::detail::JsonReader::Token::Key) {
+      std::string_view key = reader.value();
+      if (key == "value") {
+        rule.value_json = std::string(reader.rawValue());
+      } else {
+        auto vToken = reader.next();
+        if (key == "id")
+          rule.id = std::string(reader.value());
+        else if (key == "schedule")
+          rule.schedule = std::string(reader.value());
+        else if (key == "command_key")
+          rule.command_key = std::string(reader.value());
+        else if (key == "enabled")
+          rule.enabled = reader.asBool();
+        else
+          reader.skipComposite(vToken);
+      }
+    }
   }
-
   return rule;
 }
 
@@ -321,62 +346,48 @@ int64_t Cron::loadRules() {
   std::fclose(file);
   if (bytesRead != payload.size()) return -1;
 
-  cJSON* doc = cJSON_Parse(payload.c_str());
-  if (!cJSON_IsArray(doc)) {
-    if (doc != nullptr) cJSON_Delete(doc);
-    return -1;
-  }
+  ebus::detail::JsonReader reader(payload);
+  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return -1;
 
   std::unordered_map<std::string, Rule> nextRules;
-  cJSON* entry = nullptr;
-  cJSON_ArrayForEach(entry, doc) {
-    if (!cJSON_IsObject(entry)) continue;
-    if (Cron::evaluate(entry).empty()) {
-      Rule rule = ruleFromJson(entry);
-      nextRules[rule.id] = std::move(rule);
+  while (true) {
+    auto token = reader.next();
+    if (token == ebus::detail::JsonReader::Token::ArrayEnd ||
+        token == ebus::detail::JsonReader::Token::End ||
+        token == ebus::detail::JsonReader::Token::Error)
+      break;
+
+    if (token == ebus::detail::JsonReader::Token::ObjectStart) {
+      Rule rule = ruleFromReader(reader);
+      if (validateRule(rule).empty()) {
+        nextRules[rule.id] = std::move(rule);
+      }
     }
   }
 
   setRules(std::move(nextRules));
-  cJSON_Delete(doc);
   return static_cast<int64_t>(payload.size());
 }
 
 int64_t Cron::replaceRules(std::string_view payload) {
+  ebus::detail::JsonReader reader(payload);
+  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return -1;
+
   std::unordered_map<std::string, Rule> nextRules;
 
-  // Iterate through the array without parsing the whole list into heap
-  size_t pos = 0;
-  while (pos < payload.size()) {
-    size_t start_obj = payload.find('{', pos);
-    if (start_obj == std::string_view::npos) break;
+  while (true) {
+    auto token = reader.next();
+    if (token == ebus::detail::JsonReader::Token::ArrayEnd ||
+        token == ebus::detail::JsonReader::Token::End ||
+        token == ebus::detail::JsonReader::Token::Error)
+      break;
 
-    int depth = 0;
-    size_t end_obj = std::string_view::npos;
-    for (size_t i = start_obj; i < payload.size(); ++i) {
-      if (payload[i] == '{')
-        depth++;
-      else if (payload[i] == '}') {
-        depth--;
-        if (depth == 0) {
-          end_obj = i;
-          break;
-        }
-      }
-    }
-    if (end_obj == std::string_view::npos) break;
-
-    std::string_view rule_sv =
-        payload.substr(start_obj, end_obj - start_obj + 1);
-    cJSON* doc = cJSON_ParseWithLength(rule_sv.data(), rule_sv.size());
-    if (doc) {
-      if (evaluate(doc).empty()) {
-        Rule rule = ruleFromJson(doc);
+    if (token == ebus::detail::JsonReader::Token::ObjectStart) {
+      Rule rule = ruleFromReader(reader);
+      if (validateRule(rule).empty()) {
         nextRules[rule.id] = std::move(rule);
       }
-      cJSON_Delete(doc);
     }
-    pos = end_obj + 1;
   }
 
   setRules(std::move(nextRules));
@@ -426,82 +437,8 @@ int64_t Cron::saveRules() const {
   return static_cast<int64_t>(total);
 }
 
-const std::string Cron::evaluate(const cJSON* doc) {
-  if (!cJSON_IsObject(doc)) return "Json invalid";
-
-  const std::string id = getStringField(doc, "id");
-  const std::string scheduleExpr = getStringField(doc, "schedule");
-  const std::string commandKey = getStringField(doc, "command_key");
-  const cJSON* valueNode = getField(doc, "value");
-
-  if (id.empty()) return "Missing or invalid 'id'";
-  if (scheduleExpr.empty()) return "Missing or invalid 'schedule'";
-  if (commandKey.empty()) return "Missing or invalid 'command_key'";
-  if (valueNode == nullptr) return "Missing field 'value'";
-
-  tm sample = {};
-  sample.tm_min = 0;
-  sample.tm_hour = 0;
-  sample.tm_mday = 1;
-  sample.tm_mon = 0;
-  sample.tm_wday = 0;
-
-  if (!matchSchedule(scheduleExpr, sample) &&
-      scheduleExpr.find('*') == std::string::npos &&
-      scheduleExpr.find('/') == std::string::npos &&
-      scheduleExpr.find(',') == std::string::npos &&
-      scheduleExpr.find('-') == std::string::npos) {
-    return "Invalid schedule expression";
-  }
-
-  // Deep validation for cron fields by checking each field shape.
-  std::vector<std::string> fields;
-  std::string current;
-  for (const char c : scheduleExpr) {
-    if (c == ' ' || c == '\t') {
-      if (!current.empty()) {
-        fields.push_back(current);
-        current.clear();
-      }
-    } else {
-      current.push_back(c);
-    }
-  }
-  if (!current.empty()) fields.push_back(current);
-  if (fields.size() != 5) return "Schedule must have 5 fields";
-
-  if (!validateFieldExpression(fields[0], 0, 59, false))
-    return "Invalid minute field";
-  if (!validateFieldExpression(fields[1], 0, 23, false))
-    return "Invalid hour field";
-  if (!validateFieldExpression(fields[2], 1, 31, false))
-    return "Invalid day-of-month field";
-  if (!validateFieldExpression(fields[3], 1, 12, false))
-    return "Invalid month field";
-  if (!validateFieldExpression(fields[4], 0, 6, true))
-    return "Invalid day-of-week field";
-
-  Command* command = store.findCommand(commandKey);
-  if (command == nullptr) {
-    return std::string("Command key '") + commandKey + "' not found";
-  }
-
-  if (command->getWriteCmd().empty()) {
-    return std::string("Command '") + commandKey + "' has no write_cmd";
-  }
-
-  std::string val_str;
-  ebus::detail::JsonWriter writer(
-      [&val_str](std::string_view s) { val_str.append(s); });
-  writeCJsonToWriter(writer, valueNode);
-  const std::vector<uint8_t> valueBytes =
-      command->getVectorFromValue(val_str).toVector();
-
-  if (valueBytes.empty()) {
-    return std::string("Invalid value for command '") + commandKey + "'";
-  }
-
-  return "";
+const std::string Cron::evaluate(ebus::detail::JsonReader& reader) {
+  return validateRule(ruleFromReader(reader));
 }
 
 void Cron::taskFunc(void* arg) {

@@ -39,7 +39,7 @@
 #include "HttpUtils.hpp"
 #include "UpgradeManager.hpp"
 #include "WifiNetworkManager.hpp"
-#include "esp32c3/rom/rtc.h"
+#include "esp_rom_sys.h"
 #include "esp_sntp.h"
 #include "http.hpp"
 
@@ -71,19 +71,18 @@ uint32_t reset_code = 0;
 
 struct StatusInfo {
   void toJson(ebus::detail::JsonWriter& writer) const {
-    writer.startObject();
+    auto scope = writer.objectScope();
     writer.writeField("Reset_Code", reset_code);
     writer.writeField("Uptime",
                       static_cast<uint32_t>(esp_timer_get_time() / 1000ULL));
     writer.writeField("Free_Heap", esp_get_free_heap_size());
-    writer.endObject();
   }
 };
 
 #if !defined(EBUS_INTERNAL)
 struct ArbitrationInfo {
   void toJson(ebus::detail::JsonWriter& writer) const {
-    writer.startObject();
+    auto scope = writer.objectScope();
     writer.writeField("Total", static_cast<int>(Bus._nbrArbitrations));
     writer.writeField("Restarts1", static_cast<int>(Bus._nbrRestarts1));
     writer.writeField("Restarts2", static_cast<int>(Bus._nbrRestarts2));
@@ -93,14 +92,13 @@ struct ArbitrationInfo {
     writer.writeField("Lost2", static_cast<int>(Bus._nbrLost2));
     writer.writeField("Late", static_cast<int>(Bus._nbrLate));
     writer.writeField("Errors", static_cast<int>(Bus._nbrErrors));
-    writer.endObject();
   }
 };
 #endif
 
 struct FirmwareStatus {
   void toJson(ebus::detail::JsonWriter& writer) const {
-    writer.startObject();
+    auto scope = writer.objectScope();
     writer.writeField("Version", AUTO_VERSION);
     writer.writeField("SDK", esp_get_idf_version());
 #if !defined(EBUS_INTERNAL)
@@ -113,13 +111,12 @@ struct FirmwareStatus {
     writer.writeField("Adapter_HW_Version_Raw", getAdapterHwVersionRaw());
     writer.writeField("Clock_Speed", esp_clk_cpu_freq() / 1000000U);
     writer.writeField("Apb_Speed", esp_clk_apb_freq());
-    writer.endObject();
   }
 };
 
 struct ChipStatus {
   void toJson(ebus::detail::JsonWriter& writer) const {
-    writer.startObject();
+    auto scope = writer.objectScope();
     esp_chip_info_t chip_info{};
     esp_chip_info(&chip_info);
     uint32_t flash_size = 0;
@@ -127,13 +124,12 @@ struct ChipStatus {
       esp_flash_get_size(esp_flash_default_chip, &flash_size);
     writer.writeField("Chip_Revision", static_cast<int>(chip_info.revision));
     writer.writeField("Flash_Chip_Size", flash_size);
-    writer.endObject();
   }
 };
 
 struct WifiStatus {
   void toJson(ebus::detail::JsonWriter& writer) const {
-    writer.startObject();
+    auto scope = writer.objectScope();
     writer.writeField("Last_Connect", WifiNetworkManager::getLastConnect());
     writer.writeField("Reconnect_Count",
                       WifiNetworkManager::getReconnectCount());
@@ -173,14 +169,13 @@ struct WifiStatus {
     writer.writeField("Channel", WifiNetworkManager::channel());
     writer.writeField("Hostname", WifiNetworkManager::getHostname());
     writer.writeField("MAC_Address", WifiNetworkManager::macAddress());
-    writer.endObject();
   }
 };
 
 #if defined(EBUS_INTERNAL)
 struct SntpStatus {
   void toJson(ebus::detail::JsonWriter& writer) const {
-    writer.startObject();
+    auto scope = writer.objectScope();
     writer.writeField("Enabled", configManager.readBool("sntpEnabled"));
     const char* activeSntpServer = esp_sntp_getservername(0);
     if (activeSntpServer != nullptr) {
@@ -191,7 +186,6 @@ struct SntpStatus {
     }
     writer.writeField("Timezone", configManager.readString(
                                       "sntpTimezone", DEFAULT_SNTP_TIMEZONE));
-    writer.endObject();
   }
 };
 #endif
@@ -379,11 +373,10 @@ void fetchMqttStatusJson(const ebus::JsonChunkVisitor& visitor) {
   writer.writeField("rssi", WifiNetworkManager::RSSI());
   writer.endObject();
 }
-#endif
 
 void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
-  writer.startObject();
+  auto scope = writer.objectScope();
 
   auto addThread = [&](const char* name, TaskHandle_t handle,
                        uint32_t stack_size) {
@@ -396,40 +389,39 @@ void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor) {
   };
 
   writer.appendKey("threads");
-  writer.startArray();
+  {
+    auto array = writer.arrayScope();
 #if defined(EBUS_SIMULATION)
-  addThread("sim", simTaskHandle, 2048);
+    addThread("sim", simTaskHandle, 2048);
 #endif
-#if defined(EBUS_INTERNAL)
-  addThread("mqtt", mqtt.getTaskHandle(), 4096);
-  addThread("cron", cron.getTaskHandle(), 1024);
-  addThread("logger", logger.getTaskHandle(), 1536);
-  addThread("client_acceptor", client_acceptor.getTaskHandle(), 1536);
-#endif
-  addThread("dns", captiveDnsServer.getTaskHandle(), 2048);
-  addThread("espota", espOtaManager.getTaskHandle(), 8192);
-  addThread("status_led", WifiNetworkManager::getStatusLedTaskHandle(), 1024);
-  addThread("socket_logger", WifiNetworkManager::getSocketLoggerTaskHandle(),
-            2048);
-  writer.endArray();
+    addThread("mqtt", mqtt.getTaskHandle(), 4096);
+    addThread("cron", cron.getTaskHandle(), 1024);
+    addThread("logger", logger.getTaskHandle(), 1536);
+    addThread("client_acceptor", client_acceptor.getTaskHandle(), 1536);
+    addThread("dns", captiveDnsServer.getTaskHandle(), 2048);
+    addThread("espota", espOtaManager.getTaskHandle(), 8192);
+    addThread("status_led", WifiNetworkManager::getStatusLedTaskHandle(), 1024);
+    addThread("socket_logger", WifiNetworkManager::getSocketLoggerTaskHandle(),
+              2048);
+  }
 
   writer.appendKey("queues");
-  writer.startArray();
-  auto addQueue = [&](const char* qname, size_t size, size_t cap) {
-    ebus::QueueStatus qs(qname, size, cap, 0);
-    writer.writeValue(qs);
-  };
+  {
+    auto array = writer.arrayScope();
+    auto addQueue = [&](const char* qname, size_t size, size_t cap) {
+      ebus::QueueStatus qs(qname, size, cap, 0);
+      writer.writeValue(qs);
+    };
 
-#if defined(EBUS_INTERNAL)
-  addQueue("mqtt_in", mqtt.getIncomingQueueSize(),
-           mqtt.getIncomingQueueCapacity());
-  addQueue("mqtt_out", mqtt.getOutgoingQueueSize(),
-           mqtt.getOutgoingQueueCapacity());
-#endif
-  addQueue("logger", logger.getQueueSize(), 32);  // kPrintQueueLen is 32
-  writer.endArray();
-  writer.endObject();
+    addQueue("mqtt_in", mqtt.getIncomingQueueSize(),
+             mqtt.getIncomingQueueCapacity());
+    addQueue("mqtt_out", mqtt.getOutgoingQueueSize(),
+             mqtt.getOutgoingQueueCapacity());
+
+    addQueue("logger", logger.getQueueSize(), 32);  // kPrintQueueLen is 32
+  }
 }
+#endif
 
 void saveParamsCallback() {
   set_pwm();
@@ -480,7 +472,7 @@ void saveParamsCallback() {
 
 void fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
-  writer.startObject();
+  auto scope = writer.objectScope();
   writer.writeField("Status", StatusInfo{});
 
 #if !defined(EBUS_INTERNAL)
@@ -495,21 +487,20 @@ void fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
 
   struct EbusStatus {
     void toJson(ebus::detail::JsonWriter& w) const {
-      w.startObject();
+      auto scope = w.objectScope();
       w.writeField("PWM", get_pwm());
       w.writeField("Ebus_Address",
                    configManager.readString("ebusAddress", "ff"));
       w.writeField("BusIsr_Window",
                    configManager.readInt("busisrWindow", 4300));
       w.writeField("BusIsr_Offset", configManager.readInt("busisrOffset", 80));
-      w.endObject();
     }
   };
   writer.writeField("eBUS", EbusStatus{});
 
   struct ScheduleStatus {
     void toJson(ebus::detail::JsonWriter& w) const {
-      w.startObject();
+      auto scope = w.objectScope();
       w.writeField("Inquiry_Of_Existence",
                    configManager.readBool("inquiryExistPrm"));
       w.writeField("Scan_On_Startup", configManager.readBool("scanOnStartPrm"));
@@ -519,34 +510,29 @@ void fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
                    static_cast<uint32_t>(store.getActiveCommands()));
       w.writeField("Passive_Commands",
                    static_cast<uint32_t>(store.getPassiveCommands()));
-      w.endObject();
     }
   };
   writer.writeField("Schedule", ScheduleStatus{});
 
   struct MqttStatus {
     void toJson(ebus::detail::JsonWriter& w) const {
-      w.startObject();
+      auto scope = w.objectScope();
       w.writeField("Enabled", mqtt.isEnabled());
       w.writeField("Server", configManager.readString("mqttServer"));
       w.writeField("User", configManager.readString("mqttUser"));
       w.writeField("Connected", mqtt.isConnected());
-      w.endObject();
     }
   };
   writer.writeField("MQTT", MqttStatus{});
 
   struct HaStatus {
     void toJson(ebus::detail::JsonWriter& w) const {
-      w.startObject();
+      auto scope = w.objectScope();
       w.writeField("Enabled", mqttha.isEnabled());
-      w.endObject();
     }
   };
   writer.writeField("Home_Assistant", HaStatus{});
 #endif
-
-  writer.endObject();
 }
 
 extern "C" void app_main(void) {
@@ -582,7 +568,7 @@ extern "C" void app_main(void) {
 
   check_reset();
 
-  reset_code = rtc_get_reset_reason(0);
+  reset_code = (uint32_t)esp_rom_get_reset_reason(0);
 
   calcUniqueId();
   loadAdapterHwVersionFromEfuse();

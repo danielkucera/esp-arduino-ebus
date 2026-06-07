@@ -1,6 +1,5 @@
 #include "UpgradeManager.hpp"
 
-#include <cJSON.h>
 #include <esp_err.h>
 #include <esp_http_client.h>
 #include <esp_ota_ops.h>
@@ -10,6 +9,7 @@
 #include <freertos/task.h>
 
 #include <cstdio>
+#include <ebus/detail/json_reader.hpp>
 #include <ebus/detail/json_writer.hpp>
 #include <string>
 
@@ -105,18 +105,17 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
       ebus::detail::JsonWriter writer([req](std::string_view chunk) {
         httpd_resp_send_chunk(req, chunk.data(), chunk.size());
       });
-      char hex[4];
+      char hex[12];
       snprintf(hex, sizeof(hex), "%02x", beginResult);
-      writer.startObject();
+      auto root = writer.objectScope();
       writer.writeField("id", "upgrade_upload");
       writer.writeField("status", "failed");
-      writer.appendKey("error");
-      writer.write("\"esp_ota_begin failed: ");
-      writer.write(esp_err_to_name(beginResult));
-      writer.write(" (0x");
-      writer.write(hex);
-      writer.write(")\"");
-      writer.endObject();
+      std::string err = "esp_ota_begin failed: ";
+      err += esp_err_to_name(beginResult);
+      err += " (0x";
+      err += hex;
+      err += ")";
+      writer.writeField("error", err);
     }
     httpd_resp_send_chunk(req, nullptr, 0);
     return ESP_OK;
@@ -139,11 +138,10 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
       ebus::detail::JsonWriter writer([req](std::string_view chunk) {
         httpd_resp_send_chunk(req, chunk.data(), chunk.size());
       });
-      writer.startObject();
+      auto root = writer.objectScope();
       writer.writeField("id", "upgrade_upload");
       writer.writeField("status", "failed");
       writer.writeField("error", message);
-      writer.endObject();
     }
     httpd_resp_send_chunk(req, nullptr, 0);
     return ESP_OK;
@@ -215,12 +213,11 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
       ebus::detail::JsonWriter writer([req](std::string_view chunk) {
         httpd_resp_send_chunk(req, chunk.data(), chunk.size());
       });
-      writer.startObject();
+      auto root = writer.objectScope();
       writer.writeField("id", "upgrade_upload");
       writer.writeField("status", "failed");
       writer.writeField("error", std::string("esp_ota_end failed: ") +
                                      esp_err_to_name(endResult));
-      writer.endObject();
     }
     httpd_resp_send_chunk(req, nullptr, 0);
     return ESP_OK;
@@ -234,13 +231,12 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
       ebus::detail::JsonWriter writer([req](std::string_view chunk) {
         httpd_resp_send_chunk(req, chunk.data(), chunk.size());
       });
-      writer.startObject();
+      auto root = writer.objectScope();
       writer.writeField("id", "upgrade_upload");
       writer.writeField("status", "failed");
       writer.writeField("error",
                         std::string("esp_ota_set_boot_partition failed: ") +
                             esp_err_to_name(partitionResult));
-      writer.endObject();
     }
     httpd_resp_send_chunk(req, nullptr, 0);
     return ESP_OK;
@@ -254,10 +250,9 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
 
 void UpgradeManager::fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
-  writer.startObject();
+  auto root = writer.objectScope();
   writer.writeField("ready", true);
   writer.writeField("upgrading", false);
-  writer.endObject();
 }
 
 esp_err_t UpgradeManager::handleStatus(httpd_req_t* req) {
@@ -432,25 +427,16 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
 
 esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
   preUpgradeDone_ = false;
+  std::string body = HttpUtils::readBody(req);
+  ebus::detail::JsonReader reader(body);
 
-  cJSON* doc = cJSON_Parse(HttpUtils::readBody(req).c_str());
-  if (doc == nullptr) {
-    httpd_resp_set_status(req, "400 Bad Request");
-    httpd_resp_set_type(req, "application/json;charset=utf-8");
-    httpd_resp_sendstr_chunk(
-        req,
-        "{\"id\":\"upgrade_http\",\"status\":\"failed\",\"error\":\"Invalid "
-        "JSON payload\"}");
-    httpd_resp_send_chunk(req, nullptr, 0);
-    return ESP_OK;
+  std::string url;
+  if (reader.findKey("url")) {
+    reader.next();
+    url = std::string(reader.value());
   }
 
-  cJSON* urlNode = cJSON_GetObjectItemCaseSensitive(doc, "url");
-  std::string url = (cJSON_IsString(urlNode) && urlNode->valuestring != nullptr)
-                        ? std::string(urlNode->valuestring)
-                        : std::string();
   if (url.empty()) {
-    cJSON_Delete(doc);
     httpd_resp_set_status(req, "400 Bad Request");
     httpd_resp_set_type(req, "application/json;charset=utf-8");
     httpd_resp_sendstr_chunk(
@@ -460,7 +446,6 @@ esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
     httpd_resp_send_chunk(req, nullptr, 0);
     return ESP_OK;
   }
-  cJSON_Delete(doc);
 
   prepareForUpgrade();
 
@@ -472,11 +457,10 @@ esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
       ebus::detail::JsonWriter writer([req](std::string_view chunk) {
         httpd_resp_send_chunk(req, chunk.data(), chunk.size());
       });
-      writer.startObject();
+      auto root = writer.objectScope();
       writer.writeField("id", "upgrade_http");
       writer.writeField("status", "failed");
       writer.writeField("error", error);
-      writer.endObject();
     }
     httpd_resp_send_chunk(req, nullptr, 0);
     return ESP_OK;
@@ -494,11 +478,10 @@ void UpgradeManager::sendAndRestart(httpd_req_t* req, const char* message,
     ebus::detail::JsonWriter writer([req](std::string_view chunk) {
       httpd_resp_send_chunk(req, chunk.data(), chunk.size());
     });
-    writer.startObject();
+    auto root = writer.objectScope();
     writer.writeField("id", id);
     writer.writeField("status", "successful");
     writer.writeField("message", message);
-    writer.endObject();
   }
   httpd_resp_send_chunk(req, nullptr, 0);
 

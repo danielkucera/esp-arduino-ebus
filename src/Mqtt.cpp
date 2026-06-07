@@ -1,7 +1,6 @@
 #if defined(EBUS_INTERNAL)
 #include "Mqtt.hpp"
 
-#include <cJSON.h>
 #include <esp_timer.h>
 
 #include <functional>
@@ -9,6 +8,7 @@
 #include "Logger.hpp"
 #include "MqttHA.hpp"
 #include "Store.hpp"
+#include "ebus/detail/json_reader.hpp"
 #include "ebus/detail/json_writer.hpp"  // Include for JsonWriter
 #include "ebus/status.hpp"
 #include "ebus_accessor.hpp"
@@ -60,11 +60,20 @@ void Mqtt::setup(const char* id) {
   will_topic_ = root_topic_ + "available";
   request_topic_ = root_topic_ + "request";
 
+  offline_payload_.clear();
+  {
+    ebus::detail::JsonWriter writer(
+        [this](std::string_view s) { offline_payload_.append(s); });
+    auto scope = writer.objectScope();
+    writer.writeField("value", "offline");
+  }
+
   mqtt_cfg_.credentials.client_id = client_id_.c_str();
   // Last Will
   mqtt_cfg_.session.last_will.topic = will_topic_.c_str();
-  mqtt_cfg_.session.last_will.msg = "{ \"value\": \"offline\" }";
-  mqtt_cfg_.session.last_will.msg_len = 0;
+  mqtt_cfg_.session.last_will.msg = offline_payload_.c_str();
+  mqtt_cfg_.session.last_will.msg_len =
+      static_cast<int>(offline_payload_.size());
   mqtt_cfg_.session.last_will.qos = 1;
   mqtt_cfg_.session.last_will.retain = 1;
   // Keep-alive interval in seconds
@@ -256,8 +265,14 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       self->connected_ = true;
       esp_mqtt_client_subscribe(self->client_, self->request_topic_.c_str(), 0);
 
-      self->publish(self->will_topic_.c_str(), 0, true,
-                    "{ \"value\": \"online\" }", false);
+      self->publishStream(
+          self->will_topic_.c_str(), 0, true,
+          [](const ebus::JsonChunkVisitor& v) {
+            ebus::detail::JsonWriter writer(v);
+            auto scope = writer.objectScope();
+            writer.writeField("value", "online");
+          },
+          false);
 
       if (mqttha.isEnabled()) mqttha.publishDeviceInfo();
     } break;
@@ -275,94 +290,50 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       logger.debug("MQTT data received");
 
       std::string_view payload(event->data, event->data_len);
-      std::string_view id_view = ebus::extract(payload, "id");
-      if (id_view.size() >= 2 && id_view.front() == '"' &&
-          id_view.back() == '"') {
-        id_view.remove_prefix(1);
-        id_view.remove_suffix(1);
-      }
+      ebus::detail::JsonReader reader(payload);
+      if (!reader.findKey("id")) return;
+      reader.next();
+      std::string_view id_view = reader.value();
 
       if (id_view == "insert") {
         self->handleInsert(payload);
-        return;
-      }
-
-      if (id_view == "remove") {
+      } else if (id_view == "remove") {
         self->handleRemove(payload);
-        return;
-      }
-
-      if (id_view == "scan") {
+      } else if (id_view == "scan") {
         self->handleScan(payload);
-        return;
-      }
-
-      if (id_view == "send") {
+      } else if (id_view == "send") {
         self->handleSend(payload);
-        return;
-      }
-
-      if (id_view == "devices") {
+      } else if (id_view == "devices") {
         self->handleDevices(payload);
-        return;
-      }
-
-      if (id_view == "load") {
+      } else if (id_view == "load") {
         self->handleLoad(payload);
-        return;
-      }
-
-      if (id_view == "save") {
+      } else if (id_view == "save") {
         self->handleSave(payload);
-        return;
-      }
-
-      if (id_view == "wipe") {
+      } else if (id_view == "wipe") {
         self->handleWipe(payload);
-        return;
-      }
-
-      if (id_view == "restart") {
+      } else if (id_view == "restart") {
         self->handleRestart(payload);
-        return;
-      }
-
-      if (id_view == "read") {
+      } else if (id_view == "read") {
         self->handleRead(payload);
-        return;
-      }
-
-      if (id_view == "write") {
+      } else if (id_view == "write") {
         self->handleWrite(payload);
-        return;
-      }
-
-      if (id_view == "publish") {
+      } else if (id_view == "publish") {
         self->handlePublish();
-        return;
-      }
-
-      if (id_view == "forward") {
+      } else if (id_view == "forward") {
         self->handleForward(payload);
-        return;
-      }
-
-      if (id_view == "reset") {
+      } else if (id_view == "reset") {
         self->handleReset(payload);
-        return;
+      } else {
+        // Unrecognized command
+        self->publishStream(
+            "response", 0, false, [&](const ebus::JsonChunkVisitor& v) {
+              ebus::detail::JsonWriter writer(v);
+              auto scope = writer.objectScope();
+              writer.writeField("id", "response");
+              writer.writeField(
+                  "error", "command '" + std::string(id_view) + "' not found");
+            });
       }
-
-      // Unrecognized command
-      self->publishStream("response", 0, false,
-                          [&](const ebus::JsonChunkVisitor& v) {
-                            ebus::detail::JsonWriter writer(v);
-                            writer.startObject();
-                            writer.appendKey("error");
-                            writer.write("\"command '");
-                            writer.write(id_view);
-                            writer.write("' not found\"");
-                            writer.endObject();
-                          });
     } break;
     case MQTT_EVENT_DELETED: {
     } break;
@@ -378,79 +349,44 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
 void Mqtt::handleRestart(std::string_view payload) { restart(); }
 
 void Mqtt::handleInsert(std::string_view payload) {
-  std::string_view commands_part = ebus::extractSub(payload, "commands");
-  if (commands_part.empty()) return;
+  ebus::detail::JsonReader reader(payload);
+  if (!reader.findKey("commands")) return;
+  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return;
 
-  // Minimal iterative parser to avoid full cJSON DOM of the array
-  size_t pos = 0;
-  while (pos < commands_part.size()) {
-    size_t start_obj = commands_part.find('{', pos);
-    if (start_obj == std::string_view::npos) break;
+  while (true) {
+    std::string_view cmd_sv = reader.rawValue();
+    if (cmd_sv.empty()) break;
 
-    // Find matching } by balancing braces
-    int depth = 0;
-    size_t end_obj = std::string_view::npos;
-    for (size_t i = start_obj; i < commands_part.size(); ++i) {
-      if (commands_part[i] == '{')
-        depth++;
-      else if (commands_part[i] == '}') {
-        depth--;
-        if (depth == 0) {
-          end_obj = i;
-          break;
-        }
-      }
+    ebus::detail::JsonReader cmd_reader(cmd_sv);
+    std::string evalError = Command::evaluate(cmd_reader);
+    if (evalError.empty()) {
+      cmd_reader.reset();
+      std::lock_guard<std::mutex> lock(incoming_queue_mutex_);
+      incoming_queue_.push_back(IncomingAction(Command::fromJson(cmd_reader)));
+    } else {
+      publishStream("response", 0, false, [&](const ebus::JsonChunkVisitor& v) {
+        ebus::detail::JsonWriter writer(v);
+        auto scope = writer.objectScope();
+        writer.writeField("id", "insert");
+        writer.writeField("error", evalError);
+      });
     }
-    if (end_obj == std::string_view::npos) break;
-
-    std::string_view cmd_sv =
-        commands_part.substr(start_obj, end_obj - start_obj + 1);
-
-    // Parse only this single command object
-    cJSON* cmd_doc = cJSON_ParseWithLength(cmd_sv.data(), cmd_sv.size());
-    if (cmd_doc) {
-      std::string evalError = Command::evaluate(cmd_doc);
-      if (evalError.empty()) {
-        std::lock_guard<std::mutex> lock(incoming_queue_mutex_);
-        incoming_queue_.push_back(IncomingAction(Command::fromJson(cmd_doc)));
-      } else {
-        publishStream("response", 0, false,
-                      [&](const ebus::JsonChunkVisitor& v) {
-                        ebus::detail::JsonWriter writer(v);
-                        writer.startObject();
-                        writer.writeField("error", evalError);
-                        writer.endObject();
-                      });
-      }
-      cJSON_Delete(cmd_doc);
-    }
-    pos = end_obj + 1;
   }
 }
 
 void Mqtt::handleRemove(std::string_view payload) {
-  std::string_view keys_part = ebus::extractSub(payload, "keys");
+  ebus::detail::JsonReader reader(payload);
+  if (!reader.findKey("keys")) return;
+  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return;
 
-  {
-    std::lock_guard<std::mutex> lock(incoming_queue_mutex_);
-    if (keys_part.empty() || keys_part == "[]") {
-      // Remove all if keys array is missing or empty
-      for (const Command* command : store.getCommands())
-        incoming_queue_.push_back(IncomingAction(command->getKey()));
-    } else {
-      // Minimal iterative parser to avoid full cJSON DOM of the keys array
-      size_t pos = 0;
-      while (pos < keys_part.size()) {
-        size_t start_quote = keys_part.find('"', pos);
-        if (start_quote == std::string_view::npos) break;
-        size_t end_quote = keys_part.find('"', start_quote + 1);
-        if (end_quote == std::string_view::npos) break;
-
-        std::string key(
-            keys_part.substr(start_quote + 1, end_quote - start_quote - 1));
-        incoming_queue_.push_back(IncomingAction(key));
-        pos = end_quote + 1;
-      }
+  std::lock_guard<std::mutex> lock(incoming_queue_mutex_);
+  while (true) {
+    auto token = reader.next();
+    if (token == ebus::detail::JsonReader::Token::ArrayEnd ||
+        token == ebus::detail::JsonReader::Token::End)
+      break;
+    if (token == ebus::detail::JsonReader::Token::String) {
+      incoming_queue_.push_back(IncomingAction(std::string(reader.value())));
     }
   }
 }
@@ -493,27 +429,30 @@ void Mqtt::handleWipe(std::string_view payload) {
 }
 
 void Mqtt::handleScan(std::string_view payload) {
-  std::string_view full_view = ebus::extract(payload, "full");
-  if (full_view == "true") {
+  ebus::detail::JsonReader reader(payload);
+  if (reader.get("full") == ebus::detail::JsonReader::Token::Boolean &&
+      reader.asBool()) {
     getEbusController().initFullScan(true);
   } else {
-    std::string_view addr_part = ebus::extractSub(payload, "addresses");
-    if (addr_part.empty() || addr_part == "[]") {
-      getEbusController().scanObservedDevices();
-    } else {
+    reader.reset();
+    if (reader.findKey("addresses") &&
+        reader.next() == ebus::detail::JsonReader::Token::ArrayStart) {
       std::vector<uint8_t> addrVec;
-      size_t pos = 0;
-      while (pos < addr_part.size()) {
-        size_t s = addr_part.find('"', pos);
-        if (s == std::string_view::npos) break;
-        size_t e = addr_part.find('"', s + 1);
-        if (e == std::string_view::npos) break;
-        std::string hex(addr_part.substr(s + 1, e - s - 1));
+      while (true) {
+        auto t = reader.next();
+        if (t == ebus::detail::JsonReader::Token::ArrayEnd ||
+            t == ebus::detail::JsonReader::Token::End)
+          break;
+        std::string hex(reader.value());
         addrVec.push_back(
             static_cast<uint8_t>(std::strtoul(hex.c_str(), nullptr, 16)));
-        pos = e + 1;
       }
-      if (!addrVec.empty()) getEbusController().scanAddresses(addrVec);
+      if (!addrVec.empty())
+        getEbusController().scanAddresses(addrVec);
+      else
+        getEbusController().scanObservedDevices();
+    } else {
+      getEbusController().scanObservedDevices();
     }
   }
   publishResponse("scan", "initiated");
@@ -526,42 +465,42 @@ void Mqtt::handleDevices(std::string_view payload) {
 }
 
 void Mqtt::handleSend(std::string_view payload) {
-  std::string_view commands_part = ebus::extractSub(payload, "commands");
-  if (commands_part.empty() || commands_part == "[]") {
-    publishResponse("send", "commands array invalid");
-  } else {
-    size_t pos = 0;
-    while (pos < commands_part.size()) {
-      size_t s = commands_part.find('"', pos);
-      if (s == std::string_view::npos) break;
-      size_t e = commands_part.find('"', s + 1);
-      if (e == std::string_view::npos) break;
-      std::string cmd_hex(commands_part.substr(s + 1, e - s - 1));
-      getEbusController().enqueue(PRIO_SEND, ebus::toVector(cmd_hex));
-      pos = e + 1;
+  ebus::detail::JsonReader reader(payload);
+  if (!reader.findKey("commands")) {
+    publishResponse("send", "missing commands array");
+    return;
+  }
+  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return;
+  while (true) {
+    auto token = reader.next();
+    if (token == ebus::detail::JsonReader::Token::ArrayEnd ||
+        token == ebus::detail::JsonReader::Token::End)
+      break;
+    if (token == ebus::detail::JsonReader::Token::String) {
+      getEbusController().enqueue(PRIO_SEND,
+                                  ebus::toVector(std::string(reader.value())));
     }
   }
 }
 
 void Mqtt::handleForward(std::string_view payload) {
-  std::string_view enable_view = ebus::extract(payload, "enable");
-  bool enabled = (enable_view == "true");
-  (void)enabled;
-  // getEbusController().toggleForwarding(enabled);
+  ebus::detail::JsonReader reader(payload);
+  if (reader.get("enable") == ebus::detail::JsonReader::Token::Boolean) {
+    // bool enabled = reader.asBool();
+    // getEbusController().toggleForwarding(enabled);
+  }
 
-  std::string_view filters_part = ebus::extractSub(payload, "filters");
-  if (!filters_part.empty() && filters_part != "[]") {
-    // Use StaticVector to avoid heap allocation for the collection of views
+  reader.reset();
+  if (reader.findKey("filters") &&
+      reader.next() == ebus::detail::JsonReader::Token::ArrayStart) {
     ebus::detail::StaticVector<std::string_view, 8> filters;
-    size_t pos = 0;
-    while (pos < filters_part.size() && filters.size() < filters.capacity()) {
-      size_t s = filters_part.find('"', pos);
-      if (s == std::string_view::npos) break;
-      size_t e = filters_part.find('"', s + 1);
-      if (e == std::string_view::npos) break;
-
-      filters.push_back(filters_part.substr(s + 1, e - s - 1));
-      pos = e + 1;
+    while (filters.size() < filters.capacity()) {
+      auto t = reader.next();
+      if (t == ebus::detail::JsonReader::Token::ArrayEnd ||
+          t == ebus::detail::JsonReader::Token::End)
+        break;
+      if (t == ebus::detail::JsonReader::Token::String)
+        filters.push_back(reader.value());
     }
     // getEbusController().setForwardingFilters(filters);
   }
@@ -572,79 +511,56 @@ void Mqtt::handleReset(std::string_view payload) {
 }
 
 void Mqtt::handleRead(std::string_view payload) {
-  std::string_view key_view = ebus::extract(payload, "key");
-  if (key_view.size() >= 2 && key_view.front() == '"' &&
-      key_view.back() == '"') {
-    key_view.remove_prefix(1);
-    key_view.remove_suffix(1);
-  }
+  ebus::detail::JsonReader reader(payload);
+  if (!reader.findKey("key")) return;
+  reader.next();
+  std::string_view key_view = reader.value();
 
   const Command* command = store.findCommand(std::string(key_view));
   if (command != nullptr) {
-    publishStream(
-        "response", 0, false, [command](const ebus::JsonChunkVisitor& v) {
-          ebus::detail::JsonWriter writer(v);
-          writer.startObject();
-          writer.writeField("id", "read");
-          // Now, directly write the value field from the command
-          writer.appendKey("value");  // This will add "value":
-          auto decoded =
-              ebus::decode(command->getDatatype(), command->getData());
-          if (!decoded || ebus::isNull(*decoded)) {
-            writer.writeRaw("null");
-          } else {
-            if (command->getNumeric()) {
-              writer.writeValueFloat(ebus::roundDigits(
-                  ebus::asFloat(*decoded) / command->getDivider(),
-                  command->getDigits()));
-            } else {
-              const auto meta = command->getMetaCached();
-              if (meta && std::string_view(meta->name).find("HEX") == 0)
-                writer.writeValue(ebus::toHexString(*decoded, 0));
-              else
-                writer.writeValue(ebus::asString(*decoded));
-            }
-          }
-          writer.endObject();
-        });
-  } else {
     publishStream("response", 0, false,
-                  [key_view](const ebus::JsonChunkVisitor& v) {
+                  [command](const ebus::JsonChunkVisitor& v) {
                     ebus::detail::JsonWriter writer(v);
-                    writer.startObject();
+                    auto scope = writer.objectScope();
                     writer.writeField("id", "read");
-                    writer.appendKey("status");
-                    writer.write("\"key '");
-                    writer.writeEscaped(key_view);
-                    writer.write("' not found\"");
-                    writer.endObject();
+                    writer.appendKey("value");
+                    command->getValueJson(writer);
                   });
+  } else {
+    publishStream(
+        "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {
+          ebus::detail::JsonWriter writer(v);
+          auto scope = writer.objectScope();
+          writer.writeField("id", "read");
+          writer.writeField("status",
+                            "key '" + std::string(key_view) + "' not found");
+        });
   }
 }
 
 void Mqtt::handleWrite(std::string_view payload) {
-  std::string_view key_view = ebus::extract(payload, "key");
-  if (key_view.size() >= 2 && key_view.front() == '"' &&
-      key_view.back() == '"') {
-    key_view.remove_prefix(1);
-    key_view.remove_suffix(1);
-  }
+  ebus::detail::JsonReader reader(payload);
+  if (!reader.findKey("key")) return;
+  reader.next();
+  std::string_view key_view = reader.value();
 
   Command* command = store.findCommand(std::string(key_view));
   if (command != nullptr) {
-    std::string_view val_view = ebus::extract(payload, "value");
+    reader.reset();
+    std::string_view val_view;
+    if (reader.findKey("value")) {
+      val_view = reader.rawValue();
+    }
+
     if (val_view.empty()) {
-      publishStream("response", 0, false,
-                    [key_view](const ebus::JsonChunkVisitor& v) {
-                      ebus::detail::JsonWriter writer(v);
-                      writer.startObject();
-                      writer.writeField("id", "write");
-                      writer.appendKey("status");
-                      writer.write("\"missing value for key '");
-                      writer.writeEscaped(key_view);
-                      writer.write("'\"");
-                      writer.endObject();
-                    });
+      publishStream(
+          "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {
+            ebus::detail::JsonWriter writer(v);
+            auto scope = writer.objectScope();
+            writer.writeField("id", "write");
+            writer.writeField("status", "missing value for key '" +
+                                            std::string(key_view) + "'");
+          });
       return;
     }
 
@@ -674,42 +590,33 @@ void Mqtt::handleWrite(std::string_view payload) {
       publishStream("response", 0, false,
                     [command, key_view](const ebus::JsonChunkVisitor& v) {
                       ebus::detail::JsonWriter writer(v);
-                      writer.startObject();
+                      auto scope = writer.objectScope();
                       writer.writeField("id", "write");
-                      writer.appendKey("status");
-                      writer.write("\"scheduled for key '");
-                      writer.writeEscaped(key_view);
-                      writer.write("' name '");
-                      writer.writeEscaped(command->getName());
-                      writer.write("'\"");
-                      writer.endObject();
+                      writer.writeField("status", "scheduled for key '" +
+                                                      std::string(key_view) +
+                                                      "' name '" +
+                                                      command->getName() + "'");
                     });
       command->setLast(0);
     } else {
-      publishStream("response", 0, false,
-                    [key_view](const ebus::JsonChunkVisitor& v) {
-                      ebus::detail::JsonWriter writer(v);
-                      writer.startObject();
-                      writer.writeField("id", "write");
-                      writer.appendKey("status");
-                      writer.write("\"invalid value for key '");
-                      writer.writeEscaped(key_view);
-                      writer.write("'\"");
-                      writer.endObject();
-                    });
+      publishStream(
+          "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {
+            ebus::detail::JsonWriter writer(v);
+            auto scope = writer.objectScope();
+            writer.writeField("id", "write");
+            writer.writeField("status", "invalid value for key '" +
+                                            std::string(key_view) + "'");
+          });
     }
   } else {
-    publishStream("response", 0, false,
-                  [key_view](const ebus::JsonChunkVisitor& v) {
-                    ebus::detail::JsonWriter writer(v);
-                    writer.startObject();
-                    writer.writeField("id", "write");
-                    writer.appendKey("status");
-                    writer.write("\"key '");
-                    writer.writeEscaped(key_view);
-                    writer.write("' not found\"");
-                    writer.endObject();
-                  });
+    publishStream(
+        "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {
+          ebus::detail::JsonWriter writer(v);
+          auto scope = writer.objectScope();
+          writer.writeField("id", "write");
+          writer.writeField("status",
+                            "key '" + std::string(key_view) + "' not found");
+        });
   }
 }
 
@@ -733,45 +640,35 @@ bool Mqtt::checkIncomingQueue() {
       case IncomingActionType::Insert:
         store.insertCommand(action.command);
         if (mqttha.isEnabled()) mqttha.publishComponent(&action.command, false);
-        publishStream("response", 0, false,
-                      [&](const ebus::JsonChunkVisitor& v) {
-                        ebus::detail::JsonWriter writer(v);
-                        writer.startObject();
-                        writer.writeField("id", "insert");
-                        writer.appendKey("status");
-                        writer.write("\"key '");
-                        writer.writeEscaped(action.command.getKey());
-                        writer.write("' inserted\"");
-                        writer.endObject();
-                      });
+        publishStream(
+            "response", 0, false, [&](const ebus::JsonChunkVisitor& v) {
+              ebus::detail::JsonWriter writer(v);
+              auto scope = writer.objectScope();
+              writer.writeField("id", "insert");
+              writer.writeField(
+                  "status", "key '" + action.command.getKey() + "' inserted");
+            });
         break;
       case IncomingActionType::Remove:
         const Command* cmd = store.findCommand(action.key);
         if (cmd) {
           if (mqttha.isEnabled()) mqttha.publishComponent(cmd, true);
           store.removeCommand(action.key);
-          publishStream("response", 0, false,
-                        [&](const ebus::JsonChunkVisitor& v) {
-                          ebus::detail::JsonWriter writer(v);
-                          writer.startObject();
-                          writer.writeField("id", "remove");
-                          writer.appendKey("status");
-                          writer.write("\"key '");
-                          writer.writeEscaped(action.key);
-                          writer.write("' removed\"");
-                          writer.endObject();
-                        });
+          publishStream(
+              "response", 0, false, [&](const ebus::JsonChunkVisitor& v) {
+                ebus::detail::JsonWriter writer(v);
+                auto scope = writer.objectScope();
+                writer.writeField("id", "remove");
+                writer.writeField("status", "key '" + action.key + "' removed");
+              });
         } else {
           publishStream("response", 0, false,
                         [&](const ebus::JsonChunkVisitor& v) {
                           ebus::detail::JsonWriter writer(v);
-                          writer.startObject();
+                          auto scope = writer.objectScope();
                           writer.writeField("id", "remove");
-                          writer.appendKey("status");
-                          writer.write("\"key '");
-                          writer.writeEscaped(action.key);
-                          writer.write("' not found\"");
-                          writer.endObject();
+                          writer.writeField(
+                              "status", "key '" + action.key + "' not found");
                         });
         }
         break;
@@ -832,11 +729,10 @@ bool Mqtt::checkOutgoingQueue() {
         publishStream("response", 0, false,
                       [&](const ebus::JsonChunkVisitor& v) {
                         ebus::detail::JsonWriter writer(v);
-                        writer.startObject();
+                        auto scope = writer.objectScope();
                         writer.writeField("id", action.id);
                         writer.writeHexField("master", action.master);
                         writer.writeHexField("slave", action.slave);
-                        writer.endObject();
                       });
         break;
       }
@@ -867,29 +763,9 @@ void Mqtt::handleValueUpdate(const std::string& key) {
 
       publishStream(topicBuf, 0, false, [&](const ebus::JsonChunkVisitor& v) {
         ebus::detail::JsonWriter writer(v);
-        writer.startObject();
+        auto scope = writer.objectScope();
         writer.appendKey("value");
-        if (!decoded || ebus::isNull(*decoded)) {
-          writer.writeRaw("null");
-        } else if (cmd->getNumeric()) {
-          writer.writeValueFloat(ebus::roundDigits(
-              ebus::asFloat(*decoded) / cmd->getDivider(), cmd->getDigits()));
-        } else {
-          const auto meta = cmd->getMetaCached();
-          if (meta && std::string_view(meta->name).find("HEX") == 0) {
-            const std::string& hexData = ebus::asString(*decoded);
-            writer.write("\"");
-            ebus::detail::appendHexFieldToWriter(
-                writer,
-                ebus::ByteView(reinterpret_cast<const uint8_t*>(hexData.data()),
-                               hexData.size()));
-            writer.write("\"");
-            writer.writeRaw(""); // Force first_ = false to ensure next sibling gets a comma
-          } else {
-            writer.writeValue(ebus::asString(*decoded));
-          }
-        }
-        writer.endObject();
+        cmd->getValueJson(writer);
       });
     }
   }
@@ -902,11 +778,10 @@ void Mqtt::publishResponse(std::string_view id, std::string_view status,
   if (!enabled_ || client_ == nullptr) return;
   publishStream("response", 0, false, [&](const ebus::JsonChunkVisitor& v) {
     ebus::detail::JsonWriter writer(v);
-    writer.startObject();
+    auto scope = writer.objectScope();
     writer.writeField("id", id);
     writer.writeField("status", status);
     if (bytes > 0) writer.writeField("bytes", static_cast<uint32_t>(bytes));
-    writer.endObject();
   });
 }
 

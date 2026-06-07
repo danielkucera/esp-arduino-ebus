@@ -167,6 +167,7 @@ class Mqtt {
   std::string root_topic_;
   std::string will_topic_;
   std::string request_topic_;
+  std::string offline_payload_;
 
   std::string uri_;
 

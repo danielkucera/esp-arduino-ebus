@@ -61,26 +61,25 @@ void MqttHA::publishDeviceInfo() const {
         topic.c_str(), 0, true,
         [&](const ebus::JsonChunkVisitor& v) {
           ebus::detail::JsonWriter writer(v);
-          writer.startObject();
+          auto root = writer.objectScope();
           writer.writeField("unique_id", deviceIdentifiers + "_" + key);
           writer.writeField("name", name);
           writer.writeField("availability_topic", willTopic);
           writer.writeField("availability_template", "{{value_json.value}}");
 
-          writer.appendKey("device");
-          writer.startObject();
-          writer.writeField("identifiers", deviceIdentifiers);
-          writer.writeField("name", thingName);
-          writer.writeField("manufacturer", thingManufacturer);
-          writer.writeField("model", thingModel);
-          writer.writeField("model_id", thingModelId);
-          writer.writeField("hw_version", thingHwVersion);
-          writer.writeField("sw_version", thingSwVersion);
-          writer.writeField("configuration_url", thingConfigurationUrl);
-          writer.endObject();
+          {
+            auto device = writer.objectScope("device");
+            writer.writeField("identifiers", deviceIdentifiers);
+            writer.writeField("name", thingName);
+            writer.writeField("manufacturer", thingManufacturer);
+            writer.writeField("model", thingModel);
+            writer.writeField("model_id", thingModelId);
+            writer.writeField("hw_version", thingHwVersion);
+            writer.writeField("sw_version", thingSwVersion);
+            writer.writeField("configuration_url", thingConfigurationUrl);
+          }
 
           writeFields(writer);
-          writer.endObject();
         },
         false);
   };
@@ -164,7 +163,7 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
       topic.c_str(), 0, true,
       [&](const ebus::JsonChunkVisitor& v) {
         ebus::detail::JsonWriter writer(v);
-        writer.startObject();
+        auto root = writer.objectScope();
 
         std::string prettyName = command->getName();
         std::replace(prettyName.begin(), prettyName.end(), '/', ' ');
@@ -176,10 +175,10 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
         writer.writeField("availability_topic", willTopic);
         writer.writeField("availability_template", "{{value_json.value}}");
 
-        writer.appendKey("device");
-        writer.startObject();
-        writer.writeField("identifiers", deviceIdentifiers);
-        writer.endObject();
+        {
+          auto device = writer.objectScope("device");
+          writer.writeField("identifiers", deviceIdentifiers);
+        }
 
         writer.writeField("state_topic",
                           createStateTopic("values", command->getName()));
@@ -232,10 +231,10 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
           auto opt = createOptions(command->getHAKeyValueMap(),
                                    command->getHADefaultKey());
           if (component == "select") {
-            writer.appendKey("options");
-            writer.startArray();
-            for (const auto& s : opt.options) writer.writeValue(s);
-            writer.endArray();
+            {
+              auto options = writer.arrayScope("options");
+              for (const auto& s : opt.options) writer.writeValue(s);
+            }
             writer.writeField("command_template",
                               "{\"id\":\"write\",\"key\":\"" +
                                   command->getKey() +
@@ -245,8 +244,6 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
         } else if (component == "sensor") {
           writer.writeField("value_template", "{{value_json.value}}");
         }
-
-        writer.endObject();
       },
       false);
 }

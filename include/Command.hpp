@@ -1,9 +1,9 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <cJSON.h>
 
 #include <ebus/data_types.hpp>
+#include <ebus/detail/json_reader.hpp>
 #include <map>
 #include <string>
 #include <vector>
@@ -83,16 +83,11 @@ class Command {
 
   // Serialization / Deserialization
   void toJson(ebus::detail::JsonWriter& writer) const;
-  const std::string toJson() const;
-  static Command fromJson(const cJSON* doc);
+  static Command fromJson(ebus::detail::JsonReader& reader);
+  static Command fromTabular(ebus::detail::JsonReader& reader);
 
-  static const std::string evaluate(const cJSON* doc);
+  static const std::string evaluate(ebus::detail::JsonReader& reader);
   const ebus::DataTypeInfo* getMetaCached() const;
-
-  /**
-   * @brief Writes a compact array-row for flash persistence.
-   */
-  void writePersistenceRow(ebus::detail::JsonWriter& writer) const;
 
  private:
   // Internal fields
@@ -184,13 +179,9 @@ class Command {
     FieldType type;
   };
 
-  static const std::string isFieldValid(const cJSON* doc,
-                                        const std::string& field, bool required,
-                                        FieldType type);
-  static const std::string isKeyValueMapValid(const cJSON* ha_key_value_map);
+  static const std::string isKeyValueMapValid(ebus::detail::JsonReader& reader);
 
   mutable std::optional<ebus::DataTypeInfo> _cachedMeta;
-
 };
 
 #endif

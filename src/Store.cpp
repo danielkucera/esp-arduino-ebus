@@ -1,7 +1,6 @@
 #if defined(EBUS_INTERNAL)
 #include "Store.hpp"
 
-#include <cJSON.h>
 #include <esp_littlefs.h>
 #include <esp_timer.h>
 #include <sys/stat.h>
@@ -10,9 +9,11 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ebus/detail/json_reader.hpp>
 #include <ebus/detail/json_writer.hpp>
 #include <ebus/detail/protocol_limits.hpp>
 
+#include "Logger.hpp"
 #include "Mqtt.hpp"
 
 Store store;
@@ -113,11 +114,14 @@ int64_t Store::loadCommands() {
   FILE* file = std::fopen(kCommandsFilePath, "rb");
   if (file == nullptr) {
     if (errno == ENOENT) return 0;
+    logger.error("Store: Failed to open commands file: " +
+                 std::to_string(errno));
     return -1;
   }
 
   if (std::fseek(file, 0, SEEK_END) != 0) {
     std::fclose(file);
+    logger.error("Store: Failed to seek end of commands file");
     return -1;
   }
 
@@ -129,6 +133,7 @@ int64_t Store::loadCommands() {
 
   if (size <= 0 || std::fseek(file, 0, SEEK_SET) != 0) {
     std::fclose(file);
+    logger.error("Store: Failed to seek start of commands file");
     return -1;
   }
 
@@ -138,6 +143,8 @@ int64_t Store::loadCommands() {
   std::fclose(file);
   if (bytesRead != payload.size()) return -1;
 
+  logger.info("Store: Loading commands from LittleFS (" + std::to_string(size) +
+              " bytes)");
   deserializeCommands(payload.c_str());
   return static_cast<int64_t>(payload.size());
 }
@@ -156,9 +163,10 @@ int64_t Store::saveCommands() const {
   });
 
   writer.startArray();
-  // Header row
+
+  // Header row for compressed format
   writer.startArray();
-  static const char* fields[] = {"key",
+  static const char* header[] = {"key",
                                  "name",
                                  "read_cmd",
                                  "write_cmd",
@@ -183,14 +191,52 @@ int64_t Store::saveCommands() const {
                                  "ha_payload_off",
                                  "ha_state_class",
                                  "ha_step"};
-  for (const auto& f : fields) writer.writeValue(f);
+  for (const char* h : header) writer.writeValue(h);
   writer.endArray();
 
-  // Data rows
+  // Data rows in tabular format
   for (const auto& kv : commands_) {
-    kv.second.writePersistenceRow(writer);
-  }
+    const Command& c = kv.second;
+    writer.startArray();
+    writer.writeValue(c.getKey());
+    writer.writeValue(c.getName());
+    writer.writeHexValue(c.getReadCmd());
+    writer.writeHexValue(c.getWriteCmd());
+    writer.writeValue(c.getActive());
+    writer.writeValue(c.getInterval());
+    writer.writeValue(c.getMaster());
+    writer.writeValue(c.getPosition());
+    writer.writeValue(ebus::dataTypeToString(c.getDatatype()));
+    writer.writeValueFloat(c.getDivider());
+    writer.writeValueFloat(c.getMin());
+    writer.writeValueFloat(c.getMax());
+    writer.writeValue(c.getDigits());
+    writer.writeValue(c.getUnit());
+    writer.writeValue(c.getHA());
+    writer.writeValue(c.getHAComponent());
+    writer.writeValue(c.getHADeviceClass());
+    writer.writeValue(c.getHAEntityCategory());
+    writer.writeValue(c.getHAMode());
 
+    // Map as object
+    writer.startObject();
+    for (const auto& kvm : c.getHAKeyValueMap()) {
+      char keyBuf[12];
+      auto [ptr, ec] =
+          std::to_chars(keyBuf, keyBuf + sizeof(keyBuf), kvm.first);
+      if (ec == std::errc{}) {
+        writer.writeField(std::string_view(keyBuf, ptr - keyBuf), kvm.second);
+      }
+    }
+    writer.endObject();
+
+    writer.writeValue(c.getHADefaultKey());
+    writer.writeValue(c.getHAPayloadOn());
+    writer.writeValue(c.getHAPayloadOff());
+    writer.writeValue(c.getHAStateClass());
+    writer.writeValueFloat(c.getHAStep());
+    writer.endArray();
+  }
   writer.endArray();
   writer.flush();
   std::fclose(file);
@@ -365,86 +411,62 @@ void Store::fetchValuesJson(const ebus::JsonChunkVisitor& visitor) const {
 
   uint32_t now = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
   for (const Command* cmd : ordered) {
-    writer.startObject(); // Manual construction requires startObject
+    auto scope = writer.objectScope();
     writer.writeField("key", cmd->getKey());
     writer.writeField("name", cmd->getName());
 
-    // Optimized Value fetching
-    auto decoded = ebus::decode(cmd->getDatatype(), cmd->getData());
     writer.appendKey("value");
-    if (!decoded || ebus::isNull(*decoded)) {
-      writer.writeRaw("null");
-    } else {
-      if (cmd->getNumeric())
-        writer.writeValueFloat(static_cast<float>(cmd->getDoubleFromVector()));
-      else
-        writer.writeValue(cmd->getStringFromVector());
-    }
+    cmd->getValueJson(writer);
 
     writer.writeField("unit", cmd->getUnit());
     writer.writeField("age",
                       (cmd->getLast() > 0) ? (now - cmd->getLast()) / 1000 : 0);
     writer.writeField("write", !cmd->getWriteCmd().empty());
     writer.writeField("active", cmd->getActive());
-    writer.endObject();
   }
   writer.endArray();
 }
 
 void Store::deserializeCommands(const char* payload) {
-  cJSON* doc = cJSON_Parse(payload);
-  if (!cJSON_IsArray(doc)) {
-    if (doc) cJSON_Delete(doc);
+  ebus::detail::JsonReader reader(payload);
+  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) {
+    logger.warn("Store: Payload does not start with a JSON array");
     return;
   }
 
-  int arraySize = cJSON_GetArraySize(doc);
-  if (arraySize < 2) {
-    cJSON_Delete(doc);
-    return;
-  }
+  size_t loaded_count = 0;
+  bool header_seen = false;
 
-  // Read header
-  cJSON* header = cJSON_GetArrayItem(doc, 0);
-  if (!cJSON_IsArray(header)) {
-    cJSON_Delete(doc);
-    return;
-  }
+  // Read each row individually
+  while (true) {
+    std::string_view row_sv = reader.rawValue();
+    if (row_sv.empty()) break;
 
-  std::vector<std::string> fields;
-  int headerSize = cJSON_GetArraySize(header);
-  for (int i = 0; i < headerSize; ++i) {
-    cJSON* name = cJSON_GetArrayItem(header, i);
-    if (cJSON_IsString(name) && name->valuestring != nullptr)
-      fields.emplace_back(name->valuestring);
-    else
-      fields.emplace_back();
-  }
+    ebus::detail::JsonReader row_reader(row_sv);
+    auto token = row_reader.next();
 
-  // Read each command
-  for (int i = 1; i < arraySize; ++i) {
-    cJSON* values = cJSON_GetArrayItem(doc, i);
-    if (!cJSON_IsArray(values)) continue;
-
-    cJSON* tmpDoc = cJSON_CreateObject();
-    int valueSize = cJSON_GetArraySize(values);
-    int limit = std::min(static_cast<int>(fields.size()), valueSize);
-
-    for (int j = 0; j < limit; ++j) {
-      cJSON* valueItem = cJSON_GetArrayItem(values, j);
-      if (fields[j].empty() || valueItem == nullptr) continue;
-      // Special handling for 'ha_key_value_map'
-      cJSON_AddItemToObject(tmpDoc, fields[j].c_str(),
-                            cJSON_Duplicate(valueItem, 1));
+    if (token == ebus::detail::JsonReader::Token::ArrayStart) {
+      if (!header_seen) {
+        header_seen = true;
+        continue;  // Skip header row
+      }
+      row_reader.reset();
+      insertCommand(Command::fromTabular(row_reader));
+      loaded_count++;
+    } else if (token == ebus::detail::JsonReader::Token::ObjectStart) {
+      row_reader.reset();
+      std::string evalError = Command::evaluate(row_reader);
+      if (evalError.empty()) {
+        row_reader.reset();
+        insertCommand(Command::fromJson(row_reader));
+        loaded_count++;
+      } else {
+        logger.error("Store: Command validation failed: " + evalError);
+      }
     }
-
-    std::string evalError = Command::evaluate(tmpDoc);
-    if (evalError.empty()) insertCommand(Command::fromJson(tmpDoc));
-
-    cJSON_Delete(tmpDoc);
   }
-
-  cJSON_Delete(doc);
+  logger.info("Store: Deserialized " + std::to_string(loaded_count) +
+              " commands.");
 }
 
 #endif
