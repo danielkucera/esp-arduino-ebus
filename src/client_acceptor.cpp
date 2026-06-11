@@ -83,6 +83,11 @@ int ClientAcceptor::acceptClient(ServerSocket& server) {
 
   int flag = 1;
 
+  int flags = fcntl(client_fd, F_GETFL, 0);
+  if (flags >= 0) {
+    fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+  }
+
   if (setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) <
       0) {
     logger.warn("Failed to set TCP_NODELAY on client socket (fd=" +

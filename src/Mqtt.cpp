@@ -120,30 +120,33 @@ const std::string& Mqtt::getRootTopic() const { return root_topic_; }
 
 const std::string& Mqtt::getWillTopic() const { return will_topic_; }
 
-void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
-                   const char* payload, bool prefix) {
+void Mqtt::internalPublish(const char* topic, uint8_t qos, bool retain,
+                           const char* payload, bool prefix) {
   if (!enabled_ || client_ == nullptr || payload == nullptr) return;
 
+  const char* targetTopic = topic;
+  char fullTopic[256];
+
   if (prefix) {
-    // Memory optimization: Use stack buffer for combined topic to avoid
-    // std::string concatenation
-    char fullTopic[256];
-    int n = snprintf(fullTopic, sizeof(fullTopic), "%s%s", root_topic_.c_str(),
-                     topic);
+    // Memory optimization: Use stack buffer for combined topic
+    int n = snprintf(fullTopic, sizeof(fullTopic), "%s%s",
+                     getRootTopic().c_str(), topic);
     if (n > 0 && (size_t)n < sizeof(fullTopic)) {
-      if (esp_mqtt_client_publish(client_, fullTopic, payload, 0, qos, retain) <
-          0) {
-        // Use static strings for error logging to avoid heap churn during link
-        // congestion
-        logger.warn("MQTT: Publish failed (buffer full or slow link)");
-      }
-      return;
+      targetTopic = fullTopic;
     }
   }
 
-  if (esp_mqtt_client_publish(client_, topic, payload, 0, qos, retain) < 0) {
-    logger.warn("MQTT: Publish failed");
+  if (esp_mqtt_client_publish(client_, targetTopic, payload, 0, qos, retain) <
+      0) {
+    // Use static strings for error logging to avoid heap churn during link
+    // congestion
+    logger.warn("MQTT: Publish failed (buffer full or slow link)");
   }
+}
+
+void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
+                   const char* payload, bool prefix) {
+  internalPublish(topic, qos, retain, payload, prefix);
 }
 
 void Mqtt::publishStream(
@@ -155,7 +158,7 @@ void Mqtt::publishStream(
   publish_buffer_.clear();
   publish_buffer_.reserve(1024);
   builder([this](std::string_view s) { publish_buffer_.append(s); });
-  publish(topic, qos, retain, publish_buffer_.c_str(), prefix);
+  internalPublish(topic, qos, retain, publish_buffer_.c_str(), prefix);
 }
 
 void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
@@ -163,6 +166,7 @@ void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
   std::lock_guard<std::mutex> lock(mqtt.outgoing_queue_mutex_);
   if (mqtt.outgoing_queue_.push_back(action)) {
     logger.warn("MQTT: Outgoing queue full, dropping oldest message");
+    ebus::updateMaxAtomic(mqtt.max_outgoing_, mqtt.outgoing_queue_.size());
   }
 }
 
@@ -173,14 +177,15 @@ void Mqtt::publishData(const std::string& id,
   enqueueOutgoing(OutgoingAction(id, master, slave));
 }
 
-void Mqtt::publishError(const ebus::ErrorInfo& info) {
+void Mqtt::publishError(const ebus::ProtocolInfo& info) {
   if (!mqtt.enabled_) return;
   enqueueOutgoing(OutgoingAction(info));
 }
 
-void Mqtt::publishValue(const std::string& key) {
+void Mqtt::publishValue(std::string_view key) {
   if (!mqtt.enabled_) return;
-  enqueueOutgoing(OutgoingAction(OutgoingActionType::Update, key));
+  enqueueOutgoing(
+      OutgoingAction(OutgoingActionType::Update, key));  // Pass string_view
 }
 
 size_t Mqtt::getIncomingQueueSize() const {
@@ -191,6 +196,14 @@ size_t Mqtt::getIncomingQueueSize() const {
 size_t Mqtt::getOutgoingQueueSize() const {
   std::lock_guard<std::mutex> lock(outgoing_queue_mutex_);
   return outgoing_queue_.size();
+}
+
+size_t Mqtt::getIncomingQueueHighWatermark() const {
+  return max_incoming_.load(std::memory_order_relaxed);
+}
+
+size_t Mqtt::getOutgoingQueueHighWatermark() const {
+  return max_outgoing_.load(std::memory_order_relaxed);
 }
 
 void Mqtt::doLoop() {
@@ -363,6 +376,7 @@ void Mqtt::handleInsert(std::string_view payload) {
       cmd_reader.reset();
       std::lock_guard<std::mutex> lock(incoming_queue_mutex_);
       incoming_queue_.push_back(IncomingAction(Command::fromJson(cmd_reader)));
+      ebus::updateMaxAtomic(max_incoming_, incoming_queue_.size());
     } else {
       publishStream("response", 0, false, [&](const ebus::JsonChunkVisitor& v) {
         ebus::detail::JsonWriter writer(v);
@@ -387,6 +401,7 @@ void Mqtt::handleRemove(std::string_view payload) {
       break;
     if (token == ebus::detail::JsonReader::Token::String) {
       incoming_queue_.push_back(IncomingAction(std::string(reader.value())));
+      ebus::updateMaxAtomic(max_incoming_, incoming_queue_.size());
     }
   }
 }
@@ -706,22 +721,10 @@ bool Mqtt::checkOutgoingQueue() {
       case OutgoingActionType::Component:
         mqttha.publishComponent(action.command, action.ha_remove);
         break;
-      case OutgoingActionType::Value: {
-        char topicBuf[128];
-        int written = snprintf(topicBuf, sizeof(topicBuf), "values/%s",
-                               action.name.c_str());
-        if (written > 0 && (size_t)written < sizeof(topicBuf)) {
-          for (int i = 7; i < written; ++i) {
-            topicBuf[i] = (char)tolower((unsigned char)topicBuf[i]);
-          }
-          publish(topicBuf, 0, false, action.payload.c_str());
-        }
-        break;
-      }
       case OutgoingActionType::Error: {
         publishStream("errors", 0, false, [&](const ebus::JsonChunkVisitor& v) {
           ebus::detail::JsonWriter writer(v);
-          action.error.toJson(writer);
+          action.protocol_info.toJson(writer);
         });
         break;
       }
@@ -746,8 +749,8 @@ bool Mqtt::checkOutgoingQueue() {
   return false;
 }
 
-void Mqtt::handleValueUpdate(const std::string& key) {
-  Command* cmd = store.findCommand(key);
+void Mqtt::handleValueUpdate(std::string_view key) {
+  Command* cmd = store.findCommand(std::string(key));
   if (!cmd) return;
 
   // Correlation Optimization: Decode once and reuse for both JSON and logging

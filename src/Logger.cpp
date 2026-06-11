@@ -5,6 +5,7 @@
 
 #include <cstring>
 #include <ebus/detail/json_writer.hpp>
+#include <ebus/utils.hpp>
 
 namespace {
 constexpr size_t kPrintQueueLen = 32;
@@ -41,6 +42,11 @@ Logger::~Logger() {
 size_t Logger::getQueueSize() const {
   if (printQueue == nullptr) return 0;
   return uxQueueMessagesWaiting(printQueue);
+}
+
+size_t Logger::getQueueHighWatermark() const {
+  if (printQueue == nullptr) return 0;
+  return maxQueueSize.load(std::memory_order_relaxed);
 }
 
 void Logger::error(std::string_view message, bool is_json, uint32_t sid,
@@ -144,7 +150,9 @@ void Logger::log(LogLevel level, std::string_view message, bool is_json,
     size_t len = std::min(message.size(), sizeof(msg) - 1);
     std::memcpy(msg, message.data(), len);
     msg[len] = '\0';
-    xQueueSend(printQueue, msg, 0);
+    if (xQueueSend(printQueue, msg, 0) == pdPASS) {
+      ebus::updateMaxAtomic(maxQueueSize, uxQueueMessagesWaiting(printQueue));
+    }
   }
 
   portENTER_CRITICAL(&mux);

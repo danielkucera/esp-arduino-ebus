@@ -96,6 +96,17 @@ Command* Store::findCommand(const std::string& key) {
     return nullptr;
 }
 
+Command* Store::findCommand(uint32_t poll_id) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  for (auto& kv : commands_) {
+    Command* cmd = &kv.second;
+    if (cmd->getPollId() == poll_id) {
+      return cmd;
+    }
+  }
+  return nullptr;
+}
+
 std::vector<Command*> Store::findAllMatchingCommands(ebus::ByteView master) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<Command*> result;

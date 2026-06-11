@@ -4,10 +4,11 @@
 #include <freertos/queue.h>
 #include <freertos/task.h>
 
+#include <atomic>
 #include <cstdint>
 #include <ebus/types.hpp>
-#include <string_view>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Simple circular buffer logger
@@ -22,14 +23,14 @@ class Logger {
   Logger(const Logger& other) = delete;             // Prevent copying
   Logger& operator=(const Logger& other) = delete;  // Prevent assignment
 
-  void error(std::string_view message, bool is_json = false, uint32_t session_id = 0,
-             uint32_t poll_id = 0);
-  void warn(std::string_view message, bool is_json = false, uint32_t session_id = 0,
-            uint32_t poll_id = 0);
-  void info(std::string_view message, bool is_json = false, uint32_t session_id = 0,
-            uint32_t poll_id = 0);
-  void debug(std::string_view message, bool is_json = false, uint32_t session_id = 0,
-             uint32_t poll_id = 0);
+  void error(std::string_view message, bool is_json = false,
+             uint32_t session_id = 0, uint32_t poll_id = 0);
+  void warn(std::string_view message, bool is_json = false,
+            uint32_t session_id = 0, uint32_t poll_id = 0);
+  void info(std::string_view message, bool is_json = false,
+            uint32_t session_id = 0, uint32_t poll_id = 0);
+  void debug(std::string_view message, bool is_json = false,
+             uint32_t session_id = 0, uint32_t poll_id = 0);
 
   void fetchLogsJson(const ebus::JsonChunkVisitor& visitor,
                      uint64_t sinceMillis = 0) const;
@@ -37,6 +38,8 @@ class Logger {
 
   TaskHandle_t getTaskHandle() const { return printTask; }
   size_t getQueueSize() const;
+  size_t getQueueCapacity() const { return maxEntries; }
+  size_t getQueueHighWatermark() const;
 
  private:
   enum class LogLevel { DEBUG, INFO, WARN, ERROR };
@@ -67,6 +70,7 @@ class Logger {
   mutable portMUX_TYPE mux;  // Mutex for thread safety
   QueueHandle_t printQueue;
   TaskHandle_t printTask;
+  std::atomic<size_t> maxQueueSize = 0;
 };
 
 extern Logger logger;

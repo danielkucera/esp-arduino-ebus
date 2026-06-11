@@ -34,6 +34,7 @@ class Store {
   void insertCommand(const Command& command);
   void removeCommand(const std::string& key);
   Command* findCommand(const std::string& key);
+  Command* findCommand(uint32_t poll_id);
   std::vector<Command*> findAllMatchingCommands(ebus::ByteView master);
 
   int64_t loadCommands();

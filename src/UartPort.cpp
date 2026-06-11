@@ -38,7 +38,7 @@ void UartPort::ensureInstalled(int baud, int rxPin, int txPin) {
   (void)rxPin;
   (void)txPin;
   int rxBuffer = static_cast<int>(rxBufferSize_);
-  int txBuffer = 0;
+  int txBuffer = 256; // Use a transmit buffer to prevent blocking on uart_write_bytes
   if (uart_driver_install(port_, rxBuffer, txBuffer, 0, nullptr, 0) != ESP_OK) {
     ESP_LOGE(kTag, "uart_driver_install failed for port %d", port_);
   } else {

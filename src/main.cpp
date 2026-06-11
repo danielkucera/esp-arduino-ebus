@@ -408,17 +408,21 @@ void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor) {
   writer.appendKey("queues");
   {
     auto array = writer.arrayScope();
-    auto addQueue = [&](const char* qname, size_t size, size_t cap) {
-      ebus::QueueStatus qs(qname, size, cap, 0);
+    auto addQueue = [&](const char* qname, size_t size, size_t cap,
+                        size_t max_size) {
+      ebus::QueueStatus qs(qname, size, cap, max_size);
       writer.writeValue(qs);
     };
 
     addQueue("mqtt_in", mqtt.getIncomingQueueSize(),
-             mqtt.getIncomingQueueCapacity());
+             mqtt.getIncomingQueueCapacity(),
+             mqtt.getIncomingQueueHighWatermark());
     addQueue("mqtt_out", mqtt.getOutgoingQueueSize(),
-             mqtt.getOutgoingQueueCapacity());
+             mqtt.getOutgoingQueueCapacity(),
+             mqtt.getOutgoingQueueHighWatermark());
 
-    addQueue("logger", logger.getQueueSize(), 32);  // kPrintQueueLen is 32
+    addQueue("logger", logger.getQueueSize(), 32,
+             logger.getQueueHighWatermark());
   }
 }
 #endif
@@ -761,27 +765,19 @@ extern "C" void app_main(void) {
   }
 
   // Optimized callbacks: Avoid heap-heavy JSON work inside library threads
-  getEbusController().setTelegramCallback([](const ebus::TelegramInfo& info) {
-    if (info.poll_id > 0) return;  // Ignore polling telegrams for logging
-
-    // std::string msg = ebus::toString(info.master_view);
-    // if (!info.slave_view.empty())
-    //   msg += " / " + ebus::toString(info.slave_view);
-
-    // logger.info(msg, false, info.session_id, info.poll_id);
-
-    store.updateData(nullptr, info.master_view, info.slave_view);
-  });
-
-  getEbusController().setErrorCallback([](const ebus::ErrorInfo& info) {
-    // std::string msg = ebus::toString(info.master_view);
-    // if (!info.slave_view.empty())
-    //   msg += " / " + ebus::toString(info.slave_view);
-
-    // msg += " ";
-    // msg += ebus::toString(info.protocol_error);
-
-    // logger.error(msg, false, info.session_id, info.poll_id);
+  getEbusController().setProtocolCallback([](const ebus::ProtocolInfo& info) {
+    if (info.is_error) {
+      Mqtt::publishError(info);
+    } else {
+      Command* target = nullptr;
+      if (info.poll_id !=
+          0) {  // If it's a polling item, find the command by poll_id
+        target = store.findCommand(info.poll_id);
+      }
+      // If target is nullptr, updateData will find matching commands by
+      // master_view (passive)
+      store.updateData(target, info.master_view, info.slave_view);
+    }
   });
 
   startEbus();  // This will start the ebus controller
@@ -860,16 +856,8 @@ extern "C" void app_main(void) {
     // Add new poll item if active and has a valid read command
     if (cmd->getActive() && !cmd->getReadCmd().empty()) {
       std::string key = cmd->getKey();  // Capture key by value for the lambda
-      uint32_t id = getEbusController().addPollItem(
-          3, cmd->getReadCmd(), cmd->getInterval() * 1000,
-          [key](const ebus::ResultInfo& info) {
-            if (info.success) {
-              Command* target = store.findCommand(key);
-              if (target) {
-                store.updateData(target, info.master_view, info.slave_view);
-              }
-            }
-          });
+      uint32_t id = getEbusController().addPollItem(3, cmd->getReadCmd(),
+                                                    cmd->getInterval() * 1000);
       cmd->setPollId(id);
     }
   });

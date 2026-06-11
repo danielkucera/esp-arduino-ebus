@@ -5,7 +5,8 @@
 #include <freertos/task.h>
 #include <mqtt_client.h>
 
-#include <ebus/utils/circular_buffer.hpp>  // Include for CircularBuffer
+#include <atomic>
+#include <ebus/utils/circular_buffer.hpp>
 #include <functional>
 #include <mutex>
 #include <queue>
@@ -16,6 +17,7 @@
 
 #include "Command.hpp"
 #include "ebus/device.hpp"
+#include "ebus/types.hpp"
 #include "ebus_accessor.hpp"
 
 enum class IncomingActionType { Insert, Remove };
@@ -38,7 +40,6 @@ enum class OutgoingActionType {
   Command,
   Device,
   Component,
-  Value,
   Error,
   Data,
   Update
@@ -46,16 +47,14 @@ enum class OutgoingActionType {
 
 struct OutgoingAction {
   OutgoingActionType type;
-  const Command* command;   // for Command and Component
-  ebus::DeviceInfo device;  // for Device
-  ebus::ErrorInfo error;    // for Error
-  std::string name;         // for Value
-  std::string payload;      // for Value
-  std::string id;           // for Data
-  ebus::Sequence master;    // for Data
-  ebus::Sequence slave;     // for Data
-  std::string key;          // for Update
-  bool ha_remove;           // for Component
+  const Command* command;            // for Command and Component
+  ebus::DeviceInfo device;           // for Device
+  ebus::ProtocolInfo protocol_info;  // for Error (contains StaticSequence)
+  ebus::FixedString<32> id;          // for Data
+  ebus::Sequence master;             // for Data (uses SBO)
+  ebus::Sequence slave;              // for Data (uses SBO)
+  ebus::FixedString<64> key;         // for Update
+  bool ha_remove;                    // for Component
 
   OutgoingAction() = default;  // Add default constructor
 
@@ -63,45 +62,42 @@ struct OutgoingAction {
       : type(OutgoingActionType::Command),
         command(cmd),
         device(),
-        error(),
-        name(),
-        payload(),
+        protocol_info(),
         ha_remove(false) {}
 
   explicit OutgoingAction(const ebus::DeviceInfo& dev)
       : type(OutgoingActionType::Device),
         command(nullptr),
         device(dev),
-        error(),
-        name(),
-        payload(),
+        protocol_info(),
         ha_remove(false) {}
 
   explicit OutgoingAction(const Command* cmd, bool remove)
       : type(OutgoingActionType::Component),
         command(cmd),
         device(),
-        error(),
-        name(),
-        payload(),
+        protocol_info(),
         ha_remove(remove) {}
 
-  explicit OutgoingAction(const ebus::ErrorInfo& err)
-      : type(OutgoingActionType::Error), error(err) {}
+  explicit OutgoingAction(const ebus::ProtocolInfo& info)
+      : type(OutgoingActionType::Error), protocol_info(info) {
+    // Copy transient views from ProtocolInfo into local sequences for safe
+    // queuing
+    master.assign(info.master_view);
+    slave.assign(info.slave_view);
+    protocol_info.master_view = master;
+    protocol_info.slave_view = slave;
+  }
 
-  OutgoingAction(std::string n, std::string p)
-      : type(OutgoingActionType::Value),
-        name(std::move(n)),
-        payload(std::move(p)) {}
-
-  OutgoingAction(std::string i, ebus::ByteView m, ebus::ByteView s)
+  // Constructor for OutgoingActionType::Data
+  OutgoingAction(std::string_view i, ebus::ByteView m, ebus::ByteView s)
       : type(OutgoingActionType::Data),
-        id(std::move(i)),
+        id(i),
         master(std::move(m)),
         slave(std::move(s)) {}
 
-  OutgoingAction(OutgoingActionType t, std::string k)
-      : type(t), key(std::move(k)) {}
+  // Constructor for OutgoingActionType::Update
+  OutgoingAction(OutgoingActionType t, std::string_view k) : type(t), key(k) {}
 };
 
 // The MQTT class acts as a wrapper for the entire MQTT subsystem.
@@ -146,17 +142,19 @@ class Mqtt {
                           const std::vector<uint8_t>& master,
                           const std::vector<uint8_t>& slave);
 
-  static void publishError(const ebus::ErrorInfo& info);
+  static void publishError(const ebus::ProtocolInfo& info);
 
-  static void publishValue(const std::string& key);
+  static void publishValue(std::string_view key);
 
   void doLoop();
 
   TaskHandle_t getTaskHandle() const { return task_handle_; }
   size_t getIncomingQueueSize() const;
   size_t getIncomingQueueCapacity() const { return kMaxIncomingQueueSize; }
+  size_t getIncomingQueueHighWatermark() const;
   size_t getOutgoingQueueSize() const;
   size_t getOutgoingQueueCapacity() const { return kMaxOutgoingQueueSize; }
+  size_t getOutgoingQueueHighWatermark() const;
 
  private:
   esp_mqtt_client_handle_t client_ = nullptr;
@@ -174,21 +172,23 @@ class Mqtt {
   bool enabled_ = false;
   bool connected_ = false;
 
-  static constexpr size_t kMaxIncomingQueueSize = 10;
+  static constexpr size_t kMaxIncomingQueueSize = 5;
 
   ebus::detail::CircularBuffer<IncomingAction, kMaxIncomingQueueSize>
       incoming_queue_;
   mutable std::mutex incoming_queue_mutex_;
   uint32_t last_incoming_ = 0;
   uint32_t incoming_interval_ = 10;  // ms
+  std::atomic<size_t> max_incoming_ = 0;
 
-  static constexpr size_t kMaxOutgoingQueueSize = 20;
+  static constexpr size_t kMaxOutgoingQueueSize = 8;
 
   ebus::detail::CircularBuffer<OutgoingAction, kMaxOutgoingQueueSize>
       outgoing_queue_;
   mutable std::mutex outgoing_queue_mutex_;
   uint32_t last_outgoing_ = 0;
   uint32_t outgoing_interval_ = 10;  // ms
+  std::atomic<size_t> max_outgoing_ = 0;
 
   TaskHandle_t task_handle_ = nullptr;
   uint32_t last_status_publish_ = 0;
@@ -197,6 +197,9 @@ class Mqtt {
 
   mutable std::mutex publish_mutex_;
   std::string publish_buffer_;
+
+  void internalPublish(const char* topic, uint8_t qos, bool retain,
+                       const char* payload, bool prefix);
 
   static void taskFunc(void* arg);
 
@@ -226,7 +229,7 @@ class Mqtt {
 
   bool checkIncomingQueue();
   bool checkOutgoingQueue();
-  void handleValueUpdate(const std::string& key);
+  void handleValueUpdate(std::string_view key);
 
   void publishResponse(std::string_view id, std::string_view status,
                        size_t bytes = 0);

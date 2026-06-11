@@ -218,6 +218,10 @@ bool handleNewClient(int serverFd, int clients[]) {
       int noDelay = 1;
       setsockopt(clients[i], IPPROTO_TCP, TCP_NODELAY, &noDelay,
                  sizeof(noDelay));
+      int flags = fcntl(clients[i], F_GETFL, 0);
+      if (flags >= 0) {
+        fcntl(clients[i], F_SETFL, flags | O_NONBLOCK);
+      }
       break;
     }
   }
