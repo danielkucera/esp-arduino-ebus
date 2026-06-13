@@ -198,7 +198,8 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
 
         if (component == "switch" || component == "number" ||
             component == "select") {
-          writer.writeField("command_topic", commandTopic);
+          writer.writeField("command_topic",
+                            rootTopic + "set/" + command->getKey());
         }
 
         if (component == "sensor") {
@@ -212,9 +213,7 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
           if (!command->getUnit().empty())
             writer.writeField("unit_of_measurement", command->getUnit());
           writer.writeField("value_template", "{{value_json.value}}");
-          writer.writeField("command_template", "{\"id\":\"write\",\"key\":\"" +
-                                                    command->getKey() +
-                                                    "\",\"value\":{{value}}}");
+          writer.writeField("command_template", "{{value}}");
           writer.writeFieldFloat("min", command->getMin());
           writer.writeFieldFloat("max", command->getMax());
           writer.writeFieldFloat("step", command->getHAStep());
@@ -222,9 +221,7 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
         }
 
         if (component == "switch") {
-          writer.writeField("command_template", "{\"id\":\"write\",\"key\":\"" +
-                                                    command->getKey() +
-                                                    "\",\"value\":{{value}}}");
+          writer.writeField("command_template", "{{value}}");
         }
 
         if (!command->getHAKeyValueMap().empty()) {
@@ -235,10 +232,7 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
               auto options = writer.arrayScope("options");
               for (const auto& s : opt.options) writer.writeValue(s);
             }
-            writer.writeField("command_template",
-                              "{\"id\":\"write\",\"key\":\"" +
-                                  command->getKey() +
-                                  "\",\"value\":" + opt.cmdMap + "}");
+            writer.writeField("command_template", opt.cmdMap);
           }
           writer.writeField("value_template", opt.valueMap);
         } else if (component == "sensor") {

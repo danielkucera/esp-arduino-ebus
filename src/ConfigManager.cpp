@@ -134,10 +134,15 @@ void fillJsonFromNvs(ebus::detail::JsonWriter& writer, nvs_handle_t handle) {
     nvs_entry_info_t info{};
     nvs_entry_info(it, &info);
 
+    // Skip sensitive configuration keys in JSON output to prevent leaking
+    // credentials if (std::strcmp(info.key, "wifiPassword") != 0 &&
+    //     std::strcmp(info.key, "mqttPass") != 0 &&
+    //     std::strcmp(info.key, "apModePassword") != 0) {
     std::string value;
     if (readEntryValueAsString(handle, info, value)) {
       writer.writeField(info.key, value);
     }
+    // }
 
     if (nvs_entry_next(&it) != ESP_OK) {
       break;

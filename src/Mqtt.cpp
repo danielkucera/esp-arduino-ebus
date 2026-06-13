@@ -38,7 +38,7 @@ void Mqtt::change() {
 
 void Mqtt::startTask() {
   if (task_handle_ != nullptr) return;
-  xTaskCreate(&Mqtt::taskFunc, "mqtt", 3072, this, 2, &task_handle_);
+  xTaskCreate(&Mqtt::taskFunc, "mqtt", 4096, this, 2, &task_handle_);
 }
 
 void Mqtt::stopTask() {
@@ -357,8 +357,8 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
           self->handleRead(payload);
         else if (id_view == "write")
           self->handleWrite(payload);
-        else if (id_view == "publish")
-          self->handlePublish();
+        else if (id_view == "restart")
+          restart();
       } else if (topic.length() > self->root_topic_.length() + 4 &&
                  topic.compare(0, self->root_topic_.length() + 4,
                                self->root_topic_ + "set/") == 0) {
@@ -378,16 +378,22 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
   }
 }
 
-void Mqtt::handlePublish() {
-  for (const Command* command : store.getCommands())
-    enqueueOutgoing(OutgoingAction(command));
-}
-
 void Mqtt::handleRead(std::string_view payload) {
   ebus::detail::JsonReader reader(payload);
-  if (!reader.findKey("key")) return;
-  reader.next();
-  std::string_view key_view = reader.value();
+  if (reader.next() != ebus::detail::JsonReader::Token::object_start) return;
+
+  std::string_view key_view;
+
+  reader.forEachField([&](std::string_view k, ebus::detail::JsonReader& r) {
+    if (k == "key") {
+      if (r.next() == ebus::detail::JsonReader::Token::string) {
+        key_view = r.value();
+      }
+    }
+    return true;
+  });
+
+  if (key_view.empty()) return;
 
   Command* command = store.findCommand(std::string(key_view));
   if (command != nullptr) {
@@ -400,18 +406,26 @@ void Mqtt::handleRead(std::string_view payload) {
 
 void Mqtt::handleWrite(std::string_view payload) {
   ebus::detail::JsonReader reader(payload);
-  if (!reader.findKey("key")) return;
-  reader.next();
-  std::string_view key_view = reader.value();
+  if (reader.next() != ebus::detail::JsonReader::Token::object_start) return;
+
+  std::string_view key_view;
+  std::string_view val_view;
+
+  reader.forEachField([&](std::string_view k, ebus::detail::JsonReader& r) {
+    if (k == "key") {
+      if (r.next() == ebus::detail::JsonReader::Token::string) {
+        key_view = r.value();
+      }
+    } else if (k == "value") {
+      val_view = r.rawValue();
+    }
+    return true;
+  });
+
+  if (key_view.empty()) return;
 
   Command* command = store.findCommand(std::string(key_view));
   if (command != nullptr) {
-    reader.reset();
-    std::string_view val_view;
-    if (reader.findKey("value")) {
-      val_view = reader.rawValue();
-    }
-
     if (val_view.empty()) {
       publishStream(
           "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {

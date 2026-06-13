@@ -393,7 +393,7 @@ void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor) {
 #if defined(EBUS_SIMULATION)
     addThread("sim", simTaskHandle, 2048);
 #endif
-    addThread("mqtt", mqtt.getTaskHandle(), 3072);
+    addThread("mqtt", mqtt.getTaskHandle(), 4096);
     addThread("cron", cron.getTaskHandle(), 1024);
     addThread("logger", logger.getTaskHandle(), 1536);
     addThread("client_acceptor", client_acceptor.getTaskHandle(), 1536);
