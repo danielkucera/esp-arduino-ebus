@@ -44,6 +44,17 @@ These components manage high-level tasks like discovery, scheduling, network bri
 *   **Application Retries**: The `ebus` library's `Scheduler` provides configurable `max_send_attempts` and exponential backoff for high-level retries.
 *   **Scan Filtering**: When implementing background tasks, only re-enqueue failed tasks if the failure was transient (e.g., arbitration loss). Whitelist successful `ebus::RequestResult` values rather than whitelisting `!success`.
 
+### API Responsibility Model
+To maintain stability and security on the ESP32-C3, the application follows a separation between the **Control Plane** (HTTP) and the **Data Plane** (MQTT).
+
+| Feature | HTTP Support | MQTT Support | Rationale |
+| :--- | :---: | :---: | :--- |
+| **Telemetry (Values/Metrics)** | Read | **Publish** | Async updates are more efficient for monitoring. |
+| **HA Auto-Discovery** | No | **Yes** | Standard for Home Assistant integration. |
+| **Command Management** | **Yes** | No | Bulk RPC operations are resource-heavy and unsafe over MQTT. |
+| **System (Wipe/Restart)** | **Yes** | No | Prevent remote bricking; requires local network access. |
+| **Control (Value Write)** | **Yes** | **Yes** | HTTP for manual UI control; MQTT for automation. |
+
 ## Key Components
 
 *   **ebus Library (`lib/ebus`)**: The core eBUS protocol stack, handling bus communication, arbitration, message processing, and scheduling.
@@ -72,4 +83,3 @@ These components manage high-level tasks like discovery, scheduling, network bri
 2.  **Naming**: Ensure all new files follow the `snake_case` naming rule.
 3.  **Headers**: Ensure every new file starts with the standard project license header.
 4.  **Pull Requests**: Submit your changes via a Pull Request. Ensure that all tests pass before submission.
-

@@ -257,11 +257,9 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
         r.forEachField([&](std::string_view k,
                            ebus::detail::JsonReader& map_r) {
           if (map_r.next() == ebus::detail::JsonReader::Token::string) {
-            std::string key_str(k);
-            char* endptr;
-            errno = 0;
-            long val = std::strtol(key_str.c_str(), &endptr, 10);
-            if (endptr != key_str.c_str() && *endptr == '\0' && errno == 0) {
+            int val = ebus::toNum<int>(k);
+            if (val != 0 ||
+                k == "0") {  // Check for valid conversion or explicit "0"
               command.ha_key_value_map[static_cast<int>(val)] = map_r.value();
             }
           }
@@ -363,19 +361,17 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
         break;
       case 19: {
         if (token == ebus::detail::JsonReader::Token::object_start) {
-          reader.forEachField([&](std::string_view k,
-                                  ebus::detail::JsonReader& r) {
-            if (r.next() == ebus::detail::JsonReader::Token::string) {
-              std::string key_str(k);
-              char* endptr;
-              errno = 0;
-              long val = std::strtol(key_str.c_str(), &endptr, 10);
-              if (endptr != key_str.c_str() && *endptr == '\0' && errno == 0) {
-                command.ha_key_value_map[static_cast<int>(val)] = r.value();
-              }
-            }
-            return true;
-          });
+          reader.forEachField(
+              [&](std::string_view k, ebus::detail::JsonReader& r) {
+                if (r.next() == ebus::detail::JsonReader::Token::string) {
+                  int val = ebus::toNum<int>(k);
+                  if (val != 0 ||
+                      k == "0") {  // Check for valid conversion or explicit "0"
+                    command.ha_key_value_map[static_cast<int>(val)] = r.value();
+                  }
+                }
+                return true;
+              });
         } else {
           reader.skipComposite(token);
         }
@@ -485,18 +481,15 @@ const std::string Command::isKeyValueMapValid(
   std::string error;
   reader.forEachField(
       [&](std::string_view key, ebus::detail::JsonReader& map_r) {
-        // Check if the key can be converted to an integer
-        std::string key_str(key);
-        char* endptr = nullptr;
-        errno = 0;
-        long long keyValue = std::strtoll(key_str.c_str(), &endptr, 10);
-        if (endptr == key_str.c_str() || *endptr != '\0' || errno == ERANGE) {
-          error = "Invalid key: " + key_str;
+        int keyValue = ebus::toNum<int>(key);
+        if (keyValue == 0 &&
+            key != "0") {  // Check for valid conversion or explicit "0"
+          error = "Invalid key: " + std::string(key);
           return false;
         }
         if (keyValue < std::numeric_limits<int>::min() ||
             keyValue > std::numeric_limits<int>::max()) {
-          error = "Key out of range: " + key_str;
+          error = "Key out of range: " + std::string(key);
           return false;
         }
         if (map_r.next() != ebus::detail::JsonReader::Token::string) {

@@ -214,19 +214,27 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
                 static_cast<unsigned>(controllerRate));
   httpd_resp_set_hdr(req, "X-ADC-Controller-Sample-Rate", tmp6);
 
-  if (!adc.streamRaw(req, sampleRate, samplesPerChannel, channelMask))
+  if (!adc.streamRaw(
+          [req](std::string_view chunk) {
+            httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+          },
+          sampleRate, samplesPerChannel, channelMask))
     return ESP_FAIL;
   httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
 esp_err_t handleAdcState(httpd_req_t* req) {
-  std::string out;
-  ebus::detail::JsonWriter writer(
-      [&out](std::string_view s) { out.append(s); });
-  auto scope = writer.objectScope();
-  writer.writeField("running", adc.isRunning());
-  HttpUtils::sendResponse(req, "200 OK", "application/json;charset=utf-8", out);
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  HttpUtils::applyCustomHeaders(req);
+  {
+    ebus::detail::JsonWriter writer([req](std::string_view chunk) {
+      httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+    });
+    auto scope = writer.objectScope();
+    writer.writeField("running", adc.isRunning());
+  }
+  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
@@ -276,61 +284,54 @@ esp_err_t handleWifiScan(httpd_req_t* req) {
   ebus::detail::JsonWriter writer([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
-  // Start the JSON array
-  writer.write("[");
-  bool first_ap = true;
-  for (const auto& ap : aps) {
-    if (!first_ap) {
-      writer.write(",");
-    }
-    first_ap = false;
 
-    // Write each AP as a JSON object
-    auto obj_scope = writer.objectScope();
-    std::string ssid(reinterpret_cast<const char*>(ap.ssid),
-                     strnlen(reinterpret_cast<const char*>(ap.ssid), 32));
-    writer.writeField("ssid", ssid);
-    char bssidStr[18];
-    snprintf(bssidStr, sizeof(bssidStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-             ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4],
-             ap.bssid[5]);
-    writer.writeField("bssid", bssidStr);
-    writer.writeField("rssi", ap.rssi);
-    writer.writeField("channel", ap.primary);
+  {
+    auto array_scope = writer.arrayScope();
+    for (const auto& ap : aps) {
+      auto obj_scope = writer.objectScope();
+      std::string ssid(reinterpret_cast<const char*>(ap.ssid),
+                       strnlen(reinterpret_cast<const char*>(ap.ssid), 32));
+      writer.writeField("ssid", ssid);
+      char bssidStr[18];
+      snprintf(bssidStr, sizeof(bssidStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+               ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4],
+               ap.bssid[5]);
+      writer.writeField("bssid", bssidStr);
+      writer.writeField("rssi", ap.rssi);
+      writer.writeField("channel", ap.primary);
 
-    const char* authMode = "UNKNOWN";
-    switch (ap.authmode) {
-      case WIFI_AUTH_OPEN:
-        authMode = "OPEN";
-        break;
-      case WIFI_AUTH_WEP:
-        authMode = "WEP";
-        break;
-      case WIFI_AUTH_WPA_PSK:
-        authMode = "WPA_PSK";
-        break;
-      case WIFI_AUTH_WPA2_PSK:
-        authMode = "WPA2_PSK";
-        break;
-      case WIFI_AUTH_WPA_WPA2_PSK:
-        authMode = "WPA_WPA2_PSK";
-        break;
-      case WIFI_AUTH_WPA2_ENTERPRISE:
-        authMode = "WPA2_ENTERPRISE";
-        break;
-      case WIFI_AUTH_WPA3_PSK:
-        authMode = "WPA3_PSK";
-        break;
-      case WIFI_AUTH_WPA2_WPA3_PSK:
-        authMode = "WPA2_WPA3_PSK";
-        break;
-      default:
-        break;
+      const char* authMode = "UNKNOWN";
+      switch (ap.authmode) {
+        case WIFI_AUTH_OPEN:
+          authMode = "OPEN";
+          break;
+        case WIFI_AUTH_WEP:
+          authMode = "WEP";
+          break;
+        case WIFI_AUTH_WPA_PSK:
+          authMode = "WPA_PSK";
+          break;
+        case WIFI_AUTH_WPA2_PSK:
+          authMode = "WPA2_PSK";
+          break;
+        case WIFI_AUTH_WPA_WPA2_PSK:
+          authMode = "WPA_WPA2_PSK";
+          break;
+        case WIFI_AUTH_WPA2_ENTERPRISE:
+          authMode = "WPA2_ENTERPRISE";
+          break;
+        case WIFI_AUTH_WPA3_PSK:
+          authMode = "WPA3_PSK";
+          break;
+        case WIFI_AUTH_WPA2_WPA3_PSK:
+          authMode = "WPA2_WPA3_PSK";
+          break;
+        default:
+          break;
+      }
+      writer.writeField("authMode", authMode);
     }
-    writer.writeField("authMode", authMode);
   }
-  // End the JSON array
-  writer.write("]");
   httpd_resp_send_chunk(req, nullptr, 0);
   esp_wifi_clear_ap_list();
   return ESP_OK;
@@ -814,8 +815,9 @@ void SetupHttpHandlers() {
   config.server_port = 80;
   config.uri_match_fn = httpd_uri_match_wildcard;
   config.max_uri_handlers = 64;
-  // Memory optimization: 4KB stack is sufficient for this server
-  config.stack_size = 4096;
+  // Resilience: Increase stack to 8KB for handlers performing complex JSON
+  // work or ADC processing.
+  config.stack_size = 8192;
   // Resilience: Enable LRU purge to reclaim sockets from stalled clients
   config.lru_purge_enable = true;
   // CRITICAL for C3: Reduce socket count to save heap
