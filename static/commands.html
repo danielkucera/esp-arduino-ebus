@@ -126,42 +126,51 @@
       try {
         const txt = document.getElementById('commandsArea').value;
         const obj = JSON.parse(txt);
-        renderTable(obj.commands || []);
+        renderTable(Array.isArray(obj) ? obj : (obj.commands || []));
         setStatus('Table updated from editor');
       } catch (err) {
         setStatus('Invalid JSON');
       }
     }
 
-    function handleInsert() {
+    async function handleInsert() {
       try {
         const txt = document.getElementById('commandsArea').value;
         const obj = JSON.parse(txt);
         setStatus('Uploading...');
-        fetch('/api/v1/commands/insert', {
+        const res = await fetch('/api/v1/commands/insert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
-        }).then(res => setStatus(res.ok ? 'Uploaded' : 'Upload failed'))
-          .catch(() => setStatus('Invalid JSON or upload failed'));
+        });
+        const data = await res.json();
+        if (data.status === 'successful') {
+          setStatus('Uploaded');
+          fetchCommands();
+        } else {
+          setStatus('Upload failed: ' + (data.error || data.status));
+        }
       } catch (err) {
         setStatus('Invalid JSON or upload failed');
       }
     }
 
-    function handleEvaluate() {
+    async function handleEvaluate() {
       try {
         const txt = document.getElementById('commandsArea').value;
         const obj = JSON.parse(txt);
         setStatus('Evaluating...');
-        fetch('/api/v1/commands/evaluate', {
+        const res = await fetch('/api/v1/commands/evaluate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
-        }).then(async res => {
-          const text = await res.text();
-          setStatus(text || (res.ok ? 'Evaluated' : 'Evaluation failed'));
-        }).catch(() => setStatus('Invalid JSON or evaluation failed'));
+        });
+        const data = await res.json();
+        if (data.status === 'successful') {
+          setStatus('Evaluation successful');
+        } else {
+          setStatus('Evaluation failed: ' + (data.error || data.status));
+        }
       } catch (err) {
         setStatus('Invalid JSON or evaluation failed');
       }
@@ -193,8 +202,7 @@
     function handleRemoveAll() {
       fetch('/api/v1/commands/remove', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keys: [] })
+        headers: { 'Content-Type': 'application/json' }
       }).then(res => {
         if (res.ok) {
           setStatus('All commands removed');

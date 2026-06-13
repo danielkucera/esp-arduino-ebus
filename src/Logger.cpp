@@ -80,27 +80,25 @@ void Logger::fetchLogsJson(const ebus::JsonChunkVisitor& visitor,
   portEXIT_CRITICAL(&mux);
 
   ebus::detail::JsonWriter writer(visitor);
-  writer.startObject();
+  auto root = writer.objectScope();
   writer.appendKey("logs");
-  writer.startArray();
+  {
+    auto array = writer.arrayScope();
 
-  for (const auto& entry : copy) {
-    writer.startObject();
-    writer.writeField("millis", entry.timestamp);
-    writer.writeField("level", logLevelText(entry.level));
-    if (entry.session_id > 0) writer.writeField("sid", entry.session_id);
-    if (entry.poll_id > 0) writer.writeField("pid", entry.poll_id);
-    writer.appendKey("message");
-    if (entry.is_json_message) {
-      writer.writeRaw(entry.message);
-    } else {
-      writer.writeValue(entry.message);
+    for (const auto& entry : copy) {
+      auto item = writer.objectScope();
+      writer.writeField("millis", entry.timestamp);
+      writer.writeField("level", logLevelText(entry.level));
+      if (entry.session_id > 0) writer.writeField("sid", entry.session_id);
+      if (entry.poll_id > 0) writer.writeField("pid", entry.poll_id);
+      writer.appendKey("message");
+      if (entry.is_json_message) {
+        writer.writeRaw(entry.message);
+      } else {
+        writer.writeValue(entry.message);
+      }
     }
-    writer.endObject();
   }
-
-  writer.endArray();
-  writer.endObject();
 }
 
 void Logger::fetchTimeRelationJson(
@@ -111,17 +109,14 @@ void Logger::fetchTimeRelationJson(
       currentMillisTimeRelation(currentMillis, currentTimeMillis);
 
   ebus::detail::JsonWriter writer(visitor);
-  writer.startObject();
+  auto root = writer.objectScope();
   if (hasTimeRelation) {
-    writer.appendKey("timeRelation");
-    writer.startObject();
+    auto relation = writer.objectScope("timeRelation");
     writer.writeField("millis", currentMillis);
     writer.writeField("time", currentTimeMillis);
-    writer.endObject();
   } else {
     writer.writeField("millis", currentMillis);
   }
-  writer.endObject();
 }
 
 const char* Logger::logLevelText(LogLevel logLevel) {

@@ -15,11 +15,28 @@ std::string readBody(httpd_req_t* req);
 
 bool registerRoute(httpd_handle_t server, const httpd_uri_t& route);
 
-bool registerRoute(httpd_handle_t server, const char* uri, httpd_method_t method,
-                   esp_err_t (*handler)(httpd_req_t*));
+bool registerRoute(httpd_handle_t server, const char* uri,
+                   httpd_method_t method, esp_err_t (*handler)(httpd_req_t*));
 
-// Parse and store custom headers (format: "Name: Value" lines, newline-separated).
-// Must be called once at startup; stored headers are applied to every response.
+// Parse and store custom headers (format: "Name: Value" lines,
+// newline-separated). Must be called once at startup; stored headers are
+// applied to every response.
 void setCustomHeaders(const std::string& raw);
+
+// Maximum allowed size for request bodies to prevent memory exhaustion.
+constexpr size_t MAX_REQUEST_BODY_SIZE = 8192;  // 8KB
+
+// Sends a standardized JSON error response.
+void sendErrorResponse(httpd_req_t* req, const char* status,
+                       std::string_view id, std::string_view error_message);
+
+// Sends a standardized JSON success response.
+void sendSuccessResponse(httpd_req_t* req, std::string_view id,
+                         std::string_view status = "successful",
+                         std::string_view message = "");
+
+// Applies the currently stored custom headers to the given HTTP response.
+// Useful for handlers that use chunked/streaming responses.
+void applyCustomHeaders(httpd_req_t* req);
 
 }  // namespace HttpUtils

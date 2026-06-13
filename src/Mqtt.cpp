@@ -364,7 +364,7 @@ void Mqtt::handleRestart(std::string_view payload) { restart(); }
 void Mqtt::handleInsert(std::string_view payload) {
   ebus::detail::JsonReader reader(payload);
   if (!reader.findKey("commands")) return;
-  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return;
+  if (reader.next() != ebus::detail::JsonReader::Token::array_start) return;
 
   while (true) {
     std::string_view cmd_sv = reader.rawValue();
@@ -391,15 +391,15 @@ void Mqtt::handleInsert(std::string_view payload) {
 void Mqtt::handleRemove(std::string_view payload) {
   ebus::detail::JsonReader reader(payload);
   if (!reader.findKey("keys")) return;
-  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return;
+  if (reader.next() != ebus::detail::JsonReader::Token::array_start) return;
 
   std::lock_guard<std::mutex> lock(incoming_queue_mutex_);
   while (true) {
     auto token = reader.next();
-    if (token == ebus::detail::JsonReader::Token::ArrayEnd ||
-        token == ebus::detail::JsonReader::Token::End)
+    if (token == ebus::detail::JsonReader::Token::array_end ||
+        token == ebus::detail::JsonReader::Token::end)
       break;
-    if (token == ebus::detail::JsonReader::Token::String) {
+    if (token == ebus::detail::JsonReader::Token::string) {
       incoming_queue_.push_back(IncomingAction(std::string(reader.value())));
       ebus::updateMaxAtomic(max_incoming_, incoming_queue_.size());
     }
@@ -445,18 +445,18 @@ void Mqtt::handleWipe(std::string_view payload) {
 
 void Mqtt::handleScan(std::string_view payload) {
   ebus::detail::JsonReader reader(payload);
-  if (reader.get("full") == ebus::detail::JsonReader::Token::Boolean &&
+  if (reader.get("full") == ebus::detail::JsonReader::Token::boolean &&
       reader.asBool()) {
     getEbusController().initFullScan(true);
   } else {
     reader.reset();
     if (reader.findKey("addresses") &&
-        reader.next() == ebus::detail::JsonReader::Token::ArrayStart) {
+        reader.next() == ebus::detail::JsonReader::Token::array_start) {
       std::vector<uint8_t> addrVec;
       while (true) {
         auto t = reader.next();
-        if (t == ebus::detail::JsonReader::Token::ArrayEnd ||
-            t == ebus::detail::JsonReader::Token::End)
+        if (t == ebus::detail::JsonReader::Token::array_end ||
+            t == ebus::detail::JsonReader::Token::end)
           break;
         std::string hex(reader.value());
         addrVec.push_back(
@@ -485,13 +485,13 @@ void Mqtt::handleSend(std::string_view payload) {
     publishResponse("send", "missing commands array");
     return;
   }
-  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return;
+  if (reader.next() != ebus::detail::JsonReader::Token::array_start) return;
   while (true) {
     auto token = reader.next();
-    if (token == ebus::detail::JsonReader::Token::ArrayEnd ||
-        token == ebus::detail::JsonReader::Token::End)
+    if (token == ebus::detail::JsonReader::Token::array_end ||
+        token == ebus::detail::JsonReader::Token::end)
       break;
-    if (token == ebus::detail::JsonReader::Token::String) {
+    if (token == ebus::detail::JsonReader::Token::string) {
       getEbusController().enqueue(PRIO_SEND,
                                   ebus::toVector(std::string(reader.value())));
     }
@@ -500,21 +500,21 @@ void Mqtt::handleSend(std::string_view payload) {
 
 void Mqtt::handleForward(std::string_view payload) {
   ebus::detail::JsonReader reader(payload);
-  if (reader.get("enable") == ebus::detail::JsonReader::Token::Boolean) {
+  if (reader.get("enable") == ebus::detail::JsonReader::Token::boolean) {
     // bool enabled = reader.asBool();
     // getEbusController().toggleForwarding(enabled);
   }
 
   reader.reset();
   if (reader.findKey("filters") &&
-      reader.next() == ebus::detail::JsonReader::Token::ArrayStart) {
-    ebus::detail::StaticVector<std::string_view, 8> filters;
+      reader.next() == ebus::detail::JsonReader::Token::array_start) {
+    ebus::StaticVector<std::string_view, 8> filters;
     while (filters.size() < filters.capacity()) {
       auto t = reader.next();
-      if (t == ebus::detail::JsonReader::Token::ArrayEnd ||
-          t == ebus::detail::JsonReader::Token::End)
+      if (t == ebus::detail::JsonReader::Token::array_end ||
+          t == ebus::detail::JsonReader::Token::end)
         break;
-      if (t == ebus::detail::JsonReader::Token::String)
+      if (t == ebus::detail::JsonReader::Token::string)
         filters.push_back(reader.value());
     }
     // getEbusController().setForwardingFilters(filters);

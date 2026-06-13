@@ -74,50 +74,31 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   prepareForUpgrade();
 
   if (req->content_len <= 0) {
-    httpd_resp_set_status(req, "411 Length Required");
-    httpd_resp_set_type(req, "application/json;charset=utf-8");
-    httpd_resp_sendstr_chunk(
-        req,
-        "{\"id\":\"upgrade_upload\",\"status\":\"failed\",\"error\":\"Content-"
-        "Length required\"}");
-    httpd_resp_send_chunk(req, nullptr, 0);
+    HttpUtils::sendErrorResponse(req, "411 Length Required", "upgrade_upload",
+                                 "Content-Length required");
     return ESP_OK;
   }
 
   uploadPartition_ = esp_ota_get_next_update_partition(nullptr);
   if (uploadPartition_ == nullptr) {
-    httpd_resp_set_status(req, "500 Internal Server Error");
-    httpd_resp_set_type(req, "application/json;charset=utf-8");
-    httpd_resp_sendstr_chunk(
-        req,
-        "{\"id\":\"upgrade_upload\",\"status\":\"failed\",\"error\":\"No OTA "
-        "partition available\"}");
-    httpd_resp_send_chunk(req, nullptr, 0);
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error",
+                                 "upgrade_upload",
+                                 "No OTA partition available");
     return ESP_OK;
   }
 
   esp_err_t beginResult =
       esp_ota_begin(uploadPartition_, OTA_SIZE_UNKNOWN, &uploadHandle_);
   if (beginResult != ESP_OK) {
-    httpd_resp_set_status(req, "500 Internal Server Error");
-    httpd_resp_set_type(req, "application/json;charset=utf-8");
-    {
-      ebus::detail::JsonWriter writer([req](std::string_view chunk) {
-        httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-      });
-      char hex[12];
-      snprintf(hex, sizeof(hex), "%02x", beginResult);
-      auto root = writer.objectScope();
-      writer.writeField("id", "upgrade_upload");
-      writer.writeField("status", "failed");
-      std::string err = "esp_ota_begin failed: ";
-      err += esp_err_to_name(beginResult);
-      err += " (0x";
-      err += hex;
-      err += ")";
-      writer.writeField("error", err);
-    }
-    httpd_resp_send_chunk(req, nullptr, 0);
+    char hex[12];
+    snprintf(hex, sizeof(hex), "%02x", beginResult);
+    std::string error_msg = "esp_ota_begin failed: ";
+    error_msg += esp_err_to_name(beginResult);
+    error_msg += " (0x";
+    error_msg += hex;
+    error_msg += ")";
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error",
+                                 "upgrade_upload", error_msg);
     return ESP_OK;
   }
 
@@ -130,20 +111,10 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   logger.info("Upload started: content_len=" +
               std::to_string(req->content_len));
 
-  auto abortUpload = [&](const char* status, const char* message) -> esp_err_t {
+  auto abortUpload = [&](const char* status,
+                         std::string_view message) -> esp_err_t {
     esp_ota_abort(uploadHandle_);
-    httpd_resp_set_status(req, status);
-    httpd_resp_set_type(req, "application/json;charset=utf-8");
-    {
-      ebus::detail::JsonWriter writer([req](std::string_view chunk) {
-        httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-      });
-      auto root = writer.objectScope();
-      writer.writeField("id", "upgrade_upload");
-      writer.writeField("status", "failed");
-      writer.writeField("error", message);
-    }
-    httpd_resp_send_chunk(req, nullptr, 0);
+    HttpUtils::sendErrorResponse(req, status, "upgrade_upload", message);
     return ESP_OK;
   };
 
@@ -207,38 +178,19 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
 
   esp_err_t endResult = esp_ota_end(uploadHandle_);
   if (endResult != ESP_OK) {
-    httpd_resp_set_status(req, "500 Internal Server Error");
-    httpd_resp_set_type(req, "application/json;charset=utf-8");
-    {
-      ebus::detail::JsonWriter writer([req](std::string_view chunk) {
-        httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-      });
-      auto root = writer.objectScope();
-      writer.writeField("id", "upgrade_upload");
-      writer.writeField("status", "failed");
-      writer.writeField("error", std::string("esp_ota_end failed: ") +
-                                     esp_err_to_name(endResult));
-    }
-    httpd_resp_send_chunk(req, nullptr, 0);
+    std::string error_msg = "esp_ota_end failed: ";
+    error_msg += esp_err_to_name(endResult);
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error",
+                                 "upgrade_upload", error_msg);
     return ESP_OK;
   }
 
   esp_err_t partitionResult = esp_ota_set_boot_partition(uploadPartition_);
   if (partitionResult != ESP_OK) {
-    httpd_resp_set_status(req, "500 Internal Server Error");
-    httpd_resp_set_type(req, "application/json;charset=utf-8");
-    {
-      ebus::detail::JsonWriter writer([req](std::string_view chunk) {
-        httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-      });
-      auto root = writer.objectScope();
-      writer.writeField("id", "upgrade_upload");
-      writer.writeField("status", "failed");
-      writer.writeField("error",
-                        std::string("esp_ota_set_boot_partition failed: ") +
-                            esp_err_to_name(partitionResult));
-    }
-    httpd_resp_send_chunk(req, nullptr, 0);
+    std::string error_msg = "esp_ota_set_boot_partition failed: ";
+    error_msg += esp_err_to_name(partitionResult);
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error",
+                                 "upgrade_upload", error_msg);
     return ESP_OK;
   }
 
@@ -257,6 +209,7 @@ void UpgradeManager::fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
 
 esp_err_t UpgradeManager::handleStatus(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
+  HttpUtils::applyCustomHeaders(req);
   fetchStatusJson([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
@@ -437,13 +390,8 @@ esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
   }
 
   if (url.empty()) {
-    httpd_resp_set_status(req, "400 Bad Request");
-    httpd_resp_set_type(req, "application/json;charset=utf-8");
-    httpd_resp_sendstr_chunk(
-        req,
-        "{\"id\":\"upgrade_http\",\"status\":\"failed\",\"error\":\"Missing "
-        "'url'\"}");
-    httpd_resp_send_chunk(req, nullptr, 0);
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "upgrade_http",
+                                 "Missing 'url'");
     return ESP_OK;
   }
 
@@ -451,18 +399,8 @@ esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
 
   std::string error;
   if (!performHttpUpgrade(url, error)) {
-    httpd_resp_set_status(req, "500 Internal Server Error");
-    httpd_resp_set_type(req, "application/json;charset=utf-8");
-    {
-      ebus::detail::JsonWriter writer([req](std::string_view chunk) {
-        httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-      });
-      auto root = writer.objectScope();
-      writer.writeField("id", "upgrade_http");
-      writer.writeField("status", "failed");
-      writer.writeField("error", error);
-    }
-    httpd_resp_send_chunk(req, nullptr, 0);
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error",
+                                 "upgrade_http", error);
     return ESP_OK;
   }
 
@@ -472,18 +410,7 @@ esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
 
 void UpgradeManager::sendAndRestart(httpd_req_t* req, const char* message,
                                     const char* id) {
-  httpd_resp_set_status(req, "200 OK");
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  {
-    ebus::detail::JsonWriter writer([req](std::string_view chunk) {
-      httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-    });
-    auto root = writer.objectScope();
-    writer.writeField("id", id);
-    writer.writeField("status", "successful");
-    writer.writeField("message", message);
-  }
-  httpd_resp_send_chunk(req, nullptr, 0);
+  HttpUtils::sendSuccessResponse(req, id, "successful", message);
 
   vTaskDelay(pdMS_TO_TICKS(1000));
   esp_restart();

@@ -173,82 +173,85 @@ int64_t Store::saveCommands() const {
     bytes_written += std::fwrite(s.data(), 1, s.size(), file);
   });
 
-  writer.startArray();
+  {
+    auto root_array = writer.arrayScope();
 
-  // Header row for compressed format
-  writer.startArray();
-  static const char* header[] = {"key",
-                                 "name",
-                                 "read_cmd",
-                                 "write_cmd",
-                                 "active",
-                                 "interval",
-                                 "master",
-                                 "position",
-                                 "datatype",
-                                 "divider",
-                                 "min",
-                                 "max",
-                                 "digits",
-                                 "unit",
-                                 "ha",
-                                 "ha_component",
-                                 "ha_device_class",
-                                 "ha_entity_category",
-                                 "ha_mode",
-                                 "ha_key_value_map",
-                                 "ha_default_key",
-                                 "ha_payload_on",
-                                 "ha_payload_off",
-                                 "ha_state_class",
-                                 "ha_step"};
-  for (const char* h : header) writer.writeValue(h);
-  writer.endArray();
-
-  // Data rows in tabular format
-  for (const auto& kv : commands_) {
-    const Command& c = kv.second;
-    writer.startArray();
-    writer.writeValue(c.getKey());
-    writer.writeValue(c.getName());
-    writer.writeHexValue(c.getReadCmd());
-    writer.writeHexValue(c.getWriteCmd());
-    writer.writeValue(c.getActive());
-    writer.writeValue(c.getInterval());
-    writer.writeValue(c.getMaster());
-    writer.writeValue(c.getPosition());
-    writer.writeValue(ebus::dataTypeToString(c.getDatatype()));
-    writer.writeValueFloat(c.getDivider());
-    writer.writeValueFloat(c.getMin());
-    writer.writeValueFloat(c.getMax());
-    writer.writeValue(c.getDigits());
-    writer.writeValue(c.getUnit());
-    writer.writeValue(c.getHA());
-    writer.writeValue(c.getHAComponent());
-    writer.writeValue(c.getHADeviceClass());
-    writer.writeValue(c.getHAEntityCategory());
-    writer.writeValue(c.getHAMode());
-
-    // Map as object
-    writer.startObject();
-    for (const auto& kvm : c.getHAKeyValueMap()) {
-      char keyBuf[12];
-      auto [ptr, ec] =
-          std::to_chars(keyBuf, keyBuf + sizeof(keyBuf), kvm.first);
-      if (ec == std::errc{}) {
-        writer.writeField(std::string_view(keyBuf, ptr - keyBuf), kvm.second);
-      }
+    // Header row for compressed format
+    {
+      auto header_array = writer.arrayScope();
+      static const char* header[] = {"key",
+                                     "name",
+                                     "read_cmd",
+                                     "write_cmd",
+                                     "active",
+                                     "interval",
+                                     "master",
+                                     "position",
+                                     "datatype",
+                                     "divider",
+                                     "min",
+                                     "max",
+                                     "digits",
+                                     "unit",
+                                     "ha",
+                                     "ha_component",
+                                     "ha_device_class",
+                                     "ha_entity_category",
+                                     "ha_mode",
+                                     "ha_key_value_map",
+                                     "ha_default_key",
+                                     "ha_payload_on",
+                                     "ha_payload_off",
+                                     "ha_state_class",
+                                     "ha_step"};
+      for (const char* h : header) writer.writeValue(h);
     }
-    writer.endObject();
 
-    writer.writeValue(c.getHADefaultKey());
-    writer.writeValue(c.getHAPayloadOn());
-    writer.writeValue(c.getHAPayloadOff());
-    writer.writeValue(c.getHAStateClass());
-    writer.writeValueFloat(c.getHAStep());
-    writer.endArray();
+    // Data rows in tabular format
+    for (const auto& kv : commands_) {
+      const Command& c = kv.second;
+      auto row_array = writer.arrayScope();
+      writer.writeValue(c.getKey());
+      writer.writeValue(c.getName());
+      writer.writeHexValue(c.getReadCmd());
+      writer.writeHexValue(c.getWriteCmd());
+      writer.writeValue(c.getActive());
+      writer.writeValue(c.getInterval());
+      writer.writeValue(c.getMaster());
+      writer.writeValue(c.getPosition());
+      writer.writeValue(ebus::dataTypeToString(c.getDatatype()));
+      writer.writeValueFloat(c.getDivider());
+      writer.writeValueFloat(c.getMin());
+      writer.writeValueFloat(c.getMax());
+      writer.writeValue(c.getDigits());
+      writer.writeValue(c.getUnit());
+      writer.writeValue(c.getHA());
+      writer.writeValue(c.getHAComponent());
+      writer.writeValue(c.getHADeviceClass());
+      writer.writeValue(c.getHAEntityCategory());
+      writer.writeValue(c.getHAMode());
+
+      // Map as object
+      {
+        auto map_scope = writer.objectScope();
+        for (const auto& kvm : c.getHAKeyValueMap()) {
+          char keyBuf[12];
+          auto [ptr, ec] =
+              std::to_chars(keyBuf, keyBuf + sizeof(keyBuf), kvm.first);
+          if (ec == std::errc{}) {
+            writer.writeField(std::string_view(keyBuf, ptr - keyBuf),
+                              kvm.second);
+          }
+        }
+      }
+
+      writer.writeValue(c.getHADefaultKey());
+      writer.writeValue(c.getHAPayloadOn());
+      writer.writeValue(c.getHAPayloadOff());
+      writer.writeValue(c.getHAStateClass());
+      writer.writeValueFloat(c.getHAStep());
+    }
   }
-  writer.endArray();
   writer.flush();
   std::fclose(file);
 
@@ -281,7 +284,7 @@ int64_t Store::wipeCommands() {
 void Store::fetchCommandsJson(const ebus::JsonChunkVisitor& visitor) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   ebus::detail::JsonWriter writer(visitor);
-  writer.startArray();
+  auto array_scope = writer.arrayScope();
 
   std::vector<const Command*> ordered;
   for (const auto& kv : commands_) ordered.push_back(&kv.second);
@@ -293,7 +296,6 @@ void Store::fetchCommandsJson(const ebus::JsonChunkVisitor& visitor) const {
   for (const Command* cmd : ordered) {
     writer.writeValue(*cmd);
   }
-  writer.endArray();
 }
 
 const std::vector<Command*> Store::getCommands() {
@@ -411,7 +413,7 @@ std::vector<Command*> Store::updateData(Command* command,
 void Store::fetchValuesJson(const ebus::JsonChunkVisitor& visitor) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   ebus::detail::JsonWriter writer(visitor);
-  writer.startArray();
+  auto array_scope = writer.arrayScope();
 
   std::vector<const Command*> ordered;
   for (const auto& kv : commands_) ordered.push_back(&kv.second);
@@ -435,12 +437,11 @@ void Store::fetchValuesJson(const ebus::JsonChunkVisitor& visitor) const {
     writer.writeField("write", !cmd->getWriteCmd().empty());
     writer.writeField("active", cmd->getActive());
   }
-  writer.endArray();
 }
 
 void Store::deserializeCommands(const char* payload) {
   ebus::detail::JsonReader reader(payload);
-  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) {
+  if (reader.next() != ebus::detail::JsonReader::Token::array_start) {
     logger.warn("Store: Payload does not start with a JSON array");
     return;
   }
@@ -456,7 +457,7 @@ void Store::deserializeCommands(const char* payload) {
     ebus::detail::JsonReader row_reader(row_sv);
     auto token = row_reader.next();
 
-    if (token == ebus::detail::JsonReader::Token::ArrayStart) {
+    if (token == ebus::detail::JsonReader::Token::array_start) {
       if (!header_seen) {
         header_seen = true;
         continue;  // Skip header row
@@ -464,7 +465,7 @@ void Store::deserializeCommands(const char* payload) {
       row_reader.reset();
       insertCommand(Command::fromTabular(row_reader));
       loaded_count++;
-    } else if (token == ebus::detail::JsonReader::Token::ObjectStart) {
+    } else if (token == ebus::detail::JsonReader::Token::object_start) {
       row_reader.reset();
       std::string evalError = Command::evaluate(row_reader);
       if (evalError.empty()) {

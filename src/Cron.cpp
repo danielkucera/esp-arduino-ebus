@@ -282,12 +282,12 @@ Cron::Rule Cron::ruleFromReader(ebus::detail::JsonReader& reader) {
   Rule rule;
   while (true) {
     auto token = reader.next();
-    if (token == ebus::detail::JsonReader::Token::ObjectEnd ||
-        token == ebus::detail::JsonReader::Token::End ||
-        token == ebus::detail::JsonReader::Token::Error)
+    if (token == ebus::detail::JsonReader::Token::object_end ||
+        token == ebus::detail::JsonReader::Token::end ||
+        token == ebus::detail::JsonReader::Token::error)
       break;
 
-    if (token == ebus::detail::JsonReader::Token::Key) {
+    if (token == ebus::detail::JsonReader::Token::key) {
       std::string_view key = reader.value();
       if (key == "value") {
         rule.value_json = std::string(reader.rawValue());
@@ -347,17 +347,17 @@ int64_t Cron::loadRules() {
   if (bytesRead != payload.size()) return -1;
 
   ebus::detail::JsonReader reader(payload);
-  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return -1;
+  if (reader.next() != ebus::detail::JsonReader::Token::array_start) return -1;
 
   std::unordered_map<std::string, Rule> nextRules;
   while (true) {
     auto token = reader.next();
-    if (token == ebus::detail::JsonReader::Token::ArrayEnd ||
-        token == ebus::detail::JsonReader::Token::End ||
-        token == ebus::detail::JsonReader::Token::Error)
+    if (token == ebus::detail::JsonReader::Token::array_end ||
+        token == ebus::detail::JsonReader::Token::end ||
+        token == ebus::detail::JsonReader::Token::error)
       break;
 
-    if (token == ebus::detail::JsonReader::Token::ObjectStart) {
+    if (token == ebus::detail::JsonReader::Token::object_start) {
       Rule rule = ruleFromReader(reader);
       if (validateRule(rule).empty()) {
         nextRules[rule.id] = std::move(rule);
@@ -371,18 +371,18 @@ int64_t Cron::loadRules() {
 
 int64_t Cron::replaceRules(std::string_view payload) {
   ebus::detail::JsonReader reader(payload);
-  if (reader.next() != ebus::detail::JsonReader::Token::ArrayStart) return -1;
+  if (reader.next() != ebus::detail::JsonReader::Token::array_start) return -1;
 
   std::unordered_map<std::string, Rule> nextRules;
 
   while (true) {
     auto token = reader.next();
-    if (token == ebus::detail::JsonReader::Token::ArrayEnd ||
-        token == ebus::detail::JsonReader::Token::End ||
-        token == ebus::detail::JsonReader::Token::Error)
+    if (token == ebus::detail::JsonReader::Token::array_end ||
+        token == ebus::detail::JsonReader::Token::end ||
+        token == ebus::detail::JsonReader::Token::error)
       break;
 
-    if (token == ebus::detail::JsonReader::Token::ObjectStart) {
+    if (token == ebus::detail::JsonReader::Token::object_start) {
       Rule rule = ruleFromReader(reader);
       if (validateRule(rule).empty()) {
         nextRules[rule.id] = std::move(rule);
@@ -396,7 +396,7 @@ int64_t Cron::replaceRules(std::string_view payload) {
 
 void Cron::fetchRulesJson(const ebus::JsonChunkVisitor& visitor) const {
   ebus::detail::JsonWriter writer(visitor);
-  writer.startArray();
+  auto array_scope = writer.arrayScope();
 
   std::vector<Rule> ordered;
   portENTER_CRITICAL(&rules_mux_);
@@ -407,7 +407,7 @@ void Cron::fetchRulesJson(const ebus::JsonChunkVisitor& visitor) const {
             [](const Rule& a, const Rule& b) { return a.id < b.id; });
 
   for (const Rule& rule : ordered) {
-    writer.startObject();
+    auto obj_scope = writer.objectScope();
     writer.writeField("id", rule.id);
     writer.writeField("schedule", rule.schedule);
     writer.writeField("command_key", rule.command_key);
@@ -417,9 +417,7 @@ void Cron::fetchRulesJson(const ebus::JsonChunkVisitor& visitor) const {
       writer.writeRaw("null");
     else
       writer.writeRaw(rule.value_json);
-    writer.endObject();
   }
-  writer.endArray();
 }
 
 int64_t Cron::saveRules() const {

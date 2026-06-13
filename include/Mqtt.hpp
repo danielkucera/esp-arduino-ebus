@@ -6,7 +6,7 @@
 #include <mqtt_client.h>
 
 #include <atomic>
-#include <ebus/utils/circular_buffer.hpp>
+#include <ebus/detail/circular_buffer.hpp>
 #include <functional>
 #include <mutex>
 #include <queue>

@@ -365,13 +365,12 @@ void fetchMqttStatusJson(const ebus::JsonChunkVisitor& visitor) {
   ssize_t min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
 
   ebus::detail::JsonWriter writer(visitor);
-  writer.startObject();
+  auto scope = writer.objectScope();
   writer.writeField("reset_code", reset_code);
   writer.writeField("uptime", uptime);
   writer.writeField("free_heap", static_cast<uint32_t>(free_heap));
   writer.writeField("min_free_heap", static_cast<uint32_t>(min_free_heap));
   writer.writeField("rssi", WifiNetworkManager::RSSI());
-  writer.endObject();
 }
 
 void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor) {

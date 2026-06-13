@@ -1,4 +1,5 @@
 #include "ConfigManager.hpp"
+
 #include <esp_err.h>
 #include <nvs.h>
 #include <nvs_flash.h>
@@ -275,7 +276,7 @@ bool ConfigManager::writeConfigJson(const std::string& body,
   }
 
   ebus::detail::JsonReader reader(body);
-  if (reader.next() != ebus::detail::JsonReader::Token::ObjectStart) {
+  if (reader.next() != ebus::detail::JsonReader::Token::object_start) {
     error = "JSON root must be an object";
     return false;
   }
@@ -292,12 +293,12 @@ bool ConfigManager::writeConfigJson(const std::string& body,
 
   while (ok) {
     auto token = reader.next();
-    if (token == ebus::detail::JsonReader::Token::ObjectEnd ||
-        token == ebus::detail::JsonReader::Token::End)
+    if (token == ebus::detail::JsonReader::Token::object_end ||
+        token == ebus::detail::JsonReader::Token::end)
       break;
-    if (token == ebus::detail::JsonReader::Token::Key) {
+    if (token == ebus::detail::JsonReader::Token::key) {
       std::string key(reader.value());
-      if (reader.next() == ebus::detail::JsonReader::Token::String) {
+      if (reader.next() == ebus::detail::JsonReader::Token::string) {
         if (!::writeString(handle, key.c_str(), std::string(reader.value()),
                            error)) {
           ok = false;
@@ -319,6 +320,7 @@ bool ConfigManager::writeConfigJson(const std::string& body,
 
 esp_err_t ConfigManager::handleGet(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
+  HttpUtils::applyCustomHeaders(req);
   fetchConfigJson([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
@@ -330,40 +332,18 @@ esp_err_t ConfigManager::handleSet(httpd_req_t* req) {
   std::string error;
   const std::string body = HttpUtils::readBody(req);
   bool success = writeConfigJson(body, error);
-
-  httpd_resp_set_status(req, success ? "200 OK" : "400 Bad Request");
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  {
-    ebus::detail::JsonWriter writer([req](std::string_view chunk) {
-      httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-    });
-    auto root = writer.objectScope();
-    writer.writeField("id", "config_set");
-    if (success) {
-      writer.writeField("status", "successful");
-      writer.writeField("message", "Config saved to NVS");
-    } else {
-      writer.writeField("status", "failed");
-      writer.writeField("error", error);
-    }
+  if (success) {
+    HttpUtils::sendSuccessResponse(req, "config_set", "successful",
+                                   "Config saved to NVS");
+  } else {
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "config_set", error);
   }
-  httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
 
 esp_err_t ConfigManager::handleReset(httpd_req_t* req) {
   resetConfig();
-  httpd_resp_set_status(req, "200 OK");
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  {
-    ebus::detail::JsonWriter writer([req](std::string_view chunk) {
-      httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-    });
-    auto root = writer.objectScope();
-    writer.writeField("id", "config_reset");
-    writer.writeField("status", "successful");
-    writer.writeField("message", "Config reset");
-  }
-  httpd_resp_send_chunk(req, nullptr, 0);
+  HttpUtils::sendSuccessResponse(req, "config_reset", "successful",
+                                 "Config reset");
   return ESP_OK;
 }
