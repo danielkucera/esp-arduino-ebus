@@ -74,8 +74,10 @@ void DNSServer::processNextRequest() {
   int received = recvfrom(socketFd_, buffer, sizeof(buffer), 0,
                           reinterpret_cast<sockaddr*>(&client), &clientLen);
   if (received <= 0) return;
-  logger.debug("Received DNS request from " +
-               std::string(inet_ntoa(client.sin_addr)));
+  char buf[64];
+  snprintf(buf, sizeof(buf), "Received DNS request from %s",
+           inet_ntoa(client.sin_addr));
+  logger.debug(buf);
   if (static_cast<size_t>(received) < kDnsHeaderSize) return;
 
   if (buffer[2] & 0x80) return;  // response packet

@@ -32,9 +32,9 @@ class Logger {
   void debug(std::string_view message, bool is_json = false,
              uint32_t session_id = 0, uint32_t poll_id = 0);
 
-  void fetchLogsJson(const ebus::JsonChunkVisitor& visitor,
-                     uint64_t sinceMillis = 0) const;
-  void fetchTimeRelationJson(const ebus::JsonChunkVisitor& visitor) const;
+  void fetchLogs(const ebus::JsonChunkVisitor& visitor,
+                 uint64_t sinceMillis = 0) const;
+  void fetchTimeRelation(const ebus::JsonChunkVisitor& visitor) const;
 
   TaskHandle_t getTaskHandle() const { return printTask; }
   size_t getQueueSize() const;

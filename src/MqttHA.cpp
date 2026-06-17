@@ -40,6 +40,19 @@ void MqttHA::setThingConfigurationUrl(const std::string& configurationUrl) {
   thingConfigurationUrl = configurationUrl;
 }
 
+void MqttHA::sanitizeObjectId(std::string_view source, char* out,
+                              size_t max_len) {
+  size_t i = 0;
+  for (; i < source.length() && i < max_len - 1; ++i) {
+    char c = source[i];
+    if (c == '/' || c == ' ')
+      out[i] = '_';
+    else
+      out[i] = (char)tolower((unsigned char)c);
+  }
+  out[i] = '\0';
+}
+
 void MqttHA::publishDeviceInfo() const {
   auto publishDiag = [this](const char* component, const char* key,
                             const char* name, auto writeFields) {
@@ -139,7 +152,7 @@ void MqttHA::publishDeviceInfo() const {
 
 void MqttHA::publishComponents() const {
   for (const Command* command : store.getCommands()) {
-    if (command->getHA())
+    if (command->getHA())  // Check if HA config exists and is enabled
       mqtt.enqueueOutgoing(OutgoingAction(command, !enabled));
   }
 }

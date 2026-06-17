@@ -18,7 +18,7 @@ class UpgradeManager {
   esp_err_t handleUpload(httpd_req_t* req);
   esp_err_t handleHttpUpgrade(httpd_req_t* req);
   esp_err_t handleStatus(httpd_req_t* req);
-  void fetchStatusJson(const ebus::JsonChunkVisitor& visitor);
+  void fetchStatus(const ebus::JsonChunkVisitor& visitor);
 
  private:
   bool performHttpUpgrade(const std::string& url, std::string& error);

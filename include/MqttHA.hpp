@@ -48,6 +48,7 @@ class MqttHA {
   std::string thingHwVersion;
   std::string thingConfigurationUrl = "http://esp-ebus.local/";
 
+  static void sanitizeObjectId(std::string_view source, char* out, size_t max_len);
   std::string createStateTopic(const std::string& prefix,
                                const std::string& topic) const;
 

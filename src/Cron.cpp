@@ -394,7 +394,7 @@ int64_t Cron::replaceRules(std::string_view payload) {
   return saveRules();
 }
 
-void Cron::fetchRulesJson(const ebus::JsonChunkVisitor& visitor) const {
+void Cron::fetchRules(const ebus::JsonChunkVisitor& visitor) const {
   ebus::detail::JsonWriter writer(visitor);
   auto array_scope = writer.arrayScope();
 
@@ -427,7 +427,7 @@ int64_t Cron::saveRules() const {
   if (file == nullptr) return -1;
 
   size_t total = 0;
-  fetchRulesJson([file, &total](std::string_view s) {
+  fetchRules([file, &total](std::string_view s) {
     total += std::fwrite(s.data(), 1, s.size(), file);
   });
   std::fclose(file);
@@ -483,8 +483,10 @@ void Cron::tick() {
   for (const PendingRule& pendingRule : pending) {
     Command* command = store.findCommand(pendingRule.commandKey);
     if (command == nullptr || command->getWriteCmd().empty()) {
-      logger.warn(std::string("Cron skipped, command unavailable: ") +
-                  pendingRule.commandKey);
+      char buf[128];
+      snprintf(buf, sizeof(buf), "Cron skipped, command unavailable: %s",
+               pendingRule.commandKey.c_str());
+      logger.warn(buf);
       continue;
     }
 

@@ -311,5 +311,7 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr,
 }
 
 void EspOtaManager::fail(const std::string& reason) {
-  logger.error("ESPOTA failure: " + reason);
+  char buf[128];
+  snprintf(buf, sizeof(buf), "ESPOTA failure: %s", reason.c_str());
+  logger.error(buf);
 }

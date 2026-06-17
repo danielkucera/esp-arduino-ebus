@@ -125,8 +125,10 @@ int64_t Store::loadCommands() {
   FILE* file = std::fopen(kCommandsFilePath, "rb");
   if (file == nullptr) {
     if (errno == ENOENT) return 0;
-    logger.error("Store: Failed to open commands file: " +
-                 std::to_string(errno));
+    char err_buf[64];
+    snprintf(err_buf, sizeof(err_buf),
+             "Store: Failed to open commands file: %d", errno);
+    logger.error(err_buf);
     return -1;
   }
 
@@ -154,8 +156,10 @@ int64_t Store::loadCommands() {
   std::fclose(file);
   if (bytesRead != payload.size()) return -1;
 
-  logger.info("Store: Loading commands from LittleFS (" + std::to_string(size) +
-              " bytes)");
+  char log_buf[64];
+  snprintf(log_buf, sizeof(log_buf), "Store: Loading from LittleFS (%ld bytes)",
+           size);
+  logger.info(log_buf);
   deserializeCommands(payload.c_str());
   return static_cast<int64_t>(payload.size());
 }
@@ -281,7 +285,7 @@ int64_t Store::wipeCommands() {
   return static_cast<int64_t>(fileStat.st_size);
 }
 
-void Store::fetchCommandsJson(const ebus::JsonChunkVisitor& visitor) const {
+void Store::fetchCommands(const ebus::JsonChunkVisitor& visitor) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   ebus::detail::JsonWriter writer(visitor);
   auto array_scope = writer.arrayScope();
@@ -410,7 +414,7 @@ std::vector<Command*> Store::updateData(Command* command,
   return matchingCommands;
 }
 
-void Store::fetchValuesJson(const ebus::JsonChunkVisitor& visitor) const {
+void Store::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   ebus::detail::JsonWriter writer(visitor);
   auto array_scope = writer.arrayScope();
@@ -473,12 +477,17 @@ void Store::deserializeCommands(const char* payload) {
         insertCommand(Command::fromJson(row_reader));
         loaded_count++;
       } else {
-        logger.error("Store: Command validation failed: " + evalError);
+        char err_buf[128];
+        snprintf(err_buf, sizeof(err_buf),
+                 "Store: Command validation failed: %s", evalError.c_str());
+        logger.error(err_buf);
       }
     }
   }
-  logger.info("Store: Deserialized " + std::to_string(loaded_count) +
-              " commands.");
+  char res_buf[64];
+  snprintf(res_buf, sizeof(res_buf), "Store: Deserialized %u commands.",
+           (unsigned)loaded_count);
+  logger.info(res_buf);
 }
 
 #endif

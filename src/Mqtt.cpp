@@ -38,7 +38,7 @@ void Mqtt::change() {
 
 void Mqtt::startTask() {
   if (task_handle_ != nullptr) return;
-  xTaskCreate(&Mqtt::taskFunc, "mqtt", 4096, this, 2, &task_handle_);
+  xTaskCreate(&Mqtt::taskFunc, "mqtt", 5120, this, 2, &task_handle_);
 }
 
 void Mqtt::stopTask() {
@@ -153,14 +153,19 @@ void Mqtt::publishStream(
   if (!enabled_ || client_ == nullptr) return;
   std::lock_guard<std::mutex> lock(publish_mutex_);
 
-  std::string& buf = publish_buffers_[current_buffer_index_];
+  char* buf = publish_buffers_[current_buffer_index_];
+  size_t& len = buffer_lengths_[current_buffer_index_];
+  len = 0;
   current_buffer_index_ = (current_buffer_index_ + 1) % kBufferPoolSize;
 
-  buf.clear();
-  if (buf.capacity() < 1024) buf.reserve(1024);
-
-  builder([&buf](std::string_view s) { buf.append(s); });
-  internalPublish(topic, qos, retain, buf.c_str(), prefix);
+  builder([&](std::string_view s) {
+    if (len + s.size() < kMqttPubBufferSize - 1) {
+      std::memcpy(buf + len, s.data(), s.size());
+      len += s.size();
+      buf[len] = '\0';
+    }
+  });
+  internalPublish(topic, qos, retain, buf, prefix);
 }
 
 void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
@@ -232,17 +237,16 @@ void Mqtt::taskFunc(void* arg) {
             break;
 
           case 1:
-            self->publishStream("resources/app", 0, false,
-                                [](const ebus::JsonChunkVisitor& v) {
-                                  fetchAppResourcesJson(v);
-                                });
+            self->publishStream(
+                "resources/app", 0, false,
+                [](const ebus::JsonChunkVisitor& v) { fetchAppStatus(v); });
             tele_phase = 2;
             break;
 
           case 2:
             self->publishStream("resources/lib", 0, false,
                                 [](const ebus::JsonChunkVisitor& v) {
-                                  getEbusController().fetchSystemResources(
+                                  getEbusController().fetchStatus(
                                       [&v](const ebus::SystemResources& res) {
                                         ebus::detail::JsonWriter writer(v);
                                         res.toJson(writer);
@@ -343,11 +347,15 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
     case MQTT_EVENT_PUBLISHED:
       break;
     case MQTT_EVENT_DATA: {
-      std::string topic(event->topic, event->topic_len);
+      // Use string_view for topic to avoid std::string allocation
+      std::string_view topic_sv(event->topic, event->topic_len);
       std::string_view payload(event->data, event->data_len);
-      logger.debug("MQTT data received on topic: " + topic);
+      char dbg_buf[128];
+      snprintf(dbg_buf, sizeof(dbg_buf), "MQTT data received on topic: %.*s",
+               (int)topic_sv.size(), topic_sv.data());
+      logger.debug(dbg_buf);
 
-      if (topic == self->request_topic_) {
+      if (topic_sv == self->request_topic_) {
         ebus::detail::JsonReader reader(payload);
         if (!reader.findKey("id")) return;
         reader.next();
@@ -359,11 +367,14 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
           self->handleWrite(payload);
         else if (id_view == "restart")
           restart();
-      } else if (topic.length() > self->root_topic_.length() + 4 &&
-                 topic.compare(0, self->root_topic_.length() + 4,
-                               self->root_topic_ + "set/") == 0) {
-        std::string key = topic.substr(self->root_topic_.length() + 4);
-        self->handleDirectWrite(key, payload);
+      } else if (topic_sv.length() > self->root_topic_.length() + 4 &&
+                 topic_sv.compare(0, self->root_topic_.length() + 4,
+                                  self->root_topic_ + "set/") == 0) {
+        std::string_view key_sv =
+            topic_sv.substr(self->root_topic_.length() + 4);
+        self->handleDirectWrite(
+            std::string(key_sv),
+            payload);  // Convert to std::string for findCommand
       } else {
       }
     } break;
@@ -399,8 +410,11 @@ void Mqtt::handleRead(std::string_view payload) {
   if (command != nullptr) {
     command->setLast(0);  // Trigger immediate physical poll
     handleValueUpdate(key_view);
-  } else {
-    publishResponse("read", "key '" + std::string(key_view) + "' not found");
+  } else {  // Use snprintf for error response
+    char err_buf[128];
+    snprintf(err_buf, sizeof(err_buf), "key '%.*s' not found",
+             (int)key_view.size(), key_view.data());
+    publishResponse("read", err_buf);
   }
 }
 
@@ -427,14 +441,18 @@ void Mqtt::handleWrite(std::string_view payload) {
   Command* command = store.findCommand(std::string(key_view));
   if (command != nullptr) {
     if (val_view.empty()) {
-      publishStream(
-          "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {
-            ebus::detail::JsonWriter writer(v);
-            auto scope = writer.objectScope();
-            writer.writeField("id", "write");
-            writer.writeField("status", "missing value for key '" +
-                                            std::string(key_view) + "'");
-          });
+      publishStream("response", 0, false,
+                    [key_view](const ebus::JsonChunkVisitor&
+                                   v) {  // Use snprintf for status message
+                      ebus::detail::JsonWriter writer(v);
+                      auto scope = writer.objectScope();
+                      writer.writeField("id", "write");
+                      char status_buf[128];
+                      snprintf(status_buf, sizeof(status_buf),
+                               "missing value for key '%.*s'",
+                               (int)key_view.size(), key_view.data());
+                      writer.writeField("status", status_buf);
+                    });
       return;
     }
 
@@ -459,19 +477,23 @@ void Mqtt::handleWrite(std::string_view payload) {
       ebus::Sequence fullWrite = command->getWriteCmd();
       fullWrite.append(valueBytes);
 
-      getEbusController().enqueue(PRIO_SEND, fullWrite);
+      getEbusController().enqueue(
+          PRIO_SEND, fullWrite);  // Use snprintf for status message
       publishStream("response", 0, false,
                     [command, key_view](const ebus::JsonChunkVisitor& v) {
                       ebus::detail::JsonWriter writer(v);
                       auto scope = writer.objectScope();
                       writer.writeField("id", "write");
-                      writer.writeField("status", "scheduled for key '" +
-                                                      std::string(key_view) +
-                                                      "' name '" +
-                                                      command->getName() + "'");
+                      char status_buf[256];
+                      snprintf(status_buf, sizeof(status_buf),
+                               "scheduled for key '%.*s' name '%s'",
+                               (int)key_view.size(), key_view.data(),
+                               command->getName().c_str());
+                      writer.writeField("status", status_buf);
                     });
       command->setLast(0);
     } else {
+      // Use snprintf for error response
       publishStream(
           "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {
             ebus::detail::JsonWriter writer(v);
@@ -482,14 +504,18 @@ void Mqtt::handleWrite(std::string_view payload) {
           });
     }
   } else {
-    publishStream(
-        "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {
-          ebus::detail::JsonWriter writer(v);
-          auto scope = writer.objectScope();
-          writer.writeField("id", "write");
-          writer.writeField("status",
-                            "key '" + std::string(key_view) + "' not found");
-        });
+    publishStream("response", 0, false,
+                  [key_view](const ebus::JsonChunkVisitor&
+                                 v) {  // Use snprintf for error response
+                    ebus::detail::JsonWriter writer(v);
+                    auto scope = writer.objectScope();
+                    writer.writeField("id", "write");
+                    char status_buf[128];
+                    snprintf(status_buf, sizeof(status_buf),
+                             "key '%.*s' not found", (int)key_view.size(),
+                             key_view.data());
+                    writer.writeField("status", status_buf);
+                  });
   }
 }
 
@@ -516,8 +542,10 @@ void Mqtt::handleValueUpdate(std::string_view key) {
       });
     }
   }
-
-  logUpdate(cmd, decoded);
+  // Use snprintf for logUpdate
+  char logBuf[512];
+  logUpdate(cmd, decoded, logBuf, sizeof(logBuf));
+  logger.debug(logBuf);
 }
 
 void Mqtt::publishResponse(std::string_view id, std::string_view status,
@@ -557,15 +585,22 @@ void Mqtt::handleDirectWrite(const std::string& key,
     fullWrite.append(valueBytes);
     getEbusController().enqueue(PRIO_SEND, fullWrite);
     command->setLast(0);
-    logger.info("MQTT: Scheduled write for '" + key + "'");
-  } else {
-    logger.warn("MQTT: Write failed for '" + key + "'");
+    char buf[128];
+    snprintf(buf, sizeof(buf), "MQTT: Scheduled write for '%s'", key.c_str());
+    logger.info(buf);
+  } else {  // Use snprintf for error message
+    char buf[128];
+    snprintf(buf, sizeof(buf), "MQTT: Write failed for '%s'", key.c_str());
+    logger.warn(buf);
   }
 }
 
+// void Mqtt::logUpdate(const Command* cmd,
+//                      const std::optional<ebus::DataValue>& decoded) {
 void Mqtt::logUpdate(const Command* cmd,
-                     const std::optional<ebus::DataValue>& decoded) {
-  char logBuf[512];
+                     const std::optional<ebus::DataValue>& decoded,
+                     char* logBuf, size_t logBufSize) {
+  // char logBuf[512];
   char* p = logBuf;
   const char* end_buf = logBuf + sizeof(logBuf);
 
@@ -585,7 +620,7 @@ void Mqtt::logUpdate(const Command* cmd,
     }
   };
 
-  appendStr(" '");
+  appendStr(" '");  // Use snprintf for the initial part of the log message
   appendHex(cmd->getReadCmd());
   appendStr("' [");
   appendStr(cmd->getName());
@@ -610,7 +645,6 @@ void Mqtt::logUpdate(const Command* cmd,
   }
 
   *p = '\0';
-  logger.debug(logBuf);
 }
 
 void Mqtt::publishCommand(const Command* command) {

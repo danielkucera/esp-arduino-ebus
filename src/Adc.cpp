@@ -127,7 +127,9 @@ bool Adc::configureController(uint32_t sampleRate, uint32_t channelMask) const {
 }
 
 void Adc::logError(const char* stage, int err) const {
-  logger.error(std::string("ADC: ") + stage + ": " + esp_err_to_name(err));
+  char buf[128];
+  snprintf(buf, sizeof(buf), "ADC: %s: %s", stage, esp_err_to_name(err));
+  logger.error(buf);
 }
 
 bool Adc::isRunning() const { return configured; }

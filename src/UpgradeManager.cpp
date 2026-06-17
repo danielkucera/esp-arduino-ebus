@@ -200,7 +200,7 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   return ESP_OK;
 }
 
-void UpgradeManager::fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
+void UpgradeManager::fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
   auto root = writer.objectScope();
   writer.writeField("ready", true);
@@ -210,7 +210,7 @@ void UpgradeManager::fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
 esp_err_t UpgradeManager::handleStatus(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  fetchStatusJson([req](std::string_view chunk) {
+  fetchStatus([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);

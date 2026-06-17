@@ -42,7 +42,7 @@ class Store {
   int64_t wipeCommands();
 
   //   const std::string getCommandsJson() const;
-  void fetchCommandsJson(const ebus::JsonChunkVisitor& visitor) const;
+  void fetchCommands(const ebus::JsonChunkVisitor& visitor) const;
 
   const std::vector<Command*> getCommands();
 
@@ -60,7 +60,7 @@ class Store {
   static const std::string getValueFullJson(const Command* command);
 
   //   const std::string getValuesJson() const;
-  void fetchValuesJson(const ebus::JsonChunkVisitor& visitor) const;
+  void fetchValues(const ebus::JsonChunkVisitor& visitor) const;
 
  private:
   // Single unified map for all commands, indexed by key

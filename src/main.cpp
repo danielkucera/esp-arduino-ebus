@@ -25,7 +25,6 @@
 #include "Mqtt.hpp"
 #include "MqttHA.hpp"
 #include "Store.hpp"
-#include "client_acceptor.hpp"
 #include "ebus_accessor.hpp"
 #else
 #include "BusType.hpp"
@@ -172,6 +171,72 @@ struct WifiStatus {
   }
 };
 
+// // Forward declarations for handles used in stack monitoring
+// extern TaskHandle_t simTaskHandle;
+// #if defined(EBUS_INTERNAL)
+// extern Mqtt mqtt;
+// extern Cron cron;
+// extern ClientAcceptor client_acceptor;
+// extern DNSServer captiveDnsServer;
+// #endif
+
+TaskHandle_t heapMonitorTaskHandle = nullptr;
+
+void heapMonitorTaskEntry(void* arg) {
+  (void)arg;
+  while (true) {
+    multi_heap_info_t info;
+    heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+
+    char hbuf[160];
+    snprintf(hbuf, sizeof(hbuf),
+             "Heap: Total=%uB, MaxBlock=%uB, MinEver=%uB, Fragments=%u",
+             (unsigned)info.total_free_bytes, (unsigned)info.largest_free_block,
+             (unsigned)info.minimum_free_bytes, (unsigned)info.free_blocks);
+    logger.debug(hbuf);
+
+    //     // Log stack high-water marks for app tasks
+    //     auto logStack = [](const char* name, TaskHandle_t handle) {
+    //       if (handle) {
+    //         unsigned free_stack =
+    //             uxTaskGetStackHighWaterMark(handle) * sizeof(StackType_t);
+    //         char sbuf[64];
+    //         snprintf(sbuf, sizeof(sbuf), "Stack: %s free=%uB", name,
+    //         free_stack); logger.debug(sbuf);
+    //       }
+    //     };
+
+    // #if defined(EBUS_SIMULATION)
+    //     logStack("sim", simTaskHandle);
+    // #endif
+    // #if defined(EBUS_INTERNAL)
+    //     logStack("mqtt", mqtt.getTaskHandle());
+    //     logStack("cron", cron.getTaskHandle());
+    //     logStack("logger", logger.getTaskHandle());
+    //     logStack("acceptor", client_acceptor.getTaskHandle());
+    //     logStack("dns", captiveDnsServer.getTaskHandle());
+    //     logStack("ota", espOtaManager.getTaskHandle());
+    //     logStack("led", WifiNetworkManager::getStatusLedTaskHandle());
+    //     logStack("socket", WifiNetworkManager::getSocketLoggerTaskHandle());
+    //     logStack("heap", heapMonitorTaskHandle);
+
+    //     // Log stack for library threads
+    //     getEbusController().fetchStatus([](const ebus::SystemResources& res)
+    //     {
+    //       for (const auto& ts : res.threads) {
+    //         char sbuf[64];
+    //         snprintf(sbuf, sizeof(sbuf), "Stack: %s free=%ldB",
+    //         ts.name.c_str(),
+    //                  ts.stack_free);
+    //         logger.debug(sbuf);
+    //       }
+    //     });
+    // #endif
+
+    vTaskDelay(pdMS_TO_TICKS(5000));  // Log every 5 seconds
+  }
+}
+
 #if defined(EBUS_INTERNAL)
 struct SntpStatus {
   void toJson(ebus::detail::JsonWriter& writer) const {
@@ -243,7 +308,10 @@ void initPwm() {
 
 void startCaptiveDns() {
   if (captiveDnsServer.start(kCaptiveDnsPort, "*", kCaptiveDnsIp)) {
-    logger.info(std::string("Captive DNS started on ") + kCaptiveDnsIpString);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Captive DNS started on %s",
+             kCaptiveDnsIpString);
+    logger.info(buf);
     return;
   }
 
@@ -253,7 +321,9 @@ void startCaptiveDns() {
 void prepareRuntimeForUpgrade() {
 #if defined(EBUS_INTERNAL)
   cron.stop();
-  mqtt.stopTask();
+  if (mqtt.getTaskHandle() != nullptr) {  // Only stop if task is running
+    mqtt.stopTask();
+  }
   stopEbus();
 
   vTaskDelay(pdMS_TO_TICKS(50));
@@ -263,6 +333,17 @@ void prepareRuntimeForUpgrade() {
 }
 
 }  // namespace
+
+void HeapStatus::toJson(ebus::detail::JsonWriter& writer) const {
+  auto scope = writer.objectScope();
+  multi_heap_info_t info;
+  heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  writer.writeField("Total_Free_Bytes", info.total_free_bytes);
+  writer.writeField("Largest_Free_Block", info.largest_free_block);
+  writer.writeField("Minimum_Free_Bytes", info.minimum_free_bytes);
+  writer.writeField("Free_Blocks", info.free_blocks);
+  writer.writeField("Total_Blocks", info.total_blocks);
+}
 
 inline void disableTX() {
 #if defined(TX_DISABLE_PIN)
@@ -327,9 +408,11 @@ void check_reset() {
 
 #if defined(EBUS_INTERNAL)
 void time_sync_notification_cb(struct timeval* tv) {
-  const char* activeServer = esp_sntp_getservername(0);
-  logger.info(std::string("SNTP synchronized to ") +
-              (activeServer != nullptr ? activeServer : "unknown"));
+  char buf[128];
+  const char* activeServer = esp_sntp_getservername(0);  // This can return NULL
+  snprintf(buf, sizeof(buf), "SNTP synchronized to %s",
+           (activeServer != nullptr ? activeServer : "unknown"));
+  logger.info(buf);
 }
 
 static std::string sntpServerStorage = DEFAULT_SNTP_SERVER;
@@ -344,22 +427,28 @@ void initSNTP(const char* server) {
   sntp_set_sync_interval(1 * 60 * 60 * 1000UL);  // 1 hour
 
   esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
-  esp_sntp_setservername(0, sntpServerStorage.c_str());
+  esp_sntp_setservername(
+      0, sntpServerStorage.c_str());  // This expects a non-null c_str()
 
   sntp_set_time_sync_notification_cb(time_sync_notification_cb);
   esp_sntp_init();
-  logger.info("SNTP started with server " + sntpServerStorage);
+  char buf[128];
+  snprintf(buf, sizeof(buf), "SNTP started with server %s",
+           sntpServerStorage.c_str());
+  logger.info(buf);
 }
 
 void setTimezone(const char* timezone) {
-  if (strlen(timezone) > 0) {
-    logger.info(std::string("Timezone set to ") + timezone);
+  if (timezone != nullptr && strlen(timezone) > 0) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Timezone set to %s", timezone);
+    logger.info(buf);
     setenv("TZ", timezone, 1);
     tzset();
   }
 }
 
-void fetchMqttStatusJson(const ebus::JsonChunkVisitor& visitor) {
+void fetchMqttStatus(const ebus::JsonChunkVisitor& visitor) {
   const uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
   ssize_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
   ssize_t min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
@@ -373,7 +462,7 @@ void fetchMqttStatusJson(const ebus::JsonChunkVisitor& visitor) {
   writer.writeField("rssi", WifiNetworkManager::RSSI());
 }
 
-void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor) {
+void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
   auto scope = writer.objectScope();
 
@@ -393,15 +482,15 @@ void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor) {
 #if defined(EBUS_SIMULATION)
     addThread("sim", simTaskHandle, 2048);
 #endif
-    addThread("mqtt", mqtt.getTaskHandle(), 4096);
+    addThread("mqtt", mqtt.getTaskHandle(), 5120);
     addThread("cron", cron.getTaskHandle(), 1024);
     addThread("logger", logger.getTaskHandle(), 1536);
-    addThread("client_acceptor", client_acceptor.getTaskHandle(), 1536);
     addThread("dns", captiveDnsServer.getTaskHandle(), 2048);
     addThread("espota", espOtaManager.getTaskHandle(), 8192);
     addThread("status_led", WifiNetworkManager::getStatusLedTaskHandle(), 1024);
     addThread("socket_logger", WifiNetworkManager::getSocketLoggerTaskHandle(),
-              2048);
+              4096);                                         // Increased stack
+    addThread("heap_monitor", heapMonitorTaskHandle, 4096);  // Increased stack
   }
 
   writer.appendKey("queues");
@@ -470,7 +559,7 @@ void saveParamsCallback() {
 #endif
 }
 
-void fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
+void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
   auto scope = writer.objectScope();
   writer.writeField("Status", StatusInfo{});
@@ -481,6 +570,7 @@ void fetchStatusJson(const ebus::JsonChunkVisitor& visitor) {
   writer.writeField("Firmware", FirmwareStatus{});
   writer.writeField("Chip", ChipStatus{});
   writer.writeField("WIFI", WifiStatus{});
+  writer.writeField("Heap", HeapStatus{});
 
 #if defined(EBUS_INTERNAL)
   writer.writeField("SNTP", SntpStatus{});
@@ -599,7 +689,10 @@ extern "C" void app_main(void) {
   upgradeManager.setPreUpgradeHook(prepareRuntimeForUpgrade);
   espOtaManager.setPreUpgradeHook(prepareRuntimeForUpgrade);
 
-  set_pwm();
+  set_pwm();  // This calls configManager.readInt("pwmValue", 130);
+
+  xTaskCreate(heapMonitorTaskEntry, "heap_monitor", 2048, nullptr, 1,
+              &heapMonitorTaskHandle);
 
 #if defined(EBUS_INTERNAL)
   if (configManager.readBool("sntpEnabled")) {
@@ -623,7 +716,7 @@ extern "C" void app_main(void) {
     mqtt.setRootTopic(rootTopicValue);
   }
   mqtt.start();
-  mqtt.setStatusProvider(fetchMqttStatusJson);
+  mqtt.setStatusProvider(fetchMqttStatus);
 
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
@@ -665,18 +758,21 @@ extern "C" void app_main(void) {
   // Bus
   runtimeConfig.bus.window_us = 4300;
   runtimeConfig.bus.offset_us = 80;
-  runtimeConfig.bus.watchdog_timeout_ms =
-      1000;  // Allow more headroom under load
+  runtimeConfig.bus.watchdog_timeout_ms = 250;
   runtimeConfig.bus.syn_gen = true;
 
   // Diagnostics
-  runtimeConfig.diagnostics.level = ebus::LogLevel::info;
+  runtimeConfig.diagnostics.level = ebus::LogLevel::error;
   runtimeConfig.diagnostics.log_size = 1;
 
   // Network
   runtimeConfig.network.session_timeout_ms = 500;
   runtimeConfig.network.transmit_timeout_ms = 250;
   runtimeConfig.network.outbound_buffer_size = 512;
+  runtimeConfig.network.enable_server = true;
+  runtimeConfig.network.port_regular = 3333;
+  runtimeConfig.network.port_readonly = 3334;
+  runtimeConfig.network.port_enhanced = 3335;
 
   // Device
   runtimeConfig.device.scan_on_startup = true;
@@ -689,6 +785,10 @@ extern "C" void app_main(void) {
   runtimeConfig.scheduler.base_backoff_ms = 100;
   runtimeConfig.scheduler.fsm_timeout_ms = 1000;
   runtimeConfig.scheduler.total_timeout_ms = 2000;
+  runtimeConfig.scheduler.max_items = 16;
+
+  // Poll
+  runtimeConfig.poll.max_items = 64;
 #else
   logger.info("Running in normal eBUS mode");
 
@@ -833,8 +933,6 @@ extern "C" void app_main(void) {
       },
       "sim", 2048, nullptr, 1, &simTaskHandle);
 #endif
-
-  client_acceptor.start();
 
   store.setDataUpdatedCallback(Mqtt::publishValue);
 

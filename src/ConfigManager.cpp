@@ -53,8 +53,10 @@ bool writeString(nvs_handle_t handle, const char* key, const std::string& value,
                  std::string& error) {
   const esp_err_t err = nvs_set_str(handle, key, value.c_str());
   if (err != ESP_OK) {
-    error = std::string("Failed to write key '") + key +
-            "': " + esp_err_to_name(err);
+    char err_buf[128];
+    snprintf(err_buf, sizeof(err_buf), "Failed to write key '%s': %s", key,
+             esp_err_to_name(err));
+    error = err_buf;
     return false;
   }
   return true;
@@ -250,7 +252,7 @@ void ConfigManager::begin() {
   RegisterUri("/api/v1/config/reset", HTTP_POST, handleConfigReset);
 }
 
-void ConfigManager::fetchConfigJson(const ebus::JsonChunkVisitor& visitor) {
+void ConfigManager::fetchConfig(const ebus::JsonChunkVisitor& visitor) {
   if (!ensureNvsReady()) {
     visitor("{}");
     return;
@@ -326,7 +328,7 @@ bool ConfigManager::writeConfigJson(const std::string& body,
 esp_err_t ConfigManager::handleGet(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  fetchConfigJson([req](std::string_view chunk) {
+  fetchConfig([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);

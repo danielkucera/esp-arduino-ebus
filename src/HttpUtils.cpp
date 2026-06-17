@@ -15,6 +15,66 @@ namespace {
 std::vector<std::pair<std::string, std::string>> customHeaders;
 }
 
+bool registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
+  const esp_err_t err = httpd_register_uri_handler(server, &route);
+  if (err != ESP_OK) {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "HTTP route register failed: %s (%s)", route.uri,
+             esp_err_to_name(err));
+    logger.error(buf);
+    return false;
+  }
+  return true;
+}
+
+bool registerRoute(httpd_handle_t server, const char* uri,
+                   httpd_method_t method, esp_err_t (*handler)(httpd_req_t*)) {
+  httpd_uri_t route = {};
+  route.uri = uri;
+  route.method = method;
+  route.handler = handler;
+  return registerRoute(server, route);
+}
+
+void sendResponse(httpd_req_t* req, const char* status, const char* type,
+                  const char* body) {
+  httpd_resp_set_status(req, status);
+  httpd_resp_set_type(req, type);
+  applyCustomHeaders(req);
+  const size_t len = body != nullptr ? std::strlen(body) : 0;
+  httpd_resp_send(req, body != nullptr ? body : "", len);
+}
+
+void sendResponse(httpd_req_t* req, const char* status, const char* type,
+                  const std::string& body) {
+  sendResponse(req, status, type, body.c_str());
+}
+
+std::string readBody(httpd_req_t* req) {
+  std::string out;
+  int remaining = req->content_len;
+  char buffer[512];
+  if (remaining > static_cast<int>(MAX_REQUEST_BODY_SIZE)) {
+    char buf[128];
+    snprintf(buf, sizeof(buf),
+             "HTTP: Request body too large (%d bytes), max is %zu", remaining,
+             MAX_REQUEST_BODY_SIZE);
+    logger.warn(buf);
+    return "";  // Return empty string to indicate failure or rejection
+  }
+
+  while (remaining > 0) {
+    int toRead = remaining > static_cast<int>(sizeof(buffer)) ? sizeof(buffer)
+                                                              : remaining;
+    int received = httpd_req_recv(req, buffer, toRead);
+    if (received <= 0) return "";
+    out.append(buffer, received);
+    remaining -= received;
+  }
+
+  return out;
+}
+
 void setCustomHeaders(const std::string& raw) {
   customHeaders.clear();
   size_t pos = 0;
@@ -35,11 +95,6 @@ void setCustomHeaders(const std::string& raw) {
     }
     pos = end + 1;
   }
-}
-
-void applyCustomHeaders(httpd_req_t* req) {
-  for (const auto& h : customHeaders)
-    httpd_resp_set_hdr(req, h.first.c_str(), h.second.c_str());
 }
 
 void sendErrorResponse(httpd_req_t* req, const char* status,
@@ -76,54 +131,9 @@ void sendSuccessResponse(httpd_req_t* req, std::string_view id,
   httpd_resp_send(req, out.c_str(), out.length());
 }
 
-void sendResponse(httpd_req_t* req, const char* status, const char* type,
-                  const char* body) {
-  httpd_resp_set_status(req, status);
-  httpd_resp_set_type(req, type);
-  applyCustomHeaders(req);
-  const size_t len = body != nullptr ? std::strlen(body) : 0;
-  httpd_resp_send(req, body != nullptr ? body : "", len);
-}
-
-void sendResponse(httpd_req_t* req, const char* status, const char* type,
-                  const std::string& body) {
-  sendResponse(req, status, type, body.c_str());
-}
-
-std::string readBody(httpd_req_t* req) {
-  std::string out;
-  int remaining = req->content_len;
-  char buffer[512];
-
-  while (remaining > 0) {
-    int toRead = remaining > static_cast<int>(sizeof(buffer)) ? sizeof(buffer)
-                                                              : remaining;
-    int received = httpd_req_recv(req, buffer, toRead);
-    if (received <= 0) return "";
-    out.append(buffer, received);
-    remaining -= received;
-  }
-
-  return out;
-}
-
-bool registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
-  const esp_err_t err = httpd_register_uri_handler(server, &route);
-  if (err != ESP_OK) {
-    logger.error(std::string("HTTP route register failed: ") + route.uri +
-                 " (" + esp_err_to_name(err) + ")");
-    return false;
-  }
-  return true;
-}
-
-bool registerRoute(httpd_handle_t server, const char* uri,
-                   httpd_method_t method, esp_err_t (*handler)(httpd_req_t*)) {
-  httpd_uri_t route = {};
-  route.uri = uri;
-  route.method = method;
-  route.handler = handler;
-  return registerRoute(server, route);
+void applyCustomHeaders(httpd_req_t* req) {
+  for (const auto& h : customHeaders)
+    httpd_resp_set_hdr(req, h.first.c_str(), h.second.c_str());
 }
 
 }  // namespace HttpUtils

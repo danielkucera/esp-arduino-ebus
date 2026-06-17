@@ -44,56 +44,57 @@ esp_netif_t* WifiNetworkManager::apNetif_ = nullptr;
 namespace {
 
 TaskHandle_t socketLoggerTaskHandle_ = nullptr;
-#if 0
+
 void logOpenSockets() {
+#if 1
   int detectedCount = 0;
-  int listedCount = 0;
+  char buf[256];  // Increased buffer size for full socket info string
 
   // Optimization: Range 64 is usually sufficient for ESP-IDF socket descriptors
   for (int fd = 0; fd < 64; ++fd) {
     int socketType = 0;
     socklen_t socketTypeLen = sizeof(socketType);
-    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &socketType, &socketTypeLen) != 0) {
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &socketType, &socketTypeLen) != 0)
       continue;
-    }
-    ++detectedCount;
+
+    detectedCount++;
 
     sockaddr_in local{}, peer{};
     socklen_t len = sizeof(local);
-    std::string typeStr = (socketType == SOCK_STREAM)  ? "TCP"
+    const char* typeStr = (socketType == SOCK_STREAM)  ? "TCP"
                           : (socketType == SOCK_DGRAM) ? "UDP"
                                                        : "?";
 
-    std::string info = "fd=" + std::to_string(fd) + "/" + typeStr;
+    int pos = snprintf(buf, sizeof(buf), "fd=%d/%s", fd, typeStr);
 
-    if (getsockname(fd, reinterpret_cast<sockaddr*>(&local), &len) == 0) {
-      info += "/local=" + std::string(inet_ntoa(local.sin_addr)) + ":" +
-              std::to_string(ntohs(local.sin_port));
+    if (getsockname(fd, (struct sockaddr*)&local, &len) == 0) {
+      pos += snprintf(buf + pos, sizeof(buf) - pos, "/l=%s:%d",
+                      inet_ntoa(local.sin_addr), ntohs(local.sin_port));
     } else {
-      info += "/local=?/getsockname_errno=" + std::to_string(errno);
+      pos += snprintf(buf + pos, sizeof(buf) - pos, "/l=?/getsockname_errno=%d",
+                      errno);
     }
 
-    if (getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &len) == 0) {
-      info += "/peer=" + std::string(inet_ntoa(peer.sin_addr)) + ":" +
-              std::to_string(ntohs(peer.sin_port));
+    len = sizeof(peer);
+    if (getpeername(fd, (struct sockaddr*)&peer, &len) == 0) {
+      snprintf(buf + pos, sizeof(buf) - pos, "/p=%s:%d",
+               inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
     }
 
-    logger.debug("[socket] " + info);
-    ++listedCount;
+    logger.debug(buf);
   }
 
-  logger.debug("[sockets] detected=" + std::to_string(detectedCount) +
-               " max=" + std::to_string(CONFIG_LWIP_MAX_SOCKETS) +
-               " listed=" + std::to_string(listedCount));
-}
+  snprintf(buf, sizeof(buf), "[sockets] detected=%d max=%d", detectedCount,
+           CONFIG_LWIP_MAX_SOCKETS);
+  logger.debug(buf);
 #endif
+}
 
 void socketLoggerTaskEntry(void* arg) {
   (void)arg;
   while (true) {
-    // Disabled by default to save heap and CPU cycles
-    // logOpenSockets();
-    vTaskDelay(pdMS_TO_TICKS(60000));
+    logOpenSockets();
+    vTaskDelay(pdMS_TO_TICKS(10000));
   }
 }
 
@@ -141,8 +142,9 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   initStatusLed();
   setStatusLedMode(StatusLedMode::SlowBlink);
 
-  if (socketLoggerTaskHandle_ == nullptr) {
-    xTaskCreate(socketLoggerTaskEntry, "socket_logger", 2048, nullptr, 1,
+  if (socketLoggerTaskHandle_ ==
+      nullptr) {  // Increased stack size for socket_logger
+    xTaskCreate(socketLoggerTaskEntry, "socket_logger", 4096, nullptr, 1,
                 &socketLoggerTaskHandle_);
   }
 
@@ -206,7 +208,9 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   // Initialize mDNS
   esp_err_t mdnsErr = mdns_init();
   if (mdnsErr != ESP_OK) {
-    logger.warn("mdns_init failed: " + std::to_string(mdnsErr));
+    char buf[64];
+    snprintf(buf, sizeof(buf), "mdns_init failed: %d", mdnsErr);
+    logger.warn(buf);
   } else {
     mdns_hostname_set(hostname.c_str());
     mdns_instance_name_set(hostname.c_str());
@@ -227,9 +231,10 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   if (esp_wifi_set_config(WIFI_IF_AP, &apConfig) != ESP_OK) {
     logger.error("AP config apply failed");
   } else {
-    logger.info(std::string("AP ready: ") + kDefaultApSsid + " (" +
-                (apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2") +
-                ")");
+    char buf[128];
+    snprintf(buf, sizeof(buf), "AP ready: %s (%s)", kDefaultApSsid,
+             (apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2"));
+    logger.info(buf);
   }
 
   std::string staSsid = configManager_ != nullptr ? configManager_->readString(
@@ -263,7 +268,9 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
     if (sscanf(staBssid.c_str(), "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
                &bssid[0], &bssid[1], &bssid[2], &bssid[3], &bssid[4],
                &bssid[5]) == 6) {
-      std::memcpy(staConfig.sta.bssid, bssid, sizeof(bssid));
+      // Use memcpy for fixed-size array copy
+      std::memcpy(staConfig.sta.bssid, bssid, 6);
+
       staConfig.sta.bssid_set = true;
       logger.info("Using specific BSSID: " + staBssid);
     } else {
@@ -275,7 +282,9 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
     logger.error("STA config apply failed");
     return;
   }
-  logger.info("Connecting STA to SSID: " + staSsid);
+  char buf[128];
+  snprintf(buf, sizeof(buf), "Connecting STA to SSID: %s", staSsid.c_str());
+  logger.info(buf);
   setStatusLedMode(StatusLedMode::SlowBlink);
   esp_wifi_connect();
 }
@@ -525,7 +534,9 @@ TaskHandle_t WifiNetworkManager::getSocketLoggerTaskHandle() {
 
 void WifiNetworkManager::configureStaticIpIfEnabled() {
   if (!isStaticIpEnabled()) {
-    logger.info("Static IP disabled, using DHCP");
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Static IP disabled, using DHCP");
+    logger.info(buf);
     return;
   }
 
@@ -540,7 +551,9 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
     if (!gatewayValue.empty() &&
         !esp_netif_str_to_ip4(gatewayValue.c_str(), &gateway_)) {
       logger.warn("Invalid gateway configured, using 0.0.0.0");
-      gateway_.addr = 0;
+      // Set to 0.0.0.0 explicitly
+      gateway_.addr = ESP_IP4TOADDR(0, 0, 0, 0);
+
     } else if (gatewayValue.empty()) {
       gateway_.addr = 0;
     }
@@ -552,7 +565,9 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
     info.gw = gateway_;
     info.netmask = netmask_;
     if (esp_netif_set_ip_info(staNetif_, &info) != ESP_OK) {
-      logger.error("Failed to set static IP info");
+      char buf[64];
+      snprintf(buf, sizeof(buf), "Failed to set static IP info");
+      logger.error(buf);
       return;
     }
     bool dns1IsValid = true;
@@ -579,11 +594,19 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
       esp_netif_set_dns_info(staNetif_, ESP_NETIF_DNS_BACKUP, &dns);
     }
 
-    logger.info(std::string("Static IP configured: ") + ipToString(ipAddress_) +
-                ", Gateway: " + ipToString(gateway_) +
-                ", DNS1: " + ipToString(dns1_) +
-                (dns2Value.empty() ? "" : ", DNS2: " + ipToString(dns2_)));
-  } else {
-    logger.warn("Invalid static IP/netmask config, falling back to DHCP");
+    char buf[256];
+    snprintf(buf, sizeof(buf),
+             "Static IP configured: %s, Gateway: %s, DNS1: %s%s",
+             ipToString(ipAddress_).c_str(), ipToString(gateway_).c_str(),
+             ipToString(dns1_).c_str(),
+             (dns2Value.empty()
+                  ? ""
+                  : (std::string(", DNS2: ") + ipToString(dns2_)).c_str()));
+    logger.info(buf);
+  } else {  // Use snprintf for warning message
+    char buf[128];
+    snprintf(buf, sizeof(buf),
+             "Invalid static IP/netmask config, falling back to DHCP");
+    logger.warn(buf);
   }
 }

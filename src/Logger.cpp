@@ -66,17 +66,15 @@ void Logger::debug(std::string_view message, bool is_json, uint32_t sid,
   log(LogLevel::DEBUG, message, is_json, sid, pid);
 }
 
-void Logger::fetchLogsJson(const ebus::JsonChunkVisitor& visitor,
-                           uint64_t sinceMillis) const {
-  std::vector<LogEntry> copy;
+void Logger::fetchLogs(const ebus::JsonChunkVisitor& visitor,
+                       uint64_t sinceMillis) const {
+  // Iterate through logs one by one to avoid massive heap spikes from vector
+  // copies.
+  size_t current_entries;
+  size_t current_index;
   portENTER_CRITICAL(&mux);
-  copy.reserve(entries);
-  for (size_t i = 0; i < entries; i++) {
-    const size_t logIndex = (index - entries + i + maxEntries) % maxEntries;
-    if (buffer_[logIndex].timestamp >= sinceMillis) {
-      copy.push_back(buffer_[logIndex]);
-    }
-  }
+  current_entries = entries;
+  current_index = index;
   portEXIT_CRITICAL(&mux);
 
   ebus::detail::JsonWriter writer(visitor);
@@ -85,7 +83,16 @@ void Logger::fetchLogsJson(const ebus::JsonChunkVisitor& visitor,
   {
     auto array = writer.arrayScope();
 
-    for (const auto& entry : copy) {
+    for (size_t i = 0; i < current_entries; i++) {
+      const size_t logIndex =
+          (current_index - current_entries + i + maxEntries) % maxEntries;
+      LogEntry entry;
+      portENTER_CRITICAL(&mux);
+      entry = buffer_[logIndex];
+      portEXIT_CRITICAL(&mux);
+
+      if (entry.timestamp < sinceMillis) continue;
+
       auto item = writer.objectScope();
       writer.writeField("millis", entry.timestamp);
       writer.writeField("level", logLevelText(entry.level));
@@ -101,8 +108,7 @@ void Logger::fetchLogsJson(const ebus::JsonChunkVisitor& visitor,
   }
 }
 
-void Logger::fetchTimeRelationJson(
-    const ebus::JsonChunkVisitor& visitor) const {
+void Logger::fetchTimeRelation(const ebus::JsonChunkVisitor& visitor) const {
   uint64_t currentMillis = 0;
   int64_t currentTimeMillis = 0;
   const bool hasTimeRelation =

@@ -30,7 +30,7 @@ class Cron {
   int64_t loadRules();
   int64_t replaceRules(std::string_view payload);
 
-  void fetchRulesJson(const ebus::JsonChunkVisitor& visitor) const;
+  void fetchRules(const ebus::JsonChunkVisitor& visitor) const;
 
   static const std::string evaluate(ebus::detail::JsonReader& reader);
 

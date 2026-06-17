@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 #include <ebus/types.hpp>
+#include <string>
 
 #include "UartPort.hpp"
 
@@ -15,10 +15,18 @@
 #define USE_ASYNCHRONOUS 0  // requires USE_SOFTWARE_SERIAL
 #endif
 
+namespace ebus::detail {
+class JsonWriter;  // Forward declaration
+}
+
 inline int DEBUG_LOG(const char* format, ...) { return 0; }
 int DEBUG_LOG_IMPL(const char* format, ...);
 // #define DEBUG_LOG DEBUG_LOG_IMPL
 
 void restart();
-void fetchStatusJson(const ebus::JsonChunkVisitor& visitor);
-void fetchAppResourcesJson(const ebus::JsonChunkVisitor& visitor);
+void fetchStatus(const ebus::JsonChunkVisitor& visitor);
+void fetchAppStatus(const ebus::JsonChunkVisitor& visitor);
+
+struct HeapStatus {
+  void toJson(ebus::detail::JsonWriter& writer) const;
+};

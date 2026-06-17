@@ -161,7 +161,9 @@ class Mqtt {
   mutable std::mutex publish_mutex_;
 
   static constexpr size_t kBufferPoolSize = 2;
-  std::string publish_buffers_[kBufferPoolSize];
+  static constexpr size_t kMqttPubBufferSize = 1024;
+  char publish_buffers_[kBufferPoolSize][kMqttPubBufferSize];
+  size_t buffer_lengths_[kBufferPoolSize]{};
   uint8_t current_buffer_index_ = 0;
 
   void internalPublish(const char* topic, uint8_t qos, bool retain,
@@ -181,8 +183,11 @@ class Mqtt {
   void publishResponse(std::string_view id, std::string_view status,
                        size_t bytes = 0);
 
+  // void logUpdate(const Command* cmd,
+  //                const std::optional<ebus::DataValue>& decoded);
   void logUpdate(const Command* cmd,
-                 const std::optional<ebus::DataValue>& decoded);
+                 const std::optional<ebus::DataValue>& decoded, char* logBuf,
+                 size_t logBufSize);
 
   void publishCommand(const Command* command);
 

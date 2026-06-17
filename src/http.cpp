@@ -60,14 +60,12 @@ static bool prepareJsonReaderForArray(ebus::detail::JsonReader& reader,
       error_out = "JSON object must contain a '" +
                   std::string(expected_array_key) + "' key.";
       return false;
-    }
-  } else if (!expected_array_key.empty()) {
-    // If it's not an object, but we expected a key, it's an error
-    error_out = "JSON root must be an object with a '" +
-                std::string(expected_array_key) + "' array, or a direct array.";
+    }  // If the root is a direct array, and we expected a key, that's fine.
+  } else if (token != ebus::detail::JsonReader::Token::array_start) {
+    // If it's neither an object nor a direct array, it's an error.
+    error_out = "JSON root must be an object or a direct array.";
     return false;
   }
-  // If expected_array_key is empty, we allow bare arrays at root.
 
   if (token != ebus::detail::JsonReader::Token::array_start) {
     error_out = "Expected a JSON array.";
@@ -157,7 +155,27 @@ esp_err_t handleAdcPage(httpd_req_t* req) {
 esp_err_t handleStatusApi(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  fetchStatusJson([req](std::string_view chunk) {
+  fetchStatus([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  httpd_resp_send_chunk(req, nullptr, 0);
+  return ESP_OK;
+}
+
+esp_err_t handleStatusAppApi(httpd_req_t* req) {
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  HttpUtils::applyCustomHeaders(req);
+  fetchAppStatus([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  httpd_resp_send_chunk(req, nullptr, 0);
+  return ESP_OK;
+}
+
+esp_err_t handleStatusLibApi(httpd_req_t* req) {
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  HttpUtils::applyCustomHeaders(req);
+  getEbusController().fetchStatus([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);
@@ -351,7 +369,7 @@ esp_err_t handleCommandsPage(httpd_req_t* req) {
 esp_err_t handleCommands(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  store.fetchCommandsJson([req](std::string_view chunk) {
+  store.fetchCommands([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);
@@ -539,7 +557,7 @@ esp_err_t handleCronPage(httpd_req_t* req) {
 esp_err_t handleCron(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  cron.fetchRulesJson([req](std::string_view chunk) {
+  cron.fetchRules([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);
@@ -615,7 +633,7 @@ esp_err_t handleValuesPage(httpd_req_t* req) {
 esp_err_t handleValues(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  store.fetchValuesJson([req](std::string_view chunk) {
+  store.fetchValues([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);
@@ -686,15 +704,9 @@ esp_err_t handleDevicesPage(httpd_req_t* req) {
 esp_err_t handleDevices(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  ebus::detail::JsonWriter writer([req](std::string_view chunk) {
+  getEbusController().fetchDevices([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
-  {
-    auto scope = writer.arrayScope();
-    getEbusController().fetchDeviceInfo(
-        [&writer](const ebus::DeviceInfo& device) { device.toJson(writer); });
-  }
-  writer.flush();
   httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
@@ -719,7 +731,7 @@ esp_err_t handleMetricsPage(httpd_req_t* req) {
 esp_err_t handleMetricsApi(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  getEbusController().fetchServiceStatus([req](std::string_view chunk) {
+  getEbusController().fetchMetrics([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);
@@ -753,7 +765,7 @@ esp_err_t handleLogs(httpd_req_t* req) {
   }
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  logger.fetchLogsJson(
+  logger.fetchLogs(
       [req](std::string_view chunk) {
         httpd_resp_send_chunk(req, chunk.data(), chunk.size());
       },
@@ -765,7 +777,7 @@ esp_err_t handleLogs(httpd_req_t* req) {
 esp_err_t handleLogsTimeRelation(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  logger.fetchTimeRelationJson([req](std::string_view chunk) {
+  logger.fetchTimeRelation([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);
@@ -815,12 +827,11 @@ void SetupHttpHandlers() {
   config.server_port = 80;
   config.uri_match_fn = httpd_uri_match_wildcard;
   config.max_uri_handlers = 64;
-  // Resilience: Increase stack to 8KB for handlers performing complex JSON
-  // work or ADC processing.
+  // Reduced stack to save DRAM; optimized JSON writers now use less stack
   config.stack_size = 8192;
   // Resilience: Enable LRU purge to reclaim sockets from stalled clients
   config.lru_purge_enable = true;
-  // CRITICAL for C3: Reduce socket count to save heap
+  // Set to 1 to minimize memory footprint on C3
   config.max_open_sockets = 2;
   // Give the networking stack more time to recover from packet loss
   config.recv_wait_timeout = 10;
@@ -838,6 +849,10 @@ void SetupHttpHandlers() {
   RegisterUri("/status", HTTP_GET, handleStatusPage);
   RegisterUri("/adc", HTTP_GET, handleAdcPage);
   RegisterUri("/api/v1/status", HTTP_GET, handleStatusApi);
+  RegisterUri("/api/v1/status/app", HTTP_GET, handleStatusAppApi);
+#if defined(EBUS_INTERNAL)
+  RegisterUri("/api/v1/status/lib", HTTP_GET, handleStatusLibApi);
+#endif
   RegisterUri("/api/v1/adc/raw", HTTP_GET, handleAdcRaw);
   RegisterUri("/api/v1/adc/enable", HTTP_POST, handleAdcEnable);
   RegisterUri("/api/v1/adc/disable", HTTP_POST, handleAdcDisable);

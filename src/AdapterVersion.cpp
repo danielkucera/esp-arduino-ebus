@@ -26,9 +26,10 @@ static std::string formatAdapterHwVersion(const uint8_t raw) {
   const uint8_t major = (raw >> 4) & 0x0F;
   const uint8_t minor = raw & 0x0F;
   if (major <= 9 && minor <= 9) {
-    return std::to_string(major) + "." + std::to_string(minor);
+    char tmp[8];
+    snprintf(tmp, sizeof(tmp), "%u.%u", major, minor);
+    return std::string(tmp);
   }
-
   char tmp[8]{};
   snprintf(tmp, sizeof(tmp), "0x%02X", raw);
   return std::string(tmp);
