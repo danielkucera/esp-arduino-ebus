@@ -17,6 +17,7 @@
 #include "Cron.hpp"
 #include "HttpUtils.hpp"
 #include "Logger.hpp"
+#include "Mqtt.hpp"
 #include "MqttHA.hpp"
 #include "Store.hpp"
 #include "WifiNetworkManager.hpp"
@@ -42,6 +43,7 @@ extern const char devices_html_start[] asm("_binary_devices_html_start");
 extern const char metrics_html_start[] asm("_binary_metrics_html_start");
 extern const char logs_html_start[] asm("_binary_logs_html_start");
 
+#if defined(EBUS_INTERNAL)
 // Helper to prepare a JsonReader for iterating over an array of commands/keys.
 // Handles both bare arrays and objects with a specific array key (e.g.,
 // {"commands": [...]}). On success, the reader is positioned at the start of
@@ -73,6 +75,7 @@ static bool prepareJsonReaderForArray(ebus::detail::JsonReader& reader,
   }
   return true;
 }
+#endif
 
 void sendStatic(httpd_req_t* req, const char* contentType, const char* data) {
   // HttpUtils::sendResponse(req, "200 OK", contentType, std::string(data));
@@ -162,6 +165,7 @@ esp_err_t handleStatusApi(httpd_req_t* req) {
   return ESP_OK;
 }
 
+#if defined(EBUS_INTERNAL)
 esp_err_t handleStatusAppApi(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
@@ -181,6 +185,7 @@ esp_err_t handleStatusLibApi(httpd_req_t* req) {
   httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
+#endif
 
 esp_err_t handleAdcRaw(httpd_req_t* req) {
   if (!adc.isRunning() && !adc.begin()) {
@@ -479,7 +484,7 @@ esp_err_t handleCommandsInsert(httpd_req_t* req) {
       store.insertCommand(Command::fromJson(row_reader));
     }
   }
-  if (mqttha.isEnabled()) mqttha.publishComponents();
+  Mqtt::publishComponentDiscovery();
   HttpUtils::sendSuccessResponse(req, "insert");
   return ESP_OK;
 }
@@ -508,7 +513,7 @@ esp_err_t handleCommandsRemove(httpd_req_t* req) {
 esp_err_t handleCommandsLoad(httpd_req_t* req) {
   int64_t bytes = store.loadCommands();
   if (bytes > 0) {
-    if (mqttha.isEnabled()) mqttha.publishComponents();
+    Mqtt::publishComponentDiscovery();
     HttpUtils::sendSuccessResponse(
         req, "load", "successful",
         "Loaded " + std::to_string(bytes) + " bytes");
@@ -849,8 +854,8 @@ void SetupHttpHandlers() {
   RegisterUri("/status", HTTP_GET, handleStatusPage);
   RegisterUri("/adc", HTTP_GET, handleAdcPage);
   RegisterUri("/api/v1/status", HTTP_GET, handleStatusApi);
-  RegisterUri("/api/v1/status/app", HTTP_GET, handleStatusAppApi);
 #if defined(EBUS_INTERNAL)
+  RegisterUri("/api/v1/status/app", HTTP_GET, handleStatusAppApi);
   RegisterUri("/api/v1/status/lib", HTTP_GET, handleStatusLibApi);
 #endif
   RegisterUri("/api/v1/adc/raw", HTTP_GET, handleAdcRaw);

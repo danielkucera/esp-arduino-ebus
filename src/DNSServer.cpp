@@ -16,7 +16,7 @@ constexpr size_t kDnsHeaderSize = 12;
 constexpr size_t kMaxPacketSize = 512;
 }  // namespace
 
-DNSServer::DNSServer() = default;
+DNSServer::DNSServer() : running_(false) {}
 
 DNSServer::~DNSServer() { stop(); }
 
@@ -43,6 +43,7 @@ bool DNSServer::start(uint16_t port, const char* domainName,
   fcntl(socketFd_, F_SETFL, flags | O_NONBLOCK);
 
   if (taskHandle_ == nullptr) {
+    running_ = true;
     xTaskCreate(taskEntry, "dns", 2048, this, 1, &taskHandle_);
   }
 
@@ -59,10 +60,12 @@ void DNSServer::taskEntry(void* arg) {
 }
 
 void DNSServer::taskLoop() {
-  while (true) {
+  while (running_) {
     processNextRequest();
     vTaskDelay(pdMS_TO_TICKS(10));
   }
+  taskHandle_ = nullptr;
+  vTaskDelete(nullptr);
 }
 
 void DNSServer::processNextRequest() {
@@ -129,6 +132,8 @@ void DNSServer::processNextRequest() {
 }
 
 void DNSServer::stop() {
+  running_ = false;
+  vTaskDelay(pdMS_TO_TICKS(20)); // Allow loop to exit
   if (socketFd_ >= 0) {
     close(socketFd_);
     socketFd_ = -1;

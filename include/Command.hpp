@@ -75,7 +75,7 @@ class Command {
   ebus::Sequence getVectorFromValue(std::string_view value_json) const;
 
   ebus::Sequence getVectorFromDouble(double value) const;
-  ebus::Sequence getVectorFromString(const std::string& value) const;
+  ebus::Sequence getVectorFromString(std::string_view value) const;
 
   // Helpers for direct value access to avoid JSON overhead
   double getDoubleFromVector() const;

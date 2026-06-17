@@ -137,6 +137,9 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   static constexpr const char* kDefaultHostname = "esp-eBus";
   static constexpr const char* kDefaultApSsid = "esp-eBus";
   static constexpr const char* kDefaultApPassword = "ebusebus";
+  static bool started = false;
+  if (started) return;
+  started = true;
 
   configManager_ = configManager;
   initStatusLed();

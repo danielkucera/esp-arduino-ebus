@@ -17,6 +17,7 @@
 Mqtt mqtt;
 
 void Mqtt::start() {
+  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
   if (enabled_) {
     // Important: destroy previous client to free resources and close sockets
     if (client_ != nullptr) {
@@ -32,23 +33,29 @@ void Mqtt::start() {
 }
 
 void Mqtt::change() {
+  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
   if (connected_) esp_mqtt_client_stop(client_);
   start();
 }
 
 void Mqtt::startTask() {
   if (task_handle_ != nullptr) return;
+  task_should_run_ = true;
   xTaskCreate(&Mqtt::taskFunc, "mqtt", 5120, this, 2, &task_handle_);
 }
 
 void Mqtt::stopTask() {
   if (task_handle_ != nullptr) {
-    vTaskDelete(task_handle_);
+    // Signal task to stop
+    task_should_run_ = false;
+
+    // Small delay to allow loop to exit if blocked in xQueueReceive
+    vTaskDelay(pdMS_TO_TICKS(50));
+    if (outgoing_queue_ != nullptr) {
+      vQueueDelete(outgoing_queue_);
+      outgoing_queue_ = nullptr;
+    }
     task_handle_ = nullptr;
-  }
-  if (outgoing_queue_ != nullptr) {
-    vQueueDelete(outgoing_queue_);
-    outgoing_queue_ = nullptr;
   }
 }
 
@@ -80,6 +87,7 @@ void Mqtt::setup(const char* id) {
 }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
+  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
   std::string hostname;
   for (size_t i = 0; host[i] != '\0'; ++i)
     if (!std::isspace(host[i])) hostname += host[i];
@@ -91,11 +99,15 @@ void Mqtt::setServer(const char* host, uint16_t port) {
 }
 
 void Mqtt::setCredentials(const char* username, const char* password) {
-  mqtt_cfg_.credentials.username = username;
-  mqtt_cfg_.credentials.authentication.password = password;
+  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
+  username_ = username ? username : "";
+  password_ = password ? password : "";
+  mqtt_cfg_.credentials.username = username_.c_str();
+  mqtt_cfg_.credentials.authentication.password = password_.c_str();
 }
 
 void Mqtt::setRootTopic(const std::string& topic) {
+  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
   root_topic_ = topic;
   // Ensure proper formatting with trailing slash
   if (!root_topic_.empty() && root_topic_.back() != '/') {
@@ -103,9 +115,15 @@ void Mqtt::setRootTopic(const std::string& topic) {
   }
   will_topic_ = root_topic_ + "available";
   request_topic_ = root_topic_ + "request";
+
+  // Refresh pointers in config after string modification
+  mqtt_cfg_.session.last_will.topic = will_topic_.c_str();
 }
 
-void Mqtt::setEnabled(const bool enable) { enabled_ = enable; }
+void Mqtt::setEnabled(const bool enable) {
+  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
+  enabled_ = enable;
+}
 
 bool Mqtt::isEnabled() const { return enabled_; }
 
@@ -119,6 +137,7 @@ const std::string& Mqtt::getWillTopic() const { return will_topic_; }
 
 void Mqtt::internalPublish(const char* topic, uint8_t qos, bool retain,
                            const char* payload, bool prefix) {
+  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
   if (!enabled_ || client_ == nullptr || payload == nullptr) return;
 
   const char* targetTopic = topic;
@@ -126,8 +145,8 @@ void Mqtt::internalPublish(const char* topic, uint8_t qos, bool retain,
 
   if (prefix) {
     // Memory optimization: Use stack buffer for combined topic
-    int n = snprintf(fullTopic, sizeof(fullTopic), "%s%s",
-                     getRootTopic().c_str(), topic);
+    int n = snprintf(fullTopic, sizeof(fullTopic), "%s%s", root_topic_.c_str(),
+                     topic);
     if (n > 0 && (size_t)n < sizeof(fullTopic)) {
       targetTopic = fullTopic;
     }
@@ -150,13 +169,13 @@ void Mqtt::publishStream(
     const char* topic, uint8_t qos, bool retain,
     const std::function<void(const ebus::JsonChunkVisitor&)>& builder,
     bool prefix) {
+  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
   if (!enabled_ || client_ == nullptr) return;
-  std::lock_guard<std::mutex> lock(publish_mutex_);
 
-  char* buf = publish_buffers_[current_buffer_index_];
-  size_t& len = buffer_lengths_[current_buffer_index_];
+  // Since we hold the mutex, we can safely use buffer index 0 exclusively.
+  char* buf = publish_buffers_[0];
+  size_t& len = buffer_lengths_[0];
   len = 0;
-  current_buffer_index_ = (current_buffer_index_ + 1) % kBufferPoolSize;
 
   builder([&](std::string_view s) {
     if (len + s.size() < kMqttPubBufferSize - 1) {
@@ -166,6 +185,16 @@ void Mqtt::publishStream(
     }
   });
   internalPublish(topic, qos, retain, buf, prefix);
+}
+
+void Mqtt::publishDiscovery() {
+  if (!mqtt.enabled_) return;
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::Discovery, ""));
+}
+
+void Mqtt::publishComponentDiscovery() {
+  if (!mqtt.enabled_) return;
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::Components, ""));
 }
 
 void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
@@ -218,7 +247,7 @@ void Mqtt::taskFunc(void* arg) {
 
   uint8_t tele_phase = 0;
 
-  for (;;) {
+  while (self->task_should_run_) {
     if (self->enabled_) {
       uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
       if (self->connected_ &&
@@ -301,12 +330,25 @@ void Mqtt::taskFunc(void* arg) {
           case OutgoingActionType::Update:
             self->handleValueUpdate(action.key);
             break;
+          case OutgoingActionType::Discovery:
+            mqttha.publishDeviceInfo();
+            break;
+          case OutgoingActionType::Components:
+            mqttha.publishComponents();
+            break;
         }
       }
     } else {
       vTaskDelay(pdMS_TO_TICKS(100));
     }
   }
+
+  if (self->outgoing_queue_ != nullptr) {
+    vQueueDelete(self->outgoing_queue_);
+    self->outgoing_queue_ = nullptr;
+  }
+  self->task_handle_ = nullptr;
+  vTaskDelete(nullptr);
 }
 
 void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
@@ -648,9 +690,11 @@ void Mqtt::logUpdate(const Command* cmd,
 }
 
 void Mqtt::publishCommand(const Command* command) {
-  char topicBuf[128];
-  snprintf(topicBuf, sizeof(topicBuf), "commands/%s",
-           command->getKey().c_str());
+  char topicBuf[64];
+  int n = snprintf(topicBuf, sizeof(topicBuf), "commands/%s",
+                   command->getKey().c_str());
+  if (n <= 0 || (size_t)n >= sizeof(topicBuf)) return;
+
   publishStream(topicBuf, 0, false, [&](const ebus::JsonChunkVisitor& v) {
     ebus::detail::JsonWriter writer(v);
     command->toJson(writer);
@@ -658,8 +702,11 @@ void Mqtt::publishCommand(const Command* command) {
 }
 
 void Mqtt::publishDevice(const ebus::DeviceInfo& device) {
-  char topicBuf[64];
-  snprintf(topicBuf, sizeof(topicBuf), "devices/%02x", device.slave_address);
+  char topicBuf[32];
+  int n = snprintf(topicBuf, sizeof(topicBuf), "devices/%02x",
+                   device.slave_address);
+  if (n <= 0 || (size_t)n >= sizeof(topicBuf)) return;
+
   publishStream(topicBuf, 0, false, [&](const ebus::JsonChunkVisitor& v) {
     ebus::detail::JsonWriter writer(v);
     device.toJson(writer);

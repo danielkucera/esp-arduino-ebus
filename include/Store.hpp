@@ -21,6 +21,8 @@ using DataUpdatedLogCallback = std::function<void(const std::string& key)>;
 
 using CommandChangedCallback = std::function<void(Command* command)>;
 
+using MatchingCommands = ebus::StaticVector<Command*, 16>;
+
 class Store {
  public:
   bool initFileSystem();
@@ -35,7 +37,7 @@ class Store {
   void removeCommand(const std::string& key);
   Command* findCommand(const std::string& key);
   Command* findCommand(uint32_t poll_id);
-  std::vector<Command*> findAllMatchingCommands(ebus::ByteView master);
+  MatchingCommands findAllMatchingCommands(ebus::ByteView master);
 
   int64_t loadCommands();
   int64_t saveCommands() const;
@@ -52,10 +54,10 @@ class Store {
   bool active() const;
 
   Command* nextActiveCommand();
-  std::vector<Command*> findPassiveCommands(ebus::ByteView master);
+  MatchingCommands findPassiveCommands(ebus::ByteView master);
 
-  std::vector<Command*> updateData(Command* command, ebus::ByteView master_view,
-                                   ebus::ByteView slave_view);
+  void updateData(Command* command, ebus::ByteView master_view,
+                  ebus::ByteView slave_view);
 
   static const std::string getValueFullJson(const Command* command);
 

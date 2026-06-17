@@ -27,4 +27,5 @@ class DNSServer {
   std::string domain_;
   esp_ip4_addr_t resolvedIp_{};
   TaskHandle_t taskHandle_ = nullptr;
+  volatile bool running_ = false;
 };

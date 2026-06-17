@@ -131,7 +131,7 @@ ebus::Sequence Command::getVectorFromValue(std::string_view val_view) const {
       s.remove_prefix(1);
       s.remove_suffix(1);
     }
-    return getVectorFromString(std::string(s));
+    return getVectorFromString(s);
   }
   return {};
 }
@@ -217,9 +217,9 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
     else if (key == "name")
       command.name = r.value();
     else if (key == "read_cmd")
-      command.read_cmd.assign(ebus::toVector(std::string(r.value())));
+      command.read_cmd.assign(ebus::toVector(r.value()));
     else if (key == "write_cmd")
-      command.write_cmd.assign(ebus::toVector(std::string(r.value())));
+      command.write_cmd.assign(ebus::toVector(r.value()));
     else if (key == "active")
       command.active = r.asBool();
     else if (key == "interval")
@@ -306,10 +306,10 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
         command.name = reader.value();
         break;
       case 2:
-        command.read_cmd.assign(ebus::toVector(std::string(reader.value())));
+        command.read_cmd.assign(ebus::toVector(reader.value()));
         break;
       case 3:
-        command.write_cmd.assign(ebus::toVector(std::string(reader.value())));
+        command.write_cmd.assign(ebus::toVector(reader.value()));
         break;
       case 4:
         command.active = reader.asBool();
@@ -517,7 +517,7 @@ ebus::Sequence Command::getVectorFromDouble(double value) const {
   return ebus::encode(datatype, dv);
 }
 
-ebus::Sequence Command::getVectorFromString(const std::string& value) const {
+ebus::Sequence Command::getVectorFromString(std::string_view value) const {
   const auto meta = getMetaCached();
   if (!meta) return ebus::Sequence{};
 
@@ -525,7 +525,7 @@ ebus::Sequence Command::getVectorFromString(const std::string& value) const {
   if (std::string(meta->name).find("HEX") == 0) {
     dv = ebus::byteToChar(ebus::toVector(value));
   } else {
-    dv = value.substr(0, length);
+    dv = std::string(value.substr(0, length));
   }
 
   return ebus::encode(datatype, dv);

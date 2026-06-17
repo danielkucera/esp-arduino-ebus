@@ -554,8 +554,8 @@ void saveParamsCallback() {
   // schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
 
   mqttha.setEnabled(configManager.readBool("haEnabledParam"));
-  mqttha.publishDeviceInfo();
-  mqttha.publishComponents();
+  Mqtt::publishDiscovery();
+  Mqtt::publishComponentDiscovery();
 #endif
 }
 
@@ -735,7 +735,7 @@ extern "C" void app_main(void) {
         mqttha.setThingConfigurationUrl("http://" + ipAddress + "/");
 
         if (mqttha.isEnabled()) {
-          mqttha.publishDeviceInfo();
+          Mqtt::publishDiscovery();
         }
       });
 #endif
@@ -971,7 +971,7 @@ extern "C" void app_main(void) {
   cron.initFileSystem();  // This should be called before cron.loadRules()
   cron.loadRules();
   cron.start();
-  mqttha.publishComponents();
+  Mqtt::publishComponentDiscovery();
   mqtt.startTask();
 #else
   if (!startClientRuntime()) {

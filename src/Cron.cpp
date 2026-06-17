@@ -310,9 +310,8 @@ Cron::Rule Cron::ruleFromReader(ebus::detail::JsonReader& reader) {
 }
 
 void Cron::setRules(std::unordered_map<std::string, Rule>&& nextRules) {
-  portENTER_CRITICAL(&rules_mux_);
+  std::lock_guard<std::mutex> lock(rules_mutex_);
   rules_ = std::move(nextRules);
-  portEXIT_CRITICAL(&rules_mux_);
 }
 
 int64_t Cron::loadRules() {
@@ -399,9 +398,10 @@ void Cron::fetchRules(const ebus::JsonChunkVisitor& visitor) const {
   auto array_scope = writer.arrayScope();
 
   std::vector<Rule> ordered;
-  portENTER_CRITICAL(&rules_mux_);
-  for (const auto& kv : rules_) ordered.push_back(kv.second);
-  portEXIT_CRITICAL(&rules_mux_);
+  {
+    std::lock_guard<std::mutex> lock(rules_mutex_);
+    for (const auto& kv : rules_) ordered.push_back(kv.second);
+  }
 
   std::sort(ordered.begin(), ordered.end(),
             [](const Rule& a, const Rule& b) { return a.id < b.id; });
@@ -460,52 +460,40 @@ void Cron::tick() {
 
   const int64_t minuteStamp = static_cast<int64_t>(now / 60);
 
-  struct PendingRule {
-    std::string id;
-    std::string commandKey;
-    std::string value_json;
-  };
+  {
+    std::lock_guard<std::mutex> lock(rules_mutex_);
+    for (auto& kv : rules_) {
+      Rule& rule = kv.second;
+      if (!rule.enabled) continue;
+      if (rule.last_triggered_minute == minuteStamp) continue;
+      if (!matchSchedule(rule.schedule, localTime)) continue;
 
-  std::vector<PendingRule> pending;
+      rule.last_triggered_minute = minuteStamp;
 
-  portENTER_CRITICAL(&rules_mux_);
-  for (auto& kv : rules_) {
-    Rule& rule = kv.second;
-    if (!rule.enabled) continue;
-    if (rule.last_triggered_minute == minuteStamp) continue;
-    if (!matchSchedule(rule.schedule, localTime)) continue;
+      Command* command = store.findCommand(rule.command_key);
+      if (command == nullptr || command->getWriteCmd().empty()) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "Cron skipped, command unavailable: %s",
+                 rule.command_key.c_str());
+        logger.warn(buf);
+        continue;
+      }
 
-    rule.last_triggered_minute = minuteStamp;
-    pending.push_back({rule.id, rule.command_key, rule.value_json});
-  }
-  portEXIT_CRITICAL(&rules_mux_);
+      ebus::Sequence valueBytes = command->getVectorFromValue(rule.value_json);
+      if (valueBytes.empty()) {
+        logger.warn(std::string("Cron skipped, value out of range for rule: ") +
+                    rule.id);
+        continue;
+      }
 
-  for (const PendingRule& pendingRule : pending) {
-    Command* command = store.findCommand(pendingRule.commandKey);
-    if (command == nullptr || command->getWriteCmd().empty()) {
-      char buf[128];
-      snprintf(buf, sizeof(buf), "Cron skipped, command unavailable: %s",
-               pendingRule.commandKey.c_str());
-      logger.warn(buf);
-      continue;
+      ebus::Sequence fullWrite = command->getWriteCmd();
+      fullWrite.append(valueBytes);
+
+      getEbusController().enqueue(PRIO_SEND, fullWrite);
+
+      logger.info(std::string("Cron write triggered: ") + rule.id +
+                  " -> " + rule.command_key);
     }
-
-    std::vector<uint8_t> valueBytes =
-        command->getVectorFromValue(pendingRule.value_json).toVector();
-
-    if (valueBytes.empty()) {
-      logger.warn(std::string("Cron skipped, value out of range for rule: ") +
-                  pendingRule.id);
-      continue;
-    }
-
-    std::vector<uint8_t> writeCmd = command->getWriteCmd().toVector();
-    writeCmd.insert(writeCmd.end(), valueBytes.begin(), valueBytes.end());
-
-    getEbusController().enqueue(PRIO_SEND, writeCmd);
-
-    logger.info(std::string("Cron write triggered: ") + pendingRule.id +
-                " -> " + pendingRule.commandKey);
   }
 }
 

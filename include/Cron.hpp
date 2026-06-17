@@ -10,6 +10,7 @@
 #include <ebus/types.hpp>
 #include <string>
 #include <unordered_map>
+#include <mutex>
 
 class Cron {
  public:
@@ -45,7 +46,7 @@ class Cron {
   volatile bool stop_runner_ = false;
   TaskHandle_t task_handle_ = nullptr;
 
-  mutable portMUX_TYPE rules_mux_ = portMUX_INITIALIZER_UNLOCKED;
+  mutable std::mutex rules_mutex_;
   void setRules(std::unordered_map<std::string, Rule>&& nextRules);
   int64_t saveRules() const;
   static void taskFunc(void* arg);

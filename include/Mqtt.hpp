@@ -4,6 +4,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+#include <mutex>
 #include <mqtt_client.h>
 
 #include <atomic>
@@ -24,7 +25,9 @@ enum class OutgoingActionType : uint8_t {
   Component,
   Error,
   Data,
-  Update
+  Update,
+  Discovery,
+  Components
 };
 
 struct OutgoingAction {
@@ -127,6 +130,9 @@ class Mqtt {
 
   static void publishValue(std::string_view key);
 
+  static void publishDiscovery();
+  static void publishComponentDiscovery();
+
   TaskHandle_t getTaskHandle() const { return task_handle_; }
   size_t getOutgoingQueueSize() const;
   size_t getOutgoingQueueCapacity() const { return kMaxOutgoingQueueSize; }
@@ -142,10 +148,13 @@ class Mqtt {
   std::string will_topic_;
   std::string request_topic_;
   std::string offline_payload_;
+  std::string username_;
+  std::string password_;
 
   std::string uri_;
 
   bool enabled_ = false;
+  volatile bool task_should_run_ = false;
   bool connected_ = false;
 
   static constexpr size_t kMaxOutgoingQueueSize = 8;
@@ -158,7 +167,7 @@ class Mqtt {
   uint32_t status_publish_interval_ms_ = 10 * 1000;
   std::function<void(const ebus::JsonChunkVisitor&)> status_provider_;
 
-  mutable std::mutex publish_mutex_;
+  mutable std::recursive_mutex mqtt_mutex_;
 
   static constexpr size_t kBufferPoolSize = 2;
   static constexpr size_t kMqttPubBufferSize = 1024;

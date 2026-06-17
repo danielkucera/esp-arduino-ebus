@@ -107,13 +107,13 @@ Command* Store::findCommand(uint32_t poll_id) {
   return nullptr;
 }
 
-std::vector<Command*> Store::findAllMatchingCommands(ebus::ByteView master) {
+MatchingCommands Store::findAllMatchingCommands(ebus::ByteView master) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::vector<Command*> result;
+  MatchingCommands result;
   for (auto& kv : commands_) {
     Command* cmd = &kv.second;
     if (cmd->matches(master)) {
-      result.push_back(cmd);
+      if (!result.push_back(cmd)) break;
     }
   }
   return result;
@@ -361,23 +361,22 @@ Command* Store::nextActiveCommand() {
   return next;
 }
 
-std::vector<Command*> Store::findPassiveCommands(ebus::ByteView master) {
+MatchingCommands Store::findPassiveCommands(ebus::ByteView master) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::vector<Command*> result;
+  MatchingCommands result;
   for (auto& kv : commands_) {
     Command* cmd = &kv.second;
     // Skip active commands
     if (cmd->getActive()) continue;
     if (cmd->matches(master)) {
-      result.push_back(cmd);
+      if (!result.push_back(cmd)) break;
     }
   }
   return result;
 }
 
-std::vector<Command*> Store::updateData(Command* command,
-                                        ebus::ByteView master_view,
-                                        ebus::ByteView slave_view) {
+void Store::updateData(Command* command, ebus::ByteView master_view,
+                       ebus::ByteView slave_view) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   auto update = [this](Command* cmd, ebus::ByteView master_view,
                        ebus::ByteView slave_view) {
@@ -403,15 +402,12 @@ std::vector<Command*> Store::updateData(Command* command,
 
   if (command) {
     update(command, master_view, slave_view);
-    // Return a vector with just this command, but avoid heap allocation
-    return {command};
+    return;
   }
 
   // Find all matching commands (both active and passive)
-  std::vector<Command*> matchingCommands = findAllMatchingCommands(master_view);
+  MatchingCommands matchingCommands = findAllMatchingCommands(master_view);
   for (Command* cmd : matchingCommands) update(cmd, master_view, slave_view);
-
-  return matchingCommands;
 }
 
 void Store::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
