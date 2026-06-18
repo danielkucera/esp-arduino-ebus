@@ -397,9 +397,9 @@ void setup() {
   iotWebConf.getApTimeoutParameter()->visible = true;
   iotWebConf.setWifiConnectionTimeoutMs(7000);
 
-#ifdef STATUS_LED_PIN
-  iotWebConf.setStatusPin(STATUS_LED_PIN);
-#endif
+  if (statusLedPin >= 0) {
+    iotWebConf.setStatusPin(statusLedPin);
+  }
 
   // -- Initializing the configuration.
   iotWebConf.init();
