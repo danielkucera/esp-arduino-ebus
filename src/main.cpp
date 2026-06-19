@@ -6,6 +6,10 @@
 #include "bus.hpp"
 #include <Preferences.h>
 
+#ifdef ESP32
+  #include <esp_efuse.h>
+#endif
+
 Preferences preferences;
 
 #ifdef ESP32
@@ -59,6 +63,25 @@ unsigned long loopDuration = 0;
 unsigned long maxLoopDuration = 0;
 unsigned long lastConnectTime = 0;
 int reconnectCount = 0;
+
+uint8_t adapterHwVersionRaw = 0xEE;
+String adapterHwVersion = "unread";
+int statusLedPin = -1;
+
+#ifdef ESP32
+enum class AdapterHwVersionEfuse : uint8_t {
+  PRE_7_0 = 0x00,
+  V7_0 = 0x70,
+};
+
+static constexpr size_t ADAPTER_HW_VERSION_EFUSE_BITS = 8;
+static constexpr size_t ADAPTER_HW_VERSION_EFUSE_OFFSET = 248;  // BLOCK3 bit 248..255
+
+static const esp_efuse_desc_t ADAPTER_HW_VERSION_EFUSE_DESC = {
+    EFUSE_BLK3, ADAPTER_HW_VERSION_EFUSE_OFFSET, ADAPTER_HW_VERSION_EFUSE_BITS};
+static const esp_efuse_desc_t* ADAPTER_HW_VERSION_EFUSE_FIELD[] = {
+    &ADAPTER_HW_VERSION_EFUSE_DESC, nullptr};
+#endif
 
 int random_ch(){
 #ifdef ESP32
@@ -117,6 +140,53 @@ uint32_t get_pwm(){
   return ledcRead(PWM_CHANNEL);
 #endif
   return 0;
+}
+
+String formatAdapterHwVersion(const uint8_t raw) {
+#ifdef ESP32
+  if (static_cast<AdapterHwVersionEfuse>(raw) == AdapterHwVersionEfuse::PRE_7_0) {
+    return "pre-7.0";
+  }
+
+  const uint8_t major = (raw >> 4) & 0x0F;
+  const uint8_t minor = raw & 0x0F;
+  if (major <= 9 && minor <= 9) {
+    return String(major) + "." + String(minor);
+  }
+
+  char tmp[8]{};
+  snprintf(tmp, sizeof(tmp), "0x%02X", raw);
+  return String(tmp);
+#else
+  (void)raw;
+  return "n/a";
+#endif
+}
+
+void loadAdapterHwVersionFromEfuse() {
+#ifdef ESP32
+  uint8_t raw;
+  const esp_err_t err =
+      esp_efuse_read_field_blob(ADAPTER_HW_VERSION_EFUSE_FIELD, &raw,
+                                ADAPTER_HW_VERSION_EFUSE_BITS);
+  if (err != ESP_OK) {
+    adapterHwVersionRaw = 0xEE;
+    adapterHwVersion = "reading error";
+    return;
+  }
+
+  adapterHwVersionRaw = raw;
+  adapterHwVersion = formatAdapterHwVersion(raw);
+  if (static_cast<AdapterHwVersionEfuse>(raw) == AdapterHwVersionEfuse::V7_0) {
+    statusLedPin = 5;
+  } else {
+    statusLedPin = 3;
+  }
+#else
+  adapterHwVersionRaw = 0xFF;
+  adapterHwVersion = "n/a";
+  statusLedPin = -1;
+#endif
 }
 
 void reset(){
@@ -225,6 +295,9 @@ char* status_string(){
   pos += sprintf(status + pos, "loop_duration: %ld us\r\n", loopDuration);
   pos += sprintf(status + pos, "max_loop_duration: %ld us\r\n", maxLoopDuration);
   pos += sprintf(status + pos, "version: %s\r\n", AUTO_VERSION);
+  pos += sprintf(status + pos, "adapter_hw_version: %s\r\n", adapterHwVersion.c_str());
+  pos += sprintf(status + pos, "adapter_hw_version_raw: 0x%02X\r\n", adapterHwVersionRaw);
+  pos += sprintf(status + pos, "status_led_pin: %d\r\n", statusLedPin);
   pos += sprintf(status + pos, "nbr arbitrations: %i\r\n", (int)Bus._nbrArbitrations);
   pos += sprintf(status + pos, "nbr restarts1: %i\r\n", (int)Bus._nbrRestarts1);
   pos += sprintf(status + pos, "nbr restarts2: %i\r\n", (int)Bus._nbrRestarts2);
@@ -278,6 +351,14 @@ void setup() {
 #elif defined(ESP8266)
   last_reset_code = (int) ESP.getResetInfoPtr();
 #endif
+
+  loadAdapterHwVersionFromEfuse();
+
+  if (statusLedPin >= 0) {
+    pinMode(statusLedPin, OUTPUT);
+    digitalWrite(statusLedPin, HIGH);
+  }
+
   Bus.begin();
 
   DebugSer.begin(115200);
@@ -316,9 +397,9 @@ void setup() {
   iotWebConf.getApTimeoutParameter()->visible = true;
   iotWebConf.setWifiConnectionTimeoutMs(7000);
 
-#ifdef STATUS_LED_PIN
-  iotWebConf.setStatusPin(STATUS_LED_PIN);
-#endif
+  if (statusLedPin >= 0) {
+    iotWebConf.setStatusPin(statusLedPin);
+  }
 
   // -- Initializing the configuration.
   iotWebConf.init();
