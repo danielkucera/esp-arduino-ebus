@@ -276,7 +276,11 @@ void Cron::start() {
   }
 }
 
-void Cron::stop() { stop_runner_ = true; }
+void Cron::stop() {
+  if (stop_runner_ == false) {
+    stop_runner_ = true;
+  }
+}
 
 Cron::Rule Cron::ruleFromReader(ebus::detail::JsonReader& reader) {
   Rule rule;
@@ -491,8 +495,8 @@ void Cron::tick() {
 
       getEbusController().enqueue(PRIO_SEND, fullWrite);
 
-      logger.info(std::string("Cron write triggered: ") + rule.id +
-                  " -> " + rule.command_key);
+      logger.info(std::string("Cron write triggered: ") + rule.id + " -> " +
+                  rule.command_key);
     }
   }
 }

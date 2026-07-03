@@ -25,6 +25,9 @@ class Cron {
 
   bool initFileSystem();
 
+  Cron() = default;
+  ~Cron() { stop(); }
+
   void start();
   void stop();
 

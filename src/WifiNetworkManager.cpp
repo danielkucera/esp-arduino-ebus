@@ -48,7 +48,8 @@ TaskHandle_t socketLoggerTaskHandle_ = nullptr;
 void logOpenSockets() {
 #if 1
   int detectedCount = 0;
-  char buf[256];  // Increased buffer size for full socket info string
+  int connectedCount = 0;
+  char buf[128];  // Increased buffer size for full socket info string
 
   // Optimization: Range 64 is usually sufficient for ESP-IDF socket descriptors
   for (int fd = 0; fd < 64; ++fd) {
@@ -77,15 +78,15 @@ void logOpenSockets() {
 
     len = sizeof(peer);
     if (getpeername(fd, (struct sockaddr*)&peer, &len) == 0) {
+      connectedCount++;
       snprintf(buf + pos, sizeof(buf) - pos, "/p=%s:%d",
                inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
+      logger.debug(buf);
     }
-
-    logger.debug(buf);
   }
 
-  snprintf(buf, sizeof(buf), "[sockets] detected=%d max=%d", detectedCount,
-           CONFIG_LWIP_MAX_SOCKETS);
+  snprintf(buf, sizeof(buf), "[sockets] detected=%d connected=%d max=%d",
+           detectedCount, connectedCount, CONFIG_LWIP_MAX_SOCKETS);
   logger.debug(buf);
 #endif
 }
@@ -94,7 +95,7 @@ void socketLoggerTaskEntry(void* arg) {
   (void)arg;
   while (true) {
     logOpenSockets();
-    vTaskDelay(pdMS_TO_TICKS(10000));
+    vTaskDelay(pdMS_TO_TICKS(5000));
   }
 }
 
@@ -147,7 +148,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
 
   if (socketLoggerTaskHandle_ ==
       nullptr) {  // Increased stack size for socket_logger
-    xTaskCreate(socketLoggerTaskEntry, "socket_logger", 4096, nullptr, 1,
+    xTaskCreate(socketLoggerTaskEntry, "socket_logger", 3072, nullptr, 1,
                 &socketLoggerTaskHandle_);
   }
 
@@ -211,7 +212,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   // Initialize mDNS
   esp_err_t mdnsErr = mdns_init();
   if (mdnsErr != ESP_OK) {
-    char buf[64];
+    char buf[32];
     snprintf(buf, sizeof(buf), "mdns_init failed: %d", mdnsErr);
     logger.warn(buf);
   } else {
@@ -234,7 +235,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   if (esp_wifi_set_config(WIFI_IF_AP, &apConfig) != ESP_OK) {
     logger.error("AP config apply failed");
   } else {
-    char buf[128];
+    char buf[64];
     snprintf(buf, sizeof(buf), "AP ready: %s (%s)", kDefaultApSsid,
              (apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2"));
     logger.info(buf);
@@ -285,7 +286,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
     logger.error("STA config apply failed");
     return;
   }
-  char buf[128];
+  char buf[64];
   snprintf(buf, sizeof(buf), "Connecting STA to SSID: %s", staSsid.c_str());
   logger.info(buf);
   setStatusLedMode(StatusLedMode::SlowBlink);
@@ -537,9 +538,7 @@ TaskHandle_t WifiNetworkManager::getSocketLoggerTaskHandle() {
 
 void WifiNetworkManager::configureStaticIpIfEnabled() {
   if (!isStaticIpEnabled()) {
-    char buf[64];
-    snprintf(buf, sizeof(buf), "Static IP disabled, using DHCP");
-    logger.info(buf);
+    logger.info("Static IP disabled, using DHCP");
     return;
   }
 
@@ -568,9 +567,7 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
     info.gw = gateway_;
     info.netmask = netmask_;
     if (esp_netif_set_ip_info(staNetif_, &info) != ESP_OK) {
-      char buf[64];
-      snprintf(buf, sizeof(buf), "Failed to set static IP info");
-      logger.error(buf);
+      logger.error("Failed to set static IP info");
       return;
     }
     bool dns1IsValid = true;
@@ -597,7 +594,7 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
       esp_netif_set_dns_info(staNetif_, ESP_NETIF_DNS_BACKUP, &dns);
     }
 
-    char buf[256];
+    char buf[128];
     snprintf(buf, sizeof(buf),
              "Static IP configured: %s, Gateway: %s, DNS1: %s%s",
              ipToString(ipAddress_).c_str(), ipToString(gateway_).c_str(),
@@ -607,9 +604,6 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
                   : (std::string(", DNS2: ") + ipToString(dns2_)).c_str()));
     logger.info(buf);
   } else {  // Use snprintf for warning message
-    char buf[128];
-    snprintf(buf, sizeof(buf),
-             "Invalid static IP/netmask config, falling back to DHCP");
-    logger.warn(buf);
+    logger.warn("Invalid static IP/netmask config, falling back to DHCP");
   }
 }

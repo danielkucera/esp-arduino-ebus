@@ -7,10 +7,7 @@
 #include <ebus/detail/json_writer.hpp>
 #include <ebus/utils.hpp>
 
-namespace {
-constexpr size_t kPrintQueueLen = 32;
-constexpr size_t kPrintMsgMaxLen = 384;
-}  // namespace
+
 
 Logger logger;
 
@@ -22,9 +19,9 @@ Logger::Logger(size_t maxEntries)
       printQueue(nullptr),
       printTask(nullptr) {
   buffer_ = std::vector<LogEntry>(maxEntries);  // Initialize std::vector
-  printQueue = xQueueCreate(kPrintQueueLen, kPrintMsgMaxLen);
+  printQueue = xQueueCreate(kPrintQueueEntries, kMaxMsgLength);
   if (printQueue != nullptr) {
-    xTaskCreate(Logger::printTaskEntry, "logger", 1536, this, 1, &printTask);
+    xTaskCreate(Logger::printTaskEntry, "logger", 3072, this, 1, &printTask);
   }
 }
 
@@ -147,7 +144,7 @@ void Logger::log(LogLevel level, std::string_view message, bool is_json,
                  uint32_t session_id, uint32_t poll_id) {
   if (printQueue != nullptr &&
       printTask != nullptr) {  // Ensure task is running before sending to queue
-    char msg[kPrintMsgMaxLen]{};
+    char msg[kMaxMsgLength]{};
     size_t len = std::min(message.size(), sizeof(msg) - 1);
     std::memcpy(msg, message.data(), len);
     msg[len] = '\0';
@@ -162,7 +159,7 @@ void Logger::log(LogLevel level, std::string_view message, bool is_json,
   buffer_[index].level = level;
 
   size_t msg_len =
-      std::min(message.size(), static_cast<size_t>(LOG_MSG_MAX_LEN - 1));
+      std::min(message.size(), static_cast<size_t>(kMaxMsgLength - 1));
   std::memcpy(buffer_[index].message, message.data(), msg_len);
   buffer_[index].message[msg_len] = '\0';
 
@@ -181,7 +178,7 @@ void Logger::printTaskEntry(void* arg) {
 
 void Logger::printTaskLoop() {
   while (true) {
-    char msg[kPrintMsgMaxLen]{};
+    char msg[kMaxMsgLength]{};
     if (xQueueReceive(printQueue, msg, portMAX_DELAY) == pdTRUE) {
       printf("%s\n", msg);
     }

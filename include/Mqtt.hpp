@@ -4,11 +4,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
-#include <mutex>
 #include <mqtt_client.h>
 
 #include <atomic>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -169,11 +169,8 @@ class Mqtt {
 
   mutable std::recursive_mutex mqtt_mutex_;
 
-  static constexpr size_t kBufferPoolSize = 2;
   static constexpr size_t kMqttPubBufferSize = 1024;
-  char publish_buffers_[kBufferPoolSize][kMqttPubBufferSize];
-  size_t buffer_lengths_[kBufferPoolSize]{};
-  uint8_t current_buffer_index_ = 0;
+  char publish_buffers_[kMqttPubBufferSize];
 
   void internalPublish(const char* topic, uint8_t qos, bool retain,
                        const char* payload, bool prefix);
@@ -192,11 +189,8 @@ class Mqtt {
   void publishResponse(std::string_view id, std::string_view status,
                        size_t bytes = 0);
 
-  // void logUpdate(const Command* cmd,
-  //                const std::optional<ebus::DataValue>& decoded);
   void logUpdate(const Command* cmd,
-                 const std::optional<ebus::DataValue>& decoded, char* logBuf,
-                 size_t logBufSize);
+                 const std::optional<ebus::DataValue>& decoded);
 
   void publishCommand(const Command* command);
 

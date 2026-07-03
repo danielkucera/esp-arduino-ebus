@@ -132,10 +132,12 @@ void DNSServer::processNextRequest() {
 }
 
 void DNSServer::stop() {
+  if (!running_) return;
   running_ = false;
-  vTaskDelay(pdMS_TO_TICKS(20)); // Allow loop to exit
+  vTaskDelay(pdMS_TO_TICKS(20));  // Allow loop to exit
   if (socketFd_ >= 0) {
     close(socketFd_);
     socketFd_ = -1;
   }
+  taskHandle_ = nullptr;
 }
