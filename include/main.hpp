@@ -26,7 +26,3 @@ int DEBUG_LOG_IMPL(const char* format, ...);
 void restart();
 void fetchStatus(const ebus::JsonChunkVisitor& visitor);
 void fetchAppStatus(const ebus::JsonChunkVisitor& visitor);
-
-struct HeapStatus {
-  void toJson(ebus::detail::JsonWriter& writer) const;
-};

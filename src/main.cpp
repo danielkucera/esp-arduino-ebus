@@ -58,10 +58,6 @@ EspOtaManager espOtaManager;
 #define DEFAULT_SNTP_SERVER "pool.ntp.org"
 #define DEFAULT_SNTP_TIMEZONE "UTC0"
 
-#if defined(EBUS_SIMULATION)
-TaskHandle_t simTaskHandle = nullptr;
-#endif
-
 char unique_id[7]{};
 
 namespace {
@@ -75,7 +71,19 @@ struct StatusInfo {
     writer.writeField("Reset_Code", reset_code);
     writer.writeField("Uptime",
                       static_cast<uint32_t>(esp_timer_get_time() / 1000ULL));
-    writer.writeField("Free_Heap", esp_get_free_heap_size());
+  }
+};
+
+struct HeapStatus {
+  void toJson(ebus::detail::JsonWriter& writer) const {
+    auto scope = writer.objectScope();
+    multi_heap_info_t info;
+    heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    writer.writeField("Total_Free_Bytes", info.total_free_bytes);
+    writer.writeField("Largest_Free_Block", info.largest_free_block);
+    writer.writeField("Minimum_Free_Bytes", info.minimum_free_bytes);
+    writer.writeField("Free_Blocks", info.free_blocks);
+    writer.writeField("Total_Blocks", info.total_blocks);
   }
 };
 
@@ -351,7 +359,7 @@ void heapMonitorTaskEntry(void* arg) {
         logger.debug(sbuf);
       }
     };
-    
+
     // Log runtime stats
     UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
     size_t required_size = num_tasks * 64;  // 64 bytes per task entry
@@ -365,7 +373,7 @@ void heapMonitorTaskEntry(void* arg) {
     }
 
 #if defined(EBUS_SIMULATION)
-    logStack("sim", simTaskHandle);
+    logStack("sim", simTaskHandle());
 #endif
 #if defined(EBUS_INTERNAL)
     logStack("mqtt", mqtt.getTaskHandle());
@@ -394,17 +402,6 @@ void heapMonitorTaskEntry(void* arg) {
 
 }  // namespace
 
-void HeapStatus::toJson(ebus::detail::JsonWriter& writer) const {
-  auto scope = writer.objectScope();
-  multi_heap_info_t info;
-  heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-  writer.writeField("Total_Free_Bytes", info.total_free_bytes);
-  writer.writeField("Largest_Free_Block", info.largest_free_block);
-  writer.writeField("Minimum_Free_Bytes", info.minimum_free_bytes);
-  writer.writeField("Free_Blocks", info.free_blocks);
-  writer.writeField("Total_Blocks", info.total_blocks);
-}
-
 inline void disableTX() {
 #if defined(TX_DISABLE_PIN)
   gpio_config_t config{};
@@ -429,10 +426,9 @@ void set_pwm() {
 #if defined(PWM_PIN)
   ledc_set_duty(kPwmSpeedMode, kPwmChannel, value);
   ledc_update_duty(kPwmSpeedMode, kPwmChannel);
-// #if defined(EBUS_INTERNAL)
-//   schedule.resetCounter();
-//   schedule.resetTiming();
-// #endif
+#if defined(EBUS_INTERNAL)
+  getEbusController().resetMetrics();
+#endif
 #endif
 }
 
@@ -540,7 +536,7 @@ void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
   {
     auto array = writer.arrayScope();
 #if defined(EBUS_SIMULATION)
-    addThread("sim", simTaskHandle, 2048);
+    addThread("sim", simTaskHandle(), 2048);
 #endif
     addThread("mqtt", mqtt.getTaskHandle(), 5120);
     addThread("cron", cron.getTaskHandle(), 1024);
@@ -579,8 +575,14 @@ void saveParamsCallback() {
   std::string ebusAddress = configManager.readString("ebusAddress", "ff");
   getEbusController().setAddress(
       uint8_t(std::strtoul(ebusAddress.c_str(), nullptr, 16)));
-  getEbusController().setWindow(configManager.readInt("busisrWindow", 4300));
-  getEbusController().setOffset(configManager.readInt("busisrOffset", 80));
+  getEbusController().setSystemInquiry(configManager.readBool("systemInquiry"));
+  getEbusController().setSystemResponse(
+      configManager.readBool("systemResponse"));
+
+  getEbusController().setWindow(configManager.readInt("busWindow", 4300));
+  getEbusController().setOffset(configManager.readInt("busOffset", 80));
+
+  getEbusController().setScanOnStartup(configManager.readBool("scanOnStartup"));
 
   if (configManager.readBool("sntpEnabled")) {
     esp_sntp_stop();
@@ -591,12 +593,6 @@ void saveParamsCallback() {
   } else {
     esp_sntp_stop();
   }
-
-  // deviceManager.setScanOnStartup(configManager.readBool("scanOnStartPrm"));
-
-  // schedule.setSendInquiryOfExistence(configManager.readBool("inquiryExistPrm"));
-  // schedule.setFirstCommandAfterStart(
-  //     configManager.readInt("firstCmdAfterSt", 10));
 
   std::string mqttServerValue = configManager.readString("mqttServer");
   std::string mqttUserValue = configManager.readString("mqttUser");
@@ -610,9 +606,6 @@ void saveParamsCallback() {
   }
   mqtt.change();
 
-  // schedule.setPublishCounter(configManager.readBool("mqttPublishCnt"));
-  // schedule.setPublishTiming(configManager.readBool("mqttPublishTmg"));
-
   mqttha.setEnabled(configManager.readBool("haEnabledParam"));
   Mqtt::publishDiscovery();
   Mqtt::publishComponentDiscovery();
@@ -623,6 +616,7 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
   auto scope = writer.objectScope();
   writer.writeField("Status", StatusInfo{});
+  writer.writeField("Heap", HeapStatus{});
 
 #if !defined(EBUS_INTERNAL)
   writer.writeField("Arbitration", ArbitrationInfo{});
@@ -630,7 +624,6 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   writer.writeField("Firmware", FirmwareStatus{});
   writer.writeField("Chip", ChipStatus{});
   writer.writeField("WIFI", WifiStatus{});
-  writer.writeField("Heap", HeapStatus{});
 
 #if defined(EBUS_INTERNAL)
   writer.writeField("SNTP", SntpStatus{});
@@ -641,9 +634,10 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
       w.writeField("PWM", get_pwm());
       w.writeField("Ebus_Address",
                    configManager.readString("ebusAddress", "ff"));
-      w.writeField("BusIsr_Window",
-                   configManager.readInt("busisrWindow", 4300));
-      w.writeField("BusIsr_Offset", configManager.readInt("busisrOffset", 80));
+      w.writeField("Bus_Window", configManager.readInt("busWindow", 4300));
+      w.writeField("Bus_Offset", configManager.readInt("busOffset", 80));
+      w.writeField("System_Inquiry", configManager.readBool("systemInquiry"));
+      w.writeField("system_Response", configManager.readBool("systemResponse"));
     }
   };
   writer.writeField("eBUS", EbusStatus{});
@@ -651,11 +645,7 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   struct ScheduleStatus {
     void toJson(ebus::detail::JsonWriter& w) const {
       auto scope = w.objectScope();
-      w.writeField("Inquiry_Of_Existence",
-                   configManager.readBool("inquiryExistPrm"));
-      w.writeField("Scan_On_Startup", configManager.readBool("scanOnStartPrm"));
-      w.writeField("First_Command_After_Start",
-                   configManager.readInt("firstCmdAfterSt", 10));
+      w.writeField("Scan_On_Startup", configManager.readBool("scanOnStartup"));
       w.writeField("Active_Commands",
                    static_cast<uint32_t>(store.getActiveCommands()));
       w.writeField("Passive_Commands",
@@ -763,8 +753,8 @@ extern "C" void app_main(void) {
 
   set_pwm();  // This calls configManager.readInt("pwmValue", 130);
 
-  xTaskCreate(heapMonitorTaskEntry, "heap_monitor", 5120, nullptr, 0,
-              &heapMonitorTaskHandle);
+  // xTaskCreate(heapMonitorTaskEntry, "heap_monitor", 5120, nullptr, 0,
+  //             &heapMonitorTaskHandle);
 
 #if defined(EBUS_INTERNAL)
   if (configManager.readBool("sntpEnabled")) {
@@ -868,53 +858,45 @@ extern "C" void app_main(void) {
   ebus::RuntimeConfig runtimeConfig{};
   runtimeConfig.address = uint8_t(std::strtoul(
       configManager.readString("ebusAddress", "ff").c_str(), nullptr, 16));
-  runtimeConfig.lock_counter = configManager.readInt("lockCounter", 3);
+  runtimeConfig.lock_counter = 3;
   runtimeConfig.system_inquiry = configManager.readBool("systemInquiry");
   runtimeConfig.system_response = configManager.readBool("systemResponse");
 
   // Bus
-  runtimeConfig.bus.window_us = configManager.readInt("windowUs", 4300);
-  runtimeConfig.bus.offset_us = configManager.readInt("offsetUs", 80);
-  runtimeConfig.bus.watchdog_timeout_ms =
-      configManager.readInt("watchdogTimeoutMs", 250);
-  runtimeConfig.bus.syn_gen = configManager.readBool("synGen", true);
+  runtimeConfig.bus.window_us = configManager.readInt("busWindow", 4300);
+  runtimeConfig.bus.offset_us = configManager.readInt("busOffset", 80);
+  runtimeConfig.bus.watchdog_timeout_ms = 250;
+  runtimeConfig.bus.syn_gen = false;
 
-  // Logging
-  runtimeConfig.diagnostics.level =
-      static_cast<ebus::LogLevel>(configManager.readInt("logLevel", 1));
-  int log_size = configManager.readInt("logSize", 5);
-#if defined(EBUS_LOG_HISTORY_SIZE)
-  if (log_size > EBUS_LOG_HISTORY_SIZE) log_size = EBUS_LOG_HISTORY_SIZE;
-#endif
-  runtimeConfig.diagnostics.log_size = log_size;
+  // Diagnostics
+  runtimeConfig.diagnostics.level = ebus::LogLevel::error;
+  runtimeConfig.diagnostics.log_size = 1;
 
   // Network
-  // runtimeConfig.network.session_timeout_ms =
-  //     configManager.readInt("sessionTimeoutMs", 500);
-  // runtimeConfig.network.transmit_timeout_ms =
-  //     configManager.readInt("transmitTimeoutMs", 250);
-  // runtimeConfig.network.outbound_buffer_size =
-  //     configManager.readInt("outboundBufferSize", 4096);
+  runtimeConfig.network.session_timeout_ms = 2000;
+  runtimeConfig.network.transmit_timeout_ms = 1000;
+  runtimeConfig.network.outbound_buffer_size = 2048;
+  runtimeConfig.network.enable_server = true;
+  runtimeConfig.network.port_regular = 3333;
+  runtimeConfig.network.port_readonly = 3334;
+  runtimeConfig.network.port_enhanced = 3335;
 
   // Device
   runtimeConfig.device.scan_on_startup =
-      configManager.readBool("scanOnStart", false);
-  // runtimeConfig.scanner.initial_delay_s =
-  //     configManager.readInt("initialDelayS", 5);
-  // runtimeConfig.scanner.startup_interval_s =
-  //     configManager.readInt("startupIntervalS", 60);
-  // runtimeConfig.scanner.max_startup_scans =
-  //     configManager.readInt("maxStartupScans", 5);
+      configManager.readBool("scanOnStartup", false);
+  runtimeConfig.device.initial_delay_s = 5;
+  runtimeConfig.device.startup_interval_s = 25;
+  runtimeConfig.device.max_startup_scans = 5;
 
   // Scheduler
-  runtimeConfig.scheduler.max_send_attempts =
-      configManager.readInt("maxSendAttempts", 1);
-  // runtimeConfig.scheduler.base_backoff_ms =
-  //     configManager.readInt("baseBackoffMs", 100);
-  // runtimeConfig.scheduler.fsm_timeout_ms =
-  //     configManager.readInt("fsmTimeoutMs", 1000);
-  // runtimeConfig.scheduler.total_timeout_ms =
-  //     configManager.readInt("totalTimeoutMs", 2000);
+  runtimeConfig.scheduler.max_send_attempts = 1;
+  runtimeConfig.scheduler.base_backoff_ms = 100;
+  runtimeConfig.scheduler.fsm_timeout_ms = 1000;
+  runtimeConfig.scheduler.total_timeout_ms = 2000;
+  runtimeConfig.scheduler.max_items = 16;
+
+  // Poll
+  runtimeConfig.poll.max_items = 64;
 
   // BusConfig
   ebus::BusConfig busConfig = {.uart_port = UART_NUM_1,
@@ -926,21 +908,33 @@ extern "C" void app_main(void) {
 #endif
   getEbusConfig().runtime = runtimeConfig;
 
-  // CRITICAL: Ensure configuration is applied or we will crash on null
-  // virtual_bus
+  // CRITICAL: Ensure configuration is applied or we will crash
   if (!getEbusController().configure(getEbusConfig())) {
     logger.error("eBUS: Global Configuration failed! Simulation may crash.");
   }
 
   // Optimized callbacks: Avoid heap-heavy JSON work inside library threads
   getEbusController().setProtocolCallback([](const ebus::ProtocolInfo& info) {
+    char buf[128];
+    if (info.is_error)
+      snprintf(buf, sizeof(buf), "%s / %s -> '%s'",
+               ebus::toString(info.master_view).c_str(),
+               ebus::toString(info.slave_view).c_str(),
+               ebus::toString(info.protocol_error));
+    else
+      snprintf(buf, sizeof(buf), "%s / %s",
+               ebus::toString(info.master_view).c_str(),
+               ebus::toString(info.slave_view).c_str());
+    logger.info(buf);
     if (info.is_error) {
       Mqtt::publishError(info);
+
     } else {
       Command* target = nullptr;
       if (info.poll_id !=
           0) {  // If it's a polling item, find the command by poll_id
         target = store.findCommand(info.poll_id);
+        logger.info("Found by poll_id");
       }
       // If target is nullptr, updateData will find matching commands by
       // master_view (passive)
@@ -948,62 +942,14 @@ extern "C" void app_main(void) {
     }
   });
 
+  // getEbusController().setTraceCallback([](const ebus::BusEventInfo& info) {
+  //   logger.debug(ebus::toJson(info, 256));
+  // });
+
   startEbus();  // This will start the ebus controller
 
 #if defined(EBUS_SIMULATION)
-  if (getEbusController().isConfigured()) {
-    auto& vbus = getEbusController().getVirtualBus();
-    // We mimic a Vaillant device reactions
-    vbus.addSlaveReaction(0x01, "08070400", "0ab54d4f434b0001020304", 0, 0);
-    vbus.addSlaveReaction(0x01, "08b5090124", "09003231313230383030", 0, 0);
-    vbus.addSlaveReaction(0x01, "08b5090125", "09313030303930373030", 0, 0);
-    vbus.addSlaveReaction(0x01, "08b5090126", "09303036303035313337", 0, 0);
-    vbus.addSlaveReaction(0x01, "08b5090127", "094e3800000000000000", 0, 0);
-    vbus.addSlaveReaction(0x01, "08b509030d0800", "039e0100", 0, 0);
-    vbus.addSlaveReaction(0x01, "08b509030d1600", "03170700", 0, 0);
-  }
-
-  xTaskCreate(
-      [](void*) {
-        // Wait for controller to be fully initialized and running
-        while (!getEbusController().isRunning()) {
-          vTaskDelay(pdMS_TO_TICKS(100));
-        }
-
-        // Periodic injections to simulate device updates without master
-        // requests
-        uint32_t count17 = 0;
-        uint32_t count25 = 0;
-        TickType_t xLastWakeTime = xTaskGetTickCount();
-        const TickType_t xFrequency = pdMS_TO_TICKS(1000);  // 1 second interval
-        auto& vbus = getEbusController().getVirtualBus();
-
-        for (;;) {
-          vTaskDelayUntil(&xLastWakeTime, xFrequency);
-
-          if (getEbusController().isRunning()) {
-            if (++count17 >= 17) {
-              count17 = 0;
-              // Example: Broadcasting of an outside temperature of 9.25°C
-              // * Master 0x10 -> Broadcast (0xfe),
-              // * Vaillant Service (0xb5 0x16 0x03 0x01),
-              // * Data: 9.25°C - DATA2B -> 0x40, 0x09
-              vbus.injectMasterMessage(0x10, "feb51603014009");
-            }
-
-            if (++count25 >= 25) {
-              count25 = 0;
-              // Example: Broadcasting of a brine inlet temperature of 31.44°C
-              // * Master 0x10 -> Slave (0x08)
-              // * Vaillant Service (0xb5 0x09 0x03 0x29 0x0f 0x00),
-              // * Data: 31.44°C - DATA2C -> 0xf7, 0x01
-              vbus.injectMasterSlaveMessage(0x10, "08b50903290f00",
-                                            "050f00f70100");
-            }
-          }
-        }
-      },
-      "sim", 2048, nullptr, 1, &simTaskHandle);
+  startEbusSimulation();
 #endif
 
   store.setDataUpdatedCallback(Mqtt::publishValue);

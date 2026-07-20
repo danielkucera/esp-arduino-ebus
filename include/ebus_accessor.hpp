@@ -2,6 +2,9 @@
 
 #if defined(EBUS_INTERNAL)
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #include <ebus.hpp>
 
 static constexpr uint8_t PRIO_INTERNAL = 5;  // highest
@@ -17,5 +20,10 @@ void configureEbus(const ebus::EbusConfig& cfg);
 
 void startEbus();
 void stopEbus();
+
+#if defined(EBUS_SIMULATION)
+TaskHandle_t simTaskHandle();
+void startEbusSimulation();
+#endif
 
 #endif

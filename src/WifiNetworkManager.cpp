@@ -79,10 +79,14 @@ void logOpenSockets() {
     len = sizeof(peer);
     if (getpeername(fd, (struct sockaddr*)&peer, &len) == 0) {
       connectedCount++;
-      snprintf(buf + pos, sizeof(buf) - pos, "/p=%s:%d",
-               inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
-      logger.debug(buf);
+      // snprintf(buf + pos, sizeof(buf) - pos, "/p=%s:%d",
+      //          inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
+      // logger.debug(buf);
     }
+    // snprintf(buf + pos, sizeof(buf) - pos, "/p=%s:%d",
+    // inet_ntoa(peer.sin_addr),
+    //          ntohs(peer.sin_port));
+    // logger.debug(buf);
   }
 
   snprintf(buf, sizeof(buf), "[sockets] detected=%d connected=%d max=%d",
@@ -95,7 +99,7 @@ void socketLoggerTaskEntry(void* arg) {
   (void)arg;
   while (true) {
     logOpenSockets();
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    vTaskDelay(pdMS_TO_TICKS(60000));
   }
 }
 
@@ -148,8 +152,8 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
 
   if (socketLoggerTaskHandle_ ==
       nullptr) {  // Increased stack size for socket_logger
-    xTaskCreate(socketLoggerTaskEntry, "socket_logger", 3072, nullptr, 1,
-                &socketLoggerTaskHandle_);
+    // xTaskCreate(socketLoggerTaskEntry, "socket_logger", 3072, nullptr, 1,
+    //             &socketLoggerTaskHandle_);
   }
 
   std::string apPassword =
