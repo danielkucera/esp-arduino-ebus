@@ -145,17 +145,100 @@ esp_err_t handleConfigPage(httpd_req_t* req) {
   return ESP_OK;
 }
 
+esp_err_t handleWifiScan(httpd_req_t* req) {
+  wifi_scan_config_t scanConfig = {};
+  scanConfig.show_hidden = true;
+  scanConfig.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+  scanConfig.scan_time.active.min = 0;
+  scanConfig.scan_time.active.max = 0;
+  scanConfig.scan_time.passive = 100;
+
+  esp_err_t err = esp_wifi_scan_start(&scanConfig, true);
+  if (err != ESP_OK) {
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "wifi_scan",
+                                 "WiFi scan failed");
+    return ESP_OK;
+  }
+
+  uint16_t apCount = 0;
+  esp_wifi_scan_get_ap_num(&apCount);
+
+  std::vector<wifi_ap_record_t> aps(apCount);
+  // Note: This still allocates a vector for all APs. For extremely large AP
+  // counts, a more advanced approach would involve iterating and processing APs
+  // directly from the WiFi driver if it supported a streaming interface, or
+  // processing in smaller batches.
+  esp_wifi_scan_get_ap_records(&apCount, aps.data());
+
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  HttpUtils::applyCustomHeaders(req);
+  ebus::detail::JsonWriter writer([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+
+  {
+    auto array_scope = writer.arrayScope();
+    for (const auto& ap : aps) {
+      auto obj_scope = writer.objectScope();
+      std::string ssid(reinterpret_cast<const char*>(ap.ssid),
+                       strnlen(reinterpret_cast<const char*>(ap.ssid), 32));
+      writer.writeField("ssid", ssid);
+      char bssidStr[18];
+      snprintf(bssidStr, sizeof(bssidStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+               ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4],
+               ap.bssid[5]);
+      writer.writeField("bssid", bssidStr);
+      writer.writeField("rssi", ap.rssi);
+      writer.writeField("channel", ap.primary);
+
+      const char* authMode = "UNKNOWN";
+      switch (ap.authmode) {
+        case WIFI_AUTH_OPEN:
+          authMode = "OPEN";
+          break;
+        case WIFI_AUTH_WEP:
+          authMode = "WEP";
+          break;
+        case WIFI_AUTH_WPA_PSK:
+          authMode = "WPA_PSK";
+          break;
+        case WIFI_AUTH_WPA2_PSK:
+          authMode = "WPA2_PSK";
+          break;
+        case WIFI_AUTH_WPA_WPA2_PSK:
+          authMode = "WPA_WPA2_PSK";
+          break;
+        case WIFI_AUTH_WPA2_ENTERPRISE:
+          authMode = "WPA2_ENTERPRISE";
+          break;
+        case WIFI_AUTH_WPA3_PSK:
+          authMode = "WPA3_PSK";
+          break;
+        case WIFI_AUTH_WPA2_WPA3_PSK:
+          authMode = "WPA2_WPA3_PSK";
+          break;
+        default:
+          break;
+      }
+      writer.writeField("authMode", authMode);
+    }
+  }
+  httpd_resp_send_chunk(req, nullptr, 0);
+  esp_wifi_clear_ap_list();
+  return ESP_OK;
+}
+
+esp_err_t handleUpgradePage(httpd_req_t* req) {
+  sendStatic(req, "text/html", upgrade_html_start);
+  return ESP_OK;
+}
+
 esp_err_t handleStatusPage(httpd_req_t* req) {
   sendStatic(req, "text/html", status_html_start);
   return ESP_OK;
 }
 
-esp_err_t handleAdcPage(httpd_req_t* req) {
-  sendStatic(req, "text/html", adc_html_start);
-  return ESP_OK;
-}
-
-esp_err_t handleStatusApi(httpd_req_t* req) {
+esp_err_t handleStatus(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
   fetchStatus([req](std::string_view chunk) {
@@ -166,7 +249,7 @@ esp_err_t handleStatusApi(httpd_req_t* req) {
 }
 
 #if defined(EBUS_INTERNAL)
-esp_err_t handleStatusAppApi(httpd_req_t* req) {
+esp_err_t handleStatusApp(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
   fetchAppStatus([req](std::string_view chunk) {
@@ -176,7 +259,7 @@ esp_err_t handleStatusAppApi(httpd_req_t* req) {
   return ESP_OK;
 }
 
-esp_err_t handleStatusLibApi(httpd_req_t* req) {
+esp_err_t handleStatusLib(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
   getEbusController().fetchStatus([req](std::string_view chunk) {
@@ -186,6 +269,11 @@ esp_err_t handleStatusLibApi(httpd_req_t* req) {
   return ESP_OK;
 }
 #endif
+
+esp_err_t handleAdcPage(httpd_req_t* req) {
+  sendStatic(req, "text/html", adc_html_start);
+  return ESP_OK;
+}
 
 esp_err_t handleAdcRaw(httpd_req_t* req) {
   if (!adc.isRunning() && !adc.begin()) {
@@ -274,94 +362,6 @@ esp_err_t handleAdcEnable(httpd_req_t* req) {
 esp_err_t handleAdcDisable(httpd_req_t* req) {
   adc.stop();
   HttpUtils::sendSuccessResponse(req, "adc_disable");
-  return ESP_OK;
-}
-
-esp_err_t handleWifiScan(httpd_req_t* req) {
-  wifi_scan_config_t scanConfig = {};
-  scanConfig.show_hidden = true;
-  scanConfig.scan_type = WIFI_SCAN_TYPE_ACTIVE;
-  scanConfig.scan_time.active.min = 0;
-  scanConfig.scan_time.active.max = 0;
-  scanConfig.scan_time.passive = 100;
-
-  esp_err_t err = esp_wifi_scan_start(&scanConfig, true);
-  if (err != ESP_OK) {
-    HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "wifi_scan",
-                                 "WiFi scan failed");
-    return ESP_OK;
-  }
-
-  uint16_t apCount = 0;
-  esp_wifi_scan_get_ap_num(&apCount);
-
-  std::vector<wifi_ap_record_t> aps(apCount);
-  // Note: This still allocates a vector for all APs. For extremely large AP
-  // counts, a more advanced approach would involve iterating and processing APs
-  // directly from the WiFi driver if it supported a streaming interface, or
-  // processing in smaller batches.
-  esp_wifi_scan_get_ap_records(&apCount, aps.data());
-
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  HttpUtils::applyCustomHeaders(req);
-  ebus::detail::JsonWriter writer([req](std::string_view chunk) {
-    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-  });
-
-  {
-    auto array_scope = writer.arrayScope();
-    for (const auto& ap : aps) {
-      auto obj_scope = writer.objectScope();
-      std::string ssid(reinterpret_cast<const char*>(ap.ssid),
-                       strnlen(reinterpret_cast<const char*>(ap.ssid), 32));
-      writer.writeField("ssid", ssid);
-      char bssidStr[18];
-      snprintf(bssidStr, sizeof(bssidStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-               ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4],
-               ap.bssid[5]);
-      writer.writeField("bssid", bssidStr);
-      writer.writeField("rssi", ap.rssi);
-      writer.writeField("channel", ap.primary);
-
-      const char* authMode = "UNKNOWN";
-      switch (ap.authmode) {
-        case WIFI_AUTH_OPEN:
-          authMode = "OPEN";
-          break;
-        case WIFI_AUTH_WEP:
-          authMode = "WEP";
-          break;
-        case WIFI_AUTH_WPA_PSK:
-          authMode = "WPA_PSK";
-          break;
-        case WIFI_AUTH_WPA2_PSK:
-          authMode = "WPA2_PSK";
-          break;
-        case WIFI_AUTH_WPA_WPA2_PSK:
-          authMode = "WPA_WPA2_PSK";
-          break;
-        case WIFI_AUTH_WPA2_ENTERPRISE:
-          authMode = "WPA2_ENTERPRISE";
-          break;
-        case WIFI_AUTH_WPA3_PSK:
-          authMode = "WPA3_PSK";
-          break;
-        case WIFI_AUTH_WPA2_WPA3_PSK:
-          authMode = "WPA2_WPA3_PSK";
-          break;
-        default:
-          break;
-      }
-      writer.writeField("authMode", authMode);
-    }
-  }
-  httpd_resp_send_chunk(req, nullptr, 0);
-  esp_wifi_clear_ap_list();
-  return ESP_OK;
-}
-
-esp_err_t handleUpgradePage(httpd_req_t* req) {
-  sendStatic(req, "text/html", upgrade_html_start);
   return ESP_OK;
 }
 
@@ -733,7 +733,7 @@ esp_err_t handleMetricsPage(httpd_req_t* req) {
   return ESP_OK;
 }
 
-esp_err_t handleMetricsApi(httpd_req_t* req) {
+esp_err_t handleMetrics(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
   getEbusController().fetchMetrics([req](std::string_view chunk) {
@@ -851,19 +851,21 @@ void SetupHttpHandlers() {
   RegisterUri("/common.js", HTTP_GET, handleCommonJs);
   RegisterUri("/", HTTP_GET, handleRoot);
   RegisterUri("/config", HTTP_GET, handleConfigPage);
+  RegisterUri("/upgrade", HTTP_GET, handleUpgradePage);
+
   RegisterUri("/status", HTTP_GET, handleStatusPage);
-  RegisterUri("/adc", HTTP_GET, handleAdcPage);
-  RegisterUri("/api/v1/status", HTTP_GET, handleStatusApi);
+  RegisterUri("/api/v1/status", HTTP_GET, handleStatus);
 #if defined(EBUS_INTERNAL)
-  RegisterUri("/api/v1/status/app", HTTP_GET, handleStatusAppApi);
-  RegisterUri("/api/v1/status/lib", HTTP_GET, handleStatusLibApi);
+  RegisterUri("/api/v1/status/app", HTTP_GET, handleStatusApp);
+  RegisterUri("/api/v1/status/lib", HTTP_GET, handleStatusLib);
 #endif
+
+  RegisterUri("/adc", HTTP_GET, handleAdcPage);
   RegisterUri("/api/v1/adc/raw", HTTP_GET, handleAdcRaw);
   RegisterUri("/api/v1/adc/enable", HTTP_POST, handleAdcEnable);
   RegisterUri("/api/v1/adc/disable", HTTP_POST, handleAdcDisable);
   RegisterUri("/api/v1/adc/state", HTTP_GET, handleAdcState);
   RegisterUri("/api/v1/wifi/scan", HTTP_POST, handleWifiScan);
-  RegisterUri("/upgrade", HTTP_GET, handleUpgradePage);
 
 #if defined(EBUS_INTERNAL)
   RegisterUri("/commands", HTTP_GET, handleCommandsPage);
@@ -892,7 +894,7 @@ void SetupHttpHandlers() {
   RegisterUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
 
   RegisterUri("/metrics", HTTP_GET, handleMetricsPage);
-  RegisterUri("/api/v1/metrics", HTTP_GET, handleMetricsApi);
+  RegisterUri("/api/v1/metrics", HTTP_GET, handleMetrics);
   RegisterUri("/api/v1/metrics/reset", HTTP_POST, handleMetricsReset);
 
   RegisterUri("/logs", HTTP_GET, handleLogsPage);
