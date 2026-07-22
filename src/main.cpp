@@ -847,10 +847,7 @@ extern "C" void app_main(void) {
   runtimeConfig.scheduler.base_backoff_ms = 100;
   runtimeConfig.scheduler.fsm_timeout_ms = 1000;
   runtimeConfig.scheduler.total_timeout_ms = 2000;
-  runtimeConfig.scheduler.max_items = 16;
 
-  // Poll
-  runtimeConfig.poll.max_items = 64;
 #else
   logger.info("Running in normal eBUS mode");
 
@@ -893,10 +890,6 @@ extern "C" void app_main(void) {
   runtimeConfig.scheduler.base_backoff_ms = 100;
   runtimeConfig.scheduler.fsm_timeout_ms = 1000;
   runtimeConfig.scheduler.total_timeout_ms = 2000;
-  runtimeConfig.scheduler.max_items = 16;
-
-  // Poll
-  runtimeConfig.poll.max_items = 64;
 
   // BusConfig
   ebus::BusConfig busConfig = {.uart_port = UART_NUM_1,
