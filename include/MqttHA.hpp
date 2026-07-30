@@ -95,7 +95,6 @@ class MqttHA {
   Component createDiagnosticResetCode() const;
   Component createDiagnosticUptime() const;
   Component createDiagnosticFreeHeap() const;
-  Component createDiagnosticLoopDuration() const;
   Component createDiagnosticRSSI() const;
 };
 

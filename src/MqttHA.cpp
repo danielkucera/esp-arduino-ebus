@@ -47,7 +47,6 @@ void MqttHA::publishDeviceInfo() const {
   mqttha.publishComponent(createDiagnosticResetCode(), !enabled);
   mqttha.publishComponent(createDiagnosticUptime(), !enabled);
   mqttha.publishComponent(createDiagnosticFreeHeap(), !enabled);
-  mqttha.publishComponent(createDiagnosticLoopDuration(), !enabled);
   mqttha.publishComponent(createDiagnosticRSSI(), !enabled);
 }
 
@@ -354,15 +353,6 @@ MqttHA::Component MqttHA::createDiagnosticFreeHeap() const {
   c.fields["unit_of_measurement"] = "B";
   c.fields["value_template"] = "{{value_json.free_heap}}";
   c.fields["icon"] = "mdi:memory";
-  return c;
-}
-
-MqttHA::Component MqttHA::createDiagnosticLoopDuration() const {
-  Component c = createDiagnostic("sensor", "loop_duration", "Loop Duration");
-  c.fields["state_topic"] = createStateTopic("", "state");
-  c.fields["unit_of_measurement"] = "µs";
-  c.fields["value_template"] = "{{value_json.loop_duration}}";
-  c.fields["icon"] = "mdi:timelapse";
   return c;
 }
 
