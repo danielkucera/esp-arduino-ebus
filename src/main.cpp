@@ -812,6 +812,8 @@ extern "C" void app_main(void) {
 
   // RuntimeConfig
   ebus::RuntimeConfig runtimeConfig{};
+  runtimeConfig.log_level = ebus::LogLevel::debug;
+
   runtimeConfig.address = 0x01;  // slave address 0x06
   runtimeConfig.lock_counter = 3;
   runtimeConfig.system_inquiry = false;
@@ -822,10 +824,6 @@ extern "C" void app_main(void) {
   runtimeConfig.bus.offset_us = 80;
   runtimeConfig.bus.watchdog_timeout_ms = 250;
   runtimeConfig.bus.syn_gen = true;
-
-  // Diagnostics
-  runtimeConfig.diagnostics.level = ebus::LogLevel::error;
-  runtimeConfig.diagnostics.log_size = 1;
 
   // Network
   runtimeConfig.network.session_timeout_ms = 2000;
@@ -853,6 +851,8 @@ extern "C" void app_main(void) {
 
   // General
   ebus::RuntimeConfig runtimeConfig{};
+  runtimeConfig.log_level = ebus::LogLevel::debug;
+
   runtimeConfig.address = uint8_t(std::strtoul(
       configManager.readString("ebusAddress", "ff").c_str(), nullptr, 16));
   runtimeConfig.lock_counter = 3;
@@ -864,10 +864,6 @@ extern "C" void app_main(void) {
   runtimeConfig.bus.offset_us = configManager.readInt("busOffset", 80);
   runtimeConfig.bus.watchdog_timeout_ms = 250;
   runtimeConfig.bus.syn_gen = false;
-
-  // Diagnostics
-  runtimeConfig.diagnostics.level = ebus::LogLevel::error;
-  runtimeConfig.diagnostics.log_size = 1;
 
   // Network
   runtimeConfig.network.session_timeout_ms = 2000;
