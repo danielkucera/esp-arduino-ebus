@@ -14,12 +14,9 @@
 namespace command_types {
 
 using KeyFS = ebus::FixedString<8>;
-using NameFS = ebus::FixedString<32>;
+using NameFS = ebus::FixedString<48>;
 using ProfileFS = ebus::FixedString<24>;
 using UnitFS = ebus::FixedString<8>;
-using HAValueFS = ebus::FixedString<32>;
-using HAKeyValueMap = ebus::StaticVector<std::pair<int, HAValueFS>, 8>;
-
 }  // namespace command_types
 
 // Forward declaration for JsonWriter
@@ -66,8 +63,6 @@ class Command {
   // Home Assistant field accessors
   const bool& getHA() const;
   const ebus::FixedString<24>& getHAProfile() const;
-  const command_types::HAKeyValueMap& getHAKeyValueMap() const;
-  const int& getHADefaultKey() const;
 
   /**
    * Checks if the master telegram matches this command's read sequence.
@@ -146,10 +141,6 @@ class Command {
   bool ha = false;
   // profile name referencing global HA profile registry
   command_types::ProfileFS ha_profile = {};
-  // options as pairs of "key":"value" (OPTIONAL)
-  command_types::HAKeyValueMap ha_key_value_map_ = {};
-  // options default key (OPTIONAL)
-  int ha_default_key = 0;
 
   // Field types for evaluation
   enum FieldType {
@@ -171,8 +162,6 @@ class Command {
     bool required;
     FieldType type;
   };
-
-  static const std::string isKeyValueMapValid(ebus::detail::JsonReader& reader);
 
   mutable std::optional<ebus::DataTypeInfo> _cachedMeta;
 };

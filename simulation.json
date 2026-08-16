@@ -15,9 +15,7 @@
         "digits": 2,
         "unit": "°C",
         "ha": true,
-        "ha_profile": "sensor_temperature",
-        "ha_key_value_map": [],
-        "ha_default_key": 0
+        "ha_profile": "sensor_temperature"
     },
     {
         "key": "11",
@@ -35,9 +33,7 @@
         "digits": 2,
         "unit": "°C",
         "ha": true,
-        "ha_profile": "sensor_temperature",
-        "ha_key_value_map": [],
-        "ha_default_key": 0
+        "ha_profile": "sensor_temperature"
     },
     {
         "key": "12",
@@ -55,9 +51,7 @@
         "digits": 2,
         "unit": "°C",
         "ha": true,
-        "ha_profile": "sensor_temperature",
-        "ha_key_value_map": [],
-        "ha_default_key": 0
+        "ha_profile": "sensor_temperature"
     },
     {
         "key": "13",
@@ -75,9 +69,7 @@
         "digits": 2,
         "unit": "bar",
         "ha": true,
-        "ha_profile": "sensor_pressure",
-        "ha_key_value_map": [],
-        "ha_default_key": 0
+        "ha_profile": "sensor_pressure"
     },
     {
         "key": "27",
@@ -95,8 +87,6 @@
         "digits": 2,
         "unit": "°C",
         "ha": true,
-        "ha_profile": "sensor_temperature",
-        "ha_key_value_map": [],
-        "ha_default_key": 0
+        "ha_profile": "sensor_temperature"
     }
 ]

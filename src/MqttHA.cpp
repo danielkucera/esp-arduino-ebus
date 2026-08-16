@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstring>
 #include <ebus/detail/json_writer.hpp>
+#include <string>
 
 #include "Store.hpp"
 
@@ -56,7 +57,8 @@ void MqttHA::sanitizeObjectId(std::string_view source, char* out,
 
 void MqttHA::publishDeviceInfo() const {
   auto publishDiag = [this](const char* component, const char* key,
-                            const char* name, auto writeFields) {
+                            const char* name, bool withDeviceInfo,
+                            auto writeFields) {
     std::string objectId = name;
     std::transform(objectId.begin(), objectId.end(), objectId.begin(),
                    ::tolower);
@@ -84,13 +86,15 @@ void MqttHA::publishDeviceInfo() const {
           {
             auto device = writer.objectScope("device");
             writer.writeField("identifiers", deviceIdentifiers);
-            writer.writeField("name", thingName);
-            writer.writeField("manufacturer", thingManufacturer);
-            writer.writeField("model", thingModel);
-            writer.writeField("model_id", thingModelId);
-            writer.writeField("hw_version", thingHwVersion);
-            writer.writeField("sw_version", thingSwVersion);
-            writer.writeField("configuration_url", thingConfigurationUrl);
+            if (withDeviceInfo) {
+              writer.writeField("name", thingName);
+              writer.writeField("manufacturer", thingManufacturer);
+              writer.writeField("model", thingModel);
+              writer.writeField("model_id", thingModelId);
+              writer.writeField("hw_version", thingHwVersion);
+              writer.writeField("sw_version", thingSwVersion);
+              writer.writeField("configuration_url", thingConfigurationUrl);
+            }
           }
 
           writeFields(writer);
@@ -98,14 +102,15 @@ void MqttHA::publishDeviceInfo() const {
         false);
   };
 
-  publishDiag(
-      "button", "restart", "Restart", [this](ebus::detail::JsonWriter& w) {
-        w.writeField("command_topic", commandTopic);
-        w.writeField("payload_press", "{\"id\":\"restart\",\"value\":true}");
-        w.writeField("entity_category", "config");
-      });
+  publishDiag("button", "restart", "Restart", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("command_topic", commandTopic);
+                w.writeField("payload_press",
+                             "{\"id\":\"restart\",\"value\":true}");
+                w.writeField("entity_category", "config");
+              });
 
-  publishDiag("sensor", "reset_code", "Reset Code",
+  publishDiag("sensor", "reset_code", "Reset Code", false,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("value_template", "{{value_json.reset_code}}");
@@ -113,7 +118,7 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "uptime", "Uptime",
+  publishDiag("sensor", "uptime", "Uptime", true,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "s");
@@ -123,7 +128,7 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "free_heap", "Free Heap",
+  publishDiag("sensor", "free_heap", "Free Heap", false,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "B");
@@ -132,7 +137,7 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "loop_duration", "Loop Duration",
+  publishDiag("sensor", "loop_duration", "Loop Duration", false,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "µs");
@@ -141,7 +146,7 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "rssi", "WiFi RSSI",
+  publishDiag("sensor", "rssi", "WiFi RSSI", false,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "dBm");
@@ -153,8 +158,9 @@ void MqttHA::publishDeviceInfo() const {
 
 void MqttHA::publishComponents() const {
   for (const Command* command : store.getCommands()) {
-    if (command->getHA())  // Check if HA config exists and is enabled
-      mqtt.enqueueOutgoing(OutgoingAction(command, !enabled));
+    if (command->getHA()) {
+      publishComponent(command, !enabled);
+    }
   }
 }
 
@@ -257,9 +263,8 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
           writer.writeField("command_template", "{{value}}");
         }
 
-        if (!command->getHAKeyValueMap().empty()) {
-          auto opt = createOptions(command->getHAKeyValueMap(),
-                                   command->getHADefaultKey());
+        if (profile && profile->key_value_count > 0) {
+          auto opt = createOptions(profile);
           if (component == "select") {
             {
               auto options = writer.arrayScope("options");
@@ -277,62 +282,103 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
 
 std::string MqttHA::createStateTopic(const std::string& prefix,
                                      std::string_view topic) const {
-  std::string stateTopic = std::string(topic);
-  std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-  return rootTopic + prefix + (prefix.empty() ? "" : "/") + stateTopic;
+  char buf[128];
+  char lowerBuf[32];
+  size_t tlen = std::min(topic.size(), sizeof(lowerBuf) - 1);
+  for (size_t i = 0; i < tlen; i++) {
+    lowerBuf[i] = std::tolower(static_cast<unsigned char>(topic[i]));
+  }
+  lowerBuf[tlen] = '\0';
+
+  int slen = snprintf(buf, sizeof(buf), "%s%s%s", rootTopic.c_str(),
+                      prefix.c_str(), prefix.empty() ? "" : "/");
+  // Append lowercased topic
+  for (size_t i = 0; i < tlen && slen < (int)sizeof(buf) - 1; i++) {
+    buf[slen++] = lowerBuf[i];
+  }
+  buf[slen] = '\0';
+  return std::string(buf);
 }
 
-MqttHA::KeyValueMapping MqttHA::createOptions(
-    const command_types::HAKeyValueMap& ha_key_value_map,
-    const int& ha_default_key) {
-  // Create a vector of options names and a vector of pairs
-  std::vector<std::pair<std::string, int>> optionsVec;
-  std::vector<std::string> options;
+MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile) {
+  if (!profile) return KeyValueMapping{};
 
-  // Populate optionsVec and options from the map
-  for (const auto& kv : ha_key_value_map) {
-    optionsVec.emplace_back(std::string(kv.second), kv.first);
-    options.push_back(std::string(kv.second));
+  // Use stack buffers instead of std::string to reduce heap fragmentation
+  int options_keys[5];
+  const char* options_values[5];
+  size_t options_count = 0;
+
+  for (size_t i = 0; i < profile->key_value_count && i < 5; i++) {
+    options_keys[i] = profile->key_value_pairs[i].first;
+    options_values[i] = profile->key_value_pairs[i].second;
+    options_count++;
   }
 
-  // Determine default option name and value
-  const auto defaultIt =
-      std::find_if(optionsVec.begin(), optionsVec.end(),
-                   [&](const std::pair<std::string, int>& opt) {
-                     return opt.second == ha_default_key;
-                   });
-
-  std::string defaultOptionName = optionsVec.empty() ? "" : optionsVec[0].first;
-  int defaultOptionValue = optionsVec.empty() ? 0 : optionsVec[0].second;
-  if (defaultIt != optionsVec.end()) {
-    defaultOptionName = defaultIt->first;
-    defaultOptionValue = defaultIt->second;
+  int defaultOptionValue = 0;
+  if (options_count > 0) {
+    defaultOptionValue = options_keys[0];
+    for (size_t i = 0; i < options_count; i++) {
+      if (options_keys[i] == profile->default_key) {
+        defaultOptionValue = options_keys[i];
+        break;
+      }
+    }
   }
 
-  // Build value_template for displaying option name from value
-  std::string valueMap = "{% set values = {";
-  for (size_t i = 0; i < optionsVec.size(); ++i) {
-    valueMap +=
-        std::to_string(optionsVec[i].second) + ":'" + optionsVec[i].first + "'";
-    if (i < optionsVec.size() - 1) valueMap += ",";
-  }
-  valueMap +=
-      "} %}{{ values[value_json.value] if value_json.value in values.keys() "
-      "else '" +
-      defaultOptionName + "' }}";
+  // Build value_template and command_template using char buffers
+  // Original: std::string valueMap = "{% set values = {" ... "} %}..."
+  // Need to escape % for snprintf: use %% instead of %
 
-  // Build command_template for sending value from option name
-  std::string cmdMap = "{% set values = {";
-  for (size_t i = 0; i < optionsVec.size(); ++i) {
-    cmdMap +=
-        "'" + optionsVec[i].first + "':" + std::to_string(optionsVec[i].second);
-    if (i < optionsVec.size() - 1) cmdMap += ",";
-  }
-  cmdMap += "} %}{{ values[value] if value in values.keys() else " +
-            std::to_string(defaultOptionValue) + " }}";
+  char valueMapBuf[512];
+  char cmdMapBuf[512];
 
-  return KeyValueMapping{options, valueMap, cmdMap};
+  int vmLen = 0;
+  int pnLen = 0;
+
+  vmLen += snprintf(valueMapBuf + vmLen, sizeof(valueMapBuf) - vmLen,
+                    "%%{ set values = {");
+  pnLen += snprintf(cmdMapBuf + pnLen, sizeof(cmdMapBuf) - pnLen,
+                    "%%{ set values = {");
+
+  for (size_t i = 0; i < options_count; i++) {
+    if (vmLen < (int)sizeof(valueMapBuf)) {
+      vmLen += snprintf(valueMapBuf + vmLen, sizeof(valueMapBuf) - vmLen,
+                        "%d:'%s'", options_keys[i], options_values[i]);
+      if (i < options_count - 1 && vmLen < (int)sizeof(valueMapBuf)) {
+        vmLen +=
+            snprintf(valueMapBuf + vmLen, sizeof(valueMapBuf) - vmLen, ",");
+      }
+    }
+    if (pnLen < (int)sizeof(cmdMapBuf)) {
+      pnLen += snprintf(cmdMapBuf + pnLen, sizeof(cmdMapBuf) - pnLen, "'%s':%d",
+                        options_values[i], options_keys[i]);
+      if (i < options_count - 1 && pnLen < (int)sizeof(cmdMapBuf)) {
+        pnLen += snprintf(cmdMapBuf + pnLen, sizeof(cmdMapBuf) - pnLen, ",");
+      }
+    }
+  }
+
+  vmLen += snprintf(valueMapBuf + vmLen, sizeof(valueMapBuf) - vmLen,
+                    " %%}{{ values[value_json.value] if value_json.value in "
+                    "values.keys() else '%s' }}",
+                    options_count > 0 ? options_values[0] : "");
+
+  pnLen += snprintf(cmdMapBuf + pnLen, sizeof(cmdMapBuf) - pnLen,
+                    " %%}{{ values[value] if value in values.keys() else "
+                    "%d }}",
+                    defaultOptionValue);
+
+  // Build options list using StaticVector<FixedString<16>, 5>
+  ebus::StaticVector<ebus::FixedString<16>, 5> options;
+  for (size_t i = 0; i < options_count; i++) {
+    options.push_back(ebus::FixedString<16>(options_values[i]));
+  }
+
+  KeyValueMapping mapping;
+  mapping.options = options;
+  mapping.valueMap = std::string(valueMapBuf);
+  mapping.cmdMap = std::string(cmdMapBuf);
+  return mapping;
 }
 
 const HAProfile* MqttHA::resolveProfile(const Command* command) {

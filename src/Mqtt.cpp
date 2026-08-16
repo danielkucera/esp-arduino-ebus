@@ -389,7 +389,10 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
           },
           false);
 
-      if (mqttha.isEnabled()) mqttha.publishDeviceInfo();
+      if (mqttha.isEnabled()) {
+        mqttha.publishDeviceInfo();
+        Mqtt::publishComponentDiscovery();
+      }
     } break;
     case MQTT_EVENT_DISCONNECTED: {
       logger.debug("[MQTT] disconnected");

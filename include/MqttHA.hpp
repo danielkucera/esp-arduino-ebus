@@ -3,9 +3,7 @@
 #if defined(EBUS_INTERNAL)
 #include <Command.hpp>
 #include <HaProfile.hpp>
-#include <map>
 #include <string>
-#include <vector>
 
 // Home Assistant MQTT class for auto discovery
 
@@ -55,14 +53,12 @@ class MqttHA {
                                std::string_view topic) const;
 
   struct KeyValueMapping {
-    std::vector<std::string> options;
+    ebus::StaticVector<ebus::FixedString<16>, 5> options;
     std::string valueMap;
     std::string cmdMap;
   };
 
-  static KeyValueMapping createOptions(
-      const command_types::HAKeyValueMap& ha_key_value_map,
-      const int& ha_default_key);
+  static KeyValueMapping createOptions(const HAProfile* profile);
 
   static const HAProfile* resolveProfile(const Command* command);
 };

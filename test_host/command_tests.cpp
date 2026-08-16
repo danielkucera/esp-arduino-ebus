@@ -26,12 +26,6 @@ TEST_CASE("Command fromJson roundtrip preserves fields", "[Command]") {
   REQUIRE(cmd.getUnit() == "°C");
   REQUIRE(cmd.getHA() == true);
   REQUIRE(std::string(cmd.getHAProfile()) == "sensor_temperature");
-  REQUIRE(cmd.getHAKeyValueMap().size() == 2);
-  REQUIRE(cmd.getHAKeyValueMap()[0].first == 0);
-  REQUIRE(std::string(cmd.getHAKeyValueMap()[0].second) == "Off");
-  REQUIRE(cmd.getHAKeyValueMap()[1].first == 1);
-  REQUIRE(std::string(cmd.getHAKeyValueMap()[1].second) == "On");
-  REQUIRE(cmd.getHADefaultKey() == 1);
 }
 
 TEST_CASE("Command fromTabular roundtrip preserves fields", "[Command]") {
@@ -45,8 +39,6 @@ TEST_CASE("Command fromTabular roundtrip preserves fields", "[Command]") {
   REQUIRE(cmd.getName() == "Outside_Temperature");
   REQUIRE(cmd.getDatatype() == ebus::DataType::data2b);
   REQUIRE(std::string(cmd.getHAProfile()) == "sensor_temperature");
-  REQUIRE(cmd.getHAKeyValueMap().size() == 2);
-  REQUIRE(cmd.getHADefaultKey() == 1);
 }
 
 TEST_CASE("Command evaluate accepts valid command", "[Command]") {
@@ -94,8 +86,8 @@ TEST_CASE("Command toJson serializes all fields", "[Command]") {
   REQUIRE(out.find("\"datatype\":\"UINT16\"") != std::string::npos);
   REQUIRE(out.find("\"ha_profile\":\"sensor_temperature\"") !=
           std::string::npos);
-  REQUIRE(out.find("\"key\":0") != std::string::npos);
-  REQUIRE(out.find("\"value\":\"Off\"") != std::string::npos);
+  REQUIRE(out.find("\"ha_key_value_map\"") == std::string::npos);
+  REQUIRE(out.find("\"ha_default_key\"") == std::string::npos);
 }
 
 TEST_CASE("Command getStringFromVector decodes string type", "[Command]") {

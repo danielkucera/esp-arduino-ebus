@@ -5,6 +5,7 @@
 #include <esp_timer.h>
 #include <sys/stat.h>
 
+#include <array>
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
@@ -67,41 +68,44 @@ void Store::setCommandRemovedCallback(CommandChangedCallback callback) {
 
 void Store::insertCommand(const Command& command) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  command_types::KeyFS fs_key(command.getKey());
-  auto it = commands_.find(fs_key);
-  if (it != commands_.end()) {
-    it->second = command;
-  } else {
-    it = commands_.insert(std::make_pair(fs_key, command)).first;
+  for (size_t i = 0; i < commands_.size(); i++) {
+    if (std::string_view(commands_[i].getKey()) ==
+        std::string_view(command.getKey())) {
+      commands_[i] = command;
+      if (command_changed_callback_) command_changed_callback_(&commands_[i]);
+      return;
+    }
   }
-
-  if (command_changed_callback_) command_changed_callback_(&it->second);
+  if (commands_.push_back(command)) {
+    if (command_changed_callback_) command_changed_callback_(&commands_.back());
+  }
 }
 
 void Store::removeCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  command_types::KeyFS fs_key(key);
-  auto it = commands_.find(fs_key);
-  if (it != commands_.end()) {
-    if (command_removed_callback_) command_removed_callback_(&it->second);
-    commands_.erase(it);
+  for (size_t i = 0; i < commands_.size(); i++) {
+    if (std::string_view(commands_[i].getKey()) == key) {
+      if (command_removed_callback_) command_removed_callback_(&commands_[i]);
+      commands_.erase(commands_.begin() + i);
+      return;
+    }
   }
 }
 
 Command* Store::findCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  command_types::KeyFS fs_key(key);
-  auto it = commands_.find(fs_key);
-  if (it != commands_.end())
-    return &(it->second);
-  else
-    return nullptr;
+  for (size_t i = 0; i < commands_.size(); i++) {
+    if (std::string_view(commands_[i].getKey()) == key) {
+      return &commands_[i];
+    }
+  }
+  return nullptr;
 }
 
 Command* Store::findCommand(uint32_t poll_id) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  for (auto& kv : commands_) {
-    Command* cmd = &kv.second;
+  for (size_t i = 0; i < commands_.size(); i++) {
+    Command* cmd = &commands_[i];
     if (cmd->getPollId() == poll_id) {
       return cmd;
     }
@@ -112,8 +116,8 @@ Command* Store::findCommand(uint32_t poll_id) {
 MatchingCommands Store::findAllMatchingCommands(ebus::ByteView master) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   MatchingCommands result;
-  for (auto& kv : commands_) {
-    Command* cmd = &kv.second;
+  for (size_t i = 0; i < commands_.size(); i++) {
+    Command* cmd = &commands_[i];
     if (cmd->matches(master)) {
       if (!result.push_back(cmd)) break;
     }
@@ -140,6 +144,10 @@ int64_t Store::loadCommandsFrom(const char* path) {
     return -1;
   }
 
+  // Use small buffer to avoid large heap allocation for FILE* stream
+  char file_buf[512];
+  std::setvbuf(file, file_buf, _IOFBF, sizeof(file_buf));
+
   char log_buf[96];
   snprintf(log_buf, sizeof(log_buf), "Store: Loading from %s", path);
   logger.info(log_buf);
@@ -152,10 +160,14 @@ int64_t Store::loadCommandsFrom(const char* path) {
 int64_t Store::saveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (!ensureLittlefsMounted()) return -1;
-  if (commands_.empty()) return 0;
+  bool commands_empty = commands_.empty();
+  if (commands_empty) return 0;
 
   FILE* file = std::fopen(kCommandsFilePath, "wb");
   if (file == nullptr) return -1;
+
+  char file_buf[512];
+  std::setvbuf(file, file_buf, _IOFBF, sizeof(file_buf));
 
   size_t bytes_written = 0;
   ebus::detail::JsonWriter writer([file, &bytes_written](std::string_view s) {
@@ -190,8 +202,7 @@ int64_t Store::saveCommands() const {
     }
 
     // Data rows in tabular format
-    for (const auto& kv : commands_) {
-      const Command& c = kv.second;
+    for (const Command& c : commands_) {
       auto row_array = writer.arrayScope();
       writer.writeValue(c.getKey());
       writer.writeValue(c.getName());
@@ -210,17 +221,9 @@ int64_t Store::saveCommands() const {
       writer.writeValue(c.getHA());
       writer.writeValue(c.getHAProfile());
 
-      // Key-value map as array of objects
-      {
-        auto kv_array = writer.arrayScope();
-        for (const auto& kv : c.getHAKeyValueMap()) {
-          auto obj_scope = writer.objectScope();
-          writer.writeField("key", kv.first);
-          writer.writeField("value", std::string_view(kv.second));
-        }
-      }
-
-      writer.writeValue(c.getHADefaultKey());
+      // Empty key-value map and default key (stored in HA profile registry)
+      writer.writeValue("");
+      writer.writeValue(0);
     }
   }
   writer.flush();
@@ -257,30 +260,37 @@ void Store::fetchCommands(const ebus::JsonChunkVisitor& visitor) const {
   ebus::detail::JsonWriter writer(visitor);
   auto array_scope = writer.arrayScope();
 
-  std::vector<const Command*> ordered;
-  for (const auto& kv : commands_) ordered.push_back(&kv.second);
-  std::sort(ordered.begin(), ordered.end(),
+  size_t n = commands_.size();
+  std::array<const Command*, 64> ordered{};
+  for (size_t i = 0; i < n; i++) {
+    ordered[i] = &commands_[i];
+  }
+  std::sort(ordered.begin(), ordered.begin() + n,
             [](const Command* a, const Command* b) {
-              return a->getKey() < b->getKey();
+              return std::string_view(a->getKey()) <
+                     std::string_view(b->getKey());
             });
 
-  for (const Command* cmd : ordered) {
-    writer.writeValue(*cmd);
+  for (size_t i = 0; i < n; i++) {
+    writer.writeValue(*ordered[i]);
   }
 }
 
 const std::vector<Command*> Store::getCommands() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<Command*> result;
-  for (auto& kv : commands_) result.push_back(&(kv.second));
+  result.reserve(commands_.size());
+  for (size_t i = 0; i < commands_.size(); i++) {
+    result.push_back(&commands_[i]);
+  }
   return result;
 }
 
 size_t Store::getActiveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   size_t count = 0;
-  for (const auto& kv : commands_) {
-    if (kv.second.getActive()) count++;
+  for (const Command& c : commands_) {
+    if (c.getActive()) count++;
   }
   return count;
 }
@@ -288,8 +298,8 @@ size_t Store::getActiveCommands() const {
 size_t Store::getPassiveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   size_t count = 0;
-  for (const auto& kv : commands_) {
-    if (!kv.second.getActive()) count++;
+  for (const Command& c : commands_) {
+    if (!c.getActive()) count++;
   }
   return count;
 }
@@ -301,8 +311,8 @@ size_t Store::getCommandCount() const {
 
 bool Store::active() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  for (const auto& kv : commands_) {
-    if (kv.second.getActive()) return true;
+  for (const Command& c : commands_) {
+    if (c.getActive()) return true;
   }
   return false;
 }
@@ -311,9 +321,8 @@ Command* Store::nextActiveCommand() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   Command* next = nullptr;
   bool init = false;
-  for (auto& kv : commands_) {
-    Command* cmd = &kv.second;
-    // Only consider active commands
+  for (size_t i = 0; i < commands_.size(); i++) {
+    Command* cmd = &commands_[i];
     if (!cmd->getActive()) continue;
     if (cmd->getLast() == 0) {
       next = cmd;
@@ -336,8 +345,8 @@ Command* Store::nextActiveCommand() {
 MatchingCommands Store::findPassiveCommands(ebus::ByteView master) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   MatchingCommands result;
-  for (auto& kv : commands_) {
-    Command* cmd = &kv.second;
+  for (size_t i = 0; i < commands_.size(); i++) {
+    Command* cmd = &commands_[i];
     // Skip active commands
     if (cmd->getActive()) continue;
     if (cmd->matches(master)) {
@@ -387,15 +396,20 @@ void Store::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
   ebus::detail::JsonWriter writer(visitor);
   auto array_scope = writer.arrayScope();
 
-  std::vector<const Command*> ordered;
-  for (const auto& kv : commands_) ordered.push_back(&kv.second);
-  std::sort(ordered.begin(), ordered.end(),
+  size_t n = commands_.size();
+  std::array<const Command*, 64> ordered{};
+  for (size_t i = 0; i < n; i++) {
+    ordered[i] = &commands_[i];
+  }
+  std::sort(ordered.begin(), ordered.begin() + n,
             [](const Command* a, const Command* b) {
-              return a->getKey() < b->getKey();
+              return std::string_view(a->getKey()) <
+                     std::string_view(b->getKey());
             });
 
   uint32_t now = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
-  for (const Command* cmd : ordered) {
+  for (size_t i = 0; i < n; i++) {
+    const Command* cmd = ordered[i];
     auto scope = writer.objectScope();
     writer.writeField("key", cmd->getKey());
     writer.writeField("name", cmd->getName());
@@ -412,7 +426,7 @@ void Store::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
 }
 
 void Store::deserializeCommands(FILE* file) {
-  constexpr size_t kReaderBufSize = 2048;
+  constexpr size_t kReaderBufSize = 1536;
   constexpr size_t kRowBufSize = 1024;
   constexpr size_t kChunkSize = 512;
 

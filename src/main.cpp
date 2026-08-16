@@ -1004,7 +1004,6 @@ extern "C" void app_main(void) {
   cron.loadRules();
   cron.start();
 
-  Mqtt::publishComponentDiscovery();
   mqtt.startTask();
 #else
   if (!startClientRuntime()) {
