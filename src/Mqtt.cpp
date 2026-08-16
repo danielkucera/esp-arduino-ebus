@@ -427,9 +427,8 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
                                   self->root_topic_ + "set/") == 0) {
         std::string_view key_sv =
             topic_sv.substr(self->root_topic_.length() + 4);
-        self->handleDirectWrite(
-            std::string(key_sv),
-            payload);  // Convert to std::string for findCommand
+        self->handleDirectWrite(key_sv,
+                                payload);  // Pass string_view directly
       } else {
       }
     } break;
@@ -462,7 +461,7 @@ void Mqtt::handleRead(std::string_view payload) {
 
   if (key_view.empty()) return;
 
-  Command* command = store.findCommand(std::string(key_view));
+  Command* command = store.findCommand(key_view);
   if (command != nullptr) {
     command->setLast(0);  // Trigger immediate physical poll
     handleValueUpdate(key_view);
@@ -494,12 +493,11 @@ void Mqtt::handleWrite(std::string_view payload) {
 
   if (key_view.empty()) return;
 
-  Command* command = store.findCommand(std::string(key_view));
+  Command* command = store.findCommand(key_view);
   if (command != nullptr) {
     if (val_view.empty()) {
       publishStream("response", 0, false,
-                    [key_view](const ebus::JsonChunkVisitor&
-                                   v) {  // Use snprintf for status message
+                    [key_view](const ebus::JsonChunkVisitor& v) {
                       ebus::detail::JsonWriter writer(v);
                       auto scope = writer.objectScope();
                       writer.writeField("id", "write");
@@ -526,15 +524,14 @@ void Mqtt::handleWrite(std::string_view payload) {
         val_view.remove_prefix(1);
         val_view.remove_suffix(1);
       }
-      valueBytes = command->getVectorFromString(std::string(val_view));
+      valueBytes = command->getVectorFromString(val_view);
     }
 
     if (!valueBytes.empty()) {
       ebus::Sequence fullWrite = command->getWriteCmd();
       fullWrite.append(valueBytes);
 
-      getEbusController().enqueue(
-          PRIO_SEND, fullWrite);  // Use snprintf for status message
+      getEbusController().enqueue(PRIO_SEND, fullWrite);
       publishStream("response", 0, false,
                     [command, key_view](const ebus::JsonChunkVisitor& v) {
                       ebus::detail::JsonWriter writer(v);
@@ -542,41 +539,43 @@ void Mqtt::handleWrite(std::string_view payload) {
                       writer.writeField("id", "write");
                       char status_buf[256];
                       snprintf(status_buf, sizeof(status_buf),
-                               "scheduled for key '%.*s' name '%s'",
+                               "scheduled for key '%.*s' name '%.*s'",
                                (int)key_view.size(), key_view.data(),
-                               command->getName().c_str());
+                               (int)command->getName().size(),
+                               command->getName().data());
                       writer.writeField("status", status_buf);
                     });
       command->setLast(0);
     } else {
       // Use snprintf for error response
-      publishStream(
-          "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {
-            ebus::detail::JsonWriter writer(v);
-            auto scope = writer.objectScope();
-            writer.writeField("id", "write");
-            writer.writeField("status", "invalid value for key '" +
-                                            std::string(key_view) + "'");
-          });
+      publishStream("response", 0, false,
+                    [key_view](const ebus::JsonChunkVisitor& v) {
+                      ebus::detail::JsonWriter writer(v);
+                      auto scope = writer.objectScope();
+                      writer.writeField("id", "write");
+                      char status_buf[128];
+                      snprintf(status_buf, sizeof(status_buf),
+                               "invalid value for key '%.*s'",
+                               (int)key_view.size(), key_view.data());
+                      writer.writeField("status", status_buf);
+                    });
     }
   } else {
-    publishStream("response", 0, false,
-                  [key_view](const ebus::JsonChunkVisitor&
-                                 v) {  // Use snprintf for error response
-                    ebus::detail::JsonWriter writer(v);
-                    auto scope = writer.objectScope();
-                    writer.writeField("id", "write");
-                    char status_buf[128];
-                    snprintf(status_buf, sizeof(status_buf),
-                             "key '%.*s' not found", (int)key_view.size(),
-                             key_view.data());
-                    writer.writeField("status", status_buf);
-                  });
+    publishStream(
+        "response", 0, false, [key_view](const ebus::JsonChunkVisitor& v) {
+          ebus::detail::JsonWriter writer(v);
+          auto scope = writer.objectScope();
+          writer.writeField("id", "write");
+          char status_buf[128];
+          snprintf(status_buf, sizeof(status_buf), "key '%.*s' not found",
+                   (int)key_view.size(), key_view.data());
+          writer.writeField("status", status_buf);
+        });
   }
 }
 
 void Mqtt::handleValueUpdate(std::string_view key) {
-  Command* cmd = store.findCommand(std::string(key));
+  Command* cmd = store.findCommand(key);
   if (!cmd) return;
 
   // Correlation Optimization: Decode once and reuse for both JSON and logging
@@ -584,8 +583,8 @@ void Mqtt::handleValueUpdate(std::string_view key) {
 
   if (connected_) {
     char topicBuf[128];
-    int n = snprintf(topicBuf, sizeof(topicBuf), "values/%s",
-                     cmd->getName().c_str());
+    int n = snprintf(topicBuf, sizeof(topicBuf), "values/%.*s",
+                     (int)cmd->getName().size(), cmd->getName().data());
     if (n > 0 && (size_t)n < sizeof(topicBuf)) {
       for (int i = 7; i < n; ++i)
         topicBuf[i] = (char)tolower((unsigned char)topicBuf[i]);
@@ -614,8 +613,7 @@ void Mqtt::publishResponse(std::string_view id, std::string_view status,
   });
 }
 
-void Mqtt::handleDirectWrite(const std::string& key,
-                             std::string_view val_view) {
+void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
   Command* command = store.findCommand(key);
   if (command == nullptr) return;
 
@@ -626,12 +624,12 @@ void Mqtt::handleDirectWrite(const std::string& key,
       valueBytes = command->getVectorFromDouble(val);
     }
   } else {
-    std::string_view s = val_view;
-    if (s.size() >= 2 && s.front() == '"' && s.back() == '"') {
-      s.remove_prefix(1);
-      s.remove_suffix(1);
+    if (val_view.size() >= 2 && val_view.front() == '"' &&
+        val_view.back() == '"') {
+      val_view.remove_prefix(1);
+      val_view.remove_suffix(1);
     }
-    valueBytes = command->getVectorFromString(std::string(s));
+    valueBytes = command->getVectorFromString(val_view);
   }
 
   if (!valueBytes.empty()) {
@@ -640,11 +638,13 @@ void Mqtt::handleDirectWrite(const std::string& key,
     getEbusController().enqueue(PRIO_SEND, fullWrite);
     command->setLast(0);
     char buf[128];
-    snprintf(buf, sizeof(buf), "[MQTT] Scheduled write for '%s'", key.c_str());
+    snprintf(buf, sizeof(buf), "[MQTT] Scheduled write for '%.*s'",
+             (int)key.size(), key.data());
     logger.info(buf);
-  } else {  // Use snprintf for error message
+  } else {
     char buf[128];
-    snprintf(buf, sizeof(buf), "[MQTT] Write failed for '%s'", key.c_str());
+    snprintf(buf, sizeof(buf), "[MQTT] Write failed for '%.*s'",
+             (int)key.size(), key.data());
     logger.warn(buf);
   }
 }
@@ -709,8 +709,8 @@ void Mqtt::logUpdate(const Command* cmd,
 
 void Mqtt::publishCommand(const Command* command) {
   char topicBuf[64];
-  int n = snprintf(topicBuf, sizeof(topicBuf), "commands/%s",
-                   command->getKey().c_str());
+  int n = snprintf(topicBuf, sizeof(topicBuf), "commands/%.*s",
+                   (int)command->getKey().size(), command->getKey().data());
   if (n <= 0 || (size_t)n >= sizeof(topicBuf)) return;
 
   publishStream(topicBuf, 0, false, [&](const ebus::JsonChunkVisitor& v) {

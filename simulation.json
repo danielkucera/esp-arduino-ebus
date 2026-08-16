@@ -15,16 +15,9 @@
         "digits": 2,
         "unit": "°C",
         "ha": true,
-        "ha_component": "sensor",
-        "ha_device_class": "temperature",
-        "ha_entity_category": "",
-        "ha_mode": "auto",
-        "ha_key_value_map": {},
-        "ha_default_key": 0,
-        "ha_payload_on": 1,
-        "ha_payload_off": 0,
-        "ha_state_class": "",
-        "ha_step": 1
+        "ha_profile": "sensor_temperature",
+        "ha_key_value_map": [],
+        "ha_default_key": 0
     },
     {
         "key": "11",
@@ -42,16 +35,9 @@
         "digits": 2,
         "unit": "°C",
         "ha": true,
-        "ha_component": "sensor",
-        "ha_device_class": "temperature",
-        "ha_entity_category": "",
-        "ha_mode": "",
-        "ha_key_value_map": {},
-        "ha_default_key": 0,
-        "ha_payload_on": 0,
-        "ha_payload_off": 0,
-        "ha_state_class": "",
-        "ha_step": 1
+        "ha_profile": "sensor_temperature",
+        "ha_key_value_map": [],
+        "ha_default_key": 0
     },
     {
         "key": "12",
@@ -69,16 +55,9 @@
         "digits": 2,
         "unit": "°C",
         "ha": true,
-        "ha_component": "sensor",
-        "ha_device_class": "temperature",
-        "ha_entity_category": "",
-        "ha_mode": "",
-        "ha_key_value_map": {},
-        "ha_default_key": 0,
-        "ha_payload_on": 0,
-        "ha_payload_off": 0,
-        "ha_state_class": "",
-        "ha_step": 1
+        "ha_profile": "sensor_temperature",
+        "ha_key_value_map": [],
+        "ha_default_key": 0
     },
     {
         "key": "13",
@@ -96,16 +75,9 @@
         "digits": 2,
         "unit": "bar",
         "ha": true,
-        "ha_component": "sensor",
-        "ha_device_class": "pressure",
-        "ha_entity_category": "",
-        "ha_mode": "",
-        "ha_key_value_map": {},
-        "ha_default_key": 0,
-        "ha_payload_on": 0,
-        "ha_payload_off": 0,
-        "ha_state_class": "",
-        "ha_step": 1
+        "ha_profile": "sensor_pressure",
+        "ha_key_value_map": [],
+        "ha_default_key": 0
     },
     {
         "key": "27",
@@ -123,15 +95,8 @@
         "digits": 2,
         "unit": "°C",
         "ha": true,
-        "ha_component": "sensor",
-        "ha_device_class": "temperature",
-        "ha_entity_category": "",
-        "ha_mode": "",
-        "ha_key_value_map": {},
-        "ha_default_key": 0,
-        "ha_payload_on": 0,
-        "ha_payload_off": 0,
-        "ha_state_class": "",
-        "ha_step": 0
+        "ha_profile": "sensor_temperature",
+        "ha_key_value_map": [],
+        "ha_default_key": 0
     }
 ]

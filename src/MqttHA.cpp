@@ -2,6 +2,7 @@
 #include <Mqtt.hpp>
 #include <MqttHA.hpp>
 #include <algorithm>
+#include <cstring>
 #include <ebus/detail/json_writer.hpp>
 
 #include "Store.hpp"
@@ -158,33 +159,49 @@ void MqttHA::publishComponents() const {
 }
 
 void MqttHA::publishComponent(const Command* command, const bool remove) const {
-  const std::string& component = command->getHAComponent();
-  std::string objectId = command->getName();
-  std::transform(objectId.begin(), objectId.end(), objectId.begin(), ::tolower);
-  std::replace(objectId.begin(), objectId.end(), '/', '_');
-  std::replace(objectId.begin(), objectId.end(), ' ', '_');
+  const HAProfile* profile = resolveProfile(command);
+  if (!profile && !remove) return;
 
-  std::string topic = "homeassistant/" + component + '/' + deviceIdentifiers +
-                      '/' + objectId + "/config";
+  const std::string& component = profile ? profile->component : "";
+
+  const std::string& dev_id = deviceIdentifiers;
+
+  std::string_view name_sv = command->getName();
+  std::string_view key_sv = command->getKey();
+
+  char objectIdBuf[32];
+  sanitizeObjectId(name_sv, objectIdBuf, sizeof(objectIdBuf));
+
+  char topicBuf[128];
+  int tlen =
+      snprintf(topicBuf, sizeof(topicBuf), "homeassistant/%s/%s/%s/config",
+               component.c_str(), dev_id.c_str(), objectIdBuf);
+  if (tlen <= 0 || (size_t)tlen >= sizeof(topicBuf)) return;
 
   if (remove || !enabled) {
-    mqtt.publish(topic.c_str(), 0, true, "", false);
+    mqtt.publish(topicBuf, 0, true, "", false);
     return;
   }
 
   mqtt.publishStream(
-      topic.c_str(), 0, true,
+      topicBuf, 0, true,
       [&](const ebus::JsonChunkVisitor& v) {
         ebus::detail::JsonWriter writer(v);
         auto root = writer.objectScope();
 
-        std::string prettyName = command->getName();
-        std::replace(prettyName.begin(), prettyName.end(), '/', ' ');
-        std::replace(prettyName.begin(), prettyName.end(), '_', ' ');
+        char prettyNameBuf[32];
+        size_t pn_len = std::min(name_sv.size(), sizeof(prettyNameBuf) - 1);
+        for (size_t i = 0; i < pn_len; ++i) {
+          char c = name_sv[i];
+          prettyNameBuf[i] = (c == '/' || c == '_') ? ' ' : c;
+        }
+        prettyNameBuf[pn_len] = '\0';
 
-        writer.writeField("unique_id",
-                          deviceIdentifiers + "_" + command->getKey());
-        writer.writeField("name", prettyName);
+        char uidBuf[96];
+        snprintf(uidBuf, sizeof(uidBuf), "%s_%.*s", dev_id.c_str(),
+                 (int)key_sv.size(), key_sv.data());
+        writer.writeField("unique_id", uidBuf);
+        writer.writeField("name", std::string_view(prettyNameBuf, pn_len));
         writer.writeField("availability_topic", willTopic);
         writer.writeField("availability_template", "{{value_json.value}}");
 
@@ -193,31 +210,32 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
           writer.writeField("identifiers", deviceIdentifiers);
         }
 
-        writer.writeField("state_topic",
-                          createStateTopic("values", command->getName()));
+        writer.writeField("state_topic", createStateTopic("values", name_sv));
 
-        if (!command->getHADeviceClass().empty())
-          writer.writeField("device_class", command->getHADeviceClass());
-        if (!command->getHAEntityCategory().empty())
-          writer.writeField("entity_category", command->getHAEntityCategory());
+        if (profile && profile->device_class && profile->device_class[0])
+          writer.writeField("device_class", profile->device_class);
+        if (profile && profile->entity_category && profile->entity_category[0])
+          writer.writeField("entity_category", profile->entity_category);
 
         if (component == "binary_sensor" || component == "switch") {
           writer.writeField("payload_on",
-                            std::to_string(command->getHAPayloadOn()));
+                            std::to_string(profile ? profile->payload_on : 1));
           writer.writeField("payload_off",
-                            std::to_string(command->getHAPayloadOff()));
+                            std::to_string(profile ? profile->payload_off : 0));
           writer.writeField("value_template", "{{value_json.value}}");
         }
 
         if (component == "switch" || component == "number" ||
             component == "select") {
-          writer.writeField("command_topic",
-                            rootTopic + "set/" + command->getKey());
+          char cmdTopicBuf[96];
+          snprintf(cmdTopicBuf, sizeof(cmdTopicBuf), "%sset/%.*s",
+                   rootTopic.c_str(), (int)key_sv.size(), key_sv.data());
+          writer.writeField("command_topic", cmdTopicBuf);
         }
 
         if (component == "sensor") {
-          if (!command->getHAStateClass().empty())
-            writer.writeField("state_class", command->getHAStateClass());
+          if (profile && profile->state_class && profile->state_class[0])
+            writer.writeField("state_class", profile->state_class);
           if (!command->getUnit().empty())
             writer.writeField("unit_of_measurement", command->getUnit());
         }
@@ -229,8 +247,10 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
           writer.writeField("command_template", "{{value}}");
           writer.writeFieldFloat("min", command->getMin());
           writer.writeFieldFloat("max", command->getMax());
-          writer.writeFieldFloat("step", command->getHAStep());
-          writer.writeField("mode", command->getHAMode());
+          writer.writeFieldFloat("step", profile ? profile->step : 1);
+          writer.writeField("mode", profile && profile->mode && profile->mode[0]
+                                        ? profile->mode
+                                        : "auto");
         }
 
         if (component == "switch") {
@@ -256,15 +276,15 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
 }
 
 std::string MqttHA::createStateTopic(const std::string& prefix,
-                                     const std::string& topic) const {
-  std::string stateTopic = topic;
+                                     std::string_view topic) const {
+  std::string stateTopic = std::string(topic);
   std::transform(stateTopic.begin(), stateTopic.end(), stateTopic.begin(),
                  [](unsigned char c) { return std::tolower(c); });
   return rootTopic + prefix + (prefix.empty() ? "" : "/") + stateTopic;
 }
 
 MqttHA::KeyValueMapping MqttHA::createOptions(
-    const std::map<int, std::string>& ha_key_value_map,
+    const command_types::HAKeyValueMap& ha_key_value_map,
     const int& ha_default_key) {
   // Create a vector of options names and a vector of pairs
   std::vector<std::pair<std::string, int>> optionsVec;
@@ -272,8 +292,8 @@ MqttHA::KeyValueMapping MqttHA::createOptions(
 
   // Populate optionsVec and options from the map
   for (const auto& kv : ha_key_value_map) {
-    optionsVec.emplace_back(kv.second, kv.first);
-    options.push_back(kv.second);
+    optionsVec.emplace_back(std::string(kv.second), kv.first);
+    options.push_back(std::string(kv.second));
   }
 
   // Determine default option name and value
@@ -313,6 +333,11 @@ MqttHA::KeyValueMapping MqttHA::createOptions(
             std::to_string(defaultOptionValue) + " }}";
 
   return KeyValueMapping{options, valueMap, cmdMap};
+}
+
+const HAProfile* MqttHA::resolveProfile(const Command* command) {
+  if (!command || !command->getHA()) return nullptr;
+  return findHAProfile(command->getHAProfile());
 }
 
 #endif

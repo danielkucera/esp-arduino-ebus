@@ -183,7 +183,7 @@ class Mqtt {
   void handleRead(std::string_view payload);
   void handleWrite(std::string_view payload);
 
-  void handleDirectWrite(const std::string& key, std::string_view val_view);
+  void handleDirectWrite(std::string_view key, std::string_view val_view);
   void handleValueUpdate(std::string_view key);
 
   void publishResponse(std::string_view id, std::string_view status,

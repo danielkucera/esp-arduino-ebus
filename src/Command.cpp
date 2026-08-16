@@ -10,6 +10,7 @@
 #include <limits>
 #include <regex>
 
+#include "HaProfile.hpp"
 #include "Logger.hpp"
 
 const uint32_t& Command::getPollId() const { return poll_id; }
@@ -28,9 +29,9 @@ size_t Command::getLength() const { return length; }
 
 bool Command::getNumeric() const { return numeric; }
 
-const std::string& Command::getKey() const { return key; }
+std::string_view Command::getKey() const { return key_; }
 
-const std::string& Command::getName() const { return name; }
+std::string_view Command::getName() const { return name_; }
 
 const ebus::Sequence& Command::getReadCmd() const { return read_cmd; }
 
@@ -54,33 +55,19 @@ const float& Command::getMax() const { return max; }
 
 const uint8_t& Command::getDigits() const { return digits; }
 
-const std::string& Command::getUnit() const { return unit; }
+std::string_view Command::getUnit() const { return unit_; }
 
 const bool& Command::getHA() const { return ha; }
 
-const std::string& Command::getHAComponent() const { return ha_component; }
-
-const std::string& Command::getHADeviceClass() const { return ha_device_class; }
-
-const std::string& Command::getHAEntityCategory() const {
-  return ha_entity_category;
+const command_types::ProfileFS& Command::getHAProfile() const {
+  return ha_profile;
 }
 
-const std::string& Command::getHAMode() const { return ha_mode; }
-
-const std::map<int, std::string>& Command::getHAKeyValueMap() const {
-  return ha_key_value_map;
+const command_types::HAKeyValueMap& Command::getHAKeyValueMap() const {
+  return ha_key_value_map_;
 }
 
 const int& Command::getHADefaultKey() const { return ha_default_key; }
-
-const uint8_t& Command::getHAPayloadOn() const { return ha_payload_on; }
-
-const uint8_t& Command::getHAPayloadOff() const { return ha_payload_off; }
-
-const std::string& Command::getHAStateClass() const { return ha_state_class; }
-
-const float& Command::getHAStep() const { return ha_step; }
 
 bool Command::matches(ebus::ByteView master_view) const {
   // eBUS service identification (ZZ PB SB...) starts at index 1
@@ -159,8 +146,8 @@ const std::string Command::getStringFromVector() const {
 void Command::toJson(ebus::detail::JsonWriter& writer) const {
   auto scope = writer.objectScope();
   // Command Fields
-  writer.writeField("key", key);
-  writer.writeField("name", name);
+  writer.writeField("key", key_);
+  writer.writeField("name", name_);
   writer.writeHexField("read_cmd", read_cmd);
   writer.writeHexField("write_cmd", write_cmd);
   writer.writeField("active", active);
@@ -174,33 +161,23 @@ void Command::toJson(ebus::detail::JsonWriter& writer) const {
   writer.writeFieldFloat("min", min);
   writer.writeFieldFloat("max", max);
   writer.writeField("digits", digits);
-  writer.writeField("unit", unit);
+  writer.writeField("unit", unit_);
 
   // Home Assistant
   writer.writeField("ha", ha);
-  writer.writeField("ha_component", ha_component);
-  writer.writeField("ha_device_class", ha_device_class);
-  writer.writeField("ha_entity_category", ha_entity_category);
-  writer.writeField("ha_mode", ha_mode);
+  writer.writeField("ha_profile", ha_profile);
 
   writer.appendKey("ha_key_value_map");
   {
-    auto map_scope = writer.objectScope();
-    for (const auto& kv : ha_key_value_map) {
-      // Optimization: Avoid std::to_string heap allocation for every map entry
-      char keyBuf[12];
-      auto [ptr, ec] = std::to_chars(keyBuf, keyBuf + sizeof(keyBuf), kv.first);
-      if (ec == std::errc{}) {
-        writer.writeField(std::string_view(keyBuf, ptr - keyBuf), kv.second);
-      }
+    auto array_scope = writer.arrayScope();
+    for (const auto& kv : ha_key_value_map_) {
+      auto obj_scope = writer.objectScope();
+      writer.writeField("key", kv.first);
+      writer.writeField("value", std::string_view(kv.second));
     }
   }
 
   writer.writeField("ha_default_key", ha_default_key);
-  writer.writeField("ha_payload_on", ha_payload_on);
-  writer.writeField("ha_payload_off", ha_payload_off);
-  writer.writeField("ha_state_class", ha_state_class);
-  writer.writeFieldFloat("ha_step", ha_step);
 }
 
 Command Command::fromJson(ebus::detail::JsonReader& reader) {
@@ -213,9 +190,9 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
   reader.forEachField([&](std::string_view key, ebus::detail::JsonReader& r) {
     auto token = r.next();
     if (key == "key")
-      command.key = r.value();
+      command.key_.assign(r.value());
     else if (key == "name")
-      command.name = r.value();
+      command.name_.assign(r.value());
     else if (key == "read_cmd")
       command.read_cmd.assign(ebus::toVector(r.value()));
     else if (key == "write_cmd")
@@ -241,41 +218,45 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
     else if (key == "digits")
       command.digits = r.asNum<uint8_t>();
     else if (key == "unit")
-      command.unit = r.value();
+      command.unit_.assign(r.value());
     else if (key == "ha")
       command.ha = r.asBool();
-    else if (key == "ha_component")
-      command.ha_component = r.value();
-    else if (key == "ha_device_class")
-      command.ha_device_class = r.value();
-    else if (key == "ha_entity_category")
-      command.ha_entity_category = r.value();
-    else if (key == "ha_mode")
-      command.ha_mode = r.value();
+    else if (key == "ha_profile")
+      command.ha_profile.assign(r.value());
     else if (key == "ha_key_value_map") {
-      if (token == ebus::detail::JsonReader::Token::object_start) {
-        r.forEachField([&](std::string_view k,
-                           ebus::detail::JsonReader& map_r) {
-          if (map_r.next() == ebus::detail::JsonReader::Token::string) {
-            int val = ebus::toNum<int>(k);
-            if (val != 0 ||
-                k == "0") {  // Check for valid conversion or explicit "0"
-              command.ha_key_value_map[static_cast<int>(val)] = map_r.value();
+      if (token == ebus::detail::JsonReader::Token::array_start) {
+        while (true) {
+          std::string_view elem_sv = r.rawValue();
+          if (elem_sv.empty() || elem_sv == "]") break;
+          if (!elem_sv.empty() && elem_sv.front() == '{') {
+            ebus::detail::JsonReader obj_r(elem_sv);
+            int key_val = 0;
+            std::string value_str;
+            bool has_key = false;
+            bool has_value = false;
+            obj_r.forEachField([&](std::string_view field_k,
+                                   ebus::detail::JsonReader& field_r) {
+              auto field_t = field_r.next();
+              if (field_k == "key" &&
+                  field_t == ebus::detail::JsonReader::Token::number) {
+                key_val = field_r.asNum<int>();
+                has_key = true;
+              } else if (field_k == "value" &&
+                         field_t == ebus::detail::JsonReader::Token::string) {
+                value_str = std::string(field_r.value());
+                has_value = true;
+              }
+              return true;
+            });
+            if (has_key && has_value) {
+              command.ha_key_value_map_.push_back(
+                  {key_val, command_types::HAValueFS(value_str)});
             }
           }
-          return true;
-        });
+        }
       }
     } else if (key == "ha_default_key")
       command.ha_default_key = r.asNum<int>();
-    else if (key == "ha_payload_on")
-      command.ha_payload_on = r.asNum<uint8_t>();
-    else if (key == "ha_payload_off")
-      command.ha_payload_off = r.asNum<uint8_t>();
-    else if (key == "ha_state_class")
-      command.ha_state_class = r.value();
-    else if (key == "ha_step")
-      command.ha_step = r.asNum<float>();
     return true;
   });
 
@@ -300,10 +281,10 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
 
     switch (index) {
       case 0:
-        command.key = reader.value();
+        command.key_.assign(reader.value());
         break;
       case 1:
-        command.name = reader.value();
+        command.name_.assign(reader.value());
         break;
       case 2:
         command.read_cmd.assign(ebus::toVector(reader.value()));
@@ -342,54 +323,51 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
         command.digits = reader.asNum<uint8_t>();
         break;
       case 13:
-        command.unit = reader.value();
+        command.unit_.assign(reader.value());
         break;
       case 14:
         command.ha = reader.asBool();
         break;
       case 15:
-        command.ha_component = reader.value();
+        command.ha_profile.assign(reader.value());
         break;
-      case 16:
-        command.ha_device_class = reader.value();
-        break;
-      case 17:
-        command.ha_entity_category = reader.value();
-        break;
-      case 18:
-        command.ha_mode = reader.value();
-        break;
-      case 19: {
-        if (token == ebus::detail::JsonReader::Token::object_start) {
-          reader.forEachField(
-              [&](std::string_view k, ebus::detail::JsonReader& r) {
-                if (r.next() == ebus::detail::JsonReader::Token::string) {
-                  int val = ebus::toNum<int>(k);
-                  if (val != 0 ||
-                      k == "0") {  // Check for valid conversion or explicit "0"
-                    command.ha_key_value_map[static_cast<int>(val)] = r.value();
-                  }
+      case 16: {
+        if (token == ebus::detail::JsonReader::Token::array_start) {
+          while (true) {
+            std::string_view elem_sv = reader.rawValue();
+            if (elem_sv.empty() || elem_sv == "]") break;
+            if (!elem_sv.empty() && elem_sv.front() == '{') {
+              ebus::detail::JsonReader obj_r(elem_sv);
+              int key_val = 0;
+              std::string value_str;
+              bool has_key = false;
+              bool has_value = false;
+              obj_r.forEachField([&](std::string_view field_k,
+                                     ebus::detail::JsonReader& field_r) {
+                auto field_t = field_r.next();
+                if (field_k == "key" &&
+                    field_t == ebus::detail::JsonReader::Token::number) {
+                  key_val = field_r.asNum<int>();
+                  has_key = true;
+                } else if (field_k == "value" &&
+                           field_t == ebus::detail::JsonReader::Token::string) {
+                  value_str = std::string(field_r.value());
+                  has_value = true;
                 }
                 return true;
               });
+              if (has_key && has_value) {
+                command.ha_key_value_map_.push_back(
+                    {key_val, ebus::FixedString<32>(value_str)});
+              }
+            }
+          }
         } else {
           reader.skipComposite(token);
         }
       } break;
-      case 20:
+      case 17:
         command.ha_default_key = reader.asNum<int>();
-        break;
-      case 21:
-        command.ha_payload_on = reader.asNum<uint8_t>();
-        break;
-      case 22:
-        command.ha_payload_off = reader.asNum<uint8_t>();
-        break;
-      case 23:
-        command.ha_state_class = reader.value();
-        break;
-      case 24:
-        command.ha_step = reader.asNum<float>();
         break;
       default:
         reader.skipComposite(token);
@@ -452,14 +430,16 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
                           ebus::DataType::error);
       if (!met.datatype) error = "Invalid datatype for field: datatype";
     } else if (key == "ha_key_value_map") {
-      if (token != ebus::detail::JsonReader::Token::object_start)
+      if (token != ebus::detail::JsonReader::Token::array_start)
         error = "Invalid type for field: ha_key_value_map";
       else
         error = isKeyValueMapValid(r);
-    } else if (key == "interval" || key == "ha_default_key" ||
-               key == "ha_payload_on" || key == "ha_payload_off") {
+    } else if (key == "interval" || key == "ha_default_key") {
       if (token != ebus::detail::JsonReader::Token::number)
         error = "Invalid type for field: " + std::string(key);
+    } else if (key == "ha_profile") {
+      if (token != ebus::detail::JsonReader::Token::string)
+        error = "Invalid type for field: ha_profile";
     }
     return error.empty();
   });
@@ -479,25 +459,31 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
 const std::string Command::isKeyValueMapValid(
     ebus::detail::JsonReader& reader) {
   std::string error;
-  reader.forEachField(
-      [&](std::string_view key, ebus::detail::JsonReader& map_r) {
-        int keyValue = ebus::toNum<int>(key);
-        if (keyValue == 0 &&
-            key != "0") {  // Check for valid conversion or explicit "0"
-          error = "Invalid key: " + std::string(key);
-          return false;
-        }
-        if (keyValue < std::numeric_limits<int>::min() ||
-            keyValue > std::numeric_limits<int>::max()) {
-          error = "Key out of range: " + std::string(key);
-          return false;
-        }
-        if (map_r.next() != ebus::detail::JsonReader::Token::string) {
-          error = "Invalid value type in map";
-          return false;
-        }
-        return true;
-      });
+  while (true) {
+    std::string_view elem_sv = reader.rawValue();
+    if (elem_sv.empty() || elem_sv == "]") break;
+    if (!elem_sv.empty() && elem_sv.front() == '{') {
+      ebus::detail::JsonReader obj_r(elem_sv);
+      bool has_key = false;
+      bool has_value = false;
+      obj_r.forEachField(
+          [&](std::string_view field_k, ebus::detail::JsonReader& field_r) {
+            auto field_t = field_r.next();
+            if (field_k == "key" &&
+                field_t == ebus::detail::JsonReader::Token::number) {
+              has_key = true;
+            } else if (field_k == "value" &&
+                       field_t == ebus::detail::JsonReader::Token::string) {
+              has_value = true;
+            }
+            return true;
+          });
+      if (!has_key || !has_value) {
+        error = "Invalid ha_key_value_map element";
+        break;
+      }
+    }
+  }
   return error;
 }
 

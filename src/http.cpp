@@ -489,6 +489,82 @@ esp_err_t handleCommandsInsert(httpd_req_t* req) {
   return ESP_OK;
 }
 
+esp_err_t handleCommandsUpload(httpd_req_t* req) {
+  if (req->method != HTTP_POST) {
+    HttpUtils::sendErrorResponse(req, "405 Method Not Allowed", "upload",
+                                 "POST required");
+    return ESP_OK;
+  }
+
+  if (!store.initFileSystem()) {
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
+                                 "LittleFS init failed");
+    return ESP_OK;
+  }
+
+  const char* kTmpPath = "/littlefs/commands.json.tmp";
+
+  FILE* file = std::fopen(kTmpPath, "wb");
+  if (file == nullptr) {
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
+                                 "Failed to open temp file");
+    return ESP_OK;
+  }
+
+  char buffer[512];
+  int remaining = req->content_len;
+  int total_written = 0;
+
+  while (remaining > 0) {
+    int to_read = remaining > static_cast<int>(sizeof(buffer))
+                      ? static_cast<int>(sizeof(buffer))
+                      : remaining;
+    int received = httpd_req_recv(req, buffer, to_read);
+    if (received <= 0) {
+      std::fclose(file);
+      std::remove(kTmpPath);
+      HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
+                                   "Receive failed");
+      return ESP_OK;
+    }
+    int written = std::fwrite(buffer, 1, received, file);
+    if (written != received) {
+      std::fclose(file);
+      std::remove(kTmpPath);
+      HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
+                                   "Write failed");
+      return ESP_OK;
+    }
+    total_written += written;
+    remaining -= received;
+  }
+
+  std::fclose(file);
+
+  int64_t bytes = store.loadCommandsFrom(kTmpPath);
+  if (bytes < 0) {
+    std::remove(kTmpPath);
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
+                                 "JSON parse failed");
+    return ESP_OK;
+  }
+
+  if (store.saveCommands() < 0) {
+    std::remove(kTmpPath);
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
+                                 "Save failed");
+    return ESP_OK;
+  }
+
+  std::remove(kTmpPath);
+  size_t count = store.getCommandCount();
+  char res_buf[128];
+  snprintf(res_buf, sizeof(res_buf), "Uploaded %d bytes, loaded %u commands",
+           total_written, (unsigned)count);
+  HttpUtils::sendSuccessResponse(req, "upload", res_buf);
+  return ESP_OK;
+}
+
 esp_err_t handleCommandsRemove(httpd_req_t* req) {
   std::string body = HttpUtils::readBody(req);
   ebus::detail::JsonReader reader(body);
@@ -500,7 +576,7 @@ esp_err_t handleCommandsRemove(httpd_req_t* req) {
           t == ebus::detail::JsonReader::Token::end)
         break;
       if (t == ebus::detail::JsonReader::Token::string)
-        store.removeCommand(std::string(reader.value()));
+        store.removeCommand(reader.value());
     }
   } else {
     auto cmds = store.getCommands();
@@ -872,6 +948,7 @@ void SetupHttpHandlers() {
   RegisterUri("/api/v1/commands", HTTP_GET, handleCommands);
   RegisterUri("/api/v1/commands/evaluate", HTTP_POST, handleCommandsEvaluate);
   RegisterUri("/api/v1/commands/insert", HTTP_POST, handleCommandsInsert);
+  RegisterUri("/api/v1/commands/upload", HTTP_POST, handleCommandsUpload);
   RegisterUri("/api/v1/commands/remove", HTTP_POST, handleCommandsRemove);
   RegisterUri("/api/v1/commands/load", HTTP_POST, handleCommandsLoad);
   RegisterUri("/api/v1/commands/save", HTTP_POST, handleCommandsSave);

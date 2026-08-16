@@ -2,6 +2,7 @@
 
 #if defined(EBUS_INTERNAL)
 #include <Command.hpp>
+#include <HaProfile.hpp>
 #include <map>
 #include <string>
 #include <vector>
@@ -48,9 +49,10 @@ class MqttHA {
   std::string thingHwVersion;
   std::string thingConfigurationUrl = "http://esp-ebus.local/";
 
-  static void sanitizeObjectId(std::string_view source, char* out, size_t max_len);
+  static void sanitizeObjectId(std::string_view source, char* out,
+                               size_t max_len);
   std::string createStateTopic(const std::string& prefix,
-                               const std::string& topic) const;
+                               std::string_view topic) const;
 
   struct KeyValueMapping {
     std::vector<std::string> options;
@@ -59,8 +61,10 @@ class MqttHA {
   };
 
   static KeyValueMapping createOptions(
-      const std::map<int, std::string>& ha_key_value_map,
+      const command_types::HAKeyValueMap& ha_key_value_map,
       const int& ha_default_key);
+
+  static const HAProfile* resolveProfile(const Command* command);
 };
 
 extern MqttHA mqttha;

@@ -67,29 +67,31 @@ void Store::setCommandRemovedCallback(CommandChangedCallback callback) {
 
 void Store::insertCommand(const Command& command) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  // Insert or update in commands map
-  auto it = commands_.find(command.getKey());
+  command_types::KeyFS fs_key(command.getKey());
+  auto it = commands_.find(fs_key);
   if (it != commands_.end()) {
     it->second = command;
   } else {
-    it = commands_.insert(std::make_pair(command.getKey(), command)).first;
+    it = commands_.insert(std::make_pair(fs_key, command)).first;
   }
 
   if (command_changed_callback_) command_changed_callback_(&it->second);
 }
 
-void Store::removeCommand(const std::string& key) {
+void Store::removeCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  auto it = commands_.find(key);
+  command_types::KeyFS fs_key(key);
+  auto it = commands_.find(fs_key);
   if (it != commands_.end()) {
     if (command_removed_callback_) command_removed_callback_(&it->second);
     commands_.erase(it);
   }
 }
 
-Command* Store::findCommand(const std::string& key) {
+Command* Store::findCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  auto it = commands_.find(key);
+  command_types::KeyFS fs_key(key);
+  auto it = commands_.find(fs_key);
   if (it != commands_.end())
     return &(it->second);
   else
@@ -121,47 +123,30 @@ MatchingCommands Store::findAllMatchingCommands(ebus::ByteView master) {
 
 int64_t Store::loadCommands() {
   if (!ensureLittlefsMounted()) return -1;
+  std::remove("/littlefs/commands.json.tmp");
+  return loadCommandsFrom(kCommandsFilePath);
+}
 
-  FILE* file = std::fopen(kCommandsFilePath, "rb");
+int64_t Store::loadCommandsFrom(const char* path) {
+  if (!ensureLittlefsMounted()) return -1;
+
+  FILE* file = std::fopen(path, "rb");
   if (file == nullptr) {
     if (errno == ENOENT) return 0;
     char err_buf[64];
     snprintf(err_buf, sizeof(err_buf),
-             "Store: Failed to open commands file: %d", errno);
+             "Store: Failed to open commands file %s: %d", path, errno);
     logger.error(err_buf);
     return -1;
   }
 
-  if (std::fseek(file, 0, SEEK_END) != 0) {
-    std::fclose(file);
-    logger.error("Store: Failed to seek end of commands file");
-    return -1;
-  }
-
-  long size = std::ftell(file);
-  if (size <= 2) {
-    std::fclose(file);
-    return 0;
-  }
-
-  if (size <= 0 || std::fseek(file, 0, SEEK_SET) != 0) {
-    std::fclose(file);
-    logger.error("Store: Failed to seek start of commands file");
-    return -1;
-  }
-
-  std::string payload;
-  payload.resize(static_cast<size_t>(size));
-  size_t bytesRead = std::fread(payload.data(), 1, payload.size(), file);
-  std::fclose(file);
-  if (bytesRead != payload.size()) return -1;
-
-  char log_buf[64];
-  snprintf(log_buf, sizeof(log_buf), "Store: Loading from LittleFS (%ld bytes)",
-           size);
+  char log_buf[96];
+  snprintf(log_buf, sizeof(log_buf), "Store: Loading from %s", path);
   logger.info(log_buf);
-  deserializeCommands(payload.c_str());
-  return static_cast<int64_t>(payload.size());
+
+  deserializeCommands(file);
+  std::fclose(file);
+  return static_cast<int64_t>(store.getCommandCount());
 }
 
 int64_t Store::saveCommands() const {
@@ -198,16 +183,9 @@ int64_t Store::saveCommands() const {
                                      "digits",
                                      "unit",
                                      "ha",
-                                     "ha_component",
-                                     "ha_device_class",
-                                     "ha_entity_category",
-                                     "ha_mode",
+                                     "ha_profile",
                                      "ha_key_value_map",
-                                     "ha_default_key",
-                                     "ha_payload_on",
-                                     "ha_payload_off",
-                                     "ha_state_class",
-                                     "ha_step"};
+                                     "ha_default_key"};
       for (const char* h : header) writer.writeValue(h);
     }
 
@@ -230,30 +208,19 @@ int64_t Store::saveCommands() const {
       writer.writeValue(c.getDigits());
       writer.writeValue(c.getUnit());
       writer.writeValue(c.getHA());
-      writer.writeValue(c.getHAComponent());
-      writer.writeValue(c.getHADeviceClass());
-      writer.writeValue(c.getHAEntityCategory());
-      writer.writeValue(c.getHAMode());
+      writer.writeValue(c.getHAProfile());
 
-      // Map as object
+      // Key-value map as array of objects
       {
-        auto map_scope = writer.objectScope();
-        for (const auto& kvm : c.getHAKeyValueMap()) {
-          char keyBuf[12];
-          auto [ptr, ec] =
-              std::to_chars(keyBuf, keyBuf + sizeof(keyBuf), kvm.first);
-          if (ec == std::errc{}) {
-            writer.writeField(std::string_view(keyBuf, ptr - keyBuf),
-                              kvm.second);
-          }
+        auto kv_array = writer.arrayScope();
+        for (const auto& kv : c.getHAKeyValueMap()) {
+          auto obj_scope = writer.objectScope();
+          writer.writeField("key", kv.first);
+          writer.writeField("value", std::string_view(kv.second));
         }
       }
 
       writer.writeValue(c.getHADefaultKey());
-      writer.writeValue(c.getHAPayloadOn());
-      writer.writeValue(c.getHAPayloadOff());
-      writer.writeValue(c.getHAStateClass());
-      writer.writeValueFloat(c.getHAStep());
     }
   }
   writer.flush();
@@ -325,6 +292,11 @@ size_t Store::getPassiveCommands() const {
     if (!kv.second.getActive()) count++;
   }
   return count;
+}
+
+size_t Store::getCommandCount() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  return commands_.size();
 }
 
 bool Store::active() const {
@@ -439,28 +411,83 @@ void Store::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
   }
 }
 
-void Store::deserializeCommands(const char* payload) {
-  ebus::detail::JsonReader reader(payload);
-  if (reader.next() != ebus::detail::JsonReader::Token::array_start) {
-    logger.warn("Store: Payload does not start with a JSON array");
-    return;
-  }
+void Store::deserializeCommands(FILE* file) {
+  constexpr size_t kReaderBufSize = 2048;
+  constexpr size_t kRowBufSize = 1024;
+  constexpr size_t kChunkSize = 512;
 
+  static char reader_buf[kReaderBufSize];
+  static char row_buf[kRowBufSize];
+  char chunk_buf[kChunkSize];
+
+  ebus::detail::JsonReader reader(reader_buf, sizeof(reader_buf));
+
+  bool eof = false;
   size_t loaded_count = 0;
   bool header_seen = false;
 
-  // Read each row individually
+  auto feedFile = [&]() -> bool {
+    if (eof) return false;
+    size_t n = std::fread(chunk_buf, 1, sizeof(chunk_buf), file);
+    if (n > 0) {
+      reader.feed(std::string_view(chunk_buf, n));
+      return true;
+    }
+    eof = true;
+    reader.endOfInput();
+    return false;
+  };
+
+  feedFile();
+
+  // Expect root array
+  while (true) {
+    auto t = reader.next();
+    if (t == ebus::detail::JsonReader::Token::need_more_data) {
+      if (!feedFile()) {
+        t = reader.next();
+        if (t == ebus::detail::JsonReader::Token::need_more_data) return;
+      }
+      continue;
+    }
+    if (t == ebus::detail::JsonReader::Token::array_start) break;
+    if (t == ebus::detail::JsonReader::Token::end ||
+        t == ebus::detail::JsonReader::Token::error)
+      return;
+  }
+
+  // Read each element
   while (true) {
     std::string_view row_sv = reader.rawValue();
-    if (row_sv.empty()) break;
+    if (row_sv.empty()) {
+      if (reader.needsMoreData()) {
+        if (eof) {
+          reader.endOfInput();
+        }
+        if (!feedFile()) {
+          if (reader.needsMoreData()) {
+            logger.warn("Store: Command element exceeds reader buffer size");
+            return;
+          }
+          continue;
+        }
+        continue;
+      }
+      break;
+    }
 
-    ebus::detail::JsonReader row_reader(row_sv);
+    size_t copy_len =
+        row_sv.size() < kRowBufSize ? row_sv.size() : kRowBufSize - 1;
+    std::memcpy(row_buf, row_sv.data(), copy_len);
+    row_buf[copy_len] = '\0';
+
+    ebus::detail::JsonReader row_reader(std::string_view(row_buf, copy_len));
     auto token = row_reader.next();
 
     if (token == ebus::detail::JsonReader::Token::array_start) {
       if (!header_seen) {
         header_seen = true;
-        continue;  // Skip header row
+        continue;
       }
       row_reader.reset();
       insertCommand(Command::fromTabular(row_reader));
@@ -480,9 +507,10 @@ void Store::deserializeCommands(const char* payload) {
       }
     }
   }
+
   char res_buf[64];
   snprintf(res_buf, sizeof(res_buf), "Store: Deserialized %u commands.",
-           (unsigned)loaded_count);
+           static_cast<unsigned>(loaded_count));
   logger.info(res_buf);
 }
 

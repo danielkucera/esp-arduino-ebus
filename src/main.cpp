@@ -943,7 +943,7 @@ extern "C" void app_main(void) {
 
   store.setDataUpdatedCallback(Mqtt::publishValue);
 
-  store.setDataUpdatedLogCallback([](const std::string& key) {
+  store.setDataUpdatedLogCallback([](std::string_view key) {
     // Now handled asynchronously within the Mqtt Update action
   });
 
@@ -951,23 +951,33 @@ extern "C" void app_main(void) {
   store.setCommandChangedCallback([](Command* cmd) {
     // Remove existing poll item if it was already registered
     if (cmd->getPollId() != 0) {
-      logger.warn("Releasing Poll ID " + std::to_string(cmd->getPollId()) +
-                  " for key " + cmd->getKey() + " during command change.");
+      char log_buf[128];
+      snprintf(log_buf, sizeof(log_buf),
+               "Releasing Poll ID %lu for key '%.*s' during command change.",
+               (unsigned long)cmd->getPollId(), (int)cmd->getKey().size(),
+               cmd->getKey().data());
+      logger.warn(log_buf);
       getEbusController().removePollItem(cmd->getPollId());
       cmd->setPollId(0);
     }
     // Add new poll item if active and has a valid read command
     if (cmd->getActive() && !cmd->getReadCmd().empty()) {
-      std::string key = cmd->getKey();  // Capture key by value for the lambda
+      std::string_view key = cmd->getKey();
       uint32_t id = getEbusController().addPollItem(3, cmd->getReadCmd(),
                                                     cmd->getInterval() * 1000);
-      logger.info("Re-registering Poll ID " + std::to_string(id) + " for key " +
-                  key);
+      char log_buf[128];
+      snprintf(log_buf, sizeof(log_buf),
+               "Re-registering Poll ID %lu for key '%.*s'", (unsigned long)id,
+               (int)key.size(), key.data());
+      logger.info(log_buf);
       cmd->setPollId(id);
     } else {
-      logger.info(
-          "No valid poll item to register/update for command change on key " +
-          cmd->getKey());
+      char log_buf[128];
+      snprintf(log_buf, sizeof(log_buf),
+               "No valid poll item to register/update for command change on "
+               "key '%.*s'",
+               (int)cmd->getKey().size(), cmd->getKey().data());
+      logger.info(log_buf);
     }
   });
 
@@ -981,6 +991,13 @@ extern "C" void app_main(void) {
   if (!store.initFileSystem()) {
     logger.error("LittleFS initialization failed");
   }
+
+#if defined(EBUS_INTERNAL)
+  // Emergency recovery: uncomment to wipe commands.json on boot
+  // std::remove("/littlefs/commands.json");
+  // std::remove("/littlefs/commands.json.tmp");
+#endif
+
   store.loadCommands();  // Automatically registers poll items via the callback
 
   cron.initFileSystem();  // This should be called before cron.loadRules()

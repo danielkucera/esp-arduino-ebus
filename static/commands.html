@@ -35,6 +35,8 @@
     <button id="btnDownload" class="secondary">Save as file</button>
     <button id="btnLoad" class="apply">Apply from storage</button>
     <button id="btnSave" class="danger">Save to storage</button>
+    <button id="btnUploadFile" class="apply">Upload file to storage</button>
+    <input id="fileUploadDirect" type="file" style="display:none" accept="application/json">
     <button id="btnWipe" class="danger">Wipe all from storage</button>
     <span class="status" id="status"> </span>
     <span id="size">0 bytes</span>
@@ -232,6 +234,24 @@
       fetchCommands();
     });
     document.getElementById('btnSave').addEventListener('click', () => postSimple('/api/v1/commands/save'));
+    document.getElementById('btnUploadFile').addEventListener('click', () => document.getElementById('fileUploadDirect').click());
+    document.getElementById('fileUploadDirect').addEventListener('change', ev => {
+      const f = ev.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setStatus('Uploading file...');
+        fetch('/api/v1/commands/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: e.target.result
+        }).then(res => res.text().then(text => {
+          setStatus(text || (res.ok ? 'Uploaded' : 'Error'));
+          if (res.ok) fetchCommands();
+        })).catch(() => setStatus('Upload failed'));
+      };
+      reader.readAsText(f);
+    });
     document.getElementById('btnWipe').addEventListener('click', () => {
       if (confirm('Clear all commands from NVS?')) postSimple('/api/v1/commands/wipe');
     });

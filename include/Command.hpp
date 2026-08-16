@@ -4,9 +4,23 @@
 
 #include <ebus/data_types.hpp>
 #include <ebus/detail/json_reader.hpp>
-#include <map>
+#include <ebus/static_vector.hpp>
+#include <ebus/types.hpp>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
+
+namespace command_types {
+
+using KeyFS = ebus::FixedString<8>;
+using NameFS = ebus::FixedString<32>;
+using ProfileFS = ebus::FixedString<24>;
+using UnitFS = ebus::FixedString<8>;
+using HAValueFS = ebus::FixedString<32>;
+using HAKeyValueMap = ebus::StaticVector<std::pair<int, HAValueFS>, 8>;
+
+}  // namespace command_types
 
 // Forward declaration for JsonWriter
 namespace ebus::detail {
@@ -32,8 +46,8 @@ class Command {
   bool getNumeric() const;
 
   // Command field accessors
-  const std::string& getKey() const;
-  const std::string& getName() const;
+  std::string_view getKey() const;
+  std::string_view getName() const;
   const ebus::Sequence& getReadCmd() const;
   const ebus::Sequence& getWriteCmd() const;
   const bool& getActive() const;
@@ -47,20 +61,13 @@ class Command {
   const float& getMin() const;
   const float& getMax() const;
   const uint8_t& getDigits() const;
-  const std::string& getUnit() const;
+  std::string_view getUnit() const;
 
   // Home Assistant field accessors
   const bool& getHA() const;
-  const std::string& getHAComponent() const;
-  const std::string& getHADeviceClass() const;
-  const std::string& getHAEntityCategory() const;
-  const std::string& getHAMode() const;
-  const std::map<int, std::string>& getHAKeyValueMap() const;
+  const ebus::FixedString<24>& getHAProfile() const;
+  const command_types::HAKeyValueMap& getHAKeyValueMap() const;
   const int& getHADefaultKey() const;
-  const uint8_t& getHAPayloadOn() const;
-  const uint8_t& getHAPayloadOff() const;
-  const std::string& getHAStateClass() const;
-  const float& getHAStep() const;
 
   /**
    * Checks if the master telegram matches this command's read sequence.
@@ -104,9 +111,9 @@ class Command {
 
   // Command fields
   // unique key of command
-  std::string key = "";
+  command_types::KeyFS key_ = {};
   // name of the command used as mqtt topic below "values/"
-  std::string name = "";
+  command_types::NameFS name_ = {};
   // read command as vector of "ZZPBSBNNDBx"
   ebus::Sequence read_cmd = {};
   // write command as vector of "ZZPBSBNNDBx" (OPTIONAL)
@@ -132,31 +139,17 @@ class Command {
   // decimal digits of value (OPTIONAL)
   uint8_t digits = 2;
   // unit (OPTIONAL)
-  std::string unit = "";
+  command_types::UnitFS unit_ = {};
 
   // Home Assistant
   // support for auto discovery (OPTIONAL)
   bool ha = false;
-  // component type (OPTIONAL)
-  std::string ha_component = "";
-  // device class (OPTIONAL)
-  std::string ha_device_class = "";
-  // entity category (OPTIONAL)
-  std::string ha_entity_category = "";
-  // mode (OPTIONAL)
-  std::string ha_mode = "auto";
+  // profile name referencing global HA profile registry
+  command_types::ProfileFS ha_profile = {};
   // options as pairs of "key":"value" (OPTIONAL)
-  std::map<int, std::string> ha_key_value_map = {};
+  command_types::HAKeyValueMap ha_key_value_map_ = {};
   // options default key (OPTIONAL)
   int ha_default_key = 0;
-  // payload for ON state (OPTIONAL)
-  uint8_t ha_payload_on = 1;
-  // payload for OFF state (OPTIONAL)
-  uint8_t ha_payload_off = 0;
-  // state class (OPTIONAL)
-  std::string ha_state_class = "";
-  // step value (OPTIONAL)
-  float ha_step = 1;
 
   // Field types for evaluation
   enum FieldType {
