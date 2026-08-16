@@ -10,7 +10,7 @@ using namespace ebus::detail;
 
 TEST_CASE("Command fromJson roundtrip preserves fields", "[Command]") {
   std::string json =
-      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009","write_cmd":"","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"min":0,"max":0,"digits":2,"unit":"°C","ha":true,"ha_profile":"sensor_temperature","ha_key_value_map":[{"key":0,"value":"Off"},{"key":1,"value":"On"}],"ha_default_key":1})";
+      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009","write_cmd":"","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"min":0,"max":0,"digits":2,"unit":"°C","ha":true,"ha_profile":"sensor_temperature"})";
 
   JsonReader reader(json);
   Command cmd = Command::fromJson(reader);
@@ -30,7 +30,7 @@ TEST_CASE("Command fromJson roundtrip preserves fields", "[Command]") {
 
 TEST_CASE("Command fromTabular roundtrip preserves fields", "[Command]") {
   std::string json =
-      R"(["01","Outside_Temperature","fe070009","",false,0,true,1,"DATA2B",1,0,0,2,"°C",true,"sensor_temperature",[{"key":0,"value":"Off"},{"key":1,"value":"On"}],1])";
+      R"(["01","Outside_Temperature","fe070009","",false,0,true,1,"DATA2B",1,0,0,2,"°C",true,"sensor_temperature",[],0])";
 
   JsonReader reader(json);
   Command cmd = Command::fromTabular(reader);
@@ -72,7 +72,7 @@ TEST_CASE("Command evaluate rejects invalid datatype", "[Command]") {
 
 TEST_CASE("Command toJson serializes all fields", "[Command]") {
   std::string json =
-      R"({"key":"01","name":"Test","read_cmd":"fe070009","write_cmd":"","active":true,"interval":60,"master":true,"position":1,"datatype":"UINT16","divider":1,"min":0,"max":100,"digits":0,"unit":"","ha":true,"ha_profile":"sensor_temperature","ha_key_value_map":[{"key":0,"value":"Off"},{"key":1,"value":"On"}],"ha_default_key":1})";
+      R"({"key":"01","name":"Test","read_cmd":"fe070009","write_cmd":"","active":true,"interval":60,"master":true,"position":1,"datatype":"UINT16","divider":1,"min":0,"max":100,"digits":0,"unit":"","ha":true,"ha_profile":"sensor_temperature"})";
   JsonReader reader(json);
   Command cmd = Command::fromJson(reader);
 

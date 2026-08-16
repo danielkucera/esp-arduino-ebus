@@ -16,9 +16,9 @@ Command makeCommand(const std::string& key, const std::string& name,
       R"({"key":")" + key + R"(","name":")" + name + R"(","read_cmd":")" +
       read_cmd + R"(","write_cmd":"","active":)" + (active ? "true" : "false") +
       R"(,"interval":0,"master":)" + (master ? "true" : "false") +
-      R"(,"position":)" + std::to_string(position) + R"(,"datatype":")" +
+      R"(,"position":)" + std::to_string(position) + R"(","datatype":")" +
       datatype +
-      R"(","divider":1,"min":0,"max":0,"digits":0,"unit":"","ha":false,"ha_profile":"","ha_key_value_map":[],"ha_default_key":0})";
+      R"(","divider":1,"min":0,"max":0,"digits":0,"unit":"","ha":false,"ha_profile":""})";
   JsonReader reader(json);
   return Command::fromJson(reader);
 }
@@ -122,8 +122,14 @@ TEST_CASE("Store loadCommandsFrom streams JSON from file", "[Store]") {
   store.wipeCommands();
 
   const char* json = R"([
-    {"key":"01","name":"Test1","read_cmd":"fe070009","write_cmd":"","active":true,"interval":60,"master":true,"position":1,"datatype":"UINT8","divider":1,"min":0,"max":0,"digits":0,"unit":"","ha":false,"ha_profile":"","ha_key_value_map":[],"ha_default_key":0},
-    {"key":"02","name":"Test2","read_cmd":"fe070009","write_cmd":"","active":false,"interval":0,"master":false,"position":1,"datatype":"UINT8","divider":1,"min":0,"max":0,"digits":0,"unit":"","ha":false,"ha_profile":"","ha_key_value_map":[],"ha_default_key":0}
+    {"key":"01","name":"Test1","read_cmd":"fe070009","write_cmd":"",
+     "active":true,"interval":60,"master":true,"position":1,
+     "datatype":"UINT8","divider":1,"min":0,"max":0,"digits":0,"unit":"",
+     "ha":false,"ha_profile":""},
+    {"key":"02","name":"Test2","read_cmd":"fe070009","write_cmd":"",
+     "active":false,"interval":0,"master":false,"position":1,
+     "datatype":"UINT8","divider":1,"min":0,"max":0,"digits":0,"unit":"",
+     "ha":false,"ha_profile":""}
   ])";
 
   const char* tmp_path = "/tmp/test_commands_stream.json";
@@ -146,8 +152,6 @@ TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
   store.wipeCommands();
 
   // Write a 4000+ byte JSON that spans multiple 1024-byte buffer fills.
-  // Commands 33 and 44 include non-empty ha_key_value_map arrays that
-  // are large enough to cross streaming buffer boundaries.
   FILE* f = std::fopen("/tmp/test_large_stream.json", "wb");
   REQUIRE(f != nullptr);
 
@@ -155,7 +159,6 @@ TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
   for (int i = 1; i <= 47; i++) {
     char buf[1024];
     if (i == 33) {
-      // Command 33: large ha_key_value_map with 5 entries
       int len = snprintf(
           buf, sizeof(buf),
           "  {\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":\"%02xb50903"
@@ -163,16 +166,11 @@ TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
           "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
           "1,"
           "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":true,"
-          "\"ha_profile\":\"select_enum\","
-          "\"ha_key_value_map\":[{\"key\":1,\"value\":\"On\"},"
-          "{\"key\":2,\"value\":\"Off\"},{\"key\":3,\"value\":\"Auto\"},"
-          "{\"key\":4,\"value\":\"Eco\"},{\"key\":5,\"value\":\"Night\"}],"
-          "\"ha_default_key\":3}%s\n",
+          "\"ha_profile\":\"select_enum\"}%s\n",
           i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256,
           (i < 47) ? "," : "");
       std::fwrite(buf, 1, len, f);
     } else if (i == 44) {
-      // Command 44: large ha_key_value_map with 3 entries
       int len = snprintf(
           buf, sizeof(buf),
           "  {\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":\"%02xb50903"
@@ -180,10 +178,7 @@ TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
           "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
           "1,"
           "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":true,"
-          "\"ha_profile\":\"select_enum\","
-          "\"ha_key_value_map\":[{\"key\":0,\"value\":\"Off\"},"
-          "{\"key\":1,\"value\":\"On\"},{\"key\":2,\"value\":\"Error\"}],"
-          "\"ha_default_key\":1}%s\n",
+          "\"ha_profile\":\"sensor_enum_ok_error\"}%s\n",
           i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256,
           (i < 47) ? "," : "");
       std::fwrite(buf, 1, len, f);
@@ -195,7 +190,7 @@ TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
           "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
           "1,"
           "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":false,"
-          "\"ha_profile\":\"\",\"ha_key_value_map\":[],\"ha_default_key\":0}%"
+          "\"ha_profile\":\"\"}%"
           "s\n",
           i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256,
           (i % 5 == 0) ? "false" : "true", (i < 47) ? "," : "");
@@ -215,14 +210,10 @@ TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
     REQUIRE(store.findCommand(key) != nullptr);
   }
 
-  // Verify ha_key_value_map commands loaded correctly
-  auto* cmd33 = store.findCommand("33");
-  REQUIRE(cmd33 != nullptr);
-
   std::remove("/tmp/test_large_stream.json");
 }
 
-TEST_CASE("Store loadCommandsFrom streams JSON with nested ha_key_value_map",
+TEST_CASE("Store loadCommandsFrom streams JSON with select_enum profile",
           "[Store]") {
   store.wipeCommands();
 
@@ -231,9 +222,7 @@ TEST_CASE("Store loadCommandsFrom streams JSON with nested ha_key_value_map",
       "key":"01","name":"Test1","read_cmd":"fe070009","write_cmd":"",
       "active":true,"interval":60,"master":true,"position":1,
       "datatype":"UINT8","divider":1,"min":0,"max":0,"digits":0,"unit":"",
-      "ha":true,"ha_profile":"select_enum",
-      "ha_key_value_map":[{"key":1,"value":"On"},{"key":2,"value":"Off"}],
-      "ha_default_key":1
+      "ha":true,"ha_profile":"select_enum"
     }
   ])";
 
@@ -251,8 +240,7 @@ TEST_CASE("Store loadCommandsFrom streams JSON with nested ha_key_value_map",
   std::remove(tmp_path);
 }
 
-TEST_CASE("Store loadCommandsFrom loads large commands with ha_key_value_map",
-          "[Store]") {
+TEST_CASE("Store loadCommandsFrom loads large commands", "[Store]") {
   store.wipeCommands();
 
   const char* path = "/tmp/test_kvm_stream.json";
@@ -272,12 +260,9 @@ TEST_CASE("Store loadCommandsFrom loads large commands with ha_key_value_map",
           "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
           "1,"
           "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":true,"
-          "\"ha_profile\":\"select_enum\","
-          "\"ha_key_value_map\":[{\"key\":1,\"value\":\"On\"},{\"key\":2,"
-          "\"value\":\"Off\"},"
-          "{\"key\":3,\"value\":\"Auto\"},{\"key\":4,\"value\":\"Eco\"},"
-          "{\"key\":5,\"value\":\"Night\"}],\"ha_default_key\":3}%s\n",
+          "\"ha_profile\":\"select_enum\"}",
           i, i, (i < 47) ? "," : "");
+      len += snprintf(buf + len, sizeof(buf) - len, "%s\n", "");
       std::fwrite(buf, 1, len, f);
     } else if (i == 44) {
       int len =
@@ -289,11 +274,9 @@ TEST_CASE("Store loadCommandsFrom loads large commands with ha_key_value_map",
                    "\"master\":false,\"position\":1,\"datatype\":\"UINT8\","
                    "\"divider\":1,"
                    "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":true,"
-                   "\"ha_profile\":\"select_enum\","
-                   "\"ha_key_value_map\":[{\"key\":0,\"value\":\"Off\"},{"
-                   "\"key\":1,\"value\":\"On\"},"
-                   "{\"key\":2,\"value\":\"Error\"}],\"ha_default_key\":1}%s\n",
+                   "\"ha_profile\":\"sensor_enum_ok_error\"}",
                    i, i, (i < 47) ? "," : "");
+      len += snprintf(buf + len, sizeof(buf) - len, "%s\n", "");
       std::fwrite(buf, 1, len, f);
     } else {
       int len = snprintf(
@@ -303,7 +286,7 @@ TEST_CASE("Store loadCommandsFrom loads large commands with ha_key_value_map",
           "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
           "1,"
           "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":false,"
-          "\"ha_profile\":\"\",\"ha_key_value_map\":[],\"ha_default_key\":0}%"
+          "\"ha_profile\":\"\"}%"
           "s\n",
           i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256,
           (i % 5 == 0) ? "false" : "true", (i < 47) ? "," : "");
@@ -328,9 +311,9 @@ TEST_CASE("Store loadCommandsFrom loads large commands with ha_key_value_map",
   store.wipeCommands();
 
   const char* json =
-      R"([["key","name","read_cmd","write_cmd","active","interval","master","position","datatype","divider","min","max","digits","unit","ha","ha_profile","ha_key_value_map","ha_default_key"],
-        ["01","Test1","fe070009","","1","60","1","1","UINT8","1","0","0","0","","0","",[],"0"],
-        ["02","Test2","fe070009","","0","0","0","1","UINT8","1","0","0","0","","0","",[],"0"]
+      R"([["key","name","read_cmd","write_cmd","active","interval","master","position","datatype","divider","min","max","digits","unit","ha","ha_profile"],
+        ["01","Test1","fe070009","","1","60","1","1","UINT8","1","0","0","0","","0"],
+        ["02","Test2","fe070009","","0","0","0","1","UINT8","1","0","0","0","","0"]
       ])";
 
   const char* tmp_path = "/tmp/test_tabular_stream.json";
