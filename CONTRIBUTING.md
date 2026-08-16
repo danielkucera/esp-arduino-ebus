@@ -83,3 +83,43 @@ To maintain stability and security on the ESP32-C3, the application follows a se
 2.  **Naming**: Ensure all new files follow the `snake_case` naming rule.
 3.  **Headers**: Ensure every new file starts with the standard project license header.
 4.  **Pull Requests**: Submit your changes via a Pull Request. Ensure that all tests pass before submission.
+
+## Testing
+
+### Host Tests (Catch2 + CMake)
+
+Host tests run on the development machine (no hardware required). They cover app-layer logic for `Command` and `Store`.
+
+```bash
+cd test_host && mkdir build && cd build && cmake .. && make && ./app_tests
+```
+
+### ebus Library Source Linking
+
+The `ebus` library is vendored into `lib/ebus/` and is built as part of the PlatformIO and host test build. For development, you may want to modify the library source directly or link it from an external checkout.
+
+**Option A: Work directly in the vendored copy**
+
+Edit files under `lib/ebus/` directly. The library has its own git repository and test suite:
+
+```bash
+cd lib/ebus && mkdir build && cd build && cmake .. && make && ctest
+```
+
+**Option B: Link from an external checkout**
+
+If you have a separate clone of the `ebus` library, replace the vendored copy with a symlink:
+
+```bash
+rm -rf lib/ebus
+ln -s /path/to/ebus/lib/ebus lib/ebus
+```
+
+**Important**: The `ebus` library's compile-time macros (defined in `lib/ebus/CMakeLists.txt` and `lib/ebus/include/ebus/detail/protocol_limits.hpp`) must be mirrored in `platformio.ini` `build_flags` for the `esp32-c3-internal` environment. Without this, the library silently falls back to its built-in defaults, causing mismatches.
+
+### ebus Library Tests
+
+```bash
+cd lib/ebus && mkdir build && cd build && cmake .. && make && ctest
+```
+
