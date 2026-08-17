@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "Command.hpp"
+#include "command.hpp"
 #include "ebus/device.hpp"
 #include "ebus/types.hpp"
 #include "ebus_accessor.hpp"

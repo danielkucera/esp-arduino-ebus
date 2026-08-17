@@ -9,7 +9,7 @@
 #include <string_view>
 #include <vector>
 
-#include "Command.hpp"
+#include "command.hpp"
 
 #ifndef COMMAND_CAPACITY
 #define COMMAND_CAPACITY 64

@@ -4,7 +4,7 @@
 #include <ebus/detail/json_reader.hpp>
 #include <ebus/detail/json_writer.hpp>
 
-#include "Command.hpp"
+#include "command.hpp"
 
 using namespace ebus::detail;
 

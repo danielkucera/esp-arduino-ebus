@@ -1,5 +1,5 @@
 #if defined(EBUS_INTERNAL)
-#include "Store.hpp"
+#include "store.hpp"
 
 #include <esp_littlefs.h>
 #include <esp_timer.h>
@@ -15,7 +15,7 @@
 #include <ebus/detail/protocol_limits.hpp>
 
 #include "Logger.hpp"
-#include "Mqtt.hpp"
+#include "mqtt.hpp"
 
 Store store;
 
@@ -180,24 +180,10 @@ int64_t Store::saveCommands() const {
     // Header row for compressed format
     {
       auto header_array = writer.arrayScope();
-      static const char* header[] = {"key",
-                                     "name",
-                                     "read_cmd",
-                                     "write_cmd",
-                                     "active",
-                                     "interval",
-                                     "master",
-                                     "position",
-                                     "datatype",
-                                     "divider",
-                                     "min",
-                                     "max",
-                                     "digits",
-                                     "unit",
-                                     "ha",
-                                     "ha_profile",
-                                     "ha_key_value_map",
-                                     "ha_default_key"};
+      static const char* header[] = {
+          "key",    "name",     "read_cmd", "write_cmd", "active", "interval",
+          "master", "position", "datatype", "divider",   "min",    "max",
+          "digits", "unit",     "ha",       "ha_profile"};
       for (const char* h : header) writer.writeValue(h);
     }
 

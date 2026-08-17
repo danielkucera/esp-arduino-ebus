@@ -18,8 +18,8 @@ include_directories(
 
 # Use mock Logger instead of real one
 set(APP_SOURCES
-    ${PROJECT_ROOT}/src/Command.cpp
-    ${PROJECT_ROOT}/src/Store.cpp
+    ${PROJECT_ROOT}/src/command.cpp
+    ${PROJECT_ROOT}/src/store.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/Logger.cpp
 )
 

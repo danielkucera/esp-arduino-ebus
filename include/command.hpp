@@ -94,15 +94,15 @@ class Command {
  private:
   // Internal fields
   // polling id
-  uint32_t poll_id = 0;
+  uint32_t poll_id_ = 0;
   // last time of the successful command
-  uint32_t last = 0;
+  uint32_t last_ = 0;
   // received raw data
-  ebus::Sequence data = {};
+  ebus::Sequence data_;
   // length of datatype
-  size_t length = 1;
+  size_t length_ = 1;
   // indicates numeric datatype
-  bool numeric = false;
+  bool numeric_ = false;
 
   // Command fields
   // unique key of command
@@ -110,58 +110,37 @@ class Command {
   // name of the command used as mqtt topic below "values/"
   command_types::NameFS name_ = {};
   // read command as vector of "ZZPBSBNNDBx"
-  ebus::Sequence read_cmd = {};
+  ebus::Sequence read_cmd_ = {};
   // write command as vector of "ZZPBSBNNDBx" (OPTIONAL)
-  ebus::Sequence write_cmd = {};
+  ebus::Sequence write_cmd_ = {};
   // active sending of command
-  bool active = false;
+  bool active_ = false;
   // minimum interval between two commands in seconds (OPTIONAL)
-  uint32_t interval = 60;
+  uint32_t interval_ = 60;
 
   // Data fields
   // value of interest is in master or slave part
-  bool master = false;
+  bool master_ = false;
   // starting position within the data bytes, beginning with 1
-  size_t position = 1;
+  size_t position_ = 1;
   // ebus data type
-  ebus::DataType datatype = ebus::DataType::hex1;
+  ebus::DataType datatype_ = ebus::DataType::hex1;
   // divider for value conversion (OPTIONAL)
-  float divider = 1;
+  float divider_ = 1;
   // minimum value (OPTIONAL)
-  float min = 1;
+  float min_ = 1;
   // maximum value (OPTIONAL)
-  float max = 100;
+  float max_ = 100;
   // decimal digits of value (OPTIONAL)
-  uint8_t digits = 2;
+  uint8_t digits_ = 2;
   // unit (OPTIONAL)
   command_types::UnitFS unit_ = {};
 
   // Home Assistant
   // support for auto discovery (OPTIONAL)
-  bool ha = false;
+  bool ha_ = false;
   // profile name referencing global HA profile registry
-  command_types::ProfileFS ha_profile = {};
-
-  // Field types for evaluation
-  enum FieldType {
-    FT_String,
-    FT_HexString,
-    FT_Bool,
-    FT_Int,
-    FT_Float,
-    FT_Uint8T,
-    FT_Uint32T,
-    FT_SizeT,
-    FT_DataType,
-    FT_KeyValueMap
-  };
-
-  // Structure for field evaluation
-  struct FieldEvaluation {
-    const char* name;
-    bool required;
-    FieldType type;
-  };
+  command_types::ProfileFS ha_profile_ = {};
 
   mutable std::optional<ebus::DataTypeInfo> _cachedMeta;
 };

@@ -1,8 +1,8 @@
 #pragma once
 
 #if defined(EBUS_INTERNAL)
-#include <Command.hpp>
-#include <HaProfile.hpp>
+#include <command.hpp>
+#include <ha_profile.hpp>
 #include <string>
 
 // Home Assistant MQTT class for auto discovery
@@ -30,22 +30,21 @@ class MqttHA {
   void publishComponent(const Command* command, const bool remove) const;
 
  private:
-  std::string uniqueId;           // e.g. "8406ac"
-  std::string deviceIdentifiers;  // e.g. "ebus8406ac"
-  std::string rootTopic;          // e.g. "ebus/8406ac/"
-  std::string commandTopic;       // e.g. "ebus/8406ac/request"
-  std::string willTopic;          // e.g. "ebus/8406ac/state/available"
+  std::string unique_id_;           // e.g. "8406ac"
+  std::string device_identifiers_;  // e.g. "ebus8406ac"
+  std::string root_topic_;          // e.g. "ebus/8406ac/"
+  std::string command_topic_;       // e.g. "ebus/8406ac/request"
+  std::string will_topic_;          // e.g. "ebus/8406ac/state/available"
 
-  bool enabled = false;
+  bool enabled_ = false;
 
-  // Common thing data
-  std::string thingName;
-  std::string thingModel;
-  std::string thingModelId;
-  std::string thingManufacturer = "danman.eu";
-  std::string thingSwVersion = AUTO_VERSION;
-  std::string thingHwVersion;
-  std::string thingConfigurationUrl = "http://esp-ebus.local/";
+  std::string thing_name_;
+  std::string thing_model_;
+  std::string thing_model_id_;
+  std::string thing_manufacturer_ = "danman.eu";
+  std::string thing_sw_version_ = AUTO_VERSION;
+  std::string thing_hw_version_;
+  std::string thing_configuration_url_ = "http://esp-ebus.local/";
 
   static void sanitizeObjectId(std::string_view source, char* out,
                                size_t max_len);

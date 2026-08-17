@@ -23,10 +23,10 @@
 
 #if defined(EBUS_INTERNAL)
 #include "Cron.hpp"
-#include "Mqtt.hpp"
-#include "MqttHA.hpp"
-#include "Store.hpp"
 #include "ebus_accessor.hpp"
+#include "mqtt.hpp"
+#include "mqtt_ha.hpp"
+#include "store.hpp"
 #else
 #include "BusType.hpp"
 #include "client.hpp"

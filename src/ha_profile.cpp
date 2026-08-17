@@ -1,5 +1,5 @@
 #if defined(EBUS_INTERNAL)
-#include "HaProfile.hpp"
+#include "ha_profile.hpp"
 
 namespace {
 // clang-format off

@@ -17,12 +17,12 @@
 #include "Cron.hpp"
 #include "HttpUtils.hpp"
 #include "Logger.hpp"
-#include "Mqtt.hpp"
-#include "MqttHA.hpp"
-#include "Store.hpp"
 #include "WifiNetworkManager.hpp"
 #include "ebus_accessor.hpp"
 #include "main.hpp"
+#include "mqtt.hpp"
+#include "mqtt_ha.hpp"
+#include "store.hpp"
 
 static httpd_handle_t configServer = nullptr;
 static bool fallbackHandlersRegistered = false;

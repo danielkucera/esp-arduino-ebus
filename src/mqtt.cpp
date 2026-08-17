@@ -1,18 +1,18 @@
 #if defined(EBUS_INTERNAL)
-#include "Mqtt.hpp"
+#include "mqtt.hpp"
 
 #include <esp_timer.h>
 
 #include <functional>
 
 #include "Logger.hpp"
-#include "MqttHA.hpp"
-#include "Store.hpp"
 #include "ebus/detail/json_reader.hpp"
 #include "ebus/detail/json_writer.hpp"  // Include for JsonWriter
 #include "ebus/status.hpp"
 #include "ebus_accessor.hpp"
 #include "main.hpp"
+#include "mqtt_ha.hpp"
+#include "store.hpp"
 
 Mqtt mqtt;
 

@@ -1,5 +1,5 @@
 #if defined(EBUS_INTERNAL)
-#include "Command.hpp"
+#include "command.hpp"
 
 #include <cerrno>
 #include <charconv>
@@ -10,82 +10,79 @@
 #include <limits>
 #include <regex>
 
-#include "HaProfile.hpp"
 #include "Logger.hpp"
+#include "ha_profile.hpp"
 
-const uint32_t& Command::getPollId() const { return poll_id; }
+const uint32_t& Command::getPollId() const { return poll_id_; }
 
-void Command::setPollId(const uint32_t id) { poll_id = id; }
+void Command::setPollId(const uint32_t id) { poll_id_ = id; }
 
-const uint32_t& Command::getLast() const { return last; }
+const uint32_t& Command::getLast() const { return last_; }
 
-void Command::setLast(const uint32_t time) { last = time; }
+void Command::setLast(const uint32_t time) { last_ = time; }
 
-const ebus::Sequence& Command::getData() const { return data; }
+const ebus::Sequence& Command::getData() const { return data_; }
 
-void Command::setData(ebus::ByteView data) { this->data.assign(data); }
+void Command::setData(ebus::ByteView data) { this->data_.assign(data); }
 
-size_t Command::getLength() const { return length; }
+size_t Command::getLength() const { return length_; }
 
-bool Command::getNumeric() const { return numeric; }
+bool Command::getNumeric() const { return numeric_; }
 
 std::string_view Command::getKey() const { return key_; }
 
 std::string_view Command::getName() const { return name_; }
 
-const ebus::Sequence& Command::getReadCmd() const { return read_cmd; }
+const ebus::Sequence& Command::getReadCmd() const { return read_cmd_; }
 
-const ebus::Sequence& Command::getWriteCmd() const { return write_cmd; }
+const ebus::Sequence& Command::getWriteCmd() const { return write_cmd_; }
 
-const bool& Command::getActive() const { return active; }
+const bool& Command::getActive() const { return active_; }
 
-const uint32_t& Command::getInterval() const { return interval; }
+const uint32_t& Command::getInterval() const { return interval_; }
 
-const bool& Command::getMaster() const { return master; }
+const bool& Command::getMaster() const { return master_; }
 
-const size_t& Command::getPosition() const { return position; }
+const size_t& Command::getPosition() const { return position_; }
 
-const ebus::DataType& Command::getDatatype() const { return datatype; }
+const ebus::DataType& Command::getDatatype() const { return datatype_; }
 
-const float& Command::getDivider() const { return divider; }
+const float& Command::getDivider() const { return divider_; }
 
-const float& Command::getMin() const { return min; }
+const float& Command::getMin() const { return min_; }
 
-const float& Command::getMax() const { return max; }
+const float& Command::getMax() const { return max_; }
 
-const uint8_t& Command::getDigits() const { return digits; }
+const uint8_t& Command::getDigits() const { return digits_; }
 
 std::string_view Command::getUnit() const { return unit_; }
 
-const bool& Command::getHA() const { return ha; }
+const bool& Command::getHA() const { return ha_; }
 
 const command_types::ProfileFS& Command::getHAProfile() const {
-  return ha_profile;
+  return ha_profile_;
 }
 
 bool Command::matches(ebus::ByteView master_view) const {
   // eBUS service identification (ZZ PB SB...) starts at index 1
   // (Index 0 is Source). Fixed-offset matching is precise and fast.
-  return ebus::matches(master_view, read_cmd, 1);
+  return ebus::matches(master_view, read_cmd_, 1);
 }
 
 void Command::getValueJson(ebus::detail::JsonWriter& writer) const {
-  auto decoded = ebus::decode(datatype, data);
+  auto decoded = ebus::decode(datatype_, data_);
   if (!decoded || ebus::isNull(*decoded)) {
     writer.writeRaw("null");
   } else {
-    if (numeric) {
-      // Optimization: Calculate directly from the decoded value to avoid double
-      // decoding
-      float val = ebus::roundDigits(ebus::asFloat(*decoded) / divider, digits);
+    if (numeric_) {
+      float val =
+          ebus::roundDigits(ebus::asFloat(*decoded) / divider_, digits_);
       writer.writeValueFloat(val);
     } else {
       const auto meta = getMetaCached();
       if (meta && std::string_view(meta->name).find("HEX") == 0) {
-        writer.writeHexValue(data);
+        writer.writeHexValue(data_);
       } else {
-        // asString returns a const reference to the string inside the variant;
-        // zero-copy to JsonWriter
         writer.writeValue(ebus::asString(*decoded));
       }
     }
@@ -101,9 +98,9 @@ ebus::Sequence Command::getVectorFromJson(std::string_view json) const {
 ebus::Sequence Command::getVectorFromValue(std::string_view val_view) const {
   if (val_view.empty()) return {};
 
-  if (numeric) {
+  if (numeric_) {
     double val = ebus::toNum<double>(val_view);
-    if ((val >= min) && (val <= max)) {
+    if ((val >= min_) && (val <= max_)) {
       return getVectorFromDouble(val);
     }
   } else {
@@ -118,16 +115,16 @@ ebus::Sequence Command::getVectorFromValue(std::string_view val_view) const {
 }
 
 double Command::getDoubleFromVector() const {
-  if (data.empty()) return 0.0;
-  auto decoded = ebus::decode(datatype, data);
+  if (data_.empty()) return 0.0;
+  auto decoded = ebus::decode(datatype_, data_);
   if (!decoded || ebus::isNull(*decoded)) return 0.0;
 
-  return ebus::roundDigits(ebus::asFloat(*decoded) / divider, digits);
+  return ebus::roundDigits(ebus::asFloat(*decoded) / divider_, digits_);
 }
 
 const std::string Command::getStringFromVector() const {
-  if (data.empty()) return "";
-  auto decoded = ebus::decode(datatype, data);
+  if (data_.empty()) return "";
+  auto decoded = ebus::decode(datatype_, data_);
   if (!decoded || ebus::isNull(*decoded)) return "";
 
   const auto meta = getMetaCached();
@@ -142,24 +139,24 @@ void Command::toJson(ebus::detail::JsonWriter& writer) const {
   // Command Fields
   writer.writeField("key", key_);
   writer.writeField("name", name_);
-  writer.writeHexField("read_cmd", read_cmd);
-  writer.writeHexField("write_cmd", write_cmd);
-  writer.writeField("active", active);
-  writer.writeField("interval", interval);
+  writer.writeHexField("read_cmd", read_cmd_);
+  writer.writeHexField("write_cmd", write_cmd_);
+  writer.writeField("active", active_);
+  writer.writeField("interval", interval_);
 
   // Data Fields
-  writer.writeField("master", master);
-  writer.writeField("position", position);
-  writer.writeField("datatype", ebus::dataTypeToString(datatype));
-  writer.writeFieldFloat("divider", divider);
-  writer.writeFieldFloat("min", min);
-  writer.writeFieldFloat("max", max);
-  writer.writeField("digits", digits);
+  writer.writeField("master", master_);
+  writer.writeField("position", position_);
+  writer.writeField("datatype", ebus::dataTypeToString(datatype_));
+  writer.writeFieldFloat("divider", divider_);
+  writer.writeFieldFloat("min", min_);
+  writer.writeFieldFloat("max", max_);
+  writer.writeField("digits", digits_);
   writer.writeField("unit", unit_);
 
   // Home Assistant
-  writer.writeField("ha", ha);
-  writer.writeField("ha_profile", ha_profile);
+  writer.writeField("ha", ha_);
+  writer.writeField("ha_profile", ha_profile_);
 }
 
 Command Command::fromJson(ebus::detail::JsonReader& reader) {
@@ -170,54 +167,51 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
   }
 
   reader.forEachField([&](std::string_view key, ebus::detail::JsonReader& r) {
-    // Skip HA discovery fields (now stored in HAProfile registry)
-    if (key == "ha_key_value_map" || key == "ha_default_key") return false;
-
     auto token = r.next();
     if (key == "key")
       command.key_.assign(r.value());
     else if (key == "name")
       command.name_.assign(r.value());
     else if (key == "read_cmd")
-      command.read_cmd.assign(ebus::toVector(r.value()));
+      command.read_cmd_.assign(ebus::toVector(r.value()));
     else if (key == "write_cmd")
-      command.write_cmd.assign(ebus::toVector(r.value()));
+      command.write_cmd_.assign(ebus::toVector(r.value()));
     else if (key == "active")
-      command.active = r.asBool();
+      command.active_ = r.asBool();
     else if (key == "interval")
-      command.interval = r.asNum<uint32_t>();
+      command.interval_ = r.asNum<uint32_t>();
     else if (key == "master")
-      command.master = r.asBool();
+      command.master_ = r.asBool();
     else if (key == "position")
-      command.position = r.asNum<size_t>();
+      command.position_ = r.asNum<size_t>();
     else if (key == "datatype") {
       char dt_buf[32];
       size_t dt_len = std::min(r.value().size(), sizeof(dt_buf) - 1);
       std::memcpy(dt_buf, r.value().data(), dt_len);
       dt_buf[dt_len] = '\0';
-      command.datatype = ebus::stringToDataType(dt_buf);
-      command.length = ebus::sizeOfDataType(command.datatype);
-      command.numeric = ebus::isNumeric(command.datatype);
+      command.datatype_ = ebus::stringToDataType(dt_buf);
+      command.length_ = ebus::sizeOfDataType(command.datatype_);
+      command.numeric_ = ebus::isNumeric(command.datatype_);
     } else if (key == "divider")
-      command.divider = r.asNum<float>();
+      command.divider_ = r.asNum<float>();
     else if (key == "min")
-      command.min = r.asNum<float>();
+      command.min_ = r.asNum<float>();
     else if (key == "max")
-      command.max = r.asNum<float>();
+      command.max_ = r.asNum<float>();
     else if (key == "digits")
-      command.digits = r.asNum<uint8_t>();
+      command.digits_ = r.asNum<uint8_t>();
     else if (key == "unit")
       command.unit_.assign(r.value());
     else if (key == "ha")
-      command.ha = r.asBool();
+      command.ha_ = r.asBool();
     else if (key == "ha_profile")
-      command.ha_profile.assign(r.value());
+      command.ha_profile_.assign(r.value());
     return true;
   });
 
-  command.last = 0;
-  command.poll_id = 0;
-  command.data.clear();
+  command.last_ = 0;
+  command.poll_id_ = 0;
+  command.data_.clear();
   return command;
 }
 
@@ -242,52 +236,52 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
         command.name_.assign(reader.value());
         break;
       case 2:
-        command.read_cmd.assign(ebus::toVector(reader.value()));
+        command.read_cmd_.assign(ebus::toVector(reader.value()));
         break;
       case 3:
-        command.write_cmd.assign(ebus::toVector(reader.value()));
+        command.write_cmd_.assign(ebus::toVector(reader.value()));
         break;
       case 4:
-        command.active = reader.asBool();
+        command.active_ = reader.asBool();
         break;
       case 5:
-        command.interval = reader.asNum<uint32_t>();
+        command.interval_ = reader.asNum<uint32_t>();
         break;
       case 6:
-        command.master = reader.asBool();
+        command.master_ = reader.asBool();
         break;
       case 7:
-        command.position = reader.asNum<size_t>();
+        command.position_ = reader.asNum<size_t>();
         break;
       case 8: {
         char dt_buf[32];
         size_t dt_len = std::min(reader.value().size(), sizeof(dt_buf) - 1);
         std::memcpy(dt_buf, reader.value().data(), dt_len);
         dt_buf[dt_len] = '\0';
-        command.datatype = ebus::stringToDataType(dt_buf);
-        command.length = ebus::sizeOfDataType(command.datatype);
-        command.numeric = ebus::isNumeric(command.datatype);
+        command.datatype_ = ebus::stringToDataType(dt_buf);
+        command.length_ = ebus::sizeOfDataType(command.datatype_);
+        command.numeric_ = ebus::isNumeric(command.datatype_);
       } break;
       case 9:
-        command.divider = reader.asNum<float>();
+        command.divider_ = reader.asNum<float>();
         break;
       case 10:
-        command.min = reader.asNum<float>();
+        command.min_ = reader.asNum<float>();
         break;
       case 11:
-        command.max = reader.asNum<float>();
+        command.max_ = reader.asNum<float>();
         break;
       case 12:
-        command.digits = reader.asNum<uint8_t>();
+        command.digits_ = reader.asNum<uint8_t>();
         break;
       case 13:
         command.unit_.assign(reader.value());
         break;
       case 14:
-        command.ha = reader.asBool();
+        command.ha_ = reader.asBool();
         break;
       case 15:
-        command.ha_profile.assign(reader.value());
+        command.ha_profile_.assign(reader.value());
         break;
       case 16:
         reader.skipComposite(token);
@@ -302,9 +296,9 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
     index++;
   }
 
-  command.last = 0;
-  command.poll_id = 0;
-  command.data.clear();
+  command.last_ = 0;
+  command.poll_id_ = 0;
+  command.data_.clear();
   return command;
 }
 
@@ -319,10 +313,6 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
 
   std::string error;
   reader.forEachField([&](std::string_view key, ebus::detail::JsonReader& r) {
-    // Skip HA discovery fields (validation not needed, stored in profile
-    // registry)
-    if (key == "ha_key_value_map" || key == "ha_default_key") return false;
-
     auto token = r.next();
     if (key == "key") {
       met.key = (token == ebus::detail::JsonReader::Token::string);
@@ -365,12 +355,6 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
     } else if (key == "ha_profile") {
       if (token != ebus::detail::JsonReader::Token::string)
         error = "Invalid type for field: ha_profile";
-    } else if (key == "ha_key_value_map") {
-      if (token != ebus::detail::JsonReader::Token::array_start)
-        error = "Invalid type for field: ha_key_value_map";
-    } else if (key == "ha_default_key") {
-      if (token != ebus::detail::JsonReader::Token::number)
-        error = "Invalid type for field: ha_default_key";
     } else if (key == "interval") {
       if (token != ebus::detail::JsonReader::Token::number)
         error = "Invalid type for field: " + std::string(key);
@@ -392,18 +376,18 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
 
 const ebus::DataTypeInfo* Command::getMetaCached() const {
   if (!_cachedMeta.has_value()) {
-    _cachedMeta = ebus::getMeta(datatype);
+    _cachedMeta = ebus::getMeta(datatype_);
   }
   return _cachedMeta.has_value() ? &_cachedMeta.value() : nullptr;
 }
 
 ebus::Sequence Command::getVectorFromDouble(double value) const {
-  double scaledValue = ebus::roundDigits(value * divider, digits);
+  double scaledValue = ebus::roundDigits(value * divider_, digits_);
 
   ebus::DataValue dv;
   dv = static_cast<float>(scaledValue);
 
-  return ebus::encode(datatype, dv);
+  return ebus::encode(datatype_, dv);
 }
 
 ebus::Sequence Command::getVectorFromString(std::string_view value) const {
@@ -414,10 +398,10 @@ ebus::Sequence Command::getVectorFromString(std::string_view value) const {
   if (std::string(meta->name).find("HEX") == 0) {
     dv = ebus::byteToChar(ebus::toVector(value));
   } else {
-    dv = std::string(value.substr(0, length));
+    dv = std::string(value.substr(0, length_));
   }
 
-  return ebus::encode(datatype, dv);
+  return ebus::encode(datatype_, dv);
 }
 
 #endif

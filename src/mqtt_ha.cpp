@@ -1,45 +1,45 @@
 #if defined(EBUS_INTERNAL)
-#include <Mqtt.hpp>
-#include <MqttHA.hpp>
 #include <algorithm>
 #include <cstring>
 #include <ebus/detail/json_writer.hpp>
+#include <mqtt.hpp>
+#include <mqtt_ha.hpp>
 #include <string>
 
-#include "Store.hpp"
+#include "store.hpp"
 
 MqttHA mqttha;
 
 void MqttHA::setUniqueId(const std::string& id) {
-  uniqueId = id;
-  deviceIdentifiers = "ebus" + uniqueId;
+  unique_id_ = id;
+  device_identifiers_ = "ebus" + unique_id_;
 }
 
 void MqttHA::setRootTopic(const std::string& topic) {
-  rootTopic = topic;
-  commandTopic = rootTopic + "request";
+  root_topic_ = topic;
+  command_topic_ = root_topic_ + "request";
 }
 
-void MqttHA::setWillTopic(const std::string& topic) { willTopic = topic; }
+void MqttHA::setWillTopic(const std::string& topic) { will_topic_ = topic; }
 
-void MqttHA::setEnabled(const bool enable) { enabled = enable; }
+void MqttHA::setEnabled(const bool enable) { enabled_ = enable; }
 
-bool MqttHA::isEnabled() const { return enabled; }
+bool MqttHA::isEnabled() const { return enabled_; }
 
-void MqttHA::setThingName(const std::string& name) { thingName = name; }
+void MqttHA::setThingName(const std::string& name) { thing_name_ = name; }
 
-void MqttHA::setThingModel(const std::string& model) { thingModel = model; }
+void MqttHA::setThingModel(const std::string& model) { thing_model_ = model; }
 
 void MqttHA::setThingModelId(const std::string& modelId) {
-  thingModelId = modelId;
+  thing_model_id_ = modelId;
 }
 
 void MqttHA::setThingHwVersion(const std::string& hwVersion) {
-  thingHwVersion = hwVersion;
+  thing_hw_version_ = hwVersion;
 }
 
 void MqttHA::setThingConfigurationUrl(const std::string& configurationUrl) {
-  thingConfigurationUrl = configurationUrl;
+  thing_configuration_url_ = configurationUrl;
 }
 
 void MqttHA::sanitizeObjectId(std::string_view source, char* out,
@@ -66,9 +66,9 @@ void MqttHA::publishDeviceInfo() const {
     std::replace(objectId.begin(), objectId.end(), ' ', '_');
 
     std::string topic = "homeassistant/" + std::string(component) + '/' +
-                        deviceIdentifiers + '/' + objectId + "/config";
+                        device_identifiers_ + '/' + objectId + "/config";
 
-    if (!enabled) {
+    if (!enabled_) {
       mqtt.publish(topic.c_str(), 0, true, "", false);
       return;
     }
@@ -78,22 +78,22 @@ void MqttHA::publishDeviceInfo() const {
         [&](const ebus::JsonChunkVisitor& v) {
           ebus::detail::JsonWriter writer(v);
           auto root = writer.objectScope();
-          writer.writeField("unique_id", deviceIdentifiers + "_" + key);
+          writer.writeField("unique_id", device_identifiers_ + "_" + key);
           writer.writeField("name", name);
-          writer.writeField("availability_topic", willTopic);
+          writer.writeField("availability_topic", will_topic_);
           writer.writeField("availability_template", "{{value_json.value}}");
 
           {
             auto device = writer.objectScope("device");
-            writer.writeField("identifiers", deviceIdentifiers);
+            writer.writeField("identifiers", device_identifiers_);
             if (withDeviceInfo) {
-              writer.writeField("name", thingName);
-              writer.writeField("manufacturer", thingManufacturer);
-              writer.writeField("model", thingModel);
-              writer.writeField("model_id", thingModelId);
-              writer.writeField("hw_version", thingHwVersion);
-              writer.writeField("sw_version", thingSwVersion);
-              writer.writeField("configuration_url", thingConfigurationUrl);
+              writer.writeField("name", thing_name_);
+              writer.writeField("manufacturer", thing_manufacturer_);
+              writer.writeField("model", thing_model_);
+              writer.writeField("model_id", thing_model_id_);
+              writer.writeField("hw_version", thing_hw_version_);
+              writer.writeField("sw_version", thing_sw_version_);
+              writer.writeField("configuration_url", thing_configuration_url_);
             }
           }
 
@@ -104,7 +104,7 @@ void MqttHA::publishDeviceInfo() const {
 
   publishDiag("button", "restart", "Restart", false,
               [this](ebus::detail::JsonWriter& w) {
-                w.writeField("command_topic", commandTopic);
+                w.writeField("command_topic", command_topic_);
                 w.writeField("payload_press",
                              "{\"id\":\"restart\",\"value\":true}");
                 w.writeField("entity_category", "config");
@@ -159,7 +159,7 @@ void MqttHA::publishDeviceInfo() const {
 void MqttHA::publishComponents() const {
   for (const Command* command : store.getCommands()) {
     if (command->getHA()) {
-      publishComponent(command, !enabled);
+      publishComponent(command, !enabled_);
     }
   }
 }
@@ -170,7 +170,7 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
 
   const std::string& component = profile ? profile->component : "";
 
-  const std::string& dev_id = deviceIdentifiers;
+  const std::string& dev_id = device_identifiers_;
 
   std::string_view name_sv = command->getName();
   std::string_view key_sv = command->getKey();
@@ -184,7 +184,7 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
                component.c_str(), dev_id.c_str(), objectIdBuf);
   if (tlen <= 0 || (size_t)tlen >= sizeof(topicBuf)) return;
 
-  if (remove || !enabled) {
+  if (remove || !enabled_) {
     mqtt.publish(topicBuf, 0, true, "", false);
     return;
   }
@@ -208,12 +208,12 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
                  (int)key_sv.size(), key_sv.data());
         writer.writeField("unique_id", uidBuf);
         writer.writeField("name", std::string_view(prettyNameBuf, pn_len));
-        writer.writeField("availability_topic", willTopic);
+        writer.writeField("availability_topic", will_topic_);
         writer.writeField("availability_template", "{{value_json.value}}");
 
         {
           auto device = writer.objectScope("device");
-          writer.writeField("identifiers", deviceIdentifiers);
+          writer.writeField("identifiers", device_identifiers_);
         }
 
         writer.writeField("state_topic", createStateTopic("values", name_sv));
@@ -235,7 +235,7 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
             component == "select") {
           char cmdTopicBuf[96];
           snprintf(cmdTopicBuf, sizeof(cmdTopicBuf), "%sset/%.*s",
-                   rootTopic.c_str(), (int)key_sv.size(), key_sv.data());
+                   root_topic_.c_str(), (int)key_sv.size(), key_sv.data());
           writer.writeField("command_topic", cmdTopicBuf);
         }
 
@@ -290,7 +290,7 @@ std::string MqttHA::createStateTopic(const std::string& prefix,
   }
   lowerBuf[tlen] = '\0';
 
-  int slen = snprintf(buf, sizeof(buf), "%s%s%s", rootTopic.c_str(),
+  int slen = snprintf(buf, sizeof(buf), "%s%s%s", root_topic_.c_str(),
                       prefix.c_str(), prefix.empty() ? "" : "/");
   // Append lowercased topic
   for (size_t i = 0; i < tlen && slen < (int)sizeof(buf) - 1; i++) {
