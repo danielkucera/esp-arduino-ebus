@@ -1,6 +1,6 @@
 #if defined(EBUS_INTERNAL)
 
-#include "Cron.hpp"
+#include "cron.hpp"
 
 #include <sys/stat.h>
 
@@ -14,8 +14,8 @@
 #include <string>
 #include <vector>
 
-#include "Logger.hpp"
 #include "ebus_accessor.hpp"
+#include "logger.hpp"
 #include "store.hpp"
 
 Cron cron;

@@ -14,7 +14,7 @@
 #include <ebus/detail/json_writer.hpp>
 #include <ebus/detail/protocol_limits.hpp>
 
-#include "Logger.hpp"
+#include "logger.hpp"
 #include "mqtt.hpp"
 
 Store store;

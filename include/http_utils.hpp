@@ -7,7 +7,7 @@
 namespace HttpUtils {
 
 // Maximum allowed size for request bodies to prevent memory exhaustion.
-constexpr size_t MAX_REQUEST_BODY_SIZE = 8192;  // 8KB
+constexpr size_t kMaxRequestBodySize = 8192;  // 8KB
 
 bool registerRoute(httpd_handle_t server, const httpd_uri_t& route);
 

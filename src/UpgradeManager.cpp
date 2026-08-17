@@ -17,9 +17,9 @@
 #undef INADDR_NONE
 #endif
 
-#include "HttpUtils.hpp"
-#include "Logger.hpp"
 #include "http.hpp"
+#include "http_utils.hpp"
+#include "logger.hpp"
 #include "main.hpp"
 
 extern UpgradeManager upgradeManager;

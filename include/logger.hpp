@@ -43,9 +43,9 @@ class Logger {
                  uint64_t sinceMillis = 0) const;
   void fetchTimeRelation(const ebus::JsonChunkVisitor& visitor) const;
 
-  TaskHandle_t getTaskHandle() const { return printTask; }
+  TaskHandle_t getTaskHandle() const { return print_task_; }
   size_t getQueueSize() const;
-  size_t getQueueCapacity() const { return maxEntries; }
+  size_t getQueueCapacity() const { return max_entries_; }
   size_t getQueueHighWatermark() const;
 
  private:
@@ -60,9 +60,9 @@ class Logger {
   };
 
   std::vector<LogEntry> buffer_;  // Use std::vector for RAII
-  size_t maxEntries;
-  size_t index;
-  size_t entries;
+  size_t max_entries_;
+  size_t index_;
+  size_t entries_;
 
   static const char* logLevelText(LogLevel logLevel);
 
@@ -74,10 +74,10 @@ class Logger {
   void log(LogLevel level, std::string_view message, bool is_json,
            uint32_t session_id, uint32_t poll_id);
 
-  mutable portMUX_TYPE mux;  // Mutex for thread safety
-  QueueHandle_t printQueue;
-  TaskHandle_t printTask;
-  std::atomic<size_t> maxQueueSize = 0;
+  mutable portMUX_TYPE mux_;  // Mutex for thread safety
+  QueueHandle_t print_queue_ = nullptr;
+  TaskHandle_t print_task_ = nullptr;
+  std::atomic<size_t> max_queue_size_ = 0;
 };
 
 extern Logger logger;

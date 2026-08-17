@@ -1,4 +1,4 @@
-#include "HttpUtils.hpp"
+#include "http_utils.hpp"
 
 #include <esp_err.h>
 
@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "Logger.hpp"
+#include "logger.hpp"
 
 namespace HttpUtils {
 
@@ -54,11 +54,11 @@ std::string readBody(httpd_req_t* req) {
   std::string out;
   int remaining = req->content_len;
   char buffer[512];
-  if (remaining > static_cast<int>(MAX_REQUEST_BODY_SIZE)) {
+  if (remaining > static_cast<int>(kMaxRequestBodySize)) {
     char buf[128];
     snprintf(buf, sizeof(buf),
              "HTTP: Request body too large (%d bytes), max is %zu", remaining,
-             MAX_REQUEST_BODY_SIZE);
+             kMaxRequestBodySize);
     logger.warn(buf);
     return "";  // Return empty string to indicate failure or rejection
   }

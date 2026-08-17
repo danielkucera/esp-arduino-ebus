@@ -1,9 +1,10 @@
 #pragma once
 
-#include <cstdint>
 #include <esp_netif_types.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+#include <cstdint>
 #include <string>
 
 class DNSServer {

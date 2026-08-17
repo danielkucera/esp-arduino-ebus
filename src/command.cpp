@@ -10,8 +10,8 @@
 #include <limits>
 #include <regex>
 
-#include "Logger.hpp"
 #include "ha_profile.hpp"
+#include "logger.hpp"
 
 const uint32_t& Command::getPollId() const { return poll_id_; }
 

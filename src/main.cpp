@@ -19,10 +19,10 @@
 #include <cstring>
 #include <ebus/detail/json_writer.hpp>
 
-#include "Logger.hpp"
+#include "logger.hpp"
 
 #if defined(EBUS_INTERNAL)
-#include "Cron.hpp"
+#include "cron.hpp"
 #include "ebus_accessor.hpp"
 #include "mqtt.hpp"
 #include "mqtt_ha.hpp"
@@ -34,14 +34,14 @@
 
 #include "AdapterVersion.hpp"
 #include "ConfigManager.hpp"
-#include "DNSServer.h"
 #include "EspOtaManager.hpp"
-#include "HttpUtils.hpp"
 #include "UpgradeManager.hpp"
 #include "WifiNetworkManager.hpp"
+#include "dns_server.hpp"
 #include "esp_rom_sys.h"
 #include "esp_sntp.h"
 #include "http.hpp"
+#include "http_utils.hpp"
 
 ConfigManager configManager;
 UpgradeManager upgradeManager;

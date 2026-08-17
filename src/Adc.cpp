@@ -7,7 +7,7 @@
 
 #include <cstring>
 
-#include "Logger.hpp"
+#include "logger.hpp"
 
 Adc adc;
 

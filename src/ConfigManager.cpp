@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "HttpUtils.hpp"
 #include "http.hpp"
+#include "http_utils.hpp"
 
 extern ConfigManager configManager;
 

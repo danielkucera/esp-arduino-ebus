@@ -19,7 +19,7 @@
 #undef INADDR_NONE
 #endif
 
-#include "Logger.hpp"
+#include "logger.hpp"
 #include "main.hpp"
 
 namespace {

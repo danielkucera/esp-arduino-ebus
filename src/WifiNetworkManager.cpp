@@ -20,7 +20,7 @@
 #include <string>
 
 #include "ConfigManager.hpp"
-#include "Logger.hpp"
+#include "logger.hpp"
 
 ConfigManager* WifiNetworkManager::configManager_ = nullptr;
 esp_ip4_addr_t WifiNetworkManager::ipAddress_{};

@@ -1,4 +1,4 @@
-#include "DNSServer.h"
+#include "dns_server.hpp"
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -9,7 +9,7 @@
 
 #include <cstring>
 
-#include "Logger.hpp"
+#include "logger.hpp"
 
 namespace {
 constexpr size_t kDnsHeaderSize = 12;

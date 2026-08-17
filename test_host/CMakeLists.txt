@@ -20,7 +20,7 @@ include_directories(
 set(APP_SOURCES
     ${PROJECT_ROOT}/src/command.cpp
     ${PROJECT_ROOT}/src/store.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/Logger.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/logger.cpp
 )
 
 # Test files
