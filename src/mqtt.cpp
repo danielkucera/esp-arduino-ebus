@@ -309,12 +309,6 @@ void Mqtt::taskFunc(void* arg) {
       if (xQueueReceive(self->outgoing_queue_, &action,
                         pdMS_TO_TICKS(wait_ms)) == pdTRUE) {
         switch (action.type) {
-          case OutgoingActionType::Command:
-            if (action.command) self->publishCommand(action.command);
-            break;
-          case OutgoingActionType::Device:
-            self->publishDevice(action.device);
-            break;
           case OutgoingActionType::Component:
             mqttha.publishComponent(action.command, action.ha_remove);
             break;
@@ -708,30 +702,6 @@ void Mqtt::logUpdate(const Command* cmd,
 
   // Log the message
   logger.debug(logBuf);
-}
-
-void Mqtt::publishCommand(const Command* command) {
-  char topicBuf[64];
-  int n = snprintf(topicBuf, sizeof(topicBuf), "commands/%.*s",
-                   (int)command->getKey().size(), command->getKey().data());
-  if (n <= 0 || (size_t)n >= sizeof(topicBuf)) return;
-
-  publishStream(topicBuf, 0, false, [&](const ebus::JsonChunkVisitor& v) {
-    ebus::detail::JsonWriter writer(v);
-    command->toJson(writer);
-  });
-}
-
-void Mqtt::publishDevice(const ebus::DeviceInfo& device) {
-  char topicBuf[32];
-  int n = snprintf(topicBuf, sizeof(topicBuf), "devices/%02x",
-                   device.slave_address);
-  if (n <= 0 || (size_t)n >= sizeof(topicBuf)) return;
-
-  publishStream(topicBuf, 0, false, [&](const ebus::JsonChunkVisitor& v) {
-    ebus::detail::JsonWriter writer(v);
-    device.toJson(writer);
-  });
 }
 
 #endif

@@ -20,8 +20,6 @@
 #include "ebus_accessor.hpp"
 
 enum class OutgoingActionType : uint8_t {
-  Command,
-  Device,
   Component,
   Error,
   Data,
@@ -31,11 +29,10 @@ enum class OutgoingActionType : uint8_t {
 };
 
 struct OutgoingAction {
-  const Command* command;  // for Command and Component
+  const Command* command;  // for Component
   OutgoingActionType type;
   bool ha_remove;  // for Component
   union {
-    ebus::DeviceInfo device;           // for Device
     ebus::ProtocolInfo protocol_info;  // for Error
     ebus::FixedString<32> id;          // for Data
     ebus::FixedString<64> key;         // for Update
@@ -44,16 +41,9 @@ struct OutgoingAction {
   ebus::StaticSequence<64> slave;   // for Data (bitwise-copy safe)
 
   OutgoingAction()
-      : command(nullptr), type(OutgoingActionType::Command), ha_remove(false) {}
-
-  explicit OutgoingAction(const Command* cmd)
-      : command(cmd), type(OutgoingActionType::Command), ha_remove(false) {}
-
-  explicit OutgoingAction(const ebus::DeviceInfo& dev)
       : command(nullptr),
-        type(OutgoingActionType::Device),
-        ha_remove(false),
-        device(dev) {}
+        type(OutgoingActionType::Component),
+        ha_remove(false) {}
 
   explicit OutgoingAction(const Command* cmd, bool remove)
       : command(cmd), type(OutgoingActionType::Component), ha_remove(remove) {}
@@ -191,10 +181,6 @@ class Mqtt {
 
   void logUpdate(const Command* cmd,
                  const std::optional<ebus::DataValue>& decoded);
-
-  void publishCommand(const Command* command);
-
-  void publishDevice(const ebus::DeviceInfo& device);
 };
 
 extern Mqtt mqtt;
