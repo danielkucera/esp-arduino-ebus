@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BusState.hpp"
+#include "bus_state.hpp"
 
 // Implements the arbitration algorithm. Uses the state of the bus to decide
 // what to do. Typical usage:
@@ -22,10 +22,10 @@ class Arbitration {
   };
 
   Arbitration()
-      : _arbitrating(false),
-        _participateSecond(false),
-        _arbitrationAddress(0),
-        _restartCount(0) {}
+      : arbitrating_(false),
+        participate_second_(false),
+        arbitration_address_(0),
+        restart_count_(0) {}
   // Try to start arbitration for the specified master.
   // Return values:
   // - started     : arbitration started. Make sure to pass all bus data to this
@@ -45,8 +45,8 @@ class Arbitration {
                           uint32_t startBitTime);
 
  private:
-  bool _arbitrating;
-  bool _participateSecond;
-  uint8_t _arbitrationAddress;
-  int _restartCount;
+  bool arbitrating_;
+  bool participate_second_;
+  uint8_t arbitration_address_;
+  int restart_count_;
 };

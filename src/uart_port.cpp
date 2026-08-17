@@ -1,9 +1,9 @@
-#include "UartPort.hpp"
+#include "uart_port.hpp"
 
 #include <esp_log.h>
 
 namespace {
-constexpr const char* kTag = "UartPort";
+constexpr const char* tag = "UartPort";
 }
 
 UartPort BusSer(UART_NUM_1);
@@ -37,10 +37,11 @@ void UartPort::ensureInstalled(int baud, int rxPin, int txPin) {
   (void)baud;
   (void)rxPin;
   (void)txPin;
-  int rxBuffer = static_cast<int>(rxBufferSize_);
-  int txBuffer = 256; // Use a transmit buffer to prevent blocking on uart_write_bytes
+  int rxBuffer = static_cast<int>(rx_buffer_size_);
+  int txBuffer =
+      256;  // Use a transmit buffer to prevent blocking on uart_write_bytes
   if (uart_driver_install(port_, rxBuffer, txBuffer, 0, nullptr, 0) != ESP_OK) {
-    ESP_LOGE(kTag, "uart_driver_install failed for port %d", port_);
+    ESP_LOGE(tag, "uart_driver_install failed for port %d", port_);
   } else {
     installed_ = true;
   }
@@ -53,20 +54,18 @@ void UartPort::end() {
 }
 
 int UartPort::available() {
-  if (cachedByte_ >= 0) return 1;
+  if (cached_byte_ >= 0) return 1;
   size_t length = 0;
   uart_get_buffered_data_len(port_, &length);
   return static_cast<int>(length);
 }
 
-int UartPort::availableForWrite() {
-  return 1;
-}
+int UartPort::availableForWrite() { return 1; }
 
 int UartPort::read() {
-  if (cachedByte_ >= 0) {
-    int value = cachedByte_;
-    cachedByte_ = -1;
+  if (cached_byte_ >= 0) {
+    int value = cached_byte_;
+    cached_byte_ = -1;
     return value;
   }
   uint8_t byte = 0;
@@ -76,20 +75,21 @@ int UartPort::read() {
 }
 
 int UartPort::peek() {
-  if (cachedByte_ >= 0) return cachedByte_;
+  if (cached_byte_ >= 0) return cached_byte_;
   uint8_t byte = 0;
   int read = uart_read_bytes(port_, &byte, 1, 0);
   if (read <= 0) return -1;
-  cachedByte_ = byte;
-  return cachedByte_;
+  cached_byte_ = byte;
+  return cached_byte_;
 }
 
 size_t UartPort::write(uint8_t byte) {
-  int written = uart_write_bytes(port_, reinterpret_cast<const char*>(&byte), 1);
+  int written =
+      uart_write_bytes(port_, reinterpret_cast<const char*>(&byte), 1);
   return written > 0 ? static_cast<size_t>(written) : 0;
 }
 
-void UartPort::setRxBufferSize(size_t size) { rxBufferSize_ = size; }
+void UartPort::setRxBufferSize(size_t size) { rx_buffer_size_ = size; }
 
 void UartPort::setRxFIFOFull(int fullThreshold) {
   uart_set_rx_full_threshold(port_, fullThreshold);

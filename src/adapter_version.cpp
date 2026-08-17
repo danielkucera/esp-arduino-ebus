@@ -1,18 +1,18 @@
-#include "AdapterVersion.hpp"
+#include "adapter_version.hpp"
 
 #include <esp_efuse.h>
 
 #include <cstdio>
 #include <string>
 
-static constexpr size_t ADAPTER_HW_VERSION_EFUSE_BITS = 8;
-static constexpr size_t ADAPTER_HW_VERSION_EFUSE_OFFSET =
+static constexpr size_t adapter_hw_version_efuse_bits = 8;
+static constexpr size_t adapter_hw_version_efuse_offset =
     248;  // BLOCK3 bit 248..255
 
-static const esp_efuse_desc_t ADAPTER_HW_VERSION_EFUSE_DESC = {
-    EFUSE_BLK3, ADAPTER_HW_VERSION_EFUSE_OFFSET, ADAPTER_HW_VERSION_EFUSE_BITS};
-static const esp_efuse_desc_t* ADAPTER_HW_VERSION_EFUSE_FIELD[] = {
-    &ADAPTER_HW_VERSION_EFUSE_DESC, nullptr};
+static const esp_efuse_desc_t adapter_hw_version_efuse_desc = {
+    EFUSE_BLK3, adapter_hw_version_efuse_offset, adapter_hw_version_efuse_bits};
+static const esp_efuse_desc_t* adapter_hw_version_efuse_field[] = {
+    &adapter_hw_version_efuse_desc, nullptr};
 
 static uint8_t adapterHwVersionRaw = 0xEE;
 static std::string adapterHwVersion = "unread";
@@ -38,7 +38,7 @@ static std::string formatAdapterHwVersion(const uint8_t raw) {
 void loadAdapterHwVersionFromEfuse() {
   uint8_t raw;
   const esp_err_t err = esp_efuse_read_field_blob(
-      ADAPTER_HW_VERSION_EFUSE_FIELD, &raw, ADAPTER_HW_VERSION_EFUSE_BITS);
+      adapter_hw_version_efuse_field, &raw, adapter_hw_version_efuse_bits);
   if (err != ESP_OK) {
     adapterHwVersionRaw = 0xEE;
     adapterHwVersion = "reading error";

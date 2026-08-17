@@ -28,20 +28,20 @@
 #include "mqtt_ha.hpp"
 #include "store.hpp"
 #else
-#include "BusType.hpp"
+#include "bus_type.hpp"
 #include "client.hpp"
 #endif
 
-#include "AdapterVersion.hpp"
-#include "ConfigManager.hpp"
-#include "EspOtaManager.hpp"
-#include "UpgradeManager.hpp"
-#include "WifiNetworkManager.hpp"
+#include "adapter_version.hpp"
+#include "config_manager.hpp"
 #include "dns_server.hpp"
+#include "esp_ota_manager.hpp"
 #include "esp_rom_sys.h"
 #include "esp_sntp.h"
 #include "http.hpp"
 #include "http_utils.hpp"
+#include "upgrade_manager.hpp"
+#include "wifi_network_manager.hpp"
 
 ConfigManager configManager;
 UpgradeManager upgradeManager;
@@ -91,15 +91,15 @@ struct HeapStatus {
 struct ArbitrationInfo {
   void toJson(ebus::detail::JsonWriter& writer) const {
     auto scope = writer.objectScope();
-    writer.writeField("Total", static_cast<int>(Bus._nbrArbitrations));
-    writer.writeField("Restarts1", static_cast<int>(Bus._nbrRestarts1));
-    writer.writeField("Restarts2", static_cast<int>(Bus._nbrRestarts2));
-    writer.writeField("Won1", static_cast<int>(Bus._nbrWon1));
-    writer.writeField("Won2", static_cast<int>(Bus._nbrWon2));
-    writer.writeField("Lost1", static_cast<int>(Bus._nbrLost1));
-    writer.writeField("Lost2", static_cast<int>(Bus._nbrLost2));
-    writer.writeField("Late", static_cast<int>(Bus._nbrLate));
-    writer.writeField("Errors", static_cast<int>(Bus._nbrErrors));
+    writer.writeField("Total", static_cast<int>(Bus.nbr_arbitrations_));
+    writer.writeField("Restarts1", static_cast<int>(Bus.nbr_restarts_1_));
+    writer.writeField("Restarts2", static_cast<int>(Bus.nbr_restarts_2_));
+    writer.writeField("Won1", static_cast<int>(Bus.nbr_won_1_));
+    writer.writeField("Won2", static_cast<int>(Bus.nbr_won_2_));
+    writer.writeField("Lost1", static_cast<int>(Bus.nbr_lost_1_));
+    writer.writeField("Lost2", static_cast<int>(Bus.nbr_lost_2_));
+    writer.writeField("Late", static_cast<int>(Bus.nbr_late_));
+    writer.writeField("Errors", static_cast<int>(Bus.nbr_errors_));
   }
 };
 #endif
@@ -198,8 +198,8 @@ struct SntpStatus {
 };
 #endif
 
-constexpr uint16_t kCaptiveDnsPort = 53;
-constexpr const char* kCaptiveDnsIpString = "192.168.4.1";
+constexpr uint16_t captive_dns_port = 53;
+constexpr const char* captive_dns_ip_string = "192.168.4.1";
 const esp_ip4_addr_t kCaptiveDnsIp = {.addr = ESP_IP4TOADDR(192, 168, 4, 1)};
 
 DNSServer captiveDnsServer;
@@ -214,9 +214,9 @@ uint64_t getEfuseMac() {
   return value;
 }
 
-constexpr ledc_channel_t kPwmChannel = LEDC_CHANNEL_0;
-constexpr ledc_timer_t kPwmTimer = LEDC_TIMER_0;
-constexpr ledc_mode_t kPwmSpeedMode = LEDC_LOW_SPEED_MODE;
+constexpr ledc_channel_t pwm_channel = LEDC_CHANNEL_0;
+constexpr ledc_timer_t pwm_timer = LEDC_TIMER_0;
+constexpr ledc_mode_t pwm_speed_mode = LEDC_LOW_SPEED_MODE;
 
 void configureGpioInputPullup(int pin) {
   gpio_config_t config{};
@@ -231,17 +231,17 @@ void configureGpioInputPullup(int pin) {
 void initPwm() {
 #if defined(PWM_PIN)
   ledc_timer_config_t timer{};
-  timer.speed_mode = kPwmSpeedMode;
-  timer.timer_num = kPwmTimer;
+  timer.speed_mode = pwm_speed_mode;
+  timer.timer_num = pwm_timer;
   timer.duty_resolution = LEDC_TIMER_8_BIT;
   timer.freq_hz = PWM_FREQ;
   timer.clk_cfg = LEDC_AUTO_CLK;
   ledc_timer_config(&timer);
 
   ledc_channel_config_t channel{};
-  channel.speed_mode = kPwmSpeedMode;
-  channel.channel = kPwmChannel;
-  channel.timer_sel = kPwmTimer;
+  channel.speed_mode = pwm_speed_mode;
+  channel.channel = pwm_channel;
+  channel.timer_sel = pwm_timer;
   channel.gpio_num = PWM_PIN;
   channel.duty = 0;
   channel.hpoint = 0;
@@ -250,10 +250,10 @@ void initPwm() {
 }
 
 void startCaptiveDns() {
-  if (captiveDnsServer.start(kCaptiveDnsPort, "*", kCaptiveDnsIp)) {
+  if (captiveDnsServer.start(captive_dns_port, "*", kCaptiveDnsIp)) {
     char buf[64];
     snprintf(buf, sizeof(buf), "Captive DNS started on %s",
-             kCaptiveDnsIpString);
+             captive_dns_ip_string);
     logger.info(buf);
     return;
   }
@@ -424,8 +424,8 @@ inline void enableTX() {
 void set_pwm() {
   int value = configManager.readInt("pwmValue", 130);
 #if defined(PWM_PIN)
-  ledc_set_duty(kPwmSpeedMode, kPwmChannel, value);
-  ledc_update_duty(kPwmSpeedMode, kPwmChannel);
+  ledc_set_duty(pwm_speed_mode, pwm_channel, value);
+  ledc_update_duty(pwm_speed_mode, pwm_channel);
 #if defined(EBUS_INTERNAL)
   getEbusController().resetMetrics();
 #endif
@@ -434,7 +434,7 @@ void set_pwm() {
 
 uint32_t get_pwm() {
 #if defined(PWM_PIN)
-  return ledc_get_duty(kPwmSpeedMode, kPwmChannel);
+  return ledc_get_duty(pwm_speed_mode, pwm_channel);
 #else
   return 0;
 #endif
@@ -696,7 +696,7 @@ extern "C" void app_main(void) {
 #if defined(EBUS_INTERNAL)
   // Connect library logger to app logger
   ebus::Controller::setLogSink([](ebus::LogLevel level, std::string_view msg) {
-    char buf[kMaxMsgLength];
+    char buf[max_msg_length];
     int n = snprintf(buf, sizeof(buf), "eBUS-Lib: %.*s", (int)msg.size(),
                      msg.data());
     if (n < 0) return;

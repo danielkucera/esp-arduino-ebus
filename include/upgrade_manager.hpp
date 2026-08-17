@@ -27,11 +27,11 @@ class UpgradeManager {
                       const char* id = "upgrade");
   void resetUploadState();
 
-  PreUpgradeHook preUpgradeHook_;
+  PreUpgradeHook pre_upgrade_hook_;
 
-  const esp_partition_t* uploadPartition_ = nullptr;
-  esp_ota_handle_t uploadHandle_ = 0;
-  bool preUpgradeDone_ = false;
-  size_t uploadBytesReceived_ = 0;
-  int uploadNextProgressPercent_ = 10;
+  const esp_partition_t* upload_partition_ = nullptr;
+  esp_ota_handle_t upload_handle_ = 0;
+  bool pre_upgrade_done_ = false;
+  size_t upload_bytes_received_ = 0;
+  int upload_next_progress_percent_ = 10;
 };

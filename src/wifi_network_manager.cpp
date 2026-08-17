@@ -1,4 +1,4 @@
-#include "WifiNetworkManager.hpp"
+#include "wifi_network_manager.hpp"
 
 #include <arpa/inet.h>
 #include <driver/gpio.h>
@@ -19,7 +19,7 @@
 #include <cstring>
 #include <string>
 
-#include "ConfigManager.hpp"
+#include "config_manager.hpp"
 #include "logger.hpp"
 
 ConfigManager* WifiNetworkManager::configManager_ = nullptr;
@@ -139,9 +139,9 @@ std::string buildHostname(const std::string& source, const char* fallback) {
 }  // namespace
 
 void WifiNetworkManager::begin(ConfigManager* configManager) {
-  static constexpr const char* kDefaultHostname = "esp-eBus";
-  static constexpr const char* kDefaultApSsid = "esp-eBus";
-  static constexpr const char* kDefaultApPassword = "ebusebus";
+  static constexpr const char* default_hostname = "esp-eBus";
+  static constexpr const char* default_ap_ssid = "esp-eBus";
+  static constexpr const char* default_ap_password = "ebusebus";
   static bool started = false;
   if (started) return;
   started = true;
@@ -158,15 +158,15 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
 
   std::string apPassword =
       configManager_ != nullptr
-          ? configManager_->readString("apModePassword", kDefaultApPassword)
-          : std::string(kDefaultApPassword);
-  if (apPassword.empty()) apPassword = kDefaultApPassword;
+          ? configManager_->readString("apModePassword", default_ap_password)
+          : std::string(default_ap_password);
+  if (apPassword.empty()) apPassword = default_ap_password;
   const std::string configuredThingName =
       configManager_ != nullptr
-          ? configManager_->readString("thingName", kDefaultHostname)
-          : std::string(kDefaultHostname);
+          ? configManager_->readString("thingName", default_hostname)
+          : std::string(default_hostname);
   const std::string hostname =
-      buildHostname(configuredThingName, kDefaultHostname);
+      buildHostname(configuredThingName, default_hostname);
 
   esp_err_t err = esp_netif_init();
   if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
@@ -227,9 +227,9 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   }
 
   wifi_config_t apConfig{};
-  std::strncpy(reinterpret_cast<char*>(apConfig.ap.ssid), kDefaultApSsid,
+  std::strncpy(reinterpret_cast<char*>(apConfig.ap.ssid), default_ap_ssid,
                sizeof(apConfig.ap.ssid) - 1);
-  apConfig.ap.ssid_len = std::strlen(kDefaultApSsid);
+  apConfig.ap.ssid_len = std::strlen(default_ap_ssid);
   std::strncpy(reinterpret_cast<char*>(apConfig.ap.password),
                apPassword.c_str(), sizeof(apConfig.ap.password) - 1);
   apConfig.ap.max_connection = 4;
@@ -240,7 +240,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
     logger.error("AP config apply failed");
   } else {
     char buf[64];
-    snprintf(buf, sizeof(buf), "AP ready: %s (%s)", kDefaultApSsid,
+    snprintf(buf, sizeof(buf), "AP ready: %s (%s)", default_ap_ssid,
              (apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2"));
     logger.info(buf);
   }

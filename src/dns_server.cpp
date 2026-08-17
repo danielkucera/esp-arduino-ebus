@@ -12,8 +12,8 @@
 #include "logger.hpp"
 
 namespace {
-constexpr size_t kDnsHeaderSize = 12;
-constexpr size_t kMaxPacketSize = 512;
+constexpr size_t dns_header_size = 12;
+constexpr size_t max_packet_size = 512;
 }  // namespace
 
 DNSServer::DNSServer() : running_(false) {}
@@ -71,7 +71,7 @@ void DNSServer::taskLoop() {
 void DNSServer::processNextRequest() {
   if (socketFd_ < 0) return;
 
-  uint8_t buffer[kMaxPacketSize];
+  uint8_t buffer[max_packet_size];
   sockaddr_in client{};
   socklen_t clientLen = sizeof(client);
   int received = recvfrom(socketFd_, buffer, sizeof(buffer), 0,
@@ -81,22 +81,22 @@ void DNSServer::processNextRequest() {
   snprintf(buf, sizeof(buf), "Received DNS request from %s",
            inet_ntoa(client.sin_addr));
   logger.debug(buf);
-  if (static_cast<size_t>(received) < kDnsHeaderSize) return;
+  if (static_cast<size_t>(received) < dns_header_size) return;
 
   if (buffer[2] & 0x80) return;  // response packet
   uint16_t qdcount = (buffer[4] << 8) | buffer[5];
   if (qdcount == 0) return;
 
-  size_t idx = kDnsHeaderSize;
+  size_t idx = dns_header_size;
   while (idx < static_cast<size_t>(received) && buffer[idx] != 0) {
     idx += buffer[idx] + 1;
   }
   if (idx + 5 > static_cast<size_t>(received)) return;
 
-  size_t questionLen = (idx + 5) - kDnsHeaderSize;
-  size_t responseLen = kDnsHeaderSize + questionLen;
+  size_t questionLen = (idx + 5) - dns_header_size;
+  size_t responseLen = dns_header_size + questionLen;
 
-  uint8_t response[kMaxPacketSize];
+  uint8_t response[max_packet_size];
   std::memcpy(response, buffer, responseLen);
 
   response[2] = 0x81;

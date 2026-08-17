@@ -1,4 +1,4 @@
-#include "BusType.hpp"
+#include "bus_type.hpp"
 
 #include <driver/uart.h>
 #include <esp_rom_sys.h>
@@ -35,15 +35,15 @@ BusType Bus;
 // Locking
 #if USE_ASYNCHRONOUS
 SemaphoreHandle_t getMutex() {
-  static SemaphoreHandle_t _lock = NULL;
-  if (_lock == NULL) {
-    _lock = xSemaphoreCreateMutex();
-    if (_lock == NULL) {
+  static SemaphoreHandle_t lock_ = NULL;
+  if (lock_ == NULL) {
+    lock_ = xSemaphoreCreateMutex();
+    if (lock_ == NULL) {
       DEBUG_LOG("xSemaphoreCreateMutex failed");
       return NULL;
     }
   }
-  return _lock;
+  return lock_;
 }
 #define ENH_MUTEX_LOCK() \
   do {                   \
@@ -54,33 +54,33 @@ SemaphoreHandle_t getMutex() {
 #define ENH_MUTEX_UNLOCK()
 #endif
 
-int _arbitration_client = -1;
-int _arbitration_address = -1;
+int arbitration_client_ = -1;
+int arbitration_address_ = -1;
 
 void getArbitrationClient(int& clientFd, uint8_t& address) {
   ENH_MUTEX_LOCK();
-  clientFd = _arbitration_client;
-  address = _arbitration_address;
+  clientFd = arbitration_client_;
+  address = arbitration_address_;
   ENH_MUTEX_UNLOCK();
 }
 
 void clearArbitrationClient() {
   ENH_MUTEX_LOCK();
-  _arbitration_client = -1;
-  _arbitration_address = -1;
+  arbitration_client_ = -1;
+  arbitration_address_ = -1;
   ENH_MUTEX_UNLOCK();
 }
 
 bool setArbitrationClient(int& clientFd, uint8_t& address) {
   bool result = true;
   ENH_MUTEX_LOCK();
-  if (_arbitration_client < 0) {
-    _arbitration_client = clientFd;
-    _arbitration_address = address;
+  if (arbitration_client_ < 0) {
+    arbitration_client_ = clientFd;
+    arbitration_address_ = address;
   } else {
     result = false;
-    clientFd = _arbitration_client;
-    address = _arbitration_address;
+    clientFd = arbitration_client_;
+    address = arbitration_address_;
   }
   ENH_MUTEX_UNLOCK();
   return result;
@@ -95,23 +95,23 @@ int arbitrationRequested(uint8_t& address) {
 }
 
 BusType::BusType()
-    : _nbrRestarts1(0),
-      _nbrRestarts2(0),
-      _nbrArbitrations(0),
-      _nbrLost1(0),
-      _nbrLost2(0),
-      _nbrWon1(0),
-      _nbrWon2(0),
-      _nbrErrors(0),
-      _nbrLate(0),
-      _clientFd(-1) {}
+    : nbr_restarts_1_(0),
+      nbr_restarts_2_(0),
+      nbr_arbitrations_(0),
+      nbr_lost_1_(0),
+      nbr_lost_2_(0),
+      nbr_won_1_(0),
+      nbr_won_2_(0),
+      nbr_errors_(0),
+      nbr_late_(0),
+      client_fd_(-1) {}
 
 BusType::~BusType() { end(); }
 
 #if USE_ASYNCHRONOUS
 void IRAM_ATTR BusType::receiveHandler() {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-  vTaskNotifyGiveFromISR(Bus._serialEventTask, &xHigherPriorityTaskWoken);
+  vTaskNotifyGiveFromISR(Bus.serial_event_task_, &xHigherPriorityTaskWoken);
   portEND_SWITCHING_ISR(xHigherPriorityTaskWoken);
 }
 
@@ -203,10 +203,10 @@ void BusType::begin() {
 #endif
 
 #if USE_ASYNCHRONOUS
-  _queue = xQueueCreate(QUEUE_SIZE, sizeof(data));
+  queue_ = xQueueCreate(QUEUE_SIZE, sizeof(data));
   xTaskCreateUniversal(BusType::readDataFromSoftwareSerial, "_serialEventQueue",
                        SERIAL_EVENT_TASK_STACK_SIZE, this,
-                       SERIAL_EVENT_TASK_PRIORITY, &_serialEventTask,
+                       SERIAL_EVENT_TASK_PRIORITY, &serial_event_task_,
                        SERIAL_EVENT_TASK_RUNNING_CORE);
   mySerial.onReceive(BusType::receiveHandler);
 #endif
@@ -219,11 +219,11 @@ void BusType::end() {
 #endif
 
 #if USE_ASYNCHRONOUS
-  vQueueDelete(_queue);
-  _queue = 0;
+  vQueueDelete(queue_);
+  queue_ = 0;
 
-  vTaskDelete(_serialEventTask);
-  _serialEventTask = 0;
+  vTaskDelete(serial_event_task_);
+  serial_event_task_ = 0;
 #endif
 }
 
@@ -233,7 +233,7 @@ size_t BusType::write(uint8_t symbol) { return BusSer.write(symbol); }
 
 bool BusType::read(data& d) {
 #if USE_ASYNCHRONOUS
-  return xQueueReceive(_queue, &d, 0) == pdTRUE;
+  return xQueueReceive(queue_, &d, 0) == pdTRUE;
 #else
 #if USE_SOFTWARE_SERIAL
   if (mySerial.available()) {
@@ -246,9 +246,9 @@ bool BusType::read(data& d) {
     receive(symbol, (uint32_t)(esp_timer_get_time()));
   }
 #endif
-  if (_queue.size() > 0) {
-    d = _queue.front();
-    _queue.pop();
+  if (queue_.size() > 0) {
+    d = queue_.front();
+    queue_.pop();
     return true;
   }
   return false;
@@ -265,88 +265,89 @@ int BusType::available() {
 
 void BusType::push(const data& d) {
 #if USE_ASYNCHRONOUS
-  xQueueSendToBack(_queue, &d, 0);
+  xQueueSendToBack(queue_, &d, 0);
 #else
-  _queue.push(d);
+  queue_.push(d);
 #endif
 }
 
 void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
-  _busState.data(symbol);
-  Arbitration::state state = _arbitration.data(_busState, symbol, startBitTime);
+  bus_state_.data(symbol);
+  Arbitration::state state =
+      arbitration_.data(bus_state_, symbol, startBitTime);
   switch (state) {
     case Arbitration::restart1:
-      _nbrRestarts1++;
+      nbr_restarts_1_++;
       goto NONE;
     case Arbitration::restart2:
-      _nbrRestarts2++;
+      nbr_restarts_2_++;
       goto NONE;
     case Arbitration::none:
     NONE:
       uint8_t address;
-      _clientFd = arbitrationRequested(address);
-      if (_clientFd >= 0) {
-        switch (_arbitration.start(_busState, address, startBitTime)) {
+      client_fd_ = arbitrationRequested(address);
+      if (client_fd_ >= 0) {
+        switch (arbitration_.start(bus_state_, address, startBitTime)) {
           case Arbitration::started:
-            _nbrArbitrations++;
+            nbr_arbitrations_++;
             DEBUG_LOG("BUS START SUCC 0x%02x %lu us\n", symbol,
-                      _busState.microsSinceLastSyn());
+                      bus_state_.microsSinceLastSyn());
             break;
           case Arbitration::late:
-            _nbrLate++;
+            nbr_late_++;
             [[fallthrough]];
           case Arbitration::not_started:
             DEBUG_LOG("BUS START WAIT 0x%02x %lu us\n", symbol,
-                      _busState.microsSinceLastSyn());
+                      bus_state_.microsSinceLastSyn());
         }
       }
       // send to everybody. ebusd needs the SYN to get in the right mood
-      push({false, RECEIVED, symbol, -1, _clientFd});
+      push({false, RECEIVED, symbol, -1, client_fd_});
       break;
     case Arbitration::arbitrating:
       DEBUG_LOG("BUS ARBITRATIN 0x%02x %lu us\n", symbol,
-                _busState.microsSinceLastSyn());
+                bus_state_.microsSinceLastSyn());
       // do not send to arbitration client
-      push({false, RECEIVED, symbol, _clientFd, _clientFd});
+      push({false, RECEIVED, symbol, client_fd_, client_fd_});
       break;
     case Arbitration::won1:
-      _nbrWon1++;
+      nbr_won_1_++;
       goto WON;
     case Arbitration::won2:
-      _nbrWon2++;
+      nbr_won_2_++;
     WON:
       arbitrationDone();
-      DEBUG_LOG("BUS SEND WON   0x%02x %lu us\n", _busState._master,
-                _busState.microsSinceLastSyn());
+      DEBUG_LOG("BUS SEND WON   0x%02x %lu us\n", bus_state_.master_,
+                bus_state_.microsSinceLastSyn());
       // send only to the arbitrating client
-      push({true, STARTED, _busState._master, _clientFd, _clientFd});
+      push({true, STARTED, bus_state_.master_, client_fd_, client_fd_});
       // do not send to arbitrating client
-      push({false, RECEIVED, symbol, _clientFd, _clientFd});
-      _clientFd = -1;
+      push({false, RECEIVED, symbol, client_fd_, client_fd_});
+      client_fd_ = -1;
       break;
     case Arbitration::lost1:
-      _nbrLost1++;
+      nbr_lost_1_++;
       goto LOST;
     case Arbitration::lost2:
-      _nbrLost2++;
+      nbr_lost_2_++;
     LOST:
       arbitrationDone();
-      DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %lu us\n", _busState._master,
-                _busState._symbol, _busState.microsSinceLastSyn());
+      DEBUG_LOG("BUS SEND LOST  0x%02x 0x%02x %lu us\n", bus_state_.master_,
+                bus_state_.symbol_, bus_state_.microsSinceLastSyn());
       // send only to the arbitrating client
-      push({true, FAILED, _busState._master, _clientFd, _clientFd});
+      push({true, FAILED, bus_state_.master_, client_fd_, client_fd_});
       // send to everybody
-      push({false, RECEIVED, symbol, -1, _clientFd});
-      _clientFd = -1;
+      push({false, RECEIVED, symbol, -1, client_fd_});
+      client_fd_ = -1;
       break;
     case Arbitration::error:
-      _nbrErrors++;
+      nbr_errors_++;
       arbitrationDone();
       // send only to the arbitrating client
-      push({true, ERROR_EBUS, ERR_FRAMING, _clientFd, _clientFd});
+      push({true, ERROR_EBUS, ERR_FRAMING, client_fd_, client_fd_});
       // send to everybody
-      push({false, RECEIVED, symbol, -1, _clientFd});
-      _clientFd = -1;
+      push({false, RECEIVED, symbol, -1, client_fd_});
+      client_fd_ = -1;
       break;
   }
 }

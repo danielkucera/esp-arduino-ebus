@@ -17,7 +17,7 @@ Logger::Logger(size_t maxEntries)
       print_queue_(nullptr),
       print_task_(nullptr) {
   buffer_ = std::vector<LogEntry>(max_entries_);
-  print_queue_ = xQueueCreate(kPrintQueueEntries, kMaxMsgLength);
+  print_queue_ = xQueueCreate(print_queue_entries, max_msg_length);
   if (print_queue_ != nullptr) {
     xTaskCreate(Logger::printTaskEntry, "logger", 3072, this, 1, &print_task_);
   }
@@ -134,14 +134,14 @@ bool Logger::currentMillisTimeRelation(uint64_t& currentMillis,
   currentTimeMillis = static_cast<int64_t>(tv.tv_sec) * 1000LL +
                       static_cast<int64_t>(tv.tv_usec) / 1000LL;
 
-  constexpr int64_t kMinValidEpochMs = 1577836800000LL;  // 2020-01-01 UTC
-  return currentTimeMillis >= kMinValidEpochMs;
+  constexpr int64_t min_valid_epoch_ms = 1577836800000LL;  // 2020-01-01 UTC
+  return currentTimeMillis >= min_valid_epoch_ms;
 }
 
 void Logger::log(LogLevel level, std::string_view message, bool is_json,
                  uint32_t session_id, uint32_t poll_id) {
   if (print_queue_ != nullptr && print_task_ != nullptr) {
-    char msg[kMaxMsgLength]{};
+    char msg[max_msg_length]{};
     size_t len = std::min(message.size(), sizeof(msg) - 1);
     std::memcpy(msg, message.data(), len);
     msg[len] = '\0';
@@ -157,7 +157,7 @@ void Logger::log(LogLevel level, std::string_view message, bool is_json,
   buffer_[index_].level = level;
 
   size_t msg_len =
-      std::min(message.size(), static_cast<size_t>(kMaxMsgLength - 1));
+      std::min(message.size(), static_cast<size_t>(max_msg_length - 1));
   std::memcpy(buffer_[index_].message, message.data(), msg_len);
   buffer_[index_].message[msg_len] = '\0';
 
@@ -176,7 +176,7 @@ void Logger::printTaskEntry(void* arg) {
 
 void Logger::printTaskLoop() {
   while (true) {
-    char msg[kMaxMsgLength]{};
+    char msg[max_msg_length]{};
     if (xQueueReceive(print_queue_, msg, portMAX_DELAY) == pdTRUE) {
       printf("%s\n", msg);
     }

@@ -8,12 +8,12 @@
 
 class Adc {
  public:
-  static constexpr size_t SAMPLE_BUFFER_BYTES = 10 * 1024;
-  static constexpr size_t DMA_STORE_BUFFER_BYTES = 32 * 1024;
-  static constexpr size_t RESULT_BYTES = 2;
-  static constexpr size_t ADC_RAW_FRAME_BYTES = 1024;
-  static constexpr size_t ADC_RAW_HTTP_CHUNK_BYTES = 4096;
-  static constexpr size_t ADC_DMA_SAMPLE_BYTES = 4;
+  static constexpr size_t sample_buffer_bytes = 10 * 1024;
+  static constexpr size_t dma_store_buffer_bytes = 32 * 1024;
+  static constexpr size_t result_bytes = 2;
+  static constexpr size_t adc_raw_frame_bytes = 1024;
+  static constexpr size_t adc_raw_http_chunk_bytes = 4096;
+  static constexpr size_t adc_dma_sample_bytes = 4;
 
   bool begin();
   void stop();
@@ -34,13 +34,13 @@ class Adc {
   mutable adc_digi_pattern_config_t adc_pattern_[5] = {};
 
   // Pre-allocated buffers to prevent stack overflow and heap fragmentation
-  mutable uint8_t dma_buffer_[ADC_RAW_FRAME_BYTES];
-  mutable uint8_t tx_buffer_[ADC_RAW_HTTP_CHUNK_BYTES];
+  mutable uint8_t dma_buffer_[adc_raw_frame_bytes];
+  mutable uint8_t tx_buffer_[adc_raw_http_chunk_bytes];
   mutable adc_continuous_data_t
-      parsed_buffer_[ADC_RAW_FRAME_BYTES / ADC_DMA_SAMPLE_BYTES];
+      parsed_buffer_[adc_raw_frame_bytes / adc_dma_sample_bytes];
 
-  bool configured = false;
-  mutable bool capturing = false;
+  bool configured_ = false;
+  mutable bool capturing_ = false;
 };
 
 extern Adc adc;

@@ -1,4 +1,4 @@
-#include "EspOtaManager.hpp"
+#include "esp_ota_manager.hpp"
 
 #include <esp_err.h>
 #include <esp_ota_ops.h>
@@ -23,12 +23,12 @@
 #include "main.hpp"
 
 namespace {
-constexpr size_t kOtaBufferSize = 1024;
-constexpr uint8_t kEspImageMagic = 0xE9;
-constexpr int kEspOtaFlashCommand = 0;
-constexpr uint32_t kEspOtaTransferTimeoutMs = 60000;
-constexpr uint32_t kEspOtaTaskDelayMs = 10;
-constexpr uint32_t kEspOtaTaskStackSize = 8192;
+constexpr size_t ota_buffer_size = 1024;
+constexpr uint8_t esp_image_magic = 0xE9;
+constexpr int esp_ota_flash_command = 0;
+constexpr uint32_t esp_ota_transfer_timeout_ms = 60000;
+constexpr uint32_t esp_ota_task_delay_ms = 10;
+constexpr uint32_t esp_ota_task_stack_size = 8192;
 
 std::string toHexByte(uint8_t value) {
   char buffer[8];
@@ -39,13 +39,13 @@ std::string toHexByte(uint8_t value) {
 
 void EspOtaManager::begin(uint16_t port) {
   port_ = port;
-  if (udpSock_ >= 0) {
-    close(udpSock_);
-    udpSock_ = -1;
+  if (udp_sock_ >= 0) {
+    close(udp_sock_);
+    udp_sock_ = -1;
   }
 
-  udpSock_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (udpSock_ < 0) {
+  udp_sock_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (udp_sock_ < 0) {
     logger.error("ESPOTA: failed to create UDP socket");
     return;
   }
@@ -53,28 +53,28 @@ void EspOtaManager::begin(uint16_t port) {
   timeval tv{};
   tv.tv_sec = 0;
   tv.tv_usec = 1000;
-  setsockopt(udpSock_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+  setsockopt(udp_sock_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
   sockaddr_in addr = {};
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port_);
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  if (bind(udpSock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+  if (bind(udp_sock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
     logger.error("ESPOTA: failed to bind UDP port " + std::to_string(port_) +
                  " errno=" + std::to_string(errno));
-    close(udpSock_);
-    udpSock_ = -1;
+    close(udp_sock_);
+    udp_sock_ = -1;
     return;
   }
 
   logger.info("ESPOTA: listening on UDP port " + std::to_string(port_));
 
-  if (taskHandle_ == nullptr) {
+  if (task_handle_ == nullptr) {
     BaseType_t taskResult = xTaskCreate(
-        taskEntry, "espota", kEspOtaTaskStackSize, this, 1, &taskHandle_);
+        taskEntry, "espota", esp_ota_task_stack_size, this, 1, &task_handle_);
     if (taskResult != pdPASS) {
       logger.error("ESPOTA: failed to start task");
-      taskHandle_ = nullptr;
+      task_handle_ = nullptr;
     } else {
       logger.info("ESPOTA: task started");
     }
@@ -82,13 +82,13 @@ void EspOtaManager::begin(uint16_t port) {
 }
 
 void EspOtaManager::setPreUpgradeHook(PreUpgradeHook hook) {
-  preUpgradeHook_ = hook;
+  pre_upgrade_hook_ = hook;
 }
 
 void EspOtaManager::prepareForUpgrade() {
-  if (!preUpgradeDone_ && preUpgradeHook_) {
-    preUpgradeHook_();
-    preUpgradeDone_ = true;
+  if (!pre_upgrade_done_ && pre_upgrade_hook_) {
+    pre_upgrade_hook_();
+    pre_upgrade_done_ = true;
   }
 }
 
@@ -99,19 +99,19 @@ void EspOtaManager::taskEntry(void* param) {
 
 void EspOtaManager::taskLoop() {
   while (true) {
-    if (udpSock_ >= 0) {
+    if (udp_sock_ >= 0) {
       handleInvitation();
     } else if (port_ > 0) {
       begin(port_);
     }
-    vTaskDelay(pdMS_TO_TICKS(kEspOtaTaskDelayMs));
+    vTaskDelay(pdMS_TO_TICKS(esp_ota_task_delay_ms));
   }
 }
 
 bool EspOtaManager::handleInvitation() {
   sockaddr_in remoteAddr = {};
   socklen_t remoteLen = sizeof(remoteAddr);
-  int readLen = recvfrom(udpSock_, packet_, sizeof(packet_) - 1, 0,
+  int readLen = recvfrom(udp_sock_, packet_, sizeof(packet_) - 1, 0,
                          reinterpret_cast<sockaddr*>(&remoteAddr), &remoteLen);
   if (readLen <= 0) return false;
   packet_[readLen] = '\0';
@@ -125,14 +125,14 @@ bool EspOtaManager::handleInvitation() {
                       &expectedSizeRaw, md5);
   if (parsed < 3) {
     const char* msg = "ERROR: invalid invitation";
-    sendto(udpSock_, msg, strlen(msg), 0,
+    sendto(udp_sock_, msg, strlen(msg), 0,
            reinterpret_cast<const sockaddr*>(&remoteAddr), remoteLen);
     return false;
   }
 
-  if (command != kEspOtaFlashCommand) {
+  if (command != esp_ota_flash_command) {
     const char* msg = "ERROR: unsupported command";
-    sendto(udpSock_, msg, strlen(msg), 0,
+    sendto(udp_sock_, msg, strlen(msg), 0,
            reinterpret_cast<const sockaddr*>(&remoteAddr), remoteLen);
     return false;
   }
@@ -140,7 +140,7 @@ bool EspOtaManager::handleInvitation() {
   size_t expectedSize = static_cast<size_t>(expectedSizeRaw);
   if (expectedSize == 0) {
     const char* msg = "ERROR: invalid size";
-    sendto(udpSock_, msg, strlen(msg), 0,
+    sendto(udp_sock_, msg, strlen(msg), 0,
            reinterpret_cast<const sockaddr*>(&remoteAddr), remoteLen);
     return false;
   }
@@ -152,7 +152,7 @@ bool EspOtaManager::handleInvitation() {
               std::to_string(expectedSize) + " md5=" + std::string(md5));
 
   const char* ok = "OK";
-  sendto(udpSock_, ok, strlen(ok), 0,
+  sendto(udp_sock_, ok, strlen(ok), 0,
          reinterpret_cast<const sockaddr*>(&remoteAddr), remoteLen);
 
   return performTransfer(remoteAddr, static_cast<uint16_t>(hostPort),
@@ -163,9 +163,9 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr,
                                     uint16_t hostPort, size_t expectedSize) {
   prepareForUpgrade();
 
-  if (udpSock_ >= 0) {
-    close(udpSock_);
-    udpSock_ = -1;
+  if (udp_sock_ >= 0) {
+    close(udp_sock_);
+    udp_sock_ = -1;
   }
 
   int tcpSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -209,12 +209,12 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr,
     return false;
   }
 
-  uint8_t buffer[kOtaBufferSize];
+  uint8_t buffer[ota_buffer_size];
   size_t totalReceived = 0;
   bool checkedMagic = false;
   int nextProgressPercent = 10;
   uint32_t transferDeadline =
-      (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
+      (uint32_t)(esp_timer_get_time() / 1000ULL) + esp_ota_transfer_timeout_ms;
 
   while (totalReceived < expectedSize) {
     int bytesRead = recv(tcpSock, buffer, sizeof(buffer), 0);
@@ -240,12 +240,12 @@ bool EspOtaManager::performTransfer(const sockaddr_in& hostAddr,
       return false;
     }
 
-    transferDeadline =
-        (uint32_t)(esp_timer_get_time() / 1000ULL) + kEspOtaTransferTimeoutMs;
+    transferDeadline = (uint32_t)(esp_timer_get_time() / 1000ULL) +
+                       esp_ota_transfer_timeout_ms;
 
     if (!checkedMagic) {
       checkedMagic = true;
-      if (buffer[0] != kEspImageMagic) {
+      if (buffer[0] != esp_image_magic) {
         esp_ota_abort(handle);
         fail(std::string("invalid firmware magic 0x") + toHexByte(buffer[0]));
         const char* msg = "ERROR[4]: bad image";

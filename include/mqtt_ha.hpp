@@ -53,8 +53,8 @@ class MqttHA {
 
   struct KeyValueMapping {
     ebus::StaticVector<ebus::FixedString<16>, 5> options;
-    std::string valueMap;
-    std::string cmdMap;
+    std::string value_map;
+    std::string cmd_map;
   };
 
   static KeyValueMapping createOptions(const HAProfile* profile);

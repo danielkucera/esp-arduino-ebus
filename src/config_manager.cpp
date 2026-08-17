@@ -1,4 +1,4 @@
-#include "ConfigManager.hpp"
+#include "config_manager.hpp"
 
 #include <esp_err.h>
 #include <nvs.h>
@@ -18,7 +18,7 @@ extern ConfigManager configManager;
 
 namespace {
 
-constexpr const char* kNvsNamespace = "esp-ebus";
+constexpr const char* nvs_namespace = "esp-ebus";
 
 bool ensureNvsReady() {
   static bool nvsReady = false;
@@ -129,7 +129,7 @@ bool readEntryValueAsString(nvs_handle_t handle, const nvs_entry_info_t& info,
 
 void fillJsonFromNvs(ebus::detail::JsonWriter& writer, nvs_handle_t handle) {
   nvs_iterator_t it = nullptr;
-  if (nvs_entry_find("nvs", kNvsNamespace, NVS_TYPE_ANY, &it) != ESP_OK) {
+  if (nvs_entry_find("nvs", nvs_namespace, NVS_TYPE_ANY, &it) != ESP_OK) {
     return;
   }
   while (it != nullptr) {
@@ -159,7 +159,7 @@ std::string ConfigManager::readString(const char* key, const char* fallback) {
   if (!ensureNvsReady()) return std::string(fallback);
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
+  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READONLY, &handle);
   if (openErr != ESP_OK) return std::string(fallback);
 
   std::string value = ::readString(handle, key, fallback);
@@ -171,7 +171,7 @@ int32_t ConfigManager::readInt(const char* key, int32_t fallback) {
   if (!ensureNvsReady()) return fallback;
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
+  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READONLY, &handle);
   if (openErr != ESP_OK) return fallback;
 
   int32_t value = fallback;
@@ -200,7 +200,7 @@ bool ConfigManager::writeString(const char* key, const std::string& value) {
   if (!ensureNvsReady()) return false;
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
+  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
   if (openErr != ESP_OK) return false;
 
   std::string error;
@@ -219,7 +219,7 @@ void ConfigManager::resetConfig() {
   if (!ensureNvsReady()) return;
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
+  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
   if (openErr != ESP_OK) return;
 
   const esp_err_t eraseErr = nvs_erase_all(handle);
@@ -259,7 +259,7 @@ void ConfigManager::fetchConfig(const ebus::JsonChunkVisitor& visitor) {
   }
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READONLY, &handle);
+  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READONLY, &handle);
   if (openErr != ESP_OK) {
     visitor("{}");
     return;
@@ -289,7 +289,7 @@ bool ConfigManager::writeConfigJson(const std::string& body,
   }
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
+  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
   if (openErr != ESP_OK) {
     error = std::string("Failed to open NVS: ") + esp_err_to_name(openErr);
     return false;

@@ -4,7 +4,7 @@
 #include <ebus/types.hpp>
 #include <string>
 
-#include "UartPort.hpp"
+#include "uart_port.hpp"
 
 #define MAX_WIFI_CLIENTS 4
 

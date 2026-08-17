@@ -20,17 +20,17 @@
 Store store;
 
 namespace {
-constexpr const char* kLittlefsBasePath = "/littlefs";
-constexpr const char* kLittlefsPartitionLabel = "littlefs";
-constexpr const char* kCommandsFilePath = "/littlefs/commands.json";
+constexpr const char* littlefs_base_path = "/littlefs";
+constexpr const char* littlefs_partition_label = "littlefs";
+constexpr const char* commands_file_path = "/littlefs/commands.json";
 
 bool ensureLittlefsMounted() {
   static bool mounted = false;
   if (mounted) return true;
 
   esp_vfs_littlefs_conf_t conf = {};
-  conf.base_path = kLittlefsBasePath;
-  conf.partition_label = kLittlefsPartitionLabel;
+  conf.base_path = littlefs_base_path;
+  conf.partition_label = littlefs_partition_label;
   conf.partition = nullptr;
   conf.format_if_mount_failed = true;
   conf.read_only = false;
@@ -128,7 +128,7 @@ MatchingCommands Store::findAllMatchingCommands(ebus::ByteView master) {
 int64_t Store::loadCommands() {
   if (!ensureLittlefsMounted()) return -1;
   std::remove("/littlefs/commands.json.tmp");
-  return loadCommandsFrom(kCommandsFilePath);
+  return loadCommandsFrom(commands_file_path);
 }
 
 int64_t Store::loadCommandsFrom(const char* path) {
@@ -163,7 +163,7 @@ int64_t Store::saveCommands() const {
   bool commands_empty = commands_.empty();
   if (commands_empty) return 0;
 
-  FILE* file = std::fopen(kCommandsFilePath, "wb");
+  FILE* file = std::fopen(commands_file_path, "wb");
   if (file == nullptr) return -1;
 
   char file_buf[512];
@@ -224,12 +224,12 @@ int64_t Store::wipeCommands() {
   if (!ensureLittlefsMounted()) return -1;
 
   struct stat fileStat{};
-  if (stat(kCommandsFilePath, &fileStat) != 0) {
+  if (stat(commands_file_path, &fileStat) != 0) {
     if (errno == ENOENT) return 0;
     return -1;
   }
 
-  if (std::remove(kCommandsFilePath) != 0) {
+  if (std::remove(commands_file_path) != 0) {
     if (errno == ENOENT) return 0;
     return -1;
   }
@@ -412,13 +412,13 @@ void Store::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
 }
 
 void Store::deserializeCommands(FILE* file) {
-  constexpr size_t kReaderBufSize = 1536;
-  constexpr size_t kRowBufSize = 1024;
-  constexpr size_t kChunkSize = 512;
+  constexpr size_t reader_buf_size = 1536;
+  constexpr size_t row_buf_size = 1024;
+  constexpr size_t chunk_size = 512;
 
-  static char reader_buf[kReaderBufSize];
-  static char row_buf[kRowBufSize];
-  char chunk_buf[kChunkSize];
+  static char reader_buf[reader_buf_size];
+  static char row_buf[row_buf_size];
+  char chunk_buf[chunk_size];
 
   ebus::detail::JsonReader reader(reader_buf, sizeof(reader_buf));
 
@@ -477,7 +477,7 @@ void Store::deserializeCommands(FILE* file) {
     }
 
     size_t copy_len =
-        row_sv.size() < kRowBufSize ? row_sv.size() : kRowBufSize - 1;
+        row_sv.size() < row_buf_size ? row_sv.size() : row_buf_size - 1;
     std::memcpy(row_buf, row_sv.data(), copy_len);
     row_buf[copy_len] = '\0';
 

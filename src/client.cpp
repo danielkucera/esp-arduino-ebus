@@ -1,16 +1,15 @@
 #include "client.hpp"
 
-#include <cerrno>
-#include <cstring>
 #include <fcntl.h>
-
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-
 #include <lwip/sockets.h>
 #include <lwip/tcp.h>
 
-#include "BusType.hpp"
+#include <cerrno>
+#include <cstring>
+
+#include "bus_type.hpp"
 #include "main.hpp"
 
 #define M1 0b11000000
@@ -31,9 +30,9 @@ int wifiClientsEnhanced[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 int wifiServerReadOnlyFd = -1;
 int wifiClientsReadOnly[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 
-constexpr uint16_t kPortDefault = 3333;
-constexpr uint16_t kPortEnhanced = 3335;
-constexpr uint16_t kPortReadOnly = 3334;
+constexpr uint16_t port_default = 3333;
+constexpr uint16_t port_enhanced = 3335;
+constexpr uint16_t port_read_only = 3334;
 
 bool createListenSocket(int& listenFd, uint16_t port) {
   if (listenFd >= 0) return true;
@@ -69,9 +68,9 @@ bool createListenSocket(int& listenFd, uint16_t port) {
 }
 
 bool createListenSockets() {
-  return createListenSocket(wifiServerFd, kPortDefault) &&
-         createListenSocket(wifiServerEnhancedFd, kPortEnhanced) &&
-         createListenSocket(wifiServerReadOnlyFd, kPortReadOnly);
+  return createListenSocket(wifiServerFd, port_default) &&
+         createListenSocket(wifiServerEnhancedFd, port_enhanced) &&
+         createListenSocket(wifiServerReadOnlyFd, port_read_only);
 }
 
 void clientAcceptTask(void* arg) {
@@ -92,16 +91,16 @@ void dataProcess() {
   BusType::data data;
   if (Bus.read(data)) {
     for (int i = 0; i < MAX_WIFI_CLIENTS; i++) {
-      if (data._enhanced) {
-        if (data._clientFd == wifiClientsEnhanced[i]) {
-          pushClientEnhanced(&wifiClientsEnhanced[i], data._c, data._d, true);
+      if (data.enhanced) {
+        if (data.client_fd == wifiClientsEnhanced[i]) {
+          pushClientEnhanced(&wifiClientsEnhanced[i], data.c, data.d, true);
         }
       } else {
-        pushClient(&wifiClients[i], data._d);
-        pushClient(&wifiClientsReadOnly[i], data._d);
-        if (data._clientFd != wifiClientsEnhanced[i]) {
-          pushClientEnhanced(&wifiClientsEnhanced[i], data._c, data._d,
-                             data._logToClientFd == wifiClientsEnhanced[i]);
+        pushClient(&wifiClients[i], data.d);
+        pushClient(&wifiClientsReadOnly[i], data.d);
+        if (data.client_fd != wifiClientsEnhanced[i]) {
+          pushClientEnhanced(&wifiClientsEnhanced[i], data.c, data.d,
+                             data.log_to_client_fd == wifiClientsEnhanced[i]);
         }
       }
     }

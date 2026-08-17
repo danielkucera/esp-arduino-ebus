@@ -9,7 +9,7 @@ namespace {
 // Home Assistant auto-discovery profiles. Each profile defines the component
 // type (sensor, switch, select, etc.) and optional key-value mappings that
 // name, component, device_class, entity_category, mode, state_class, step, payload_on, payload_off, key_value_pairs, key_value_count, default_key
-constexpr HAProfile kProfiles[] = {
+constexpr HAProfile profiles[] = {
     {"sensor_temperature", "sensor", "temperature", "", "auto", "measurement", 0.5, 0, 0, {}, 0, 0},
     {"sensor_humidity", "sensor", "humidity", "", "auto", "measurement", 0, 0, 0, {}, 0, 0},
     {"sensor_pressure", "sensor", "pressure", "", "auto", "measurement", 0, 0, 0, {}, 0, 0},
@@ -36,7 +36,7 @@ constexpr HAProfile kProfiles[] = {
 }  // namespace
 
 const HAProfile* findHAProfile(std::string_view name) {
-  for (const auto& p : kProfiles) {
+  for (const auto& p : profiles) {
     if (name == p.name) return &p;
   }
   return nullptr;

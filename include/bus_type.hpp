@@ -1,10 +1,10 @@
 #pragma once
 
 #include <cstdint>
-
 #include <queue>
 
-#include "Arbitration.hpp"
+#include "arbitration.hpp"
+#include "bus_state.hpp"
 
 enum responses {
   RESETTED = 0x0,
@@ -39,11 +39,11 @@ class BusType {
   // "enhanced" data should go only to the arbitrating client
   // a client is in arbitration mode if _client is not null
   struct data {
-    bool _enhanced;       // is this an enhanced command?
-    uint8_t _c;           // command byte, only used when in "enhanced" mode
-    uint8_t _d;           // data byte for both regular and enhanced command
-    int _clientFd;        // the client fd that is being arbitrated
-    int _logToClientFd;   // the client fd that needs to log
+    bool enhanced;         // is this an enhanced command?
+    uint8_t c;             // command byte, only used when in "enhanced" mode
+    uint8_t d;             // data byte for both regular and enhanced command
+    int client_fd;         // the client fd that is being arbitrated
+    int log_to_client_fd;  // the client fd that needs to log
   };
   BusType();
   ~BusType();
@@ -60,37 +60,37 @@ class BusType {
 
   // std::atomic seems not well supported on esp12e, besides it is also not
   // needed there
-  ATOMIC_INT _nbrRestarts1;
-  ATOMIC_INT _nbrRestarts2;
-  ATOMIC_INT _nbrArbitrations;
-  ATOMIC_INT _nbrLost1;
-  ATOMIC_INT _nbrLost2;
-  ATOMIC_INT _nbrWon1;
-  ATOMIC_INT _nbrWon2;
-  ATOMIC_INT _nbrErrors;
-  ATOMIC_INT _nbrLate;
+  ATOMIC_INT nbr_restarts_1_;
+  ATOMIC_INT nbr_restarts_2_;
+  ATOMIC_INT nbr_arbitrations_;
+  ATOMIC_INT nbr_lost_1_;
+  ATOMIC_INT nbr_lost_2_;
+  ATOMIC_INT nbr_won_1_;
+  ATOMIC_INT nbr_won_2_;
+  ATOMIC_INT nbr_errors_;
+  ATOMIC_INT nbr_late_;
 
  private:
   inline void push(const data& d);
   void receive(uint8_t symbol, uint32_t startBitTime);
-  BusState _busState;
-  Arbitration _arbitration;
-  int _clientFd;
+  BusState bus_state_;
+  Arbitration arbitration_;
+  int client_fd_;
 
 #if USE_ASYNCHRONOUS
   // handler to be notified when there is signal change on the serial input
   static void IRAM_ATTR receiveHandler();
 
   // queue from Bus to read method
-  QueueHandle_t _queue;
+  QueueHandle_t queue_;
 
   // task to read bytes form the serial object and process them with receive
   // methods
-  TaskHandle_t _serialEventTask;
+  TaskHandle_t serial_event_task_;
 
   static void readDataFromSoftwareSerial(void* args);
 #else
-  std::queue<data> _queue;
+  std::queue<data> queue_;
 #endif
 };
 

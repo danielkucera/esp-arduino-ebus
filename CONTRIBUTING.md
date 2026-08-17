@@ -11,6 +11,7 @@ Thank you for your interest in contributing to the esp-arduino-ebus project! To 
 *   **Classes and Structs**: `PascalCase` (e.g., `ConfigManager`, `WifiNetworkManager`).
 *   **Methods and Functions**: `camelCase` (e.g., `getCommandsJson`, `handleValuesWrite`).
 *   **Variables and Parameters**: `snake_case` (e.g., `wifi_ssid`, `poll_id`).
+*   **Constants and `constexpr`**: `snake_case` (e.g., `baud_rate`, `max_data_bytes`). Prefer grouping related constants into classes as `static constexpr` members or specific namespaces.
 *   **Private Members**: `snake_case_` with a trailing underscore (e.g., `task_handle_`, `stop_runner_`).
 *   **Files and Directories**: `snake_case` (e.g., `config_manager.cpp`, `http_utils.hpp`).
 
@@ -58,18 +59,18 @@ To maintain stability and security on the ESP32-C3, the application follows a se
 ## Key Components
 
 *   **ebus Library (`lib/ebus`)**: The core eBUS protocol stack, handling bus communication, arbitration, message processing, and scheduling.
-*   **Store (`src/Store.hpp`)**: Manages eBUS command configurations and their associated data, including persistence to LittleFS.
-*   **Mqtt (`src/Mqtt.hpp`)**: Handles MQTT communication for publishing values, receiving commands, and Home Assistant auto-discovery.
-*   **Cron (`src/Cron.hpp`)**: Manages scheduled eBUS write operations based on cron-like expressions.
+*   **Store (`src/store.hpp`)**: Manages eBUS command configurations and their associated data, including persistence to LittleFS.
+*   **Mqtt (`src/mqtt.hpp`)**: Handles MQTT communication for publishing values, receiving commands, and Home Assistant auto-discovery.
+*   **Cron (`src/cron.hpp`)**: Manages scheduled eBUS write operations based on cron-like expressions.
 *   **Http (`src/http.hpp`)**: Provides the web UI and API endpoints for configuration, control, and data display.
-*   **ConfigManager (`src/ConfigManager.hpp`)**: Manages persistent configuration settings using NVS.
-*   **WifiNetworkManager (`src/WifiNetworkManager.hpp`)**: Handles WiFi connectivity (STA and AP modes), mDNS, and static IP configuration.
-*   **Adc (`src/Adc.hpp`)**: Manages ADC sampling and streaming for diagnostic purposes.
-*   **UpgradeManager (`src/UpgradeManager.hpp`)**: Handles firmware updates via HTTP upload or URL.
-*   **EspOtaManager (`src/EspOtaManager.hpp`)**: Handles firmware updates via ESP-OTA protocol (UDP).
-*   **DNSServer (`src/DNSServer.h`)**: Provides DNS services for the captive portal in AP mode.
-*   **Logger (`src/Logger.hpp`)**: Manages application logging to a circular buffer and serial output.
-*   **AdapterVersion (`src/AdapterVersion.hpp`)**: Provides adapter hardware and software version information from eFuse.
+*   **ConfigManager (`src/config_manager.hpp`)**: Manages persistent configuration settings using NVS.
+*   **WifiNetworkManager (`src/wifi_network_manager.hpp`)**: Handles WiFi connectivity (STA and AP modes), mDNS, and static IP configuration.
+*   **Adc (`src/adc.hpp`)**: Manages ADC sampling and streaming for diagnostic purposes.
+*   **UpgradeManager (`src/upgrade_manager.hpp`)**: Handles firmware updates via HTTP upload or URL.
+*   **EspOtaManager (`src/esp_ota_manager.hpp`)**: Handles firmware updates via ESP-OTA protocol (UDP).
+*   **DNSServer (`src/dns_server.hpp`)**: Provides DNS services for the captive portal in AP mode.
+*   **Logger (`src/logger.hpp`)**: Manages application logging to a circular buffer and serial output.
+*   **AdapterVersion (`src/adapter_version.hpp`)**: Provides adapter hardware and software version information from eFuse.
 
 ## Project Structure
 

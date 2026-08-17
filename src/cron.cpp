@@ -21,7 +21,7 @@
 Cron cron;
 
 namespace {
-constexpr const char* kCronFilePath = "/littlefs/cron.json";
+constexpr const char* cron_file_path = "/littlefs/cron.json";
 
 std::vector<std::string> split(const std::string& input, const char sep) {
   std::vector<std::string> parts;
@@ -321,7 +321,7 @@ void Cron::setRules(std::unordered_map<std::string, Rule>&& nextRules) {
 int64_t Cron::loadRules() {
   if (!store.initFileSystem()) return -1;
 
-  FILE* file = std::fopen(kCronFilePath, "rb");
+  FILE* file = std::fopen(cron_file_path, "rb");
   if (file == nullptr) {
     if (errno == ENOENT) return 0;
     return -1;
@@ -427,7 +427,7 @@ void Cron::fetchRules(const ebus::JsonChunkVisitor& visitor) const {
 int64_t Cron::saveRules() const {
   if (!store.initFileSystem()) return -1;
 
-  FILE* file = std::fopen(kCronFilePath, "wb");
+  FILE* file = std::fopen(cron_file_path, "wb");
   if (file == nullptr) return -1;
 
   size_t total = 0;
@@ -493,7 +493,7 @@ void Cron::tick() {
       ebus::Sequence fullWrite = command->getWriteCmd();
       fullWrite.append(valueBytes);
 
-      getEbusController().enqueue(PRIO_SEND, fullWrite);
+      getEbusController().enqueue(prio_send, fullWrite);
 
       logger.info(std::string("Cron write triggered: ") + rule.id + " -> " +
                   rule.command_key);

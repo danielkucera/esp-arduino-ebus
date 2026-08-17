@@ -191,7 +191,7 @@ void Mqtt::publishStream(
   size_t len = 0;
 
   builder([&](std::string_view s) {
-    if (len + s.size() < kMqttPubBufferSize - 1) {
+    if (len + s.size() < mqtt_pub_buffer_size - 1) {
       std::memcpy(buf + len, s.data(), s.size());
       len += s.size();
       buf[len] = '\0';
@@ -256,7 +256,7 @@ size_t Mqtt::getOutgoingQueueHighWatermark() const {
 void Mqtt::taskFunc(void* arg) {
   Mqtt* self = static_cast<Mqtt*>(arg);
   self->outgoing_queue_ =
-      xQueueCreate(kMaxOutgoingQueueSize, sizeof(OutgoingAction));
+      xQueueCreate(max_outgoing_queue_size, sizeof(OutgoingAction));
 
   uint8_t tele_phase = 0;
 
@@ -534,7 +534,7 @@ void Mqtt::handleWrite(std::string_view payload) {
       ebus::Sequence fullWrite = command->getWriteCmd();
       fullWrite.append(valueBytes);
 
-      getEbusController().enqueue(PRIO_SEND, fullWrite);
+      getEbusController().enqueue(prio_send, fullWrite);
       publishStream("response", 0, false,
                     [command, key_view](const ebus::JsonChunkVisitor& v) {
                       ebus::detail::JsonWriter writer(v);
@@ -638,7 +638,7 @@ void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
   if (!valueBytes.empty()) {
     ebus::Sequence fullWrite = command->getWriteCmd();
     fullWrite.append(valueBytes);
-    getEbusController().enqueue(PRIO_SEND, fullWrite);
+    getEbusController().enqueue(prio_send, fullWrite);
     command->setLast(0);
     char buf[128];
     snprintf(buf, sizeof(buf), "[MQTT] Scheduled write for '%.*s'",

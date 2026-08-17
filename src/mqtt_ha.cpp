@@ -270,9 +270,9 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
               auto options = writer.arrayScope("options");
               for (const auto& s : opt.options) writer.writeValue(s);
             }
-            writer.writeField("command_template", opt.cmdMap);
+            writer.writeField("command_template", opt.cmd_map);
           }
-          writer.writeField("value_template", opt.valueMap);
+          writer.writeField("value_template", opt.value_map);
         } else if (component == "sensor") {
           writer.writeField("value_template", "{{value_json.value}}");
         }
@@ -329,41 +329,42 @@ MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile) {
   // Original: std::string valueMap = "{% set values = {" ... "} %}..."
   // Need to escape % for snprintf: use %% instead of %
 
-  char valueMapBuf[512];
-  char cmdMapBuf[512];
+  char value_map_buf[512];
+  char cmd_map_buf[512];
 
   int vmLen = 0;
   int pnLen = 0;
 
-  vmLen += snprintf(valueMapBuf + vmLen, sizeof(valueMapBuf) - vmLen,
+  vmLen += snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen,
                     "%%{ set values = {");
-  pnLen += snprintf(cmdMapBuf + pnLen, sizeof(cmdMapBuf) - pnLen,
+  pnLen += snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen,
                     "%%{ set values = {");
 
   for (size_t i = 0; i < options_count; i++) {
-    if (vmLen < (int)sizeof(valueMapBuf)) {
-      vmLen += snprintf(valueMapBuf + vmLen, sizeof(valueMapBuf) - vmLen,
+    if (vmLen < (int)sizeof(value_map_buf)) {
+      vmLen += snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen,
                         "%d:'%s'", options_keys[i], options_values[i]);
-      if (i < options_count - 1 && vmLen < (int)sizeof(valueMapBuf)) {
+      if (i < options_count - 1 && vmLen < (int)sizeof(value_map_buf)) {
         vmLen +=
-            snprintf(valueMapBuf + vmLen, sizeof(valueMapBuf) - vmLen, ",");
+            snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen, ",");
       }
     }
-    if (pnLen < (int)sizeof(cmdMapBuf)) {
-      pnLen += snprintf(cmdMapBuf + pnLen, sizeof(cmdMapBuf) - pnLen, "'%s':%d",
-                        options_values[i], options_keys[i]);
-      if (i < options_count - 1 && pnLen < (int)sizeof(cmdMapBuf)) {
-        pnLen += snprintf(cmdMapBuf + pnLen, sizeof(cmdMapBuf) - pnLen, ",");
+    if (pnLen < (int)sizeof(cmd_map_buf)) {
+      pnLen += snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen,
+                        "'%s':%d", options_values[i], options_keys[i]);
+      if (i < options_count - 1 && pnLen < (int)sizeof(cmd_map_buf)) {
+        pnLen +=
+            snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen, ",");
       }
     }
   }
 
-  vmLen += snprintf(valueMapBuf + vmLen, sizeof(valueMapBuf) - vmLen,
+  vmLen += snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen,
                     " %%}{{ values[value_json.value] if value_json.value in "
                     "values.keys() else '%s' }}",
                     options_count > 0 ? options_values[0] : "");
 
-  pnLen += snprintf(cmdMapBuf + pnLen, sizeof(cmdMapBuf) - pnLen,
+  pnLen += snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen,
                     " %%}{{ values[value] if value in values.keys() else "
                     "%d }}",
                     defaultOptionValue);
@@ -376,8 +377,8 @@ MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile) {
 
   KeyValueMapping mapping;
   mapping.options = options;
-  mapping.valueMap = std::string(valueMapBuf);
-  mapping.cmdMap = std::string(cmdMapBuf);
+  mapping.value_map = std::string(value_map_buf);
+  mapping.cmd_map = std::string(cmd_map_buf);
   return mapping;
 }
 

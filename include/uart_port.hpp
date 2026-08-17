@@ -1,9 +1,9 @@
 #pragma once
 
+#include <driver/uart.h>
+
 #include <cstddef>
 #include <cstdint>
-
-#include <driver/uart.h>
 
 class UartPort {
  public:
@@ -28,8 +28,8 @@ class UartPort {
 
   uart_port_t port_;
   bool installed_ = false;
-  size_t rxBufferSize_ = 1024;
-  int cachedByte_ = -1;
+  size_t rx_buffer_size_ = 1024;
+  int cached_byte_ = -1;
 };
 
 extern UartPort BusSer;

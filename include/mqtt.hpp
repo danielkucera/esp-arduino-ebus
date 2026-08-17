@@ -135,7 +135,7 @@ class Mqtt {
 
   TaskHandle_t getTaskHandle() const { return task_handle_; }
   size_t getOutgoingQueueSize() const;
-  size_t getOutgoingQueueCapacity() const { return kMaxOutgoingQueueSize; }
+  size_t getOutgoingQueueCapacity() const { return max_outgoing_queue_size; }
   size_t getOutgoingQueueHighWatermark() const;
 
  private:
@@ -157,7 +157,7 @@ class Mqtt {
   volatile bool task_should_run_ = false;
   bool connected_ = false;
 
-  static constexpr size_t kMaxOutgoingQueueSize = 8;
+  static constexpr size_t max_outgoing_queue_size = 8;
 
   QueueHandle_t outgoing_queue_ = nullptr;
   std::atomic<size_t> max_outgoing_ = 0;
@@ -169,8 +169,8 @@ class Mqtt {
 
   mutable std::recursive_mutex mqtt_mutex_;
 
-  static constexpr size_t kMqttPubBufferSize = 1024;
-  char publish_buffers_[kMqttPubBufferSize];
+  static constexpr size_t mqtt_pub_buffer_size = 1024;
+  char publish_buffers_[mqtt_pub_buffer_size];
 
   void internalPublish(const char* topic, uint8_t qos, bool retain,
                        const char* payload, bool prefix);

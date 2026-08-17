@@ -54,11 +54,11 @@ std::string readBody(httpd_req_t* req) {
   std::string out;
   int remaining = req->content_len;
   char buffer[512];
-  if (remaining > static_cast<int>(kMaxRequestBodySize)) {
+  if (remaining > static_cast<int>(max_request_body_size)) {
     char buf[128];
     snprintf(buf, sizeof(buf),
              "HTTP: Request body too large (%d bytes), max is %zu", remaining,
-             kMaxRequestBodySize);
+             max_request_body_size);
     logger.warn(buf);
     return "";  // Return empty string to indicate failure or rejection
   }

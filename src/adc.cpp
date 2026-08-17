@@ -1,4 +1,4 @@
-#include "Adc.hpp"
+#include "adc.hpp"
 
 #include <esp_adc/adc_continuous.h>
 #include <esp_err.h>
@@ -12,80 +12,80 @@
 Adc adc;
 
 namespace {
-static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_DEFAULT = 30000;
+static constexpr uint32_t adc_sample_freq_hz_default = 30000;
 #if defined(SOC_ADC_SAMPLE_FREQ_THRES_LOW)
-static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MIN =
+static constexpr uint32_t adc_sample_freq_hz_min =
     SOC_ADC_SAMPLE_FREQ_THRES_LOW;
 #else
-static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MIN = 600;
+static constexpr uint32_t adc_sample_freq_hz_min = 600;
 #endif
 
 #if defined(SOC_ADC_SAMPLE_FREQ_THRES_HIGH)
-static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX =
+static constexpr uint32_t adc_sample_freq_hz_max =
     SOC_ADC_SAMPLE_FREQ_THRES_HIGH;
 #else
-static constexpr uint32_t ADC_SAMPLE_FREQ_HZ_MAX = 200000;
+static constexpr uint32_t adc_sample_freq_hz_max = 200000;
 #endif
-static constexpr uint32_t ADC_CHANNEL_MASK_ALL = 0x1F;      // GPIO0..4
-static constexpr uint32_t ADC_CHANNEL_MASK_DEFAULT = 0x03;  // GPIO0,1
+static constexpr uint32_t adc_channel_mask_all = 0x1F;      // GPIO0..4
+static constexpr uint32_t adc_channel_mask_default = 0x03;  // GPIO0,1
 }  // namespace
 
 bool Adc::begin() {
-  if (configured) return true;
+  if (configured_) return true;
 
   adc_continuous_handle_cfg_t handleConfig = {};
-  handleConfig.max_store_buf_size = DMA_STORE_BUFFER_BYTES;
-  handleConfig.conv_frame_size = ADC_RAW_FRAME_BYTES;
+  handleConfig.max_store_buf_size = dma_store_buffer_bytes;
+  handleConfig.conv_frame_size = adc_raw_frame_bytes;
   handleConfig.flags.flush_pool = 1;
 
   esp_err_t err = adc_continuous_new_handle(&handleConfig, &adc_handle_);
   if (err != ESP_OK) {
     logError("adc_continuous_new_handle", err);
-    configured = false;
+    configured_ = false;
     return false;
   }
 
-  if (!configureController(ADC_SAMPLE_FREQ_HZ_DEFAULT,
-                           ADC_CHANNEL_MASK_DEFAULT)) {
+  if (!configureController(adc_sample_freq_hz_default,
+                           adc_channel_mask_default)) {
     adc_continuous_deinit(adc_handle_);
     adc_handle_ = nullptr;
-    configured = false;
+    configured_ = false;
     return false;
   }
 
-  configured = true;
-  capturing = false;
+  configured_ = true;
+  capturing_ = false;
   return true;
 }
 
 void Adc::stop() {
-  if (!configured) return;
-  if (capturing) stopCapture();
+  if (!configured_) return;
+  if (capturing_) stopCapture();
   if (adc_handle_ != nullptr) {
     const esp_err_t err = adc_continuous_deinit(adc_handle_);
     if (err != ESP_OK) logError("adc_continuous_deinit", err);
     adc_handle_ = nullptr;
   }
-  configured = false;
+  configured_ = false;
 }
 
 bool Adc::startCapture() const {
-  if (!configured || adc_handle_ == nullptr) return false;
-  if (capturing) return true;
+  if (!configured_ || adc_handle_ == nullptr) return false;
+  if (capturing_) return true;
 
   const esp_err_t err = adc_continuous_start(adc_handle_);
   if (err != ESP_OK) {
     logError("adc_continuous_start", err);
-    capturing = false;
+    capturing_ = false;
     return false;
   }
-  capturing = true;
+  capturing_ = true;
   return true;
 }
 
 void Adc::stopCapture() const {
-  if (!capturing) return;
-  capturing = false;  // mark before call so re-entrant calls are safe
+  if (!capturing_) return;
+  capturing_ = false;  // mark before call so re-entrant calls are safe
   if (adc_handle_ != nullptr) {
     const esp_err_t err = adc_continuous_stop(adc_handle_);
     if (err != ESP_OK) logError("adc_continuous_stop", err);
@@ -94,10 +94,10 @@ void Adc::stopCapture() const {
 
 bool Adc::configureController(uint32_t sampleRate, uint32_t channelMask) const {
   if (adc_handle_ == nullptr) return false;
-  if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
-  if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  channelMask &= ADC_CHANNEL_MASK_ALL;
-  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
+  if (sampleRate < adc_sample_freq_hz_min) sampleRate = adc_sample_freq_hz_min;
+  if (sampleRate > adc_sample_freq_hz_max) sampleRate = adc_sample_freq_hz_max;
+  channelMask &= adc_channel_mask_all;
+  if (channelMask == 0) channelMask = adc_channel_mask_default;
 
   std::memset(adc_pattern_, 0, sizeof(adc_pattern_));
   uint8_t patternCount = 0;
@@ -132,14 +132,14 @@ void Adc::logError(const char* stage, int err) const {
   logger.error(buf);
 }
 
-bool Adc::isRunning() const { return configured; }
+bool Adc::isRunning() const { return configured_; }
 
 uint32_t Adc::effectivePerChannelSampleRate(uint32_t sampleRate,
                                             uint32_t channelMask) const {
-  if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
-  if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
-  channelMask &= ADC_CHANNEL_MASK_ALL;
-  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
+  if (sampleRate < adc_sample_freq_hz_min) sampleRate = adc_sample_freq_hz_min;
+  if (sampleRate > adc_sample_freq_hz_max) sampleRate = adc_sample_freq_hz_max;
+  channelMask &= adc_channel_mask_all;
+  if (channelMask == 0) channelMask = adc_channel_mask_default;
 
   uint32_t numActiveChannels = 0;
   for (uint8_t ch = 0; ch <= 4; ++ch) {
@@ -149,10 +149,10 @@ uint32_t Adc::effectivePerChannelSampleRate(uint32_t sampleRate,
 
   uint64_t controllerSampleRate =
       static_cast<uint64_t>(sampleRate) * numActiveChannels;
-  if (controllerSampleRate < ADC_SAMPLE_FREQ_HZ_MIN)
-    controllerSampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
-  if (controllerSampleRate > ADC_SAMPLE_FREQ_HZ_MAX)
-    controllerSampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
+  if (controllerSampleRate < adc_sample_freq_hz_min)
+    controllerSampleRate = adc_sample_freq_hz_min;
+  if (controllerSampleRate > adc_sample_freq_hz_max)
+    controllerSampleRate = adc_sample_freq_hz_max;
 
   uint32_t effectivePerChannelRate =
       static_cast<uint32_t>(controllerSampleRate / numActiveChannels);
@@ -161,11 +161,11 @@ uint32_t Adc::effectivePerChannelSampleRate(uint32_t sampleRate,
 
 bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
                     uint32_t samplesPerChannel, uint32_t channelMask) const {
-  if (sampleRate < ADC_SAMPLE_FREQ_HZ_MIN) sampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
-  if (sampleRate > ADC_SAMPLE_FREQ_HZ_MAX) sampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
+  if (sampleRate < adc_sample_freq_hz_min) sampleRate = adc_sample_freq_hz_min;
+  if (sampleRate > adc_sample_freq_hz_max) sampleRate = adc_sample_freq_hz_max;
   if (samplesPerChannel == 0) samplesPerChannel = 2400;
-  channelMask &= ADC_CHANNEL_MASK_ALL;
-  if (channelMask == 0) channelMask = ADC_CHANNEL_MASK_DEFAULT;
+  channelMask &= adc_channel_mask_all;
+  if (channelMask == 0) channelMask = adc_channel_mask_default;
 
   // Count active channels first so requested sampleRate can be interpreted
   // as per-channel rate even in multi-channel scans.
@@ -179,10 +179,10 @@ bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
       static_cast<uint64_t>(
           effectivePerChannelSampleRate(sampleRate, channelMask)) *
       numActiveChannels;
-  if (controllerSampleRate < ADC_SAMPLE_FREQ_HZ_MIN)
-    controllerSampleRate = ADC_SAMPLE_FREQ_HZ_MIN;
-  if (controllerSampleRate > ADC_SAMPLE_FREQ_HZ_MAX)
-    controllerSampleRate = ADC_SAMPLE_FREQ_HZ_MAX;
+  if (controllerSampleRate < adc_sample_freq_hz_min)
+    controllerSampleRate = adc_sample_freq_hz_min;
+  if (controllerSampleRate > adc_sample_freq_hz_max)
+    controllerSampleRate = adc_sample_freq_hz_max;
 
   // Reconfigure safely in INIT state.
   stopCapture();
@@ -195,7 +195,7 @@ bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
   // channels.
   const uint64_t totalSamples =
       static_cast<uint64_t>(samplesPerChannel) * numActiveChannels;
-  const uint64_t targetBytes = totalSamples * RESULT_BYTES;
+  const uint64_t targetBytes = totalSamples * result_bytes;
   uint64_t sentBytes = 0;
 
   const uint32_t effectivePerChannelRate =
@@ -225,7 +225,7 @@ bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
 
     uint32_t bytesRead = 0;
     esp_err_t err = adc_continuous_read(adc_handle_, dma_buffer_,
-                                        ADC_RAW_FRAME_BYTES, &bytesRead, 10);
+                                        adc_raw_frame_bytes, &bytesRead, 10);
 
     if (err == ESP_ERR_TIMEOUT || bytesRead == 0) {
       continue;
@@ -234,7 +234,7 @@ bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
     if (err == ESP_ERR_INVALID_STATE) {
       // Ringbuffer full: drain one frame and retry.
       uint32_t drained = 0;
-      adc_continuous_read(adc_handle_, dma_buffer_, ADC_RAW_FRAME_BYTES,
+      adc_continuous_read(adc_handle_, dma_buffer_, adc_raw_frame_bytes,
                           &drained, 0);
       continue;
     }
@@ -262,14 +262,14 @@ bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
           (static_cast<uint16_t>(parsed_buffer_[i].raw_data) & 0x0FFFU) |
           (static_cast<uint16_t>(channel) << 13));
 
-      if (txFill + RESULT_BYTES > ADC_RAW_HTTP_CHUNK_BYTES) {
+      if (txFill + result_bytes > adc_raw_http_chunk_bytes) {
         visitor(std::string_view(reinterpret_cast<const char*>(tx_buffer_),
                                  txFill));
         txFill = 0;
       }
-      std::memcpy(tx_buffer_ + txFill, &packed, RESULT_BYTES);
-      txFill += RESULT_BYTES;
-      sentBytes += RESULT_BYTES;
+      std::memcpy(tx_buffer_ + txFill, &packed, result_bytes);
+      txFill += result_bytes;
+      sentBytes += result_bytes;
     }
     lastProgressUs = esp_timer_get_time();
   }

@@ -12,9 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "Adc.hpp"
-#include "ConfigManager.hpp"
-#include "WifiNetworkManager.hpp"
+#include "adc.hpp"
+#include "config_manager.hpp"
 #include "cron.hpp"
 #include "ebus_accessor.hpp"
 #include "http_utils.hpp"
@@ -23,6 +22,7 @@
 #include "mqtt.hpp"
 #include "mqtt_ha.hpp"
 #include "store.hpp"
+#include "wifi_network_manager.hpp"
 
 static httpd_handle_t configServer = nullptr;
 static bool fallbackHandlersRegistered = false;
@@ -316,7 +316,7 @@ esp_err_t handleAdcRaw(httpd_req_t* req) {
   httpd_resp_set_hdr(req, "X-ADC-Channel-Mask", tmp3);
 
   std::snprintf(tmp4, sizeof(tmp4), "%u",
-                static_cast<unsigned>(Adc::RESULT_BYTES));
+                static_cast<unsigned>(Adc::result_bytes));
   httpd_resp_set_hdr(req, "X-ADC-Result-Bytes", tmp4);
   std::snprintf(tmp5, sizeof(tmp5), "%llu",
                 static_cast<unsigned long long>(captureStartMillis));
@@ -741,7 +741,7 @@ esp_err_t handleValuesWrite(httpd_req_t* req) {
   if (!valueBytes.empty()) {
     ebus::Sequence fullWrite = command->getWriteCmd();
     fullWrite.append(valueBytes);
-    getEbusController().enqueue(PRIO_SEND, fullWrite);
+    getEbusController().enqueue(prio_send, fullWrite);
     command->setLast(0);
     HttpUtils::sendSuccessResponse(req, "write");
   } else {

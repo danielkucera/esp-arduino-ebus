@@ -15,16 +15,16 @@
 
 namespace {  // Consider reducing these if memory is extremely tight
 // Maximum number of log entries to keep in memory
-inline constexpr size_t kMaxEntries = 5;
+inline constexpr size_t max_entries = 5;
 // Maximum length of a log message, including null terminator
-inline constexpr size_t kMaxMsgLength = 768;
+inline constexpr size_t max_msg_length = 768;
 // Maximum log message for the print queue
-inline constexpr size_t kPrintQueueEntries = 5;
+inline constexpr size_t print_queue_entries = 5;
 }  // namespace
 
 class Logger {
  public:
-  explicit Logger(size_t maxEntries = kMaxEntries);
+  explicit Logger(size_t maxEntries = max_entries);
   ~Logger();
 
   Logger(const Logger& other) = delete;             // Prevent copying
@@ -53,7 +53,7 @@ class Logger {
   struct LogEntry {
     uint64_t timestamp;
     LogLevel level;
-    char message[kMaxMsgLength];
+    char message[max_msg_length];
     bool is_json_message;
     uint32_t session_id;
     uint32_t poll_id;
