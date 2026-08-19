@@ -30,6 +30,7 @@ enum class OutgoingActionType : uint8_t {
 
 struct OutgoingAction {
   const Command* command;  // for Component
+  size_t field_idx;        // for Component (per-field HA)
   OutgoingActionType type;
   bool ha_remove;  // for Component
   union {
@@ -42,11 +43,15 @@ struct OutgoingAction {
 
   OutgoingAction()
       : command(nullptr),
+        field_idx(0),
         type(OutgoingActionType::Component),
         ha_remove(false) {}
 
-  explicit OutgoingAction(const Command* cmd, bool remove)
-      : command(cmd), type(OutgoingActionType::Component), ha_remove(remove) {}
+  explicit OutgoingAction(const Command* cmd, size_t f_idx, bool remove)
+      : command(cmd),
+        field_idx(f_idx),
+        type(OutgoingActionType::Component),
+        ha_remove(remove) {}
 
   explicit OutgoingAction(const ebus::ProtocolInfo& info)
       : command(nullptr),

@@ -25,5 +25,7 @@ struct HAProfile {
 };
 
 const HAProfile* findHAProfile(std::string_view name);
+const HAProfile* getHAProfileByIndex(uint8_t idx);
+uint8_t getProfileIndexHA(const HAProfile* p);
 
 #endif

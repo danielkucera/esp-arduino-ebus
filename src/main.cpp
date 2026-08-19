@@ -841,7 +841,7 @@ extern "C" void app_main(void) {
   runtimeConfig.device.max_startup_scans = 5;
 
   // Scheduler
-  runtimeConfig.scheduler.max_send_attempts = 1;
+  runtimeConfig.scheduler.max_attempts = 1;
   runtimeConfig.scheduler.base_backoff_ms = 100;
   runtimeConfig.scheduler.fsm_timeout_ms = 1000;
   runtimeConfig.scheduler.total_timeout_ms = 2000;
@@ -882,7 +882,7 @@ extern "C" void app_main(void) {
   runtimeConfig.device.max_startup_scans = 5;
 
   // Scheduler
-  runtimeConfig.scheduler.max_send_attempts = 1;
+  runtimeConfig.scheduler.max_attempts = 1;
   runtimeConfig.scheduler.base_backoff_ms = 100;
   runtimeConfig.scheduler.fsm_timeout_ms = 1000;
   runtimeConfig.scheduler.total_timeout_ms = 2000;

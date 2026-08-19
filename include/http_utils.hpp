@@ -2,21 +2,41 @@
 
 #include <esp_http_server.h>
 
+#include <ebus/detail/json_reader.hpp>
 #include <string>
+#include <string_view>
 
 namespace HttpUtils {
 
-// Maximum allowed size for request bodies to prevent memory exhaustion.
-constexpr size_t max_request_body_size = 8192;  // 8KB
+constexpr size_t max_request_body_size = 8192;
+constexpr size_t streaming_buffer_size = 4096;
+
+class StreamingReader {
+ public:
+  explicit StreamingReader(httpd_req_t* req);
+  ~StreamingReader();
+  StreamingReader(const StreamingReader&) = delete;
+  StreamingReader& operator=(const StreamingReader&) = delete;
+
+  bool feedAll();
+  void endOfInput();
+  ebus::detail::JsonReader& jsonReader();
+  bool isValid() const { return valid_; }
+
+ private:
+  httpd_req_t* req_;
+  std::string fallback_body_;
+  ebus::detail::JsonReader fallback_reader_;
+  bool valid_ = false;
+  bool use_streaming_ = false;
+};
 
 bool registerRoute(httpd_handle_t server, const httpd_uri_t& route);
-
 bool registerRoute(httpd_handle_t server, const char* uri,
                    httpd_method_t method, esp_err_t (*handler)(httpd_req_t*));
 
 void sendResponse(httpd_req_t* req, const char* status, const char* type,
                   const char* body);
-
 void sendResponse(httpd_req_t* req, const char* status, const char* type,
                   const std::string& body);
 

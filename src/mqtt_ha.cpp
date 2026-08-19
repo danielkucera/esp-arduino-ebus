@@ -158,25 +158,28 @@ void MqttHA::publishDeviceInfo() const {
 
 void MqttHA::publishComponents() const {
   for (const Command* command : store.getCommands()) {
-    if (command->getHA()) {
-      publishComponent(command, !enabled_);
+    for (size_t i = 0; i < command->getFieldCount(); ++i) {
+      if (command->getFieldHA(i)) {
+        publishComponent(command, i, !enabled_);
+      }
     }
   }
 }
 
-void MqttHA::publishComponent(const Command* command, const bool remove) const {
-  const HAProfile* profile = resolveProfile(command);
+void MqttHA::publishComponent(const Command* command, size_t field_idx,
+                              const bool remove) const {
+  const HAProfile* profile = resolveProfile(command, field_idx);
   if (!profile && !remove) return;
 
   const std::string& component = profile ? profile->component : "";
 
   const std::string& dev_id = device_identifiers_;
 
-  std::string_view name_sv = command->getName();
+  std::string_view field_name_sv = command->getFieldName(field_idx);
   std::string_view key_sv = command->getKey();
 
   char objectIdBuf[32];
-  sanitizeObjectId(name_sv, objectIdBuf, sizeof(objectIdBuf));
+  sanitizeObjectId(field_name_sv, objectIdBuf, sizeof(objectIdBuf));
 
   char topicBuf[128];
   int tlen =
@@ -196,16 +199,17 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
         auto root = writer.objectScope();
 
         char prettyNameBuf[32];
-        size_t pn_len = std::min(name_sv.size(), sizeof(prettyNameBuf) - 1);
+        size_t pn_len =
+            std::min(field_name_sv.size(), sizeof(prettyNameBuf) - 1);
         for (size_t i = 0; i < pn_len; ++i) {
-          char c = name_sv[i];
+          char c = field_name_sv[i];
           prettyNameBuf[i] = (c == '/' || c == '_') ? ' ' : c;
         }
         prettyNameBuf[pn_len] = '\0';
 
         char uidBuf[96];
-        snprintf(uidBuf, sizeof(uidBuf), "%s_%.*s", dev_id.c_str(),
-                 (int)key_sv.size(), key_sv.data());
+        snprintf(uidBuf, sizeof(uidBuf), "%s_%.*s_%zu", dev_id.c_str(),
+                 (int)key_sv.size(), key_sv.data(), field_idx);
         writer.writeField("unique_id", uidBuf);
         writer.writeField("name", std::string_view(prettyNameBuf, pn_len));
         writer.writeField("availability_topic", will_topic_);
@@ -216,7 +220,8 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
           writer.writeField("identifiers", device_identifiers_);
         }
 
-        writer.writeField("state_topic", createStateTopic("values", name_sv));
+        writer.writeField("state_topic",
+                          createStateTopic("values", field_name_sv));
 
         if (profile && profile->device_class && profile->device_class[0])
           writer.writeField("device_class", profile->device_class);
@@ -242,17 +247,19 @@ void MqttHA::publishComponent(const Command* command, const bool remove) const {
         if (component == "sensor") {
           if (profile && profile->state_class && profile->state_class[0])
             writer.writeField("state_class", profile->state_class);
-          if (!command->getUnit().empty())
-            writer.writeField("unit_of_measurement", command->getUnit());
+          if (command->getFieldCount() > 0 &&
+              !std::string(command->getFieldUnit(0)).empty())
+            writer.writeField("unit_of_measurement", command->getFieldUnit(0));
         }
 
         if (component == "number") {
-          if (!command->getUnit().empty())
-            writer.writeField("unit_of_measurement", command->getUnit());
+          if (command->getFieldCount() > 0 &&
+              !std::string(command->getFieldUnit(0)).empty())
+            writer.writeField("unit_of_measurement", command->getFieldUnit(0));
           writer.writeField("value_template", "{{value_json.value}}");
           writer.writeField("command_template", "{{value}}");
-          writer.writeFieldFloat("min", command->getMin());
-          writer.writeFieldFloat("max", command->getMax());
+          writer.writeFieldFloat("min", command->getFieldMin(0));
+          writer.writeFieldFloat("max", command->getFieldMax(0));
           writer.writeFieldFloat("step", profile ? profile->step : 1);
           writer.writeField("mode", profile && profile->mode && profile->mode[0]
                                         ? profile->mode
@@ -382,9 +389,12 @@ MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile) {
   return mapping;
 }
 
-const HAProfile* MqttHA::resolveProfile(const Command* command) {
-  if (!command || !command->getHA()) return nullptr;
-  return findHAProfile(command->getHAProfile());
+const HAProfile* MqttHA::resolveProfile(const Command* command,
+                                        size_t field_idx) {
+  if (!command || field_idx >= command->getFieldCount() ||
+      !command->getFieldHA(field_idx))
+    return nullptr;
+  return command->getFieldHAProfile(field_idx);
 }
 
 #endif

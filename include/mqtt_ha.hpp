@@ -27,7 +27,8 @@ class MqttHA {
 
   void publishComponents() const;
 
-  void publishComponent(const Command* command, const bool remove) const;
+  void publishComponent(const Command* command, size_t field_idx,
+                        const bool remove) const;
 
  private:
   std::string unique_id_;           // e.g. "8406ac"
@@ -59,7 +60,8 @@ class MqttHA {
 
   static KeyValueMapping createOptions(const HAProfile* profile);
 
-  static const HAProfile* resolveProfile(const Command* command);
+  static const HAProfile* resolveProfile(const Command* command,
+                                         size_t field_idx);
 };
 
 extern MqttHA mqttha;

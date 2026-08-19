@@ -5,12 +5,13 @@
 #include <ebus/detail/json_writer.hpp>
 
 #include "command.hpp"
+#include "store.hpp"
 
 using namespace ebus::detail;
 
 TEST_CASE("Command fromJson roundtrip preserves fields", "[Command]") {
   std::string json =
-      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009","write_cmd":"","active":false,"interval":0,"master":true,"position":1,"datatype":"DATA2B","divider":1,"min":0,"max":0,"digits":2,"unit":"°C","ha":true,"ha_profile":"sensor_temperature"})";
+      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009","write_cmd":"","active":false,"interval":0,"fields":[{"name":"value","profile":"d2b_c","position":1,"master":true,"ha":true,"ha_profile":"sensor_temperature"}],"ha":true,"ha_profile":"sensor_temperature"})";
 
   JsonReader reader(json);
   Command cmd = Command::fromJson(reader);
@@ -18,32 +19,34 @@ TEST_CASE("Command fromJson roundtrip preserves fields", "[Command]") {
   REQUIRE(cmd.getKey() == "01");
   REQUIRE(cmd.getName() == "Outside_Temperature");
   REQUIRE(cmd.getActive() == false);
-  REQUIRE(cmd.getMaster() == true);
-  REQUIRE(cmd.getPosition() == 1);
-  REQUIRE(cmd.getDatatype() == ebus::DataType::data2b);
-  REQUIRE(cmd.getDivider() == 1);
-  REQUIRE(cmd.getDigits() == 2);
-  REQUIRE(cmd.getUnit() == "°C");
-  REQUIRE(cmd.getHA() == true);
-  REQUIRE(std::string(cmd.getHAProfile()) == "sensor_temperature");
+  REQUIRE(cmd.getFieldCount() == 1);
+  REQUIRE(cmd.getFieldPosition(0) == 1);
+  REQUIRE(cmd.getFieldMaster(0) == true);
+  REQUIRE(cmd.getFieldDatatype(0) == ebus::DataType::data2b);
+  REQUIRE(cmd.getFieldDivider(0) == 1);
+  REQUIRE(cmd.getFieldDigits(0) == 2);
+  REQUIRE(std::string(cmd.getFieldUnit(0)) == "\u00b0C");
+  REQUIRE(cmd.getFieldHA(0) == true);
+  REQUIRE(std::string(cmd.getFieldHAProfileName(0)) == "sensor_temperature");
 }
 
 TEST_CASE("Command fromTabular roundtrip preserves fields", "[Command]") {
   std::string json =
-      R"(["01","Outside_Temperature","fe070009","",false,0,true,1,"DATA2B",1,0,0,2,"°C",true,"sensor_temperature",[],0])";
+      R"(["01","Outside_Temperature","fe070009","",false,0,[{"name":"value","profile":"d2b_c","position":1,"master":true,"ha":true,"ha_profile":"sensor_temperature"}],true,"sensor_temperature"])";
 
   JsonReader reader(json);
   Command cmd = Command::fromTabular(reader);
 
   REQUIRE(cmd.getKey() == "01");
   REQUIRE(cmd.getName() == "Outside_Temperature");
-  REQUIRE(cmd.getDatatype() == ebus::DataType::data2b);
-  REQUIRE(std::string(cmd.getHAProfile()) == "sensor_temperature");
+  REQUIRE(cmd.getFieldCount() == 1);
+  REQUIRE(cmd.getFieldDatatype(0) == ebus::DataType::data2b);
+  REQUIRE(std::string(cmd.getFieldHAProfileName(0)) == "sensor_temperature");
 }
 
 TEST_CASE("Command evaluate accepts valid command", "[Command]") {
   std::string json =
-      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009","active":true,"master":true,"position":1,"datatype":"DATA2B"})";
+      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009","active":true,"fields":[{"name":"value","profile":"d2b_c","position":1,"master":true,"ha":true,"ha_profile":"sensor_temperature"}]})";
 
   JsonReader reader(json);
   std::string error = Command::evaluate(reader);
@@ -52,7 +55,7 @@ TEST_CASE("Command evaluate accepts valid command", "[Command]") {
 
 TEST_CASE("Command evaluate rejects missing key", "[Command]") {
   std::string json =
-      R"({"name":"Outside_Temperature","read_cmd":"fe070009","active":true,"master":true,"position":1,"datatype":"DATA2B"})";
+      R"({"name":"Outside_Temperature","read_cmd":"fe070009","active":true,"fields":[{"name":"value","profile":"d2b_c","position":1,"master":true}]})";
 
   JsonReader reader(json);
   std::string error = Command::evaluate(reader);
@@ -60,39 +63,77 @@ TEST_CASE("Command evaluate rejects missing key", "[Command]") {
   REQUIRE(error.find("key") != std::string::npos);
 }
 
-TEST_CASE("Command evaluate rejects invalid datatype", "[Command]") {
+TEST_CASE("Command evaluate rejects unknown profile", "[Command]") {
   std::string json =
-      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009","active":true,"master":true,"position":1,"datatype":"INVALID_TYPE"})";
+      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009","active":true,"fields":[{"name":"value","profile":"invalid_profile","position":1,"master":true}]})";
 
   JsonReader reader(json);
   std::string error = Command::evaluate(reader);
   REQUIRE_FALSE(error.empty());
-  REQUIRE(error.find("datatype") != std::string::npos);
+  REQUIRE(error.find("data profile") != std::string::npos);
 }
 
-TEST_CASE("Command toJson serializes all fields", "[Command]") {
+TEST_CASE("Command evaluate rejects missing fields", "[Command]") {
   std::string json =
-      R"({"key":"01","name":"Test","read_cmd":"fe070009","write_cmd":"","active":true,"interval":60,"master":true,"position":1,"datatype":"UINT16","divider":1,"min":0,"max":100,"digits":0,"unit":"","ha":true,"ha_profile":"sensor_temperature"})";
+      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009","active":true})";
+
+  JsonReader reader(json);
+  std::string error = Command::evaluate(reader);
+  REQUIRE_FALSE(error.empty());
+  REQUIRE(error.find("fields") != std::string::npos);
+}
+
+TEST_CASE("Command toJson serializes fields", "[Command]") {
+  std::string json =
+      R"({"key":"01","name":"Test","read_cmd":"fe070009","write_cmd":"","active":true,"interval":60,"fields":[{"name":"value","profile":"d2b_c","position":1,"master":true,"ha":true,"ha_profile":"sensor_temperature"}],"ha":true,"ha_profile":"sensor_temperature"})";
   JsonReader reader(json);
   Command cmd = Command::fromJson(reader);
 
   std::string out;
   ebus::detail::JsonWriter writer([&out](std::string_view s) { out += s; });
-  auto scope = writer.objectScope();
-  cmd.toJson(writer);
+  {
+    auto scope = writer.objectScope();
+    writer.writeField("key", cmd.getKey());
+    writer.writeField("name", cmd.getName());
+    writer.writeHexField("read_cmd", cmd.getReadCmd());
+    Store store;
+    writer.writeHexField("write_cmd", cmd.getWriteCmd(store));
+    writer.writeField("active", cmd.getActive());
+    writer.writeField("interval", cmd.getInterval());
+
+    {
+      auto arr = writer.arrayScope("fields");
+      for (size_t i = 0; i < cmd.getFieldCount(); i++) {
+        auto field_obj = writer.objectScope();
+        writer.writeField("name", cmd.getFieldName(i));
+        writer.writeField("profile", cmd.getFieldProfile(i)
+                                         ? cmd.getFieldProfile(i)->name
+                                         : "");
+        writer.writeField("position",
+                          static_cast<uint32_t>(cmd.getFieldPosition(i)));
+        writer.writeField("master", cmd.getFieldMaster(i));
+        writer.writeField("ha", cmd.getFieldHA(i));
+        writer.writeField("ha_profile", cmd.getFieldHAProfileName(i));
+      }
+    }
+
+    writer.writeField("ha", cmd.getFieldHA(0));
+    writer.writeField("ha_profile", cmd.getFieldHAProfileName(0));
+  }
 
   REQUIRE(out.find("\"key\":\"01\"") != std::string::npos);
   REQUIRE(out.find("\"name\":\"Test\"") != std::string::npos);
-  REQUIRE(out.find("\"datatype\":\"UINT16\"") != std::string::npos);
+  REQUIRE(out.find("\"fields\"") != std::string::npos);
+  REQUIRE(out.find("\"profile\":\"d2b_c\"") != std::string::npos);
+  REQUIRE(out.find("\"position\":1") != std::string::npos);
+  REQUIRE(out.find("\"master\":true") != std::string::npos);
   REQUIRE(out.find("\"ha_profile\":\"sensor_temperature\"") !=
           std::string::npos);
-  REQUIRE(out.find("\"ha_key_value_map\"") == std::string::npos);
-  REQUIRE(out.find("\"ha_default_key\"") == std::string::npos);
 }
 
 TEST_CASE("Command getStringFromVector decodes string type", "[Command]") {
   std::string json =
-      R"({"key":"01","name":"Test","read_cmd":"fe070009","active":true,"master":true,"position":1,"datatype":"CHAR1","length":1})";
+      R"({"key":"01","name":"Test","read_cmd":"fe070009","active":true,"fields":[{"name":"value","profile":"chr1","position":1,"master":true,"ha":true,"ha_profile":"sensor_temperature"}]})";
   JsonReader reader(json);
   Command cmd = Command::fromJson(reader);
 
@@ -105,7 +146,7 @@ TEST_CASE("Command getStringFromVector decodes string type", "[Command]") {
 
 TEST_CASE("Command matches checks read_cmd at offset 1", "[Command]") {
   std::string json =
-      R"({"key":"01","name":"Test","read_cmd":"fe070009","active":true,"master":true,"position":1,"datatype":"UINT8"})";
+      R"({"key":"01","name":"Test","read_cmd":"fe070009","active":true,"fields":[{"name":"value","profile":"u8","position":1,"master":true,"ha":true,"ha_profile":"sensor_temperature"}]})";
   JsonReader reader(json);
   Command cmd = Command::fromJson(reader);
 

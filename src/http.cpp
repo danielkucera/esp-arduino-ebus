@@ -382,14 +382,15 @@ esp_err_t handleCommands(httpd_req_t* req) {
 }
 
 esp_err_t handleCommandsEvaluate(httpd_req_t* req) {
-  std::string body = HttpUtils::readBody(req);
-  if (body.empty() && req->content_len > 0) {
+  HttpUtils::StreamingReader sr(req);
+  if (!sr.isValid() || !sr.feedAll()) {
     HttpUtils::sendErrorResponse(req, "400 Bad Request", "evaluate",
                                  "Request body too large or invalid");
     return ESP_OK;
   }
+  sr.endOfInput();
 
-  ebus::detail::JsonReader reader(body);
+  ebus::detail::JsonReader& reader = sr.jsonReader();
   std::string parse_error;
   if (!prepareJsonReaderForArray(reader, "commands", parse_error)) {
     HttpUtils::sendErrorResponse(req, "400 Bad Request", "evaluate",
@@ -426,14 +427,17 @@ esp_err_t handleCommandsEvaluate(httpd_req_t* req) {
 }
 
 esp_err_t handleCommandsInsert(httpd_req_t* req) {
-  std::string body = HttpUtils::readBody(req);
-  if (body.empty() && req->content_len > 0) {
+  HttpUtils::StreamingReader sr(req);
+  if (!sr.isValid() || !sr.feedAll()) {
     HttpUtils::sendErrorResponse(req, "400 Bad Request", "insert",
                                  "Request body too large or invalid");
     return ESP_OK;
   }
+  sr.endOfInput();
 
-  ebus::detail::JsonReader reader_eval(body);
+  std::string_view body_sv = sr.jsonReader().remaining();
+
+  ebus::detail::JsonReader reader_eval(body_sv);
   std::string parse_error;
   if (!prepareJsonReaderForArray(reader_eval, "commands", parse_error)) {
     HttpUtils::sendErrorResponse(req, "400 Bad Request", "insert", parse_error);
@@ -464,7 +468,7 @@ esp_err_t handleCommandsInsert(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  ebus::detail::JsonReader reader_insert(body);
+  ebus::detail::JsonReader reader_insert(body_sv);
   prepareJsonReaderForArray(reader_insert, "commands", parse_error);
   headerSeen = false;
   while (true) {
@@ -566,8 +570,15 @@ esp_err_t handleCommandsUpload(httpd_req_t* req) {
 }
 
 esp_err_t handleCommandsRemove(httpd_req_t* req) {
-  std::string body = HttpUtils::readBody(req);
-  ebus::detail::JsonReader reader(body);
+  HttpUtils::StreamingReader sr(req);
+  if (!sr.isValid() || !sr.feedAll()) {
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "remove",
+                                 "Request body too large or invalid");
+    return ESP_OK;
+  }
+  sr.endOfInput();
+
+  ebus::detail::JsonReader reader(sr.jsonReader().remaining());
   std::string parse_error;
   if (prepareJsonReaderForArray(reader, "keys", parse_error)) {
     while (true) {
@@ -646,14 +657,15 @@ esp_err_t handleCron(httpd_req_t* req) {
 }
 
 esp_err_t handleCronEvaluate(httpd_req_t* req) {
-  std::string body = HttpUtils::readBody(req);
-  if (body.empty() && req->content_len > 0) {
+  HttpUtils::StreamingReader sr(req);
+  if (!sr.isValid() || !sr.feedAll()) {
     HttpUtils::sendErrorResponse(req, "400 Bad Request", "evaluate",
                                  "Request body too large or invalid");
     return ESP_OK;
   }
+  sr.endOfInput();
 
-  ebus::detail::JsonReader reader(body);
+  ebus::detail::JsonReader reader(sr.jsonReader().remaining());
   std::string parse_error;
   if (!prepareJsonReaderForArray(reader, "", parse_error)) {
     HttpUtils::sendErrorResponse(req, "400 Bad Request", "evaluate",
@@ -679,7 +691,14 @@ esp_err_t handleCronEvaluate(httpd_req_t* req) {
 }
 
 esp_err_t handleCronSave(httpd_req_t* req) {
-  int64_t bytes = cron.replaceRules(HttpUtils::readBody(req));
+  HttpUtils::StreamingReader sr(req);
+  if (!sr.isValid() || !sr.feedAll()) {
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "save",
+                                 "Receive failed");
+    return ESP_OK;
+  }
+  sr.endOfInput();
+  int64_t bytes = cron.replaceRules(sr.jsonReader().remaining());
   if (bytes >= 0) {
     HttpUtils::sendSuccessResponse(
         req, "save", "successful",
@@ -722,8 +741,16 @@ esp_err_t handleValues(httpd_req_t* req) {
 }
 
 esp_err_t handleValuesWrite(httpd_req_t* req) {
-  std::string body = HttpUtils::readBody(req);
-  ebus::detail::JsonReader reader(body);
+  HttpUtils::StreamingReader sr(req);
+  if (!sr.isValid() || !sr.feedAll()) {
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "write",
+                                 "Request body too large or invalid");
+    return ESP_OK;
+  }
+  sr.endOfInput();
+
+  std::string_view body_sv = sr.jsonReader().remaining();
+  ebus::detail::JsonReader reader(body_sv);
   std::string key;
   if (reader.findKey("key") &&
       reader.next() == ebus::detail::JsonReader::Token::string) {
@@ -737,9 +764,9 @@ esp_err_t handleValuesWrite(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  ebus::Sequence valueBytes = command->getVectorFromJson(body);
+  ebus::Sequence valueBytes = command->getVectorFromJson(body_sv);
   if (!valueBytes.empty()) {
-    ebus::Sequence fullWrite = command->getWriteCmd();
+    ebus::Sequence fullWrite = ebus::makeSequence(command->getWriteCmd(store));
     fullWrite.append(valueBytes);
     getEbusController().enqueue(prio_send, fullWrite);
     command->setLast(0);
@@ -752,8 +779,15 @@ esp_err_t handleValuesWrite(httpd_req_t* req) {
 }
 
 esp_err_t handleValuesRead(httpd_req_t* req) {
-  std::string body = HttpUtils::readBody(req);
-  ebus::detail::JsonReader reader(body);
+  HttpUtils::StreamingReader sr(req);
+  if (!sr.isValid() || !sr.feedAll()) {
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "read",
+                                 "Request body too large or invalid");
+    return ESP_OK;
+  }
+  sr.endOfInput();
+
+  ebus::detail::JsonReader reader(sr.jsonReader().remaining());
   std::string key;
   if (reader.findKey("key") &&
       reader.next() == ebus::detail::JsonReader::Token::string) {
@@ -834,11 +868,15 @@ esp_err_t handleLogs(httpd_req_t* req) {
   uint64_t sinceMillis = 0;
   const size_t queryLen = httpd_req_get_url_query_len(req);
   if (queryLen > 0) {
-    std::vector<char> query(queryLen + 1, '\0');
-    if (httpd_req_get_url_query_str(req, query.data(), query.size()) ==
+    char queryBuf[256];
+    if (queryLen + 1 > sizeof(queryBuf)) {
+      httpd_resp_send_err(req, HTTPD_414_URI_TOO_LONG, nullptr);
+      return ESP_OK;
+    }
+    if (httpd_req_get_url_query_str(req, queryBuf, sizeof(queryBuf)) ==
         ESP_OK) {
       char sinceBuffer[32] = {0};
-      if (httpd_query_key_value(query.data(), "since", sinceBuffer,
+      if (httpd_query_key_value(queryBuf, "since", sinceBuffer,
                                 sizeof(sinceBuffer)) == ESP_OK) {
         sinceMillis = std::strtoull(sinceBuffer, nullptr, 10);
       }

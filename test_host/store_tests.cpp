@@ -11,21 +11,39 @@ using namespace ebus::detail;
 
 Command makeCommand(const std::string& key, const std::string& name,
                     bool active, bool master, int position,
-                    const std::string& datatype, const std::string& read_cmd) {
+                    const std::string& profile, const std::string& read_cmd) {
   std::string json =
       R"({"key":")" + key + R"(","name":")" + name + R"(","read_cmd":")" +
       read_cmd + R"(","write_cmd":"","active":)" + (active ? "true" : "false") +
-      R"(,"interval":0,"master":)" + (master ? "true" : "false") +
-      R"(,"position":)" + std::to_string(position) + R"(","datatype":")" +
-      datatype +
-      R"(","divider":1,"min":0,"max":0,"digits":0,"unit":"","ha":false,"ha_profile":""})";
+      R"(,"interval":0,"fields":[{"name":"value","profile":")" + profile +
+      R"(","position":)" + std::to_string(position) + R"(,"master":)" +
+      (master ? "true" : "false") + R"(}],"ha":false,"ha_profile":""})";
+  JsonReader reader(json);
+  return Command::fromJson(reader);
+}
+
+Command makeCommandMultiField(const std::string& key, const std::string& name,
+                              bool active, const std::string& read_cmd,
+                              const std::string& field1_profile, int field1_pos,
+                              bool field1_master,
+                              const std::string& field2_profile, int field2_pos,
+                              bool field2_master) {
+  std::string json =
+      R"({"key":")" + key + R"(","name":")" + name + R"(","read_cmd":")" +
+      read_cmd + R"(","write_cmd":"","active":)" + (active ? "true" : "false") +
+      R"(,"interval":0,"fields":[{"name":"field1","profile":")" +
+      field1_profile + R"(","position":)" + std::to_string(field1_pos) +
+      R"(,"master":)" + (field1_master ? "true" : "false") +
+      R"(},{"name":"field2","profile":")" + field2_profile +
+      R"(","position":)" + std::to_string(field2_pos) + R"(,"master":)" +
+      (field2_master ? "true" : "false") + R"(}],"ha":false,"ha_profile":""})";
   JsonReader reader(json);
   return Command::fromJson(reader);
 }
 
 TEST_CASE("Store insert and find by key", "[Store]") {
   store.wipeCommands();
-  Command cmd = makeCommand("01", "Test", true, true, 1, "UINT8", "fe070009");
+  Command cmd = makeCommand("01", "Test", true, true, 1, "u8", "fe070009");
   store.insertCommand(cmd);
 
   Command* found = store.findCommand("01");
@@ -39,11 +57,10 @@ TEST_CASE("Store insert and find by key", "[Store]") {
 
 TEST_CASE("Store insert updates existing command", "[Store]") {
   store.wipeCommands();
-  Command cmd1 = makeCommand("01", "First", true, true, 1, "UINT8", "fe070009");
+  Command cmd1 = makeCommand("01", "First", true, true, 1, "u8", "fe070009");
   store.insertCommand(cmd1);
 
-  Command cmd2 =
-      makeCommand("01", "Updated", false, true, 1, "UINT8", "fe070009");
+  Command cmd2 = makeCommand("01", "Updated", false, true, 1, "u8", "fe070009");
   store.insertCommand(cmd2);
 
   Command* found = store.findCommand("01");
@@ -54,7 +71,7 @@ TEST_CASE("Store insert updates existing command", "[Store]") {
 
 TEST_CASE("Store remove command", "[Store]") {
   store.wipeCommands();
-  Command cmd = makeCommand("01", "Test", true, true, 1, "UINT8", "fe070009");
+  Command cmd = makeCommand("01", "Test", true, true, 1, "u8", "fe070009");
   store.insertCommand(cmd);
 
   store.removeCommand("01");
@@ -65,7 +82,7 @@ TEST_CASE("Store getCommands returns all commands", "[Store]") {
   store.wipeCommands();
   for (int i = 0; i < 5; i++) {
     Command cmd = makeCommand(std::to_string(i), "Test " + std::to_string(i),
-                              true, true, 1, "UINT8", "fe070009");
+                              true, true, 1, "u8", "fe070009");
     store.insertCommand(cmd);
   }
 
@@ -75,12 +92,11 @@ TEST_CASE("Store getCommands returns all commands", "[Store]") {
 
 TEST_CASE("Store getActiveCommands counts active only", "[Store]") {
   store.wipeCommands();
-  Command cmd1 =
-      makeCommand("01", "Active", true, true, 1, "UINT8", "fe070009");
+  Command cmd1 = makeCommand("01", "Active", true, true, 1, "u8", "fe070009");
   store.insertCommand(cmd1);
 
   Command cmd2 =
-      makeCommand("02", "Inactive", false, true, 1, "UINT8", "fe070009");
+      makeCommand("02", "Inactive", false, true, 1, "u8", "fe070009");
   store.insertCommand(cmd2);
 
   REQUIRE(store.getActiveCommands() == 1);
@@ -89,11 +105,11 @@ TEST_CASE("Store getActiveCommands counts active only", "[Store]") {
 
 TEST_CASE("Store findAllMatchingCommands matches read_cmd", "[Store]") {
   store.wipeCommands();
-  Command cmd1 = makeCommand("01", "Match", true, true, 1, "UINT8", "fe070009");
+  Command cmd1 = makeCommand("01", "Match", true, true, 1, "u8", "fe070009");
   store.insertCommand(cmd1);
 
   Command cmd2 =
-      makeCommand("02", "NoMatch", true, true, 1, "UINT8", "080b09010a00");
+      makeCommand("02", "NoMatch", true, true, 1, "u8", "080b09010a00");
   store.insertCommand(cmd2);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09};
@@ -106,7 +122,7 @@ TEST_CASE("Store findAllMatchingCommands matches read_cmd", "[Store]") {
 
 TEST_CASE("Store updateData sets data", "[Store]") {
   store.wipeCommands();
-  Command cmd = makeCommand("01", "Test", true, true, 1, "UINT8", "fe070009");
+  Command cmd = makeCommand("01", "Test", true, true, 1, "u8", "fe070009");
   store.insertCommand(cmd);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09, 0x00};
@@ -123,13 +139,11 @@ TEST_CASE("Store loadCommandsFrom streams JSON from file", "[Store]") {
 
   const char* json = R"([
     {"key":"01","name":"Test1","read_cmd":"fe070009","write_cmd":"",
-     "active":true,"interval":60,"master":true,"position":1,
-     "datatype":"UINT8","divider":1,"min":0,"max":0,"digits":0,"unit":"",
-     "ha":false,"ha_profile":""},
+     "active":true,"interval":60,"fields":[{"name":"value","profile":"u8","position":1,"master":true,"ha":true,"ha_profile":"sensor_temperature"}],
+     "ha":true,"ha_profile":"sensor_temperature"},
     {"key":"02","name":"Test2","read_cmd":"fe070009","write_cmd":"",
-     "active":false,"interval":0,"master":false,"position":1,
-     "datatype":"UINT8","divider":1,"min":0,"max":0,"digits":0,"unit":"",
-     "ha":false,"ha_profile":""}
+     "active":false,"interval":0,"fields":[{"name":"value","profile":"u8","position":1,"master":false,"ha":true,"ha_profile":"sensor_temperature"}],
+     "ha":true,"ha_profile":"sensor_temperature"}
   ])";
 
   const char* tmp_path = "/tmp/test_commands_stream.json";
@@ -151,51 +165,24 @@ TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
           "[Store]") {
   store.wipeCommands();
 
-  // Write a 4000+ byte JSON that spans multiple 1024-byte buffer fills.
   FILE* f = std::fopen("/tmp/test_large_stream.json", "wb");
   REQUIRE(f != nullptr);
 
   std::fputs("[\n", f);
   for (int i = 1; i <= 47; i++) {
     char buf[1024];
-    if (i == 33) {
-      int len = snprintf(
-          buf, sizeof(buf),
-          "  {\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":\"%02xb50903"
-          "%02x%02x00\",\"write_cmd\":\"\",\"active\":true,\"interval\":60,"
-          "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
-          "1,"
-          "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":true,"
-          "\"ha_profile\":\"select_enum\"}%s\n",
-          i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256,
-          (i < 47) ? "," : "");
-      std::fwrite(buf, 1, len, f);
-    } else if (i == 44) {
-      int len = snprintf(
-          buf, sizeof(buf),
-          "  {\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":\"%02xb50903"
-          "%02x%02x00\",\"write_cmd\":\"\",\"active\":true,\"interval\":60,"
-          "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
-          "1,"
-          "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":true,"
-          "\"ha_profile\":\"sensor_enum_ok_error\"}%s\n",
-          i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256,
-          (i < 47) ? "," : "");
-      std::fwrite(buf, 1, len, f);
-    } else {
-      int len = snprintf(
-          buf, sizeof(buf),
-          "  {\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":\"%02xb50903"
-          "%02x%02x00\",\"write_cmd\":\"\",\"active\":%s,\"interval\":60,"
-          "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
-          "1,"
-          "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":false,"
-          "\"ha_profile\":\"\"}%"
-          "s\n",
-          i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256,
-          (i % 5 == 0) ? "false" : "true", (i < 47) ? "," : "");
-      std::fwrite(buf, 1, len, f);
-    }
+    const char* active = (i % 5 == 0) ? "false" : "true";
+    int len = snprintf(
+        buf, sizeof(buf),
+        "  {"
+        "\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":\"%02xb50903"
+        "%02x%02x00\",\"write_cmd\":\"\",\"active\":%s,\"interval\":60,"
+        "\"fields\":[{\"name\":\"value\",\"profile\":\"u8\","
+        "\"position\":1,\"master\":false}],"
+        "\"ha\":false,\"ha_profile\":\"\"}%s\n",
+        i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256, active,
+        (i < 47) ? "," : "");
+    std::fwrite(buf, 1, len, f);
   }
   std::fputs("]\n", f);
   std::fclose(f);
@@ -213,20 +200,22 @@ TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
   std::remove("/tmp/test_large_stream.json");
 }
 
-TEST_CASE("Store loadCommandsFrom streams JSON with select_enum profile",
-          "[Store]") {
+TEST_CASE("Store loadCommandsFrom loads multi-field commands", "[Store]") {
   store.wipeCommands();
 
   const char* json = R"([
     {
-      "key":"01","name":"Test1","read_cmd":"fe070009","write_cmd":"",
-      "active":true,"interval":60,"master":true,"position":1,
-      "datatype":"UINT8","divider":1,"min":0,"max":0,"digits":0,"unit":"",
-      "ha":true,"ha_profile":"select_enum"
+      "key":"01","name":"Multi","read_cmd":"fe070009","write_cmd":"",
+      "active":true,"interval":60,
+      "fields":[
+        {"name":"temp","profile":"d2c_c","position":1,"master":false},
+        {"name":"sensor","profile":"u8_enum","position":3,"master":false}
+      ],
+      "ha":false,"ha_profile":""
     }
   ])";
 
-  const char* tmp_path = "/tmp/test_nested_stream.json";
+  const char* tmp_path = "/tmp/test_multifield_stream.json";
   FILE* f = std::fopen(tmp_path, "wb");
   REQUIRE(f != nullptr);
   std::fwrite(json, 1, std::strlen(json), f);
@@ -237,92 +226,33 @@ TEST_CASE("Store loadCommandsFrom streams JSON with select_enum profile",
   REQUIRE(store.getCommandCount() == 1);
   REQUIRE(store.findCommand("01") != nullptr);
 
+  Command* found = store.findCommand("01");
+  REQUIRE(found->getFieldCount() == 2);
+  REQUIRE(found->getFieldName(0) == std::string_view("temp"));
+  REQUIRE(found->getFieldName(1) == std::string_view("sensor"));
+  REQUIRE(found->getFieldDatatype(0) == ebus::DataType::data2c);
+  REQUIRE(found->getFieldDatatype(1) == ebus::DataType::uint8);
+
   std::remove(tmp_path);
 }
 
-TEST_CASE("Store loadCommandsFrom loads large commands", "[Store]") {
-  store.wipeCommands();
-
-  const char* path = "/tmp/test_kvm_stream.json";
-  FILE* f = std::fopen(path, "wb");
-  REQUIRE(f != nullptr);
-
-  std::fputs("[\n", f);
-  for (int i = 1; i <= 47; i++) {
-    char buf[1024];
-    if (i == 33) {
-      int len = snprintf(
-          buf, sizeof(buf),
-          "  "
-          "{\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":"
-          "\"50b509030d2b00\","
-          "\"write_cmd\":\"\",\"active\":true,\"interval\":60,"
-          "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
-          "1,"
-          "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":true,"
-          "\"ha_profile\":\"select_enum\"}",
-          i, i, (i < 47) ? "," : "");
-      len += snprintf(buf + len, sizeof(buf) - len, "%s\n", "");
-      std::fwrite(buf, 1, len, f);
-    } else if (i == 44) {
-      int len =
-          snprintf(buf, sizeof(buf),
-                   "  "
-                   "{\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":"
-                   "\"b8b50903b9ba00\","
-                   "\"write_cmd\":\"\",\"active\":true,\"interval\":60,"
-                   "\"master\":false,\"position\":1,\"datatype\":\"UINT8\","
-                   "\"divider\":1,"
-                   "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":true,"
-                   "\"ha_profile\":\"sensor_enum_ok_error\"}",
-                   i, i, (i < 47) ? "," : "");
-      len += snprintf(buf + len, sizeof(buf) - len, "%s\n", "");
-      std::fwrite(buf, 1, len, f);
-    } else {
-      int len = snprintf(
-          buf, sizeof(buf),
-          "  {\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":\"%02xb50903"
-          "%02x%02x00\",\"write_cmd\":\"\",\"active\":%s,\"interval\":60,"
-          "\"master\":false,\"position\":1,\"datatype\":\"UINT8\",\"divider\":"
-          "1,"
-          "\"min\":0,\"max\":0,\"digits\":0,\"unit\":\"\",\"ha\":false,"
-          "\"ha_profile\":\"\"}%"
-          "s\n",
-          i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256,
-          (i % 5 == 0) ? "false" : "true", (i < 47) ? "," : "");
-      std::fwrite(buf, 1, len, f);
-    }
-  }
-  std::fputs("]\n", f);
-  std::fclose(f);
-
-  int64_t bytes = store.loadCommandsFrom(path);
-  REQUIRE(bytes >= 0);
-  REQUIRE(store.getCommandCount() == 47);
-
-  for (int i = 1; i <= 47; i++) {
-    char key[4];
-    snprintf(key, sizeof(key), "%02d", i);
-    REQUIRE(store.findCommand(key) != nullptr);
-  }
-
-  std::remove(path);
-
+TEST_CASE("Store loadCommandsFrom streams tabular format with fields",
+          "[Store]") {
   store.wipeCommands();
 
   const char* json =
-      R"([["key","name","read_cmd","write_cmd","active","interval","master","position","datatype","divider","min","max","digits","unit","ha","ha_profile"],
-        ["01","Test1","fe070009","","1","60","1","1","UINT8","1","0","0","0","","0"],
-        ["02","Test2","fe070009","","0","0","0","1","UINT8","1","0","0","0","","0"]
+      R"([["key","name","read_cmd","write_cmd","active","interval","fields","ha","ha_profile"],
+        ["01","Test1","fe070009","","1","60",[{"name":"value","profile":"d2b_c","position":1,"master":true}],"1","sensor_temperature"],
+        ["02","Test2","fe070009","","0","0",[{"name":"value","profile":"u8","position":1,"master":false}],"0",""]
       ])";
 
   const char* tmp_path = "/tmp/test_tabular_stream.json";
-  f = std::fopen(tmp_path, "wb");
+  FILE* f = std::fopen(tmp_path, "wb");
   REQUIRE(f != nullptr);
   std::fwrite(json, 1, std::strlen(json), f);
   std::fclose(f);
 
-  bytes = store.loadCommandsFrom(tmp_path);
+  int64_t bytes = store.loadCommandsFrom(tmp_path);
   REQUIRE(bytes >= 0);
   REQUIRE(store.getCommandCount() == 2);
   REQUIRE(store.findCommand("01") != nullptr);

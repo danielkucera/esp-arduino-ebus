@@ -380,8 +380,14 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
 
 esp_err_t UpgradeManager::handleHttpUpgrade(httpd_req_t* req) {
   pre_upgrade_done_ = false;
-  std::string body = HttpUtils::readBody(req);
-  ebus::detail::JsonReader reader(body);
+  HttpUtils::StreamingReader sr(req);
+  if (!sr.isValid() || !sr.feedAll()) {
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "upgrade_http",
+                                 "Request body too large or invalid");
+    return ESP_OK;
+  }
+  sr.endOfInput();
+  ebus::detail::JsonReader reader(sr.jsonReader().remaining());
 
   std::string url;
   if (reader.findKey("url")) {

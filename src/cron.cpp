@@ -6,12 +6,16 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <charconv>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <ebus/detail/json_reader.hpp>
+#include <ebus/static_vector.hpp>
+#include <ebus/types.hpp>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ebus_accessor.hpp"
@@ -22,45 +26,45 @@ Cron cron;
 
 namespace {
 constexpr const char* cron_file_path = "/littlefs/cron.json";
+constexpr size_t max_cron_rules = 32;
 
-std::vector<std::string> split(const std::string& input, const char sep) {
-  std::vector<std::string> parts;
-  std::string current;
-  for (const char c : input) {
-    if (c == sep) {
-      parts.push_back(current);
-      current.clear();
-    } else {
-      current.push_back(c);
-    }
+template <size_t Cap>
+using FS = ebus::FixedString<Cap>;
+
+ebus::StaticVector<std::string_view, 64> split(std::string_view input,
+                                               const char sep) {
+  ebus::StaticVector<std::string_view, 64> parts;
+  size_t start = 0;
+  while (start <= input.size()) {
+    size_t end = input.find(sep, start);
+    if (end == std::string_view::npos) end = input.size();
+    parts.push_back(input.substr(start, end - start));
+    if (end == input.size()) break;
+    start = end + 1;
   }
-  parts.push_back(current);
   return parts;
 }
 
-bool parseInt(const std::string& text, int& out) {
+bool parseInt(std::string_view text, int& out) {
   if (text.empty()) return false;
-  char* end = nullptr;
-  long parsed = std::strtol(text.c_str(), &end, 10);
-  if (end == text.c_str() || *end != '\0') return false;
-  out = static_cast<int>(parsed);
-  return true;
+  auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), out);
+  return ec == std::errc{} && ptr == text.data() + text.size();
 }
 
 bool inRange(const int value, const int minValue, const int maxValue) {
   return value >= minValue && value <= maxValue;
 }
 
-bool matchSinglePart(const std::string& part, int value, int minValue,
+bool matchSinglePart(std::string_view part, int value, int minValue,
                      int maxValue, bool dayOfWeek) {
   if (part == "*") return true;
 
-  std::string base = part;
+  std::string_view base = part;
   int step = 1;
   size_t slashPos = part.find('/');
-  if (slashPos != std::string::npos) {
+  if (slashPos != std::string_view::npos) {
     base = part.substr(0, slashPos);
-    std::string stepPart = part.substr(slashPos + 1);
+    std::string_view stepPart = part.substr(slashPos + 1);
     if (!parseInt(stepPart, step) || step <= 0) return false;
   }
 
@@ -69,7 +73,7 @@ bool matchSinglePart(const std::string& part, int value, int minValue,
 
   if (!base.empty() && base != "*") {
     size_t dashPos = base.find('-');
-    if (dashPos != std::string::npos) {
+    if (dashPos != std::string_view::npos) {
       int parsedStart = 0;
       int parsedEnd = 0;
       if (!parseInt(base.substr(0, dashPos), parsedStart) ||
@@ -110,12 +114,12 @@ bool matchSinglePart(const std::string& part, int value, int minValue,
   return ((value - start) % step) == 0;
 }
 
-bool matchField(const std::string& expr, int value, int minValue, int maxValue,
+bool matchField(std::string_view expr, int value, int minValue, int maxValue,
                 bool dayOfWeek) {
-  std::vector<std::string> parts = split(expr, ',');
+  auto parts = split(expr, ',');
   if (parts.empty()) return false;
 
-  for (const std::string& part : parts) {
+  for (std::string_view part : parts) {
     if (part.empty()) return false;
     if (matchSinglePart(part, value, minValue, maxValue, dayOfWeek))
       return true;
@@ -123,17 +127,17 @@ bool matchField(const std::string& expr, int value, int minValue, int maxValue,
   return false;
 }
 
-bool validateSinglePart(const std::string& part, int minValue, int maxValue,
+bool validateSinglePart(std::string_view part, int minValue, int maxValue,
                         bool dayOfWeek) {
   if (part.empty()) return false;
   if (part == "*") return true;
 
-  std::string base = part;
+  std::string_view base = part;
   int step = 1;
   size_t slashPos = part.find('/');
-  if (slashPos != std::string::npos) {
+  if (slashPos != std::string_view::npos) {
     base = part.substr(0, slashPos);
-    std::string stepPart = part.substr(slashPos + 1);
+    std::string_view stepPart = part.substr(slashPos + 1);
     if (!parseInt(stepPart, step) || step <= 0) return false;
   }
 
@@ -142,7 +146,7 @@ bool validateSinglePart(const std::string& part, int minValue, int maxValue,
   int start = 0;
   int end = 0;
   size_t dashPos = base.find('-');
-  if (dashPos != std::string::npos) {
+  if (dashPos != std::string_view::npos) {
     if (!parseInt(base.substr(0, dashPos), start) ||
         !parseInt(base.substr(dashPos + 1), end)) {
       return false;
@@ -168,40 +172,42 @@ bool validateSinglePart(const std::string& part, int minValue, int maxValue,
   return true;
 }
 
-bool validateFieldExpression(const std::string& expr, int minValue,
-                             int maxValue, bool dayOfWeek) {
-  std::vector<std::string> parts = split(expr, ',');
+bool validateFieldExpression(std::string_view expr, int minValue, int maxValue,
+                             bool dayOfWeek) {
+  auto parts = split(expr, ',');
   if (parts.empty()) return false;
 
-  for (const std::string& part : parts) {
+  for (std::string_view part : parts) {
     if (!validateSinglePart(part, minValue, maxValue, dayOfWeek)) return false;
   }
   return true;
 }
 
 bool matchSchedule(const std::string& schedule, const tm& localTime) {
-  std::vector<std::string> fields;
-  std::string current;
-
-  for (const char c : schedule) {
-    if (c == ' ' || c == '\t') {
-      if (!current.empty()) {
-        fields.push_back(current);
-        current.clear();
+  FS<64> fields[5];
+  size_t field_idx = 0;
+  size_t start = 0;
+  for (size_t i = 0; i <= schedule.size(); i++) {
+    if (i == schedule.size() || schedule[i] == ' ' || schedule[i] == '\t') {
+      if (start < i) {
+        if (field_idx >= 5) return false;
+        fields[field_idx].assign(schedule.substr(start, i - start));
+        field_idx++;
       }
-    } else {
-      current.push_back(c);
+      start = i + 1;
     }
   }
-  if (!current.empty()) fields.push_back(current);
+  if (field_idx != 5) return false;
 
-  if (fields.size() != 5) return false;
-
-  return matchField(fields[0], localTime.tm_min, 0, 59, false) &&
-         matchField(fields[1], localTime.tm_hour, 0, 23, false) &&
-         matchField(fields[2], localTime.tm_mday, 1, 31, false) &&
-         matchField(fields[3], localTime.tm_mon + 1, 1, 12, false) &&
-         matchField(fields[4], localTime.tm_wday, 0, 6, true);
+  return matchField(std::string_view(fields[0]), localTime.tm_min, 0, 59,
+                    false) &&
+         matchField(std::string_view(fields[1]), localTime.tm_hour, 0, 23,
+                    false) &&
+         matchField(std::string_view(fields[2]), localTime.tm_mday, 1, 31,
+                    false) &&
+         matchField(std::string_view(fields[3]), localTime.tm_mon + 1, 1, 12,
+                    false) &&
+         matchField(std::string_view(fields[4]), localTime.tm_wday, 0, 6, true);
 }
 
 std::string validateRule(const Cron::Rule& rule) {
@@ -225,20 +231,21 @@ std::string validateRule(const Cron::Rule& rule) {
     return "Invalid schedule expression";
   }
 
-  std::vector<std::string> fields;
-  std::string current;
-  for (const char c : rule.schedule) {
-    if (c == ' ' || c == '\t') {
-      if (!current.empty()) {
-        fields.push_back(current);
-        current.clear();
+  FS<64> fields[5];
+  size_t field_idx = 0;
+  size_t start = 0;
+  for (size_t i = 0; i <= rule.schedule.size(); i++) {
+    if (i == rule.schedule.size() || rule.schedule[i] == ' ' ||
+        rule.schedule[i] == '\t') {
+      if (start < i) {
+        if (field_idx >= 5) return "Schedule must have 5 fields";
+        fields[field_idx].assign(rule.schedule.substr(start, i - start));
+        field_idx++;
       }
-    } else {
-      current.push_back(c);
+      start = i + 1;
     }
   }
-  if (!current.empty()) fields.push_back(current);
-  if (fields.size() != 5) return "Schedule must have 5 fields";
+  if (field_idx != 5) return "Schedule must have 5 fields";
 
   if (!validateFieldExpression(fields[0], 0, 59, false))
     return "Invalid minute field";
@@ -254,11 +261,10 @@ std::string validateRule(const Cron::Rule& rule) {
   Command* command = store.findCommand(rule.command_key);
   if (command == nullptr)
     return "Command key '" + rule.command_key + "' not found";
-  if (command->getWriteCmd().empty())
+  if (!command->hasWriteCmd())
     return "Command '" + rule.command_key + "' has no write_cmd";
 
-  const std::vector<uint8_t> valueBytes =
-      command->getVectorFromValue(rule.value_json).toVector();
+  ebus::ByteView valueBytes = command->getVectorFromValue(rule.value_json);
   if (valueBytes.empty())
     return "Invalid value for command '" + rule.command_key + "'";
 
@@ -401,26 +407,31 @@ void Cron::fetchRules(const ebus::JsonChunkVisitor& visitor) const {
   ebus::detail::JsonWriter writer(visitor);
   auto array_scope = writer.arrayScope();
 
-  std::vector<Rule> ordered;
+  ebus::StaticVector<const Rule*, max_cron_rules> ordered;
   {
     std::lock_guard<std::mutex> lock(rules_mutex_);
-    for (const auto& kv : rules_) ordered.push_back(kv.second);
+    for (const auto& kv : rules_) {
+      if (!ordered.push_back(&kv.second)) {
+        logger.warn("Cron rule limit exceeded, some rules omitted");
+        break;
+      }
+    }
   }
 
-  std::sort(ordered.begin(), ordered.end(),
-            [](const Rule& a, const Rule& b) { return a.id < b.id; });
+  std::sort(ordered.begin(), ordered.begin() + ordered.size(),
+            [](const Rule* a, const Rule* b) { return a->id < b->id; });
 
-  for (const Rule& rule : ordered) {
+  for (const Rule* rule : ordered) {
     auto obj_scope = writer.objectScope();
-    writer.writeField("id", rule.id);
-    writer.writeField("schedule", rule.schedule);
-    writer.writeField("command_key", rule.command_key);
-    writer.writeField("enabled", rule.enabled);
+    writer.writeField("id", rule->id);
+    writer.writeField("schedule", rule->schedule);
+    writer.writeField("command_key", rule->command_key);
+    writer.writeField("enabled", rule->enabled);
     writer.appendKey("value");
-    if (rule.value_json == "null")
+    if (rule->value_json == "null")
       writer.writeRaw("null");
     else
-      writer.writeRaw(rule.value_json);
+      writer.writeRaw(rule->value_json);
   }
 }
 
@@ -475,7 +486,7 @@ void Cron::tick() {
       rule.last_triggered_minute = minuteStamp;
 
       Command* command = store.findCommand(rule.command_key);
-      if (command == nullptr || command->getWriteCmd().empty()) {
+      if (command == nullptr || !command->hasWriteCmd()) {
         char buf[128];
         snprintf(buf, sizeof(buf), "Cron skipped, command unavailable: %s",
                  rule.command_key.c_str());
@@ -485,18 +496,24 @@ void Cron::tick() {
 
       ebus::Sequence valueBytes = command->getVectorFromValue(rule.value_json);
       if (valueBytes.empty()) {
-        logger.warn(std::string("Cron skipped, value out of range for rule: ") +
-                    rule.id);
+        char warn_buf[160];
+        snprintf(warn_buf, sizeof(warn_buf),
+                 "Cron skipped, value out of range for rule: %s",
+                 rule.id.c_str());
+        logger.warn(warn_buf);
         continue;
       }
 
-      ebus::Sequence fullWrite = command->getWriteCmd();
+      ebus::Sequence fullWrite =
+          ebus::makeSequence(command->getWriteCmd(store));
       fullWrite.append(valueBytes);
 
       getEbusController().enqueue(prio_send, fullWrite);
 
-      logger.info(std::string("Cron write triggered: ") + rule.id + " -> " +
-                  rule.command_key);
+      char info_buf[160];
+      snprintf(info_buf, sizeof(info_buf), "Cron write triggered: %s -> %s",
+               rule.id.c_str(), rule.command_key.c_str());
+      logger.info(info_buf);
     }
   }
 }

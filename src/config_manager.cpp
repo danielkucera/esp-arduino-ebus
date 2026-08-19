@@ -275,8 +275,7 @@ void ConfigManager::fetchConfig(const ebus::JsonChunkVisitor& visitor) {
   nvs_close(handle);
 }
 
-bool ConfigManager::writeConfigJson(const std::string& body,
-                                    std::string& error) {
+bool ConfigManager::writeConfigJson(std::string_view body, std::string& error) {
   if (!ensureNvsReady()) {
     error = "Failed to initialize NVS";
     return false;
@@ -336,9 +335,15 @@ esp_err_t ConfigManager::handleGet(httpd_req_t* req) {
 }
 
 esp_err_t ConfigManager::handleSet(httpd_req_t* req) {
+  HttpUtils::StreamingReader sr(req);
+  if (!sr.isValid() || !sr.feedAll()) {
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "config_set",
+                                 "Request body too large or invalid");
+    return ESP_OK;
+  }
+  sr.endOfInput();
   std::string error;
-  const std::string body = HttpUtils::readBody(req);
-  bool success = writeConfigJson(body, error);
+  bool success = writeConfigJson(sr.jsonReader().remaining(), error);
   if (success) {
     HttpUtils::sendSuccessResponse(req, "config_set", "successful",
                                    "Config saved to NVS");

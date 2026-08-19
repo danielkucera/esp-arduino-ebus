@@ -21,7 +21,7 @@ class ConfigManager {
   void fetchConfig(const ebus::JsonChunkVisitor& visitor);
 
  private:
-  bool writeConfigJson(const std::string& body, std::string& error);
+  bool writeConfigJson(std::string_view body, std::string& error);
 };
 
 extern ConfigManager configManager;

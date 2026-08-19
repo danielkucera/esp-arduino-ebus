@@ -3,9 +3,10 @@
 #include <esp_err.h>
 
 #include <cstring>
+#include <ebus/detail/json_reader.hpp>
 #include <ebus/detail/json_writer.hpp>
+#include <mutex>
 #include <utility>
-#include <vector>
 
 #include "logger.hpp"
 
@@ -13,6 +14,77 @@ namespace HttpUtils {
 
 namespace {
 std::vector<std::pair<std::string, std::string>> customHeaders;
+
+char streaming_buffer[streaming_buffer_size];
+ebus::detail::JsonReader streaming_reader(streaming_buffer,
+                                          sizeof(streaming_buffer));
+std::mutex streaming_mutex;
+}  // namespace
+
+StreamingReader::StreamingReader(httpd_req_t* req) : req_(req) {
+  if (req_->content_len == 0) {
+    valid_ = true;
+    use_streaming_ = true;
+    streaming_mutex.lock();
+    streaming_reader.reset();
+    return;
+  }
+  if (req_->content_len > static_cast<int>(max_request_body_size)) {
+    char buf[128];
+    snprintf(buf, sizeof(buf),
+             "HTTP: Request body too large (%d bytes), max is %zu",
+             req_->content_len, max_request_body_size);
+    logger.warn(buf);
+    return;
+  }
+  if (req_->content_len <= static_cast<int>(streaming_buffer_size)) {
+    valid_ = true;
+    use_streaming_ = true;
+    streaming_mutex.lock();
+    streaming_reader.reset();
+  } else {
+    fallback_body_ = readBody(req_);
+    if (fallback_body_.empty() && req_->content_len > 0) {
+      return;
+    }
+    valid_ = true;
+    fallback_reader_ = ebus::detail::JsonReader(fallback_body_);
+  }
+}
+
+StreamingReader::~StreamingReader() {
+  if (use_streaming_) {
+    streaming_mutex.unlock();
+  }
+}
+
+bool StreamingReader::feedAll() {
+  if (!use_streaming_) return true;
+  char tmp[512];
+  int remaining = req_->content_len;
+  while (remaining > 0) {
+    int toRead = std::min(remaining, static_cast<int>(sizeof(tmp)));
+    int received = httpd_req_recv(req_, tmp, toRead);
+    if (received <= 0) {
+      return false;
+    }
+    streaming_reader.feed(std::string_view(tmp, static_cast<size_t>(received)));
+    remaining -= received;
+  }
+  return true;
+}
+
+void StreamingReader::endOfInput() {
+  if (use_streaming_) {
+    streaming_reader.endOfInput();
+  }
+}
+
+ebus::detail::JsonReader& StreamingReader::jsonReader() {
+  if (use_streaming_) {
+    return streaming_reader;
+  }
+  return fallback_reader_;
 }
 
 bool registerRoute(httpd_handle_t server, const httpd_uri_t& route) {

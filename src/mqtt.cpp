@@ -310,7 +310,15 @@ void Mqtt::taskFunc(void* arg) {
                         pdMS_TO_TICKS(wait_ms)) == pdTRUE) {
         switch (action.type) {
           case OutgoingActionType::Component:
-            mqttha.publishComponent(action.command, action.ha_remove);
+            // Iterate over all fields with HA enabled (same as
+            // publishComponents)
+            if (action.command) {
+              for (size_t i = 0; i < action.command->getFieldCount(); ++i) {
+                if (action.command->getFieldHA(i)) {
+                  mqttha.publishComponent(action.command, i, action.ha_remove);
+                }
+              }
+            }
             break;
           case OutgoingActionType::Error: {
             // Fix up transient pointers for JSON serialization
@@ -508,24 +516,25 @@ void Mqtt::handleWrite(std::string_view payload) {
     }
 
     ebus::Sequence valueBytes;
-    if (command->getNumeric()) {
-      // Use ebus::toNum for numeric conversion
+    auto field_dt = command->getFieldDatatype(0);
+    if (ebus::isNumeric(field_dt)) {
       double val = ebus::toNum<double>(val_view);
-      if ((val >= command->getMin()) && (val <= command->getMax())) {
-        valueBytes = command->getVectorFromDouble(val);
+      if ((val >= command->getFieldMin(0)) &&
+          (val <= command->getFieldMax(0))) {
+        valueBytes = command->getVectorFromDouble(val, 0);
       }
     } else {
-      // For strings, strip potential quotes
       if (val_view.size() >= 2 && val_view.front() == '"' &&
           val_view.back() == '"') {
         val_view.remove_prefix(1);
         val_view.remove_suffix(1);
       }
-      valueBytes = command->getVectorFromString(val_view);
+      valueBytes = command->getVectorFromString(val_view, 0);
     }
 
     if (!valueBytes.empty()) {
-      ebus::Sequence fullWrite = command->getWriteCmd();
+      ebus::Sequence fullWrite =
+          ebus::makeSequence(command->getWriteCmd(store));
       fullWrite.append(valueBytes);
 
       getEbusController().enqueue(prio_send, fullWrite);
@@ -576,7 +585,7 @@ void Mqtt::handleValueUpdate(std::string_view key) {
   if (!cmd) return;
 
   // Correlation Optimization: Decode once and reuse for both JSON and logging
-  auto decoded = ebus::decode(cmd->getDatatype(), cmd->getData());
+  auto decoded = ebus::decode(cmd->getFieldDatatype(0), cmd->getData());
 
   if (connected_) {
     char topicBuf[128];
@@ -615,10 +624,11 @@ void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
   if (command == nullptr) return;
 
   ebus::Sequence valueBytes;
-  if (command->getNumeric()) {
+  auto field_dt = command->getFieldDatatype(0);
+  if (ebus::isNumeric(field_dt)) {
     double val = ebus::toNum<double>(val_view);
-    if ((val >= command->getMin()) && (val <= command->getMax())) {
-      valueBytes = command->getVectorFromDouble(val);
+    if ((val >= command->getFieldMin(0)) && (val <= command->getFieldMax(0))) {
+      valueBytes = command->getVectorFromDouble(val, 0);
     }
   } else {
     if (val_view.size() >= 2 && val_view.front() == '"' &&
@@ -626,11 +636,11 @@ void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
       val_view.remove_prefix(1);
       val_view.remove_suffix(1);
     }
-    valueBytes = command->getVectorFromString(val_view);
+    valueBytes = command->getVectorFromString(val_view, 0);
   }
 
   if (!valueBytes.empty()) {
-    ebus::Sequence fullWrite = command->getWriteCmd();
+    ebus::Sequence fullWrite = ebus::makeSequence(command->getWriteCmd(store));
     fullWrite.append(valueBytes);
     getEbusController().enqueue(prio_send, fullWrite);
     command->setLast(0);
@@ -682,19 +692,19 @@ void Mqtt::logUpdate(const Command* cmd,
   // Handle decoded value
   if (!decoded || ebus::isNull(*decoded)) {
     appendStr("null");
-  } else if (cmd->getNumeric()) {
+  } else if (ebus::isNumeric(cmd->getFieldDatatype(0))) {
     p = ebus::formatFloat(
-        ebus::asFloat(*decoded) / cmd->getDivider(), cmd->getDigits(), p,
-        end_buf - p, ebus::detail::FormattingLimits::float_lower_threshold,
+        ebus::asFloat(*decoded) / cmd->getFieldDivider(0),
+        cmd->getFieldDigits(0), p, end_buf - p,
+        ebus::detail::FormattingLimits::float_lower_threshold,
         ebus::detail::FormattingLimits::float_upper_threshold);
   } else {
     appendStr(ebus::asString(*decoded));
   }
 
-  // Append unit if available
-  if (!cmd->getUnit().empty()) {
+  if (!std::string(cmd->getFieldUnit(0)).empty()) {
     appendStr(" ");
-    appendStr(cmd->getUnit());
+    appendStr(cmd->getFieldUnit(0));
   }
 
   // Null-terminate the string

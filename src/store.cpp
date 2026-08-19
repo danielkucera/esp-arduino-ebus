@@ -66,17 +66,33 @@ void Store::setCommandRemovedCallback(CommandChangedCallback callback) {
   command_removed_callback_ = std::move(callback);
 }
 
-void Store::insertCommand(const Command& command) {
+void Store::insertCommand(Command command) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
     if (std::string_view(commands_[i].getKey()) ==
         std::string_view(command.getKey())) {
-      commands_[i] = command;
+      // Move write_cmd to separate storage before overwriting
+      if (!command.getWriteCmdTemp().empty()) {
+        command.setWriteCmd(std::move(command.getWriteCmdTemp()), *this);
+      } else if (command.hasWriteCmd()) {
+        PollSequence ps;
+        ps.assign(command.getWriteCmd(*this));
+        command.setWriteCmd(std::move(ps), *this);
+      }
+      commands_[i] = std::move(command);
       if (command_changed_callback_) command_changed_callback_(&commands_[i]);
       return;
     }
   }
-  if (commands_.push_back(command)) {
+  // Move write_cmd to separate storage before inserting
+  if (!command.getWriteCmdTemp().empty()) {
+    command.setWriteCmd(std::move(command.getWriteCmdTemp()), *this);
+  } else if (command.hasWriteCmd()) {
+    PollSequence ps;
+    ps.assign(command.getWriteCmd(*this));
+    command.setWriteCmd(std::move(ps), *this);
+  }
+  if (commands_.push_back(std::move(command))) {
     if (command_changed_callback_) command_changed_callback_(&commands_.back());
   }
 }
@@ -92,6 +108,28 @@ void Store::removeCommand(std::string_view key) {
   }
 }
 
+ebus::ByteView Store::getWriteCmd(size_t idx) const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if (idx < write_cmds_.size()) {
+    return ebus::ByteView(write_cmds_[idx].data(), write_cmds_[idx].size());
+  }
+  return {};
+}
+
+bool Store::addWriteCmd(PollSequence&& cmd) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if (write_cmds_.size() >= write_cmd_capacity) {
+    return false;
+  }
+  write_cmds_.push_back(std::move(cmd));
+  return true;
+}
+
+size_t Store::getWriteCmdCount() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  return write_cmds_.size();
+}
+
 Command* Store::findCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
@@ -102,7 +140,7 @@ Command* Store::findCommand(std::string_view key) {
   return nullptr;
 }
 
-Command* Store::findCommand(uint32_t poll_id) {
+Command* Store::findCommand(uint16_t poll_id) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
     Command* cmd = &commands_[i];
@@ -180,10 +218,9 @@ int64_t Store::saveCommands() const {
     // Header row for compressed format
     {
       auto header_array = writer.arrayScope();
-      static const char* header[] = {
-          "key",    "name",     "read_cmd", "write_cmd", "active", "interval",
-          "master", "position", "datatype", "divider",   "min",    "max",
-          "digits", "unit",     "ha",       "ha_profile"};
+      static const char* header[] = {"key",       "name",   "read_cmd",
+                                     "write_cmd", "active", "interval",
+                                     "fields"};
       for (const char* h : header) writer.writeValue(h);
     }
 
@@ -193,23 +230,31 @@ int64_t Store::saveCommands() const {
       writer.writeValue(c.getKey());
       writer.writeValue(c.getName());
       writer.writeHexValue(c.getReadCmd());
-      writer.writeHexValue(c.getWriteCmd());
+      // Serialize write_cmd from separate storage
+      if (c.hasWriteCmd()) {
+        writer.writeHexValue(c.getWriteCmd(*this));
+      } else {
+        writer.writeValue("");
+      }
       writer.writeValue(c.getActive());
       writer.writeValue(c.getInterval());
-      writer.writeValue(c.getMaster());
-      writer.writeValue(c.getPosition());
-      writer.writeValue(ebus::dataTypeToString(c.getDatatype()));
-      writer.writeValueFloat(c.getDivider());
-      writer.writeValueFloat(c.getMin());
-      writer.writeValueFloat(c.getMax());
-      writer.writeValue(c.getDigits());
-      writer.writeValue(c.getUnit());
-      writer.writeValue(c.getHA());
-      writer.writeValue(c.getHAProfile());
 
-      // Empty key-value map and default key (stored in HA profile registry)
-      writer.writeValue("");
-      writer.writeValue(0);
+      // Serialize fields as JSON (with per-field HA)
+      {
+        auto fields_arr = writer.arrayScope();
+        for (size_t i = 0; i < c.getFieldCount(); i++) {
+          auto field_obj = writer.objectScope();
+          writer.writeField("name", c.getFieldName(i));
+          writer.writeField("profile", c.getFieldProfile(i)
+                                           ? c.getFieldProfile(i)->name
+                                           : "");
+          writer.writeField("position",
+                            static_cast<uint32_t>(c.getFieldPosition(i)));
+          writer.writeField("master", c.getFieldMaster(i));
+          writer.writeField("ha", c.getFieldHA(i));
+          writer.writeField("ha_profile", c.getFieldHAProfileName(i));
+        }
+      }
     }
   }
   writer.flush();
@@ -258,7 +303,31 @@ void Store::fetchCommands(const ebus::JsonChunkVisitor& visitor) const {
             });
 
   for (size_t i = 0; i < n; i++) {
-    writer.writeValue(*ordered[i]);
+    const Command* c = ordered[i];
+    auto scope = writer.objectScope();
+    writer.writeField("key", c->getKey());
+    writer.writeField("name", c->getName());
+    writer.writeHexField("read_cmd", c->getReadCmd());
+    if (c->hasWriteCmd()) {
+      writer.writeHexField("write_cmd", c->getWriteCmd(*this));
+    } else {
+      writer.writeField("write_cmd", "");
+    }
+    writer.writeField("active", c->getActive());
+    writer.writeField("interval", c->getInterval());
+
+    auto arr = writer.arrayScope("fields");
+    for (size_t j = 0; j < c->getFieldCount(); j++) {
+      auto field_obj = writer.objectScope();
+      writer.writeField("name", c->getFieldName(j));
+      const DataProfile* p = c->getFieldProfile(j);
+      writer.writeField("profile", p ? p->name : "");
+      writer.writeField("position",
+                        static_cast<uint32_t>(c->getFieldPosition(j)));
+      writer.writeField("master", c->getFieldMaster(j));
+      writer.writeField("ha", c->getFieldHA(j));
+      writer.writeField("ha_profile", c->getFieldHAProfileName(j));
+    }
   }
 }
 
@@ -348,12 +417,29 @@ void Store::updateData(Command* command, ebus::ByteView master_view,
   auto update = [this](Command* cmd, ebus::ByteView master_view,
                        ebus::ByteView slave_view) {
     cmd->setLast((uint32_t)(esp_timer_get_time() / 1000ULL));
-    if (cmd->getMaster()) {
-      cmd->setData(
-          ebus::range(master_view, 4 + cmd->getPosition(), cmd->getLength()));
+
+    if (cmd->getFieldCount() == 0) return;
+
+    size_t min_pos = SIZE_MAX;
+    size_t max_end = 0;
+    bool is_master = cmd->getFieldMaster(0);
+
+    for (size_t i = 0; i < cmd->getFieldCount(); i++) {
+      auto* profile = cmd->getFieldProfile(i);
+      if (!profile) continue;
+      size_t field_len = ebus::sizeOfDataType(cmd->getFieldDatatype(i));
+      size_t end = cmd->getFieldPosition(i) + field_len;
+      min_pos = std::min(min_pos, cmd->getFieldPosition(i));
+      max_end = std::max(max_end, end);
+    }
+
+    if (min_pos > max_end) return;
+
+    size_t data_len = max_end - min_pos;
+    if (is_master) {
+      cmd->setData(ebus::range(master_view, 4 + min_pos, data_len));
     } else {
-      cmd->setData(
-          ebus::range(slave_view, cmd->getPosition(), cmd->getLength()));
+      cmd->setData(ebus::range(slave_view, min_pos, data_len));
     }
 
     // Offload heavy JSON and string work to background task via key-only
@@ -403,10 +489,14 @@ void Store::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
     writer.appendKey("value");
     cmd->getValueJson(writer);
 
-    writer.writeField("unit", cmd->getUnit());
+    std::string unit;
+    if (cmd->getFieldCount() > 0) {
+      unit = std::string(cmd->getFieldUnit(0));
+    }
+    writer.writeField("unit", unit);
     writer.writeField("age",
                       (cmd->getLast() > 0) ? (now - cmd->getLast()) / 1000 : 0);
-    writer.writeField("write", !cmd->getWriteCmd().empty());
+    writer.writeField("write", cmd->hasWriteCmd());
     writer.writeField("active", cmd->getActive());
   }
 }

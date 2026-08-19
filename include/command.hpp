@@ -8,141 +8,111 @@
 #include <ebus/types.hpp>
 #include <string>
 #include <string_view>
-#include <utility>
-#include <vector>
+
+#include "data_profile.hpp"
+#include "ha_profile.hpp"
+#include "string_pool.hpp"
 
 namespace command_types {
 
-using KeyFS = ebus::FixedString<8>;
-using NameFS = ebus::FixedString<48>;
-using ProfileFS = ebus::FixedString<24>;
-using UnitFS = ebus::FixedString<8>;
+#ifndef COMMAND_MAX_FIELDS
+inline constexpr size_t max_fields = 4;
+#else
+inline constexpr size_t max_fields = COMMAND_MAX_FIELDS;
+#endif
+
+struct FieldRef {
+  uint8_t name_id = 0;
+  uint8_t profile_idx = 0;
+  // Bits 0-3: position (1-16), Bit 7: master flag
+  uint8_t pos_master = 0;
+  // Home Assistant - per-field (0 = no HA profile)
+  uint8_t ha_profile_idx = 0;
+};
+
+using FieldVector = ebus::StaticVector<FieldRef, max_fields>;
 }  // namespace command_types
 
-// Forward declaration for JsonWriter
 namespace ebus::detail {
 class JsonWriter;
 }
 
-// This class represents a command configuration and its associated data
+using PollSequence =
+    ebus::SequenceImpl<ebus::detail::SequenceLimits::poll_capacity>;
 
 class Command {
  public:
-  // Internal fields accessors
-  const uint32_t& getPollId() const;
-  void setPollId(const uint32_t id);
+  const uint16_t& getPollId() const;
+  void setPollId(const uint16_t id);
 
   const uint32_t& getLast() const;
   void setLast(const uint32_t time);
 
-  const ebus::Sequence& getData() const;
+  ebus::ByteView getData() const;
   void setData(ebus::ByteView data);
 
-  size_t getLength() const;
+  const command_types::FieldVector& getFields() const;
+  const DataProfile* getFieldProfile(size_t i) const;
+  const char* getFieldName(size_t i) const;
+  size_t getFieldPosition(size_t i) const;
+  bool getFieldMaster(size_t i) const;
+  ebus::DataType getFieldDatatype(size_t i) const;
+  float getFieldDivider(size_t i) const;
+  float getFieldMin(size_t i) const;
+  float getFieldMax(size_t i) const;
+  uint8_t getFieldDigits(size_t i) const;
+  const char* getFieldUnit(size_t i) const;
+  size_t getFieldCount() const;
+  size_t getFieldIndex(std::string_view name) const;
 
-  bool getNumeric() const;
+  // Per-field HA accessors
+  bool getFieldHA(size_t i) const;
+  const HAProfile* getFieldHAProfile(size_t i) const;
+  std::string_view getFieldHAProfileName(size_t i) const;
 
-  // Command field accessors
   std::string_view getKey() const;
   std::string_view getName() const;
-  const ebus::Sequence& getReadCmd() const;
-  const ebus::Sequence& getWriteCmd() const;
+  ebus::ByteView getReadCmd() const;
+  ebus::ByteView getWriteCmd(const class Store& store) const;
+  void setWriteCmd(PollSequence&& cmd, class Store& store);
+  bool hasWriteCmd() const;
+  PollSequence& getWriteCmdTemp() { return write_cmd_temp_; }
   const bool& getActive() const;
-  const uint32_t& getInterval() const;
+  const uint16_t& getInterval() const;
 
-  // Data field accessors
-  const bool& getMaster() const;
-  const size_t& getPosition() const;
-  const ebus::DataType& getDatatype() const;
-  const float& getDivider() const;
-  const float& getMin() const;
-  const float& getMax() const;
-  const uint8_t& getDigits() const;
-  std::string_view getUnit() const;
-
-  // Home Assistant field accessors
-  const bool& getHA() const;
-  const ebus::FixedString<24>& getHAProfile() const;
-
-  /**
-   * Checks if the master telegram matches this command's read sequence.
-   * The match is performed at index 2 (Primary/Secondary bytes).
-   * @param master The master part of the telegram.
-   */
   bool matches(ebus::ByteView master_view) const;
 
-  // Data conversion
   void getValueJson(ebus::detail::JsonWriter& writer) const;
   ebus::Sequence getVectorFromJson(std::string_view json) const;
-  ebus::Sequence getVectorFromValue(std::string_view value_json) const;
+  ebus::Sequence getVectorFromValue(std::string_view value_json,
+                                    size_t field_idx = 0) const;
+  ebus::Sequence getVectorFromDouble(double value, size_t field_idx = 0) const;
+  ebus::Sequence getVectorFromString(std::string_view value,
+                                     size_t field_idx = 0) const;
 
-  ebus::Sequence getVectorFromDouble(double value) const;
-  ebus::Sequence getVectorFromString(std::string_view value) const;
-
-  // Helpers for direct value access to avoid JSON overhead
   double getDoubleFromVector() const;
   const std::string getStringFromVector() const;
 
-  // Serialization / Deserialization
-  void toJson(ebus::detail::JsonWriter& writer) const;
   static Command fromJson(ebus::detail::JsonReader& reader);
   static Command fromTabular(ebus::detail::JsonReader& reader);
 
   static const std::string evaluate(ebus::detail::JsonReader& reader);
-  const ebus::DataTypeInfo* getMetaCached() const;
 
  private:
-  // Internal fields
-  // polling id
-  uint32_t poll_id_ = 0;
-  // last time of the successful command
+  uint16_t poll_id_ = 0;
   uint32_t last_ = 0;
-  // received raw data
   ebus::Sequence data_;
-  // length of datatype
-  size_t length_ = 1;
-  // indicates numeric datatype
-  bool numeric_ = false;
 
-  // Command fields
-  // unique key of command
-  command_types::KeyFS key_ = {};
-  // name of the command used as mqtt topic below "values/"
-  command_types::NameFS name_ = {};
-  // read command as vector of "ZZPBSBNNDBx"
-  ebus::Sequence read_cmd_ = {};
-  // write command as vector of "ZZPBSBNNDBx" (OPTIONAL)
-  ebus::Sequence write_cmd_ = {};
-  // active sending of command
+  uint8_t key_id_ = 0;
+  uint8_t name_id_ = 0;
+  PollSequence read_cmd_ = {};
+  PollSequence write_cmd_temp_ = {};  // Temporary for deserialization
+  uint8_t write_cmd_idx_ =
+      0;  // 0 = none, 1-based index into Store::write_cmds_
   bool active_ = false;
-  // minimum interval between two commands in seconds (OPTIONAL)
-  uint32_t interval_ = 60;
+  uint16_t interval_ = 60;
 
-  // Data fields
-  // value of interest is in master or slave part
-  bool master_ = false;
-  // starting position within the data bytes, beginning with 1
-  size_t position_ = 1;
-  // ebus data type
-  ebus::DataType datatype_ = ebus::DataType::hex1;
-  // divider for value conversion (OPTIONAL)
-  float divider_ = 1;
-  // minimum value (OPTIONAL)
-  float min_ = 1;
-  // maximum value (OPTIONAL)
-  float max_ = 100;
-  // decimal digits of value (OPTIONAL)
-  uint8_t digits_ = 2;
-  // unit (OPTIONAL)
-  command_types::UnitFS unit_ = {};
-
-  // Home Assistant
-  // support for auto discovery (OPTIONAL)
-  bool ha_ = false;
-  // profile name referencing global HA profile registry
-  command_types::ProfileFS ha_profile_ = {};
-
-  mutable std::optional<ebus::DataTypeInfo> _cachedMeta;
+  command_types::FieldVector fields_;
 };
 
 #endif

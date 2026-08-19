@@ -6,16 +6,16 @@
         "write_cmd": "",
         "active": false,
         "interval": 0,
-        "master": true,
-        "position": 2,
-        "datatype": "DATA2B",
-        "divider": 1,
-        "min": 0,
-        "max": 0,
-        "digits": 2,
-        "unit": "°C",
-        "ha": true,
-        "ha_profile": "sensor_temperature"
+        "fields": [
+            {
+                "name": "value",
+                "profile": "u8",
+                "position": 1,
+                "master": false,
+                "ha": true,
+                "ha_profile": "sensor_temperature"
+            }
+        ]
     },
     {
         "key": "11",
@@ -24,16 +24,16 @@
         "write_cmd": "",
         "active": false,
         "interval": 0,
-        "master": false,
-        "position": 3,
-        "datatype": "DATA2C",
-        "divider": 1,
-        "min": 0,
-        "max": 0,
-        "digits": 2,
-        "unit": "°C",
-        "ha": true,
-        "ha_profile": "sensor_temperature"
+        "fields": [
+            {
+                "name": "value",
+                "profile": "u8",
+                "position": 1,
+                "master": false,
+                "ha": true,
+                "ha_profile": "sensor_temperature"
+            }
+        ]
     },
     {
         "key": "12",
@@ -42,16 +42,16 @@
         "write_cmd": "",
         "active": true,
         "interval": 60,
-        "master": false,
-        "position": 1,
-        "datatype": "DATA2C",
-        "divider": 1,
-        "min": 0,
-        "max": 0,
-        "digits": 2,
-        "unit": "°C",
-        "ha": true,
-        "ha_profile": "sensor_temperature"
+        "fields": [
+            {
+                "name": "value",
+                "profile": "u8",
+                "position": 1,
+                "master": false,
+                "ha": true,
+                "ha_profile": "sensor_temperature"
+            }
+        ]
     },
     {
         "key": "13",
@@ -60,16 +60,16 @@
         "write_cmd": "",
         "active": true,
         "interval": 60,
-        "master": false,
-        "position": 1,
-        "datatype": "INT16",
-        "divider": 1000,
-        "min": 0,
-        "max": 0,
-        "digits": 2,
-        "unit": "bar",
-        "ha": true,
-        "ha_profile": "sensor_pressure"
+        "fields": [
+            {
+                "name": "value",
+                "profile": "u8",
+                "position": 1,
+                "master": false,
+                "ha": true,
+                "ha_profile": "sensor_pressure"
+            }
+        ]
     },
     {
         "key": "27",
@@ -78,15 +78,15 @@
         "write_cmd": "",
         "active": false,
         "interval": 0,
-        "master": false,
-        "position": 3,
-        "datatype": "DATA2C",
-        "divider": 1,
-        "min": 0,
-        "max": 0,
-        "digits": 2,
-        "unit": "°C",
-        "ha": true,
-        "ha_profile": "sensor_temperature"
+        "fields": [
+            {
+                "name": "value",
+                "profile": "u8",
+                "position": 1,
+                "master": false,
+                "ha": true,
+                "ha_profile": "sensor_temperature"
+            }
+        ]
     }
 ]

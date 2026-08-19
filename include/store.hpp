@@ -12,7 +12,15 @@
 #include "command.hpp"
 
 #ifndef COMMAND_CAPACITY
-#define COMMAND_CAPACITY 64
+inline constexpr size_t command_capacity = 64;
+#else
+inline constexpr size_t command_capacity = COMMAND_CAPACITY;
+#endif
+
+#ifndef WRITE_CMD_CAPACITY
+inline constexpr size_t write_cmd_capacity = 16;
+#else
+inline constexpr size_t write_cmd_capacity = WRITE_CMD_CAPACITY;
 #endif
 
 using DataUpdatedCallback = std::function<void(std::string_view key)>;
@@ -32,10 +40,10 @@ class Store {
   void setCommandChangedCallback(CommandChangedCallback callback);
   void setCommandRemovedCallback(CommandChangedCallback callback);
 
-  void insertCommand(const Command& command);
+  void insertCommand(Command command);
   void removeCommand(std::string_view key);
   Command* findCommand(std::string_view key);
-  Command* findCommand(uint32_t poll_id);
+  Command* findCommand(uint16_t poll_id);
   MatchingCommands findAllMatchingCommands(ebus::ByteView master);
 
   int64_t loadCommands();
@@ -61,10 +69,16 @@ class Store {
 
   void fetchValues(const ebus::JsonChunkVisitor& visitor) const;
 
+  // Write command storage (separate from Command to save memory)
+  ebus::ByteView getWriteCmd(size_t idx) const;
+  bool addWriteCmd(PollSequence&& cmd);
+  size_t getWriteCmdCount() const;
+
  private:
   mutable std::recursive_mutex mutex_;
 
-  ebus::StaticVector<Command, COMMAND_CAPACITY> commands_;
+  ebus::StaticVector<Command, command_capacity> commands_;
+  ebus::StaticVector<PollSequence, write_cmd_capacity> write_cmds_;
 
   DataUpdatedCallback data_updated_callback_ = nullptr;
   DataUpdatedLogCallback data_updated_log_callback_ = nullptr;
