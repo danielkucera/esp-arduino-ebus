@@ -55,6 +55,7 @@ struct OutgoingAction {
 
   explicit OutgoingAction(const ebus::ProtocolInfo& info)
       : command(nullptr),
+        field_idx(0),
         type(OutgoingActionType::Error),
         ha_remove(false),
         protocol_info(info) {
@@ -67,6 +68,7 @@ struct OutgoingAction {
   // Constructor for OutgoingActionType::Data
   OutgoingAction(std::string_view i, ebus::ByteView m, ebus::ByteView s)
       : command(nullptr),
+        field_idx(0),
         type(OutgoingActionType::Data),
         ha_remove(false),
         id(i) {
@@ -76,7 +78,7 @@ struct OutgoingAction {
 
   // Constructor for OutgoingActionType::Update
   OutgoingAction(OutgoingActionType t, std::string_view k)
-      : command(nullptr), type(t), ha_remove(false), key(k) {}
+      : command(nullptr), field_idx(0), type(t), ha_remove(false), key(k) {}
 };
 
 // The MQTT class acts as a wrapper for the entire MQTT subsystem.
@@ -130,7 +132,7 @@ class Mqtt {
 
   TaskHandle_t getTaskHandle() const { return task_handle_; }
   size_t getOutgoingQueueSize() const;
-  size_t getOutgoingQueueCapacity() const { return max_outgoing_queue_size; }
+  static size_t getOutgoingQueueCapacity() { return max_outgoing_queue_size; }
   size_t getOutgoingQueueHighWatermark() const;
 
  private:
@@ -165,7 +167,7 @@ class Mqtt {
   mutable std::recursive_mutex mqtt_mutex_;
 
   static constexpr size_t mqtt_pub_buffer_size = 1024;
-  char publish_buffers_[mqtt_pub_buffer_size];
+  char publish_buffers_[mqtt_pub_buffer_size] = {};
 
   void internalPublish(const char* topic, uint8_t qos, bool retain,
                        const char* payload, bool prefix);
@@ -184,8 +186,8 @@ class Mqtt {
   void publishResponse(std::string_view id, std::string_view status,
                        size_t bytes = 0);
 
-  void logUpdate(const Command* cmd,
-                 const std::optional<ebus::DataValue>& decoded);
+  static void logUpdate(const Command* cmd,
+                        const std::optional<ebus::DataValue>& decoded);
 };
 
 extern Mqtt mqtt;

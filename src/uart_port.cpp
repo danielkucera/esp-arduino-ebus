@@ -69,16 +69,16 @@ int UartPort::read() {
     return value;
   }
   uint8_t byte = 0;
-  int read = uart_read_bytes(port_, &byte, 1, 0);
-  if (read <= 0) return -1;
+  int bytes_read = uart_read_bytes(port_, &byte, 1, 0);
+  if (bytes_read <= 0) return -1;
   return byte;
 }
 
 int UartPort::peek() {
   if (cached_byte_ >= 0) return cached_byte_;
   uint8_t byte = 0;
-  int read = uart_read_bytes(port_, &byte, 1, 0);
-  if (read <= 0) return -1;
+  int bytes_read = uart_read_bytes(port_, &byte, 1, 0);
+  if (bytes_read <= 0) return -1;
   cached_byte_ = byte;
   return cached_byte_;
 }

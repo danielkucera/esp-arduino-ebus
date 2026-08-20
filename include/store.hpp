@@ -32,7 +32,7 @@ using MatchingCommands = ebus::StaticVector<Command*, 16>;
 
 class Store {
  public:
-  bool initFileSystem();
+  static bool initFileSystem();
 
   void setDataUpdatedCallback(DataUpdatedCallback callback);
   void setDataUpdatedLogCallback(DataUpdatedLogCallback callback);

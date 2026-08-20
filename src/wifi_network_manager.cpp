@@ -68,16 +68,19 @@ void logOpenSockets() {
 
     int pos = snprintf(buf, sizeof(buf), "fd=%d/%s", fd, typeStr);
 
-    if (getsockname(fd, (struct sockaddr*)&local, &len) == 0) {
+    if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &len) ==
+        0) {
+      // cppcheck-suppress unreadVariable
       pos += snprintf(buf + pos, sizeof(buf) - pos, "/l=%s:%d",
                       inet_ntoa(local.sin_addr), ntohs(local.sin_port));
     } else {
+      // cppcheck-suppress unreadVariable
       pos += snprintf(buf + pos, sizeof(buf) - pos, "/l=?/getsockname_errno=%d",
                       errno);
     }
 
     len = sizeof(peer);
-    if (getpeername(fd, (struct sockaddr*)&peer, &len) == 0) {
+    if (getpeername(fd, reinterpret_cast<struct sockaddr*>(&peer), &len) == 0) {
       connectedCount++;
       // snprintf(buf + pos, sizeof(buf) - pos, "/p=%s:%d",
       //          inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
@@ -485,8 +488,9 @@ std::string WifiNetworkManager::getConfiguredDns2() {
   return configManager_ != nullptr ? configManager_->readString("dns2") : "";
 }
 
-void WifiNetworkManager::handle_event(void* arg, esp_event_base_t event_base,
-                                      int32_t event_id, void* event_data) {
+void WifiNetworkManager::handle_event(
+    void* arg, esp_event_base_t event_base, int32_t event_id,
+    void* event_data) {  // cppcheck-suppress constParameterCallback
   (void)arg;
   (void)event_base;
 

@@ -31,17 +31,17 @@ class Logger {
   Logger& operator=(const Logger& other) = delete;  // Prevent assignment
 
   void error(std::string_view message, bool is_json = false,
-             uint32_t session_id = 0, uint32_t poll_id = 0);
+             uint32_t session_id = 0, uint16_t poll_id = 0);
   void warn(std::string_view message, bool is_json = false,
-            uint32_t session_id = 0, uint32_t poll_id = 0);
+            uint32_t session_id = 0, uint16_t poll_id = 0);
   void info(std::string_view message, bool is_json = false,
-            uint32_t session_id = 0, uint32_t poll_id = 0);
+            uint32_t session_id = 0, uint16_t poll_id = 0);
   void debug(std::string_view message, bool is_json = false,
-             uint32_t session_id = 0, uint32_t poll_id = 0);
+             uint32_t session_id = 0, uint16_t poll_id = 0);
 
   void fetchLogs(const ebus::JsonChunkVisitor& visitor,
                  uint64_t sinceMillis = 0) const;
-  void fetchTimeRelation(const ebus::JsonChunkVisitor& visitor) const;
+  static void fetchTimeRelation(const ebus::JsonChunkVisitor& visitor);
 
   TaskHandle_t getTaskHandle() const { return print_task_; }
   size_t getQueueSize() const;
@@ -72,7 +72,7 @@ class Logger {
   void printTaskLoop();
 
   void log(LogLevel level, std::string_view message, bool is_json,
-           uint32_t session_id, uint32_t poll_id);
+           uint32_t session_id, uint16_t poll_id);
 
   mutable portMUX_TYPE mux_;  // Mutex for thread safety
   QueueHandle_t print_queue_ = nullptr;

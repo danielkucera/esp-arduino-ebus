@@ -28,19 +28,32 @@ static httpd_handle_t configServer = nullptr;
 static bool fallbackHandlersRegistered = false;
 
 namespace {
+// cppcheck-suppress syntaxError
 extern const char common_css_start[] asm("_binary_common_css_start");
+// cppcheck-suppress syntaxError
 extern const char common_js_start[] asm("_binary_common_js_start");
 
+// cppcheck-suppress syntaxError
 extern const char root_html_start[] asm("_binary_root_html_start");
+// cppcheck-suppress syntaxError
 extern const char status_html_start[] asm("_binary_status_html_start");
+// cppcheck-suppress syntaxError
 extern const char adc_html_start[] asm("_binary_adc_html_start");
+// cppcheck-suppress syntaxError
 extern const char config_html_start[] asm("_binary_config_html_start");
+// cppcheck-suppress syntaxError
 extern const char upgrade_html_start[] asm("_binary_upgrade_html_start");
+// cppcheck-suppress syntaxError
 extern const char commands_html_start[] asm("_binary_commands_html_start");
+// cppcheck-suppress syntaxError
 extern const char cron_html_start[] asm("_binary_cron_html_start");
+// cppcheck-suppress syntaxError
 extern const char values_html_start[] asm("_binary_values_html_start");
+// cppcheck-suppress syntaxError
 extern const char devices_html_start[] asm("_binary_devices_html_start");
+// cppcheck-suppress syntaxError
 extern const char metrics_html_start[] asm("_binary_metrics_html_start");
+// cppcheck-suppress syntaxError
 extern const char logs_html_start[] asm("_binary_logs_html_start");
 
 #if defined(EBUS_INTERNAL)

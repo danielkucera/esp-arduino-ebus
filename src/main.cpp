@@ -66,7 +66,7 @@ namespace {
 uint32_t reset_code = 0;
 
 struct StatusInfo {
-  void toJson(ebus::detail::JsonWriter& writer) const {
+  static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
     writer.writeField("Reset_Code", reset_code);
     writer.writeField("Uptime",
@@ -75,7 +75,7 @@ struct StatusInfo {
 };
 
 struct HeapStatus {
-  void toJson(ebus::detail::JsonWriter& writer) const {
+  static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
     multi_heap_info_t info;
     heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
@@ -89,7 +89,7 @@ struct HeapStatus {
 
 #if !defined(EBUS_INTERNAL)
 struct ArbitrationInfo {
-  void toJson(ebus::detail::JsonWriter& writer) const {
+  static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
     writer.writeField("Total", static_cast<int>(Bus.nbr_arbitrations_));
     writer.writeField("Restarts1", static_cast<int>(Bus.nbr_restarts_1_));
@@ -123,7 +123,7 @@ struct FirmwareStatus {
 };
 
 struct ChipStatus {
-  void toJson(ebus::detail::JsonWriter& writer) const {
+  static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
     esp_chip_info_t chip_info{};
     esp_chip_info(&chip_info);
@@ -136,7 +136,7 @@ struct ChipStatus {
 };
 
 struct WifiStatus {
-  void toJson(ebus::detail::JsonWriter& writer) const {
+  static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
     writer.writeField("Last_Connect", WifiNetworkManager::getLastConnect());
     writer.writeField("Reconnect_Count",
@@ -182,7 +182,7 @@ struct WifiStatus {
 
 #if defined(EBUS_INTERNAL)
 struct SntpStatus {
-  void toJson(ebus::detail::JsonWriter& writer) const {
+  static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
     writer.writeField("Enabled", configManager.readBool("sntpEnabled"));
     const char* activeSntpServer = esp_sntp_getservername(0);
@@ -297,8 +297,8 @@ inline void enableTX() {
 }
 
 void set_pwm() {
-  int value = configManager.readInt("pwmValue", 130);
 #if defined(PWM_PIN)
+  int value = configManager.readInt("pwmValue", 130);
   ledc_set_duty(pwm_speed_mode, pwm_channel, value);
   ledc_update_duty(pwm_speed_mode, pwm_channel);
 #if defined(EBUS_INTERNAL)
@@ -503,8 +503,8 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   writer.writeField("SNTP", SntpStatus{});
 
   struct EbusStatus {
-    void toJson(ebus::detail::JsonWriter& w) const {
-      auto scope = w.objectScope();
+    static void toJson(ebus::detail::JsonWriter& w) {
+      auto obj_scope = w.objectScope();
       w.writeField("PWM", get_pwm());
       w.writeField("Ebus_Address",
                    configManager.readString("ebusAddress", "ff"));
@@ -517,8 +517,8 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   writer.writeField("eBUS", EbusStatus{});
 
   struct ScheduleStatus {
-    void toJson(ebus::detail::JsonWriter& w) const {
-      auto scope = w.objectScope();
+    static void toJson(ebus::detail::JsonWriter& w) {
+      auto obj_scope = w.objectScope();
       w.writeField("Scan_On_Startup", configManager.readBool("scanOnStartup"));
       w.writeField("Active_Commands",
                    static_cast<uint32_t>(store.getActiveCommands()));
@@ -529,8 +529,8 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   writer.writeField("Schedule", ScheduleStatus{});
 
   struct MqttStatus {
-    void toJson(ebus::detail::JsonWriter& w) const {
-      auto scope = w.objectScope();
+    static void toJson(ebus::detail::JsonWriter& w) {
+      auto obj_scope = w.objectScope();
       w.writeField("Enabled", mqtt.isEnabled());
       w.writeField("Server", configManager.readString("mqttServer"));
       w.writeField("User", configManager.readString("mqttUser"));
@@ -540,8 +540,8 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   writer.writeField("MQTT", MqttStatus{});
 
   struct HaStatus {
-    void toJson(ebus::detail::JsonWriter& w) const {
-      auto scope = w.objectScope();
+    static void toJson(ebus::detail::JsonWriter& w) {
+      auto obj_scope = w.objectScope();
       w.writeField("Enabled", mqttha.isEnabled());
     }
   };
@@ -552,7 +552,8 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
 void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps,
                                  const char* function_name) {
   printf(
-      "%s was called but failed to allocate %d bytes with 0x%X capabilities.\n",
+      "%s was called but failed to allocate %zu bytes with 0x%X "
+      "capabilities.\n",
       function_name, requested_size, (int)caps);
 }
 
@@ -656,8 +657,7 @@ extern "C" void app_main(void) {
   mqttha.setWillTopic(mqtt.getWillTopic());
   mqttha.setEnabled(configManager.readBool("haEnabledParam"));
 
-  mqttha.setThingName(
-      configManager.readString("thingName", "esp-eBus").c_str());
+  mqttha.setThingName(configManager.readString("thingName", "esp-eBus"));
   mqttha.setThingHwVersion(getAdapterHwVersionString());
   mqttha.setThingModel("esp-eBus Adapter");
   mqttha.setThingModelId("esp-ebus-adapter");

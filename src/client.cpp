@@ -108,6 +108,7 @@ void dataProcess() {
 }
 
 void dataLoop(void* arg) {
+  (void)arg;
   for (;;) {
     dataProcess();
   }
@@ -237,7 +238,7 @@ bool handleNewClient(int serverFd, int clients[]) {
   return true;
 }
 
-void handleClient(int* clientFd) {
+void handleClient(const int* clientFd) {
   while (socketAvailable(*clientFd) && Bus.availableForWrite() > 0) {
     // working char by char is not very efficient
     const int value = socketReadByte(*clientFd);
@@ -246,7 +247,7 @@ void handleClient(int* clientFd) {
   }
 }
 
-int pushClient(int* clientFd, uint8_t byte) {
+int pushClient(const int* clientFd, uint8_t byte) {
   if (isSocketConnected(*clientFd)) {
     socketWriteBytes(*clientFd, &byte, 1);
     return 1;
@@ -264,13 +265,13 @@ void encode(uint8_t c, uint8_t d, uint8_t (&data)[2]) {
   data[1] = M2 | (d & 0b00111111);
 }
 
-void send_res(int* clientFd, uint8_t c, uint8_t d) {
+void send_res(const int* clientFd, uint8_t c, uint8_t d) {
   uint8_t data[2];
   encode(c, d, data);
   socketWriteBytes(*clientFd, data, 2);
 }
 
-void process_cmd(int* clientFd, uint8_t c, uint8_t d) {
+void process_cmd(const int* clientFd, uint8_t c, uint8_t d) {
   if (c == CMD_INIT) {
     send_res(clientFd, RESETTED, 0x0);
     return;
@@ -282,10 +283,10 @@ void process_cmd(int* clientFd, uint8_t c, uint8_t d) {
       return;
     } else {
       // start arbitration
-      int cl = *clientFd;
       uint8_t ad = d;
       int arbitrationClientFd = *clientFd;
       if (!setArbitrationClient(arbitrationClientFd, d)) {
+        int cl = *clientFd;
         if (cl != arbitrationClientFd) {
           // only one client can be in arbitration
           DEBUG_LOG("CMD_START ONGOING 0x%02 0x%02x\n", ad, d);
@@ -366,7 +367,7 @@ void handleClientEnhanced(int* clientFd) {
   }
 }
 
-int pushClientEnhanced(int* clientFd, uint8_t c, uint8_t d, bool log) {
+int pushClientEnhanced(const int* clientFd, uint8_t c, uint8_t d, bool log) {
   if (log) {
     DEBUG_LOG("DATA           0x%02x 0x%02x\n", c, d);
   }

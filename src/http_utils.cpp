@@ -74,7 +74,7 @@ bool StreamingReader::feedAll() {
   return true;
 }
 
-void StreamingReader::endOfInput() {
+void StreamingReader::endOfInput() const {
   if (use_streaming_) {
     streaming_reader.endOfInput();
   }

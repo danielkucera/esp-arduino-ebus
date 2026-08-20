@@ -14,14 +14,14 @@ class UartPort {
   void end();
 
   int available();
-  int availableForWrite();
+  static int availableForWrite();
   int read();
   int peek();
   size_t write(uint8_t byte);
 
   void setRxBufferSize(size_t size);
   void setRxFIFOFull(int fullThreshold);
-  void setDebugOutput(bool enable);
+  static void setDebugOutput(bool enable);
 
  private:
   void ensureInstalled(int baud, int rxPin, int txPin);

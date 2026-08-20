@@ -8,9 +8,9 @@
 #include <cstdint>
 #include <ebus/detail/json_reader.hpp>
 #include <ebus/types.hpp>
+#include <mutex>
 #include <string>
 #include <unordered_map>
-#include <mutex>
 
 class Cron {
  public:
@@ -23,7 +23,7 @@ class Cron {
     int64_t last_triggered_minute = -1;
   };
 
-  bool initFileSystem();
+  static bool initFileSystem();
 
   Cron() = default;
   ~Cron() { stop(); }

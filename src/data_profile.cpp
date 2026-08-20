@@ -1,17 +1,20 @@
 #if defined(EBUS_INTERNAL)
 #include "data_profile.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 #include "data_profile_gen.hpp"
 #include "logger.hpp"
 
 const DataProfile* findDataProfile(std::string_view name) {
-  for (const auto& p : profiles) {
-    if (name == p.name) return &p;
+  auto it = std::find_if(std::begin(profiles), std::end(profiles),
+                         [&](const DataProfile& p) { return name == p.name; });
+  if (it == std::end(profiles)) {
+    logger.warn("DataProfile: not found: " + std::string(name));
+    return nullptr;
   }
-  logger.warn("DataProfile: not found: " + std::string(name));
-  return nullptr;
+  return &*it;
 }
 
 const DataProfile* getProfileByIndex(uint8_t idx) {

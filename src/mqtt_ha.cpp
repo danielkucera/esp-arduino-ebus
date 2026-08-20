@@ -171,7 +171,7 @@ void MqttHA::publishComponent(const Command* command, size_t field_idx,
   const HAProfile* profile = resolveProfile(command, field_idx);
   if (!profile && !remove) return;
 
-  const std::string& component = profile ? profile->component : "";
+  std::string component = profile ? profile->component : "";
 
   const std::string& dev_id = device_identifiers_;
 
@@ -366,15 +366,15 @@ MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile) {
     }
   }
 
-  vmLen += snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen,
-                    " %%}{{ values[value_json.value] if value_json.value in "
-                    "values.keys() else '%s' }}",
-                    options_count > 0 ? options_values[0] : "");
+  snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen,
+           " %%}{{ values[value_json.value] if value_json.value in "
+           "values.keys() else '%s' }}",
+           options_count > 0 ? options_values[0] : "");
 
-  pnLen += snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen,
-                    " %%}{{ values[value] if value in values.keys() else "
-                    "%d }}",
-                    defaultOptionValue);
+  snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen,
+           " %%}{{ values[value] if value in values.keys() else "
+           "%d }}",
+           defaultOptionValue);
 
   // Build options list using StaticVector<FixedString<16>, 5>
   ebus::StaticVector<ebus::FixedString<16>, 5> options;

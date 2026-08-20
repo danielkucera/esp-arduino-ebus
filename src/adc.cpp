@@ -126,7 +126,7 @@ bool Adc::configureController(uint32_t sampleRate, uint32_t channelMask) const {
   return true;
 }
 
-void Adc::logError(const char* stage, int err) const {
+void Adc::logError(const char* stage, int err) {
   char buf[128];
   snprintf(buf, sizeof(buf), "ADC: %s: %s", stage, esp_err_to_name(err));
   logger.error(buf);
@@ -135,7 +135,7 @@ void Adc::logError(const char* stage, int err) const {
 bool Adc::isRunning() const { return configured_; }
 
 uint32_t Adc::effectivePerChannelSampleRate(uint32_t sampleRate,
-                                            uint32_t channelMask) const {
+                                            uint32_t channelMask) {
   if (sampleRate < adc_sample_freq_hz_min) sampleRate = adc_sample_freq_hz_min;
   if (sampleRate > adc_sample_freq_hz_max) sampleRate = adc_sample_freq_hz_max;
   channelMask &= adc_channel_mask_all;

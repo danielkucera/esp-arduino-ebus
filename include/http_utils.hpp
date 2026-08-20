@@ -19,7 +19,7 @@ class StreamingReader {
   StreamingReader& operator=(const StreamingReader&) = delete;
 
   bool feedAll();
-  void endOfInput();
+  void endOfInput() const;
   ebus::detail::JsonReader& jsonReader();
   bool isValid() const { return valid_; }
 

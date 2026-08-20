@@ -1,6 +1,7 @@
 #if defined(EBUS_INTERNAL)
 #include "command.hpp"
 
+#include <algorithm>
 #include <cerrno>
 #include <charconv>
 #include <cmath>
@@ -254,13 +255,13 @@ ebus::Sequence Command::getVectorFromJson(std::string_view json) const {
   return ebus::Sequence{};
 }
 
-ebus::Sequence Command::getVectorFromValue(std::string_view val_view,
+ebus::Sequence Command::getVectorFromValue(std::string_view value_json,
                                            size_t field_idx) const {
-  if (val_view.empty() || field_idx >= fields_.size()) return {};
+  if (value_json.empty() || field_idx >= fields_.size()) return {};
 
-  if (val_view.size() >= 2 && val_view.front() == '{' &&
-      val_view.back() == '}') {
-    ebus::detail::JsonReader reader(val_view);
+  if (value_json.size() >= 2 && value_json.front() == '{' &&
+      value_json.back() == '}') {
+    ebus::detail::JsonReader reader(value_json);
     if (reader.next() == ebus::detail::JsonReader::Token::object_start) {
       reader.forEachField(
           [&](std::string_view fkey, ebus::detail::JsonReader& fr) {
@@ -281,14 +282,14 @@ ebus::Sequence Command::getVectorFromValue(std::string_view val_view,
   bool is_num = ebus::isNumeric(dt);
 
   if (is_num) {
-    double val = ebus::toNum<double>(val_view);
+    double val = ebus::toNum<double>(value_json);
     float min_v = getFieldMin(field_idx);
     float max_v = getFieldMax(field_idx);
     if ((val >= min_v) && (val <= max_v)) {
       return getVectorFromDouble(val, field_idx);
     }
   } else {
-    std::string_view s = val_view;
+    std::string_view s = value_json;
     if (s.size() >= 2 && s.front() == '"' && s.back() == '"') {
       s.remove_prefix(1);
       s.remove_suffix(1);
@@ -571,12 +572,11 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
         std::string_view hex = r.value();
         if (hex.length() % 2 != 0)
           error = "Invalid hex string length: " + std::string(key);
-        else
-          for (char c : hex)
-            if (!isxdigit((unsigned char)c)) {
-              error = "Invalid hex character in: " + std::string(key);
-              break;
-            }
+        else if (std::any_of(hex.begin(), hex.end(), [](char c) {
+                   return !isxdigit((unsigned char)c);
+                 })) {
+          error = "Invalid hex character in: " + std::string(key);
+        }
       } else
         error = "Invalid type for field: " + std::string(key);
     } else if (key == "active") {

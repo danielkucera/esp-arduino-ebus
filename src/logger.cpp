@@ -10,14 +10,13 @@
 Logger logger;
 
 Logger::Logger(size_t maxEntries)
-    : max_entries_(maxEntries),
+    : buffer_(maxEntries),
+      max_entries_(maxEntries),
       index_(0),
       entries_(0),
       mux_(portMUX_INITIALIZER_UNLOCKED),
-      print_queue_(nullptr),
+      print_queue_(xQueueCreate(print_queue_entries, max_msg_length)),
       print_task_(nullptr) {
-  buffer_ = std::vector<LogEntry>(max_entries_);
-  print_queue_ = xQueueCreate(print_queue_entries, max_msg_length);
   if (print_queue_ != nullptr) {
     xTaskCreate(Logger::printTaskEntry, "logger", 3072, this, 1, &print_task_);
   }
@@ -44,21 +43,21 @@ size_t Logger::getQueueHighWatermark() const {
   return max_queue_size_.load(std::memory_order_relaxed);
 }
 
-void Logger::error(std::string_view message, bool is_json, uint32_t sid,
-                   uint32_t pid) {
-  log(LogLevel::ERROR, message, is_json, sid, pid);
+void Logger::error(std::string_view message, bool is_json, uint32_t session_id,
+                   uint16_t poll_id) {
+  log(LogLevel::ERROR, message, is_json, session_id, poll_id);
 }
-void Logger::warn(std::string_view message, bool is_json, uint32_t sid,
-                  uint32_t pid) {
-  log(LogLevel::WARN, message, is_json, sid, pid);
+void Logger::warn(std::string_view message, bool is_json, uint32_t session_id,
+                  uint16_t poll_id) {
+  log(LogLevel::WARN, message, is_json, session_id, poll_id);
 }
-void Logger::info(std::string_view message, bool is_json, uint32_t sid,
-                  uint32_t pid) {
-  log(LogLevel::INFO, message, is_json, sid, pid);
+void Logger::info(std::string_view message, bool is_json, uint32_t session_id,
+                  uint16_t poll_id) {
+  log(LogLevel::INFO, message, is_json, session_id, poll_id);
 }
-void Logger::debug(std::string_view message, bool is_json, uint32_t sid,
-                   uint32_t pid) {
-  log(LogLevel::DEBUG, message, is_json, sid, pid);
+void Logger::debug(std::string_view message, bool is_json, uint32_t session_id,
+                   uint16_t poll_id) {
+  log(LogLevel::DEBUG, message, is_json, session_id, poll_id);
 }
 
 void Logger::fetchLogs(const ebus::JsonChunkVisitor& visitor,
@@ -103,7 +102,7 @@ void Logger::fetchLogs(const ebus::JsonChunkVisitor& visitor,
   }
 }
 
-void Logger::fetchTimeRelation(const ebus::JsonChunkVisitor& visitor) const {
+void Logger::fetchTimeRelation(const ebus::JsonChunkVisitor& visitor) {
   uint64_t currentMillis = 0;
   int64_t currentTimeMillis = 0;
   const bool hasTimeRelation =
@@ -139,7 +138,7 @@ bool Logger::currentMillisTimeRelation(uint64_t& currentMillis,
 }
 
 void Logger::log(LogLevel level, std::string_view message, bool is_json,
-                 uint32_t session_id, uint32_t poll_id) {
+                 uint32_t session_id, uint16_t poll_id) {
   if (print_queue_ != nullptr && print_task_ != nullptr) {
     char msg[max_msg_length]{};
     size_t len = std::min(message.size(), sizeof(msg) - 1);

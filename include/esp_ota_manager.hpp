@@ -21,7 +21,7 @@ class EspOtaManager {
   bool handleInvitation();
   bool performTransfer(const sockaddr_in& hostAddr, uint16_t hostPort,
                        size_t expectedSize);
-  void fail(const std::string& reason);
+  static void fail(const std::string& reason);
   static void taskEntry(void* param);
   void taskLoop();
 

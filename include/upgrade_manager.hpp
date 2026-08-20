@@ -12,19 +12,19 @@ class UpgradeManager {
  public:
   using PreUpgradeHook = std::function<void(void)>;
 
-  void begin();
+  static void begin();
   void setPreUpgradeHook(PreUpgradeHook hook);
 
   esp_err_t handleUpload(httpd_req_t* req);
   esp_err_t handleHttpUpgrade(httpd_req_t* req);
-  esp_err_t handleStatus(httpd_req_t* req);
-  void fetchStatus(const ebus::JsonChunkVisitor& visitor);
+  static esp_err_t handleStatus(httpd_req_t* req);
+  static void fetchStatus(const ebus::JsonChunkVisitor& visitor);
 
  private:
-  bool performHttpUpgrade(const std::string& url, std::string& error);
+  static bool performHttpUpgrade(const std::string& url, std::string& error);
   void prepareForUpgrade();
-  void sendAndRestart(httpd_req_t* req, const char* message,
-                      const char* id = "upgrade");
+  static void sendAndRestart(httpd_req_t* req, const char* message,
+                             const char* id = "upgrade");
   void resetUploadState();
 
   PreUpgradeHook pre_upgrade_hook_;

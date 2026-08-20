@@ -5,6 +5,7 @@
 #include <esp_timer.h>
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cmath>
@@ -343,20 +344,14 @@ const std::vector<Command*> Store::getCommands() {
 
 size_t Store::getActiveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  size_t count = 0;
-  for (const Command& c : commands_) {
-    if (c.getActive()) count++;
-  }
-  return count;
+  return std::count_if(commands_.begin(), commands_.end(),
+                       [](const Command& c) { return c.getActive(); });
 }
 
 size_t Store::getPassiveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  size_t count = 0;
-  for (const Command& c : commands_) {
-    if (!c.getActive()) count++;
-  }
-  return count;
+  return std::count_if(commands_.begin(), commands_.end(),
+                       [](const Command& c) { return !c.getActive(); });
 }
 
 size_t Store::getCommandCount() const {
@@ -366,10 +361,8 @@ size_t Store::getCommandCount() const {
 
 bool Store::active() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  for (const Command& c : commands_) {
-    if (c.getActive()) return true;
-  }
-  return false;
+  return std::any_of(commands_.begin(), commands_.end(),
+                     [](const Command& c) { return c.getActive(); });
 }
 
 Command* Store::nextActiveCommand() {

@@ -133,11 +133,11 @@ bool validateSinglePart(std::string_view part, int minValue, int maxValue,
   if (part == "*") return true;
 
   std::string_view base = part;
-  int step = 1;
   size_t slashPos = part.find('/');
   if (slashPos != std::string_view::npos) {
     base = part.substr(0, slashPos);
     std::string_view stepPart = part.substr(slashPos + 1);
+    int step = 1;
     if (!parseInt(stepPart, step) || step <= 0) return false;
   }
 
@@ -177,10 +177,9 @@ bool validateFieldExpression(std::string_view expr, int minValue, int maxValue,
   auto parts = split(expr, ',');
   if (parts.empty()) return false;
 
-  for (std::string_view part : parts) {
-    if (!validateSinglePart(part, minValue, maxValue, dayOfWeek)) return false;
-  }
-  return true;
+  return std::all_of(parts.begin(), parts.end(), [&](std::string_view part) {
+    return validateSinglePart(part, minValue, maxValue, dayOfWeek);
+  });
 }
 
 bool matchSchedule(const std::string& schedule, const tm& localTime) {
@@ -411,6 +410,7 @@ void Cron::fetchRules(const ebus::JsonChunkVisitor& visitor) const {
   {
     std::lock_guard<std::mutex> lock(rules_mutex_);
     for (const auto& kv : rules_) {
+      // cppcheck-suppress useStlAlgorithm
       if (!ordered.push_back(&kv.second)) {
         logger.warn("Cron rule limit exceeded, some rules omitted");
         break;

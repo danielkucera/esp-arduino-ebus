@@ -1,13 +1,14 @@
 #if defined(EBUS_INTERNAL)
 #include "ha_profile.hpp"
 
+#include <algorithm>
+
 #include "ha_profile_gen.hpp"
 
 const HAProfile* findHAProfile(std::string_view name) {
-  for (const auto& p : profiles) {
-    if (name == p.name) return &p;
-  }
-  return nullptr;
+  auto it = std::find_if(std::begin(profiles), std::end(profiles),
+                         [&](const HAProfile& p) { return name == p.name; });
+  return it != std::end(profiles) ? &*it : nullptr;
 }
 
 const HAProfile* getHAProfileByIndex(uint8_t idx) {
