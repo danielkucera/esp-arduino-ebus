@@ -275,131 +275,6 @@ void prepareRuntimeForUpgrade() {
 #endif
 }
 
-TaskHandle_t heapMonitorTaskHandle = nullptr;
-
-void safe_heap_check() {
-  // Check only the largest free block (less likely to crash)
-  size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-  if (largest < 1024) {  // Arbitrary threshold
-    char buf[64];
-    snprintf(buf, sizeof(buf), "Heap critically low: %uB free",
-             (unsigned)largest);
-    logger.error(buf);
-  }
-  // Optional: Use heap_caps_check_integrity() only if heap is healthy
-  else if (!heap_caps_check_integrity(MALLOC_CAP_8BIT, false)) {
-    logger.error("Heap corruption detected (non-fatal)");
-  }
-
-#if 1
-  if (!heap_caps_check_integrity(MALLOC_CAP_8BIT, true)) {
-    logger.error("Heap corruption detected! Restarting...");
-    esp_restart();
-  }
-#endif
-}
-
-void mqtt_connection_check() {
-#if defined(EBUS_INTERNAL)
-  bool is_mqtt_connected = mqtt.isConnected();
-  static bool last_mqtt_connection_state = true;
-
-  if (is_mqtt_connected != last_mqtt_connection_state) {
-    char buf[64];
-    sniprintf(buf, sizeof(buf), "!!! MQTT Connection State Change Detected: %s",
-              is_mqtt_connected ? "CONNECTED" : "DISCONNECTED");
-    logger.error(buf);
-    last_mqtt_connection_state = is_mqtt_connected;
-
-    if (!is_mqtt_connected) {
-      // Action required when losing connection: Notify dependent systems
-      // immediately.
-      logger.error(
-          "!!! CRITICAL: MQTT Link LOST. Pausing eBus data updates until "
-          "reconnection.");
-      // This section could trigger a global "System Degraded Mode" flag in
-      // ConfigManager
-    } else {
-      logger.info("+++ MQTT LINK RESTORED. Resuming normal operations.");
-    }
-  }
-#endif
-}
-
-void heapMonitorTaskEntry(void* arg) {
-  (void)arg;
-
-  heap_caps_check_integrity(MALLOC_CAP_8BIT, true);
-  // heap_trace_start(HEAP_TRACE_LEAKS);  // Enable leak detection
-
-  while (true) {
-    // Check heap integrity
-    safe_heap_check();
-    // Check mqtt connection
-    mqtt_connection_check();
-
-    multi_heap_info_t info;
-    heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-
-    // Log heap stats
-    char hbuf[128];
-    snprintf(hbuf, sizeof(hbuf),
-             "Heap: Total=%uB, MaxBlock=%uB, MinEver=%uB, Fragments=%u",
-             (unsigned)info.total_free_bytes, (unsigned)info.largest_free_block,
-             (unsigned)info.minimum_free_bytes, (unsigned)info.free_blocks);
-    logger.debug(hbuf);
-#if 0
-    // Log stack high-water marks for app tasks
-    auto logStack = [](const char* name, TaskHandle_t handle) {
-      if (handle) {
-        unsigned free_stack =
-            uxTaskGetStackHighWaterMark(handle) * sizeof(StackType_t);
-        char sbuf[64];
-        snprintf(sbuf, sizeof(sbuf), "Stack: %s free=%uB", name, free_stack);
-        logger.debug(sbuf);
-      }
-    };
-
-    // Log runtime stats
-    UBaseType_t num_tasks = uxTaskGetNumberOfTasks();
-    size_t required_size = num_tasks * 64;  // 64 bytes per task entry
-    char* rbuf = static_cast<char*>(pvPortMalloc(required_size));
-    if (rbuf) {
-      vTaskGetRunTimeStats(rbuf);
-      logger.debug(rbuf);
-      vPortFree(rbuf);
-    } else {
-      logger.error("Failed to allocate runtime stats buffer!");
-    }
-
-#if defined(EBUS_SIMULATION)
-    logStack("sim", simTaskHandle());
-#endif
-#if defined(EBUS_INTERNAL)
-    logStack("mqtt", mqtt.getTaskHandle());
-    logStack("cron", cron.getTaskHandle());
-    logStack("logger", logger.getTaskHandle());
-    logStack("dns", captiveDnsServer.getTaskHandle());
-    logStack("espota", espOtaManager.getTaskHandle());
-    logStack("led", WifiNetworkManager::getStatusLedTaskHandle());
-    logStack("socket", WifiNetworkManager::getSocketLoggerTaskHandle());
-    logStack("heap", heapMonitorTaskHandle);
-
-    // Log stack for library threads
-    getEbusController().fetchStatus([](const ebus::SystemResources& res) {
-      for (const auto& ts : res.threads) {
-        char sbuf[64];
-        snprintf(sbuf, sizeof(sbuf), "Stack: %s free=%ldB", ts.name.c_str(),
-                 ts.stack_free);
-        logger.debug(sbuf);
-      }
-    });
-#endif
-#endif
-    vTaskDelay(pdMS_TO_TICKS(1000));  // Log every 5 seconds
-  }
-}
-
 }  // namespace
 
 inline void disableTX() {
@@ -546,7 +421,6 @@ void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
     addThread("status_led", WifiNetworkManager::getStatusLedTaskHandle(), 1024);
     addThread("socket_logger", WifiNetworkManager::getSocketLoggerTaskHandle(),
               3072);
-    addThread("heap_monitor", heapMonitorTaskHandle, 5120);
   }
 
   writer.appendKey("queues");
@@ -752,9 +626,6 @@ extern "C" void app_main(void) {
   espOtaManager.setPreUpgradeHook(prepareRuntimeForUpgrade);
 
   set_pwm();  // This calls configManager.readInt("pwmValue", 130);
-
-  // xTaskCreate(heapMonitorTaskEntry, "heap_monitor", 5120, nullptr, 0,
-  //             &heapMonitorTaskHandle);
 
 #if defined(EBUS_INTERNAL)
   if (configManager.readBool("sntpEnabled")) {
