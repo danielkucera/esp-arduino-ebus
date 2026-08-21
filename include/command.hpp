@@ -73,16 +73,20 @@ class Command {
   std::string_view getKey() const;
   std::string_view getName() const;
   ebus::ByteView getReadCmd() const;
-  ebus::ByteView getWriteCmd(const class Store& store) const;
-  void setWriteCmd(PollSequence&& cmd, class Store& store);
+  ebus::ByteView getWriteCmd(const class CommandManager& command_manager) const;
+  void setWriteCmd(PollSequence&& cmd, class CommandManager& command_manager);
   bool hasWriteCmd() const;
   PollSequence& getWriteCmdTemp() { return write_cmd_temp_; }
-  const bool& getActive() const;
+  bool getActive() const;
   const uint16_t& getInterval() const;
 
   bool matches(ebus::ByteView master_view) const;
 
+  void writeFieldValue(ebus::detail::JsonWriter& writer, size_t i) const;
+  void writeValuePayload(ebus::detail::JsonWriter& writer) const;
+
   void getValueJson(ebus::detail::JsonWriter& writer) const;
+
   ebus::Sequence getVectorFromJson(std::string_view json) const;
   ebus::Sequence getVectorFromValue(std::string_view value_json,
                                     size_t field_idx = 0) const;
@@ -108,8 +112,7 @@ class Command {
   PollSequence read_cmd_ = {};
   PollSequence write_cmd_temp_ = {};  // Temporary for deserialization
   uint8_t write_cmd_idx_ =
-      0;  // 0 = none, 1-based index into Store::write_cmds_
-  bool active_ = false;
+      0;  // 0 = none, 1-based index into ClientMmanager::write_cmds_
   uint16_t interval_ = 60;
 
   command_types::FieldVector fields_;

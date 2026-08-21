@@ -11,10 +11,10 @@
 #include <limits>
 #include <regex>
 
+#include "command_manager.hpp"
 #include "data_profile.hpp"
 #include "ha_profile.hpp"
 #include "logger.hpp"
-#include "store.hpp"
 
 const uint16_t& Command::getPollId() const { return poll_id_; }
 
@@ -111,26 +111,27 @@ ebus::ByteView Command::getReadCmd() const {
   return ebus::ByteView(read_cmd_.data(), read_cmd_.size());
 }
 
-ebus::ByteView Command::getWriteCmd(const Store& store) const {
+ebus::ByteView Command::getWriteCmd(
+    const CommandManager& command_manager) const {
   if (write_cmd_idx_ == 0) return {};
-  return store.getWriteCmd(write_cmd_idx_ - 1);
+  return command_manager.getWriteCmd(write_cmd_idx_ - 1);
 }
 
-void Command::setWriteCmd(PollSequence&& cmd, Store& store) {
+void Command::setWriteCmd(PollSequence&& cmd, CommandManager& command_manager) {
   if (cmd.empty()) {
     write_cmd_idx_ = 0;
     return;
   }
   // Try to find existing matching write_cmd
-  for (size_t i = 0; i < store.getWriteCmdCount(); ++i) {
-    if (store.getWriteCmd(i) == cmd) {
+  for (size_t i = 0; i < command_manager.getWriteCmdCount(); ++i) {
+    if (command_manager.getWriteCmd(i) == cmd) {
       write_cmd_idx_ = static_cast<uint8_t>(i + 1);
       return;
     }
   }
   // Add new write_cmd if there's space
-  if (store.addWriteCmd(std::move(cmd))) {
-    write_cmd_idx_ = static_cast<uint8_t>(store.getWriteCmdCount());
+  if (command_manager.addWriteCmd(std::move(cmd))) {
+    write_cmd_idx_ = static_cast<uint8_t>(command_manager.getWriteCmdCount());
   } else {
     write_cmd_idx_ = 0;  // No space
   }
@@ -143,7 +144,7 @@ bool Command::getFieldHA(size_t i) const {
   return fields_[i].ha_profile_idx != 0;
 }
 
-const bool& Command::getActive() const { return active_; }
+bool Command::getActive() const { return interval_ > 0; }
 
 const uint16_t& Command::getInterval() const { return interval_; }
 
@@ -162,6 +163,57 @@ bool Command::matches(ebus::ByteView master_view) const {
   return ebus::matches(master_view, read_cmd_, 1);
 }
 
+void Command::writeFieldValue(ebus::detail::JsonWriter& writer,
+                              size_t i) const {
+  if (i >= fields_.size()) {
+    writer.writeRaw("null");
+    return;
+  }
+  const auto* profile = getFieldProfile(i);
+  if (!profile) {
+    writer.writeRaw("null");
+    return;
+  }
+  auto dt = getFieldDatatype(i);
+  size_t field_len = ebus::sizeOfDataType(dt);
+  size_t field_pos = getFieldPosition(i) - 1;
+  if (field_pos + field_len > data_.size()) {
+    writer.writeRaw("null");
+    return;
+  }
+  auto field_data = ebus::range(data_, field_pos, field_len);
+  auto decoded = ebus::decode(dt, field_data);
+  if (!decoded || ebus::isNull(*decoded)) {
+    writer.writeRaw("null");
+  } else {
+    bool numeric = ebus::isNumeric(dt);
+    if (numeric) {
+      float val = ebus::roundDigits(
+          ebus::asFloat(*decoded) / getFieldDivider(i), getFieldDigits(i));
+      writer.writeValueFloat(val);
+    } else {
+      char buf[32];
+      size_t len = std::min(std::strlen(profile->datatype), sizeof(buf) - 1);
+      std::memcpy(buf, profile->datatype, len);
+      buf[len] = '\0';
+      if (std::string_view(buf).find("HEX") == 0) {
+        writer.writeHexValue(field_data);
+      } else {
+        writer.writeValue(ebus::asString(*decoded));
+      }
+    }
+  }
+}
+
+void Command::writeValuePayload(ebus::detail::JsonWriter& writer) const {
+  for (size_t i = 0; i < fields_.size(); ++i) {
+    const char* fn = getFieldName(i);
+    std::string_view fname = (fn && fn[0]) ? fn : "value";
+    writer.appendKey(fname);
+    writeFieldValue(writer, i);
+  }
+}
+
 void Command::getValueJson(ebus::detail::JsonWriter& writer) const {
   if (fields_.empty()) {
     writer.writeRaw("null");
@@ -169,70 +221,10 @@ void Command::getValueJson(ebus::detail::JsonWriter& writer) const {
   }
 
   if (fields_.size() == 1) {
-    const auto* profile = getFieldProfile(0);
-    if (!profile) {
-      writer.writeRaw("null");
-      return;
-    }
-    auto dt = getFieldDatatype(0);
-    auto decoded = ebus::decode(dt, ebus::range(data_, 0, data_.size()));
-    if (!decoded || ebus::isNull(*decoded)) {
-      writer.writeRaw("null");
-    } else {
-      bool numeric = ebus::isNumeric(dt);
-      if (numeric) {
-        float val = ebus::roundDigits(
-            ebus::asFloat(*decoded) / getFieldDivider(0), getFieldDigits(0));
-        writer.writeValueFloat(val);
-      } else {
-        // Check if datatype is HEX type (no need for cached meta)
-        char buf[32];
-        size_t len = std::min(std::strlen(profile->datatype), sizeof(buf) - 1);
-        std::memcpy(buf, profile->datatype, len);
-        buf[len] = '\0';
-        if (std::string_view(buf).find("HEX") == 0) {
-          writer.writeHexValue(data_);
-        } else {
-          writer.writeValue(ebus::asString(*decoded));
-        }
-      }
-    }
+    writeFieldValue(writer, 0);
   } else {
     auto scope = writer.objectScope();
-    for (size_t i = 0; i < fields_.size(); i++) {
-      writer.appendKey(StringPool::instance().lookup(fields_[i].name_id));
-      const auto* profile = getFieldProfile(i);
-      if (!profile) {
-        writer.writeRaw("null");
-        continue;
-      }
-      auto dt = getFieldDatatype(i);
-      size_t field_len = ebus::sizeOfDataType(dt);
-      size_t field_pos = getFieldPosition(i) - 1;
-      auto field_data = ebus::range(data_, field_pos, field_len);
-      auto decoded = ebus::decode(dt, field_data);
-      if (!decoded || ebus::isNull(*decoded)) {
-        writer.writeRaw("null");
-      } else {
-        bool numeric = ebus::isNumeric(dt);
-        if (numeric) {
-          float val = ebus::roundDigits(
-              ebus::asFloat(*decoded) / getFieldDivider(i), getFieldDigits(i));
-          writer.writeValueFloat(val);
-        } else {
-          char buf[32];
-          size_t len =
-              std::min(std::strlen(profile->datatype), sizeof(buf) - 1);
-          std::memcpy(buf, profile->datatype, len);
-          buf[len] = '\0';
-          if (std::string_view(buf).find("HEX") == 0) {
-            writer.writeHexValue(field_data);
-          } else {
-            writer.writeValue(ebus::asString(*decoded));
-          }
-        }
-      }
-    }
+    writeValuePayload(writer);
   }
 }
 
@@ -374,15 +366,9 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
       uint8_t hex_buf[64];
       size_t hex_len = ebus::toBytes(r.value(), hex_buf, sizeof(hex_buf));
       command.write_cmd_temp_.assign(ebus::ByteView(hex_buf, hex_len));
-    } else if (key == "active")
-      command.active_ = r.asBool();
-    else if (key == "interval")
+    } else if (key == "interval")
       command.interval_ = r.asNum<uint16_t>();
-    else if (key == "ha_profile") {
-      const HAProfile* p = findHAProfile(r.value());
-      /* command-level ha_profile ignored - per-field HA in fields array */
-      (void)p;
-    } else if (key == "fields") {
+    else if (key == "fields") {
       if (token == ebus::detail::JsonReader::Token::array_start) {
         while (true) {
           auto field_token = r.next();
@@ -394,7 +380,7 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
             break;
           command_types::FieldRef field;
           r.forEachField(
-              [&](std::string_view fkey, ebus::detail::JsonReader& fr) {
+              [&](std::string_view fkey, ebus::detail::JsonReader& fr) -> bool {
                 fr.next();
                 if (fkey == "name")
                   field.name_id = StringPool::instance().intern(fr.value());
@@ -460,7 +446,7 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
         break;
       }  // NOLINT(bugprone-branch-ctl-initializer)
       case 4:
-        command.active_ = reader.asBool();
+        (void)reader.asBool();  // read and ignore "active" for backward compat
         break;
       case 5:
         command.interval_ = reader.asNum<uint16_t>();
@@ -553,8 +539,7 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
     return "Record root is not a JSON object";
 
   struct {
-    bool key = false, name = false, read_cmd = false, active = false,
-         fields = false;
+    bool key = false, name = false, read_cmd = false, fields = false;
   } met;
 
   std::string error;
@@ -579,9 +564,6 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
         }
       } else
         error = "Invalid type for field: " + std::string(key);
-    } else if (key == "active") {
-      met.active = (token == ebus::detail::JsonReader::Token::boolean);
-      if (!met.active) error = "Invalid type for field: active";
     } else if (key == "fields") {
       met.fields = (token == ebus::detail::JsonReader::Token::array_start);
       if (token == ebus::detail::JsonReader::Token::array_start) {
@@ -636,9 +618,6 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
     } else if (key == "interval") {
       if (token != ebus::detail::JsonReader::Token::number)
         error = "Invalid type for field: interval";
-    } else if (key == "ha_profile") {
-      if (token != ebus::detail::JsonReader::Token::string)
-        error = "Invalid type for field: ha_profile";
     }
     return true;
   });
@@ -647,7 +626,6 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
   if (!met.key) return "Missing required field: key";
   if (!met.name) return "Missing required field: name";
   if (!met.read_cmd) return "Missing required field: read_cmd";
-  if (!met.active) return "Missing required field: active";
   if (!met.fields) return "Missing required field: fields";
 
   return "";

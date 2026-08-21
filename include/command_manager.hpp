@@ -30,7 +30,7 @@ using CommandChangedCallback = std::function<void(Command* command)>;
 
 using MatchingCommands = ebus::StaticVector<Command*, 16>;
 
-class Store {
+class CommandManager {
  public:
   static bool initFileSystem();
 
@@ -59,10 +59,7 @@ class Store {
   size_t getPassiveCommands() const;
   size_t getCommandCount() const;
 
-  bool active() const;
-
   Command* nextActiveCommand();
-  MatchingCommands findPassiveCommands(ebus::ByteView master);
 
   void updateData(Command* command, ebus::ByteView master_view,
                   ebus::ByteView slave_view);
@@ -89,5 +86,5 @@ class Store {
   void deserializeCommands(FILE* file);
 };
 
-extern Store store;
+extern CommandManager commandManager;
 #endif

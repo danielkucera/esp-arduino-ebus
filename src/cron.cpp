@@ -18,9 +18,9 @@
 #include <string_view>
 #include <vector>
 
+#include "command_manager.hpp"
 #include "ebus_accessor.hpp"
 #include "logger.hpp"
-#include "store.hpp"
 
 Cron cron;
 
@@ -257,7 +257,7 @@ std::string validateRule(const Cron::Rule& rule) {
   if (!validateFieldExpression(fields[4], 0, 6, true))
     return "Invalid day-of-week field";
 
-  Command* command = store.findCommand(rule.command_key);
+  Command* command = commandManager.findCommand(rule.command_key);
   if (command == nullptr)
     return "Command key '" + rule.command_key + "' not found";
   if (!command->hasWriteCmd())
@@ -272,7 +272,7 @@ std::string validateRule(const Cron::Rule& rule) {
 
 }  // namespace
 
-bool Cron::initFileSystem() { return store.initFileSystem(); }
+bool Cron::initFileSystem() { return commandManager.initFileSystem(); }
 
 void Cron::start() {
   stop_runner_ = false;
@@ -324,7 +324,7 @@ void Cron::setRules(std::unordered_map<std::string, Rule>&& nextRules) {
 }
 
 int64_t Cron::loadRules() {
-  if (!store.initFileSystem()) return -1;
+  if (!commandManager.initFileSystem()) return -1;
 
   FILE* file = std::fopen(cron_file_path, "rb");
   if (file == nullptr) {
@@ -436,7 +436,7 @@ void Cron::fetchRules(const ebus::JsonChunkVisitor& visitor) const {
 }
 
 int64_t Cron::saveRules() const {
-  if (!store.initFileSystem()) return -1;
+  if (!commandManager.initFileSystem()) return -1;
 
   FILE* file = std::fopen(cron_file_path, "wb");
   if (file == nullptr) return -1;
@@ -485,7 +485,7 @@ void Cron::tick() {
 
       rule.last_triggered_minute = minuteStamp;
 
-      Command* command = store.findCommand(rule.command_key);
+      Command* command = commandManager.findCommand(rule.command_key);
       if (command == nullptr || !command->hasWriteCmd()) {
         char buf[128];
         snprintf(buf, sizeof(buf), "Cron skipped, command unavailable: %s",
@@ -505,7 +505,7 @@ void Cron::tick() {
       }
 
       ebus::Sequence fullWrite =
-          ebus::makeSequence(command->getWriteCmd(store));
+          ebus::makeSequence(command->getWriteCmd(commandManager));
       fullWrite.append(valueBytes);
 
       getEbusController().enqueue(prio_send, fullWrite);

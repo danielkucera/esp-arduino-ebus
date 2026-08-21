@@ -15,8 +15,8 @@ except NameError:
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-BASE_JSON = os.path.join(PROJECT_ROOT, "config", "ha_profiles.json")
-OVERLAY_JSON = os.path.join(PROJECT_ROOT, "config", "ha_profiles_user.json")
+BASE_JSON = os.path.join(PROJECT_ROOT, "profiles", "ha_profiles.json")
+OVERLAY_JSON = os.path.join(PROJECT_ROOT, "profiles", "ha_profiles_user.json")
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "include", "ha_profile_gen.hpp")
 
 
@@ -44,7 +44,7 @@ def generate():
 
     lines = [
         "// AUTO-GENERATED FILE - DO NOT EDIT",
-        "// Generated from config/ha_profiles.json + ha_profiles_user.json by scripts/generate_ha_profiles.py",
+        "// Generated from profiles/ha_profiles.json + ha_profiles_user.json by scripts/generate_ha_profiles.py",
         "",
         "#pragma once",
         "",

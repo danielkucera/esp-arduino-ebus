@@ -22,11 +22,11 @@
 #include "logger.hpp"
 
 #if defined(EBUS_INTERNAL)
+#include "command_manager.hpp"
 #include "cron.hpp"
 #include "ebus_accessor.hpp"
 #include "mqtt.hpp"
 #include "mqtt_ha.hpp"
-#include "store.hpp"
 #else
 #include "bus_type.hpp"
 #include "client.hpp"
@@ -521,9 +521,9 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
       auto obj_scope = w.objectScope();
       w.writeField("Scan_On_Startup", configManager.readBool("scanOnStartup"));
       w.writeField("Active_Commands",
-                   static_cast<uint32_t>(store.getActiveCommands()));
+                   static_cast<uint32_t>(commandManager.getActiveCommands()));
       w.writeField("Passive_Commands",
-                   static_cast<uint32_t>(store.getPassiveCommands()));
+                   static_cast<uint32_t>(commandManager.getPassiveCommands()));
     }
   };
   writer.writeField("Schedule", ScheduleStatus{});
@@ -793,12 +793,12 @@ extern "C" void app_main(void) {
       Command* target = nullptr;
       if (info.poll_id !=
           0) {  // If it's a polling item, find the command by poll_id
-        target = store.findCommand(info.poll_id);
+        target = commandManager.findCommand(info.poll_id);
         logger.info("Found by poll_id");
       }
       // If target is nullptr, updateData will find matching commands by
       // master_view (passive)
-      store.updateData(target, info.master_view, info.slave_view);
+      commandManager.updateData(target, info.master_view, info.slave_view);
     }
   });
 
@@ -812,14 +812,15 @@ extern "C" void app_main(void) {
   startEbusSimulation();
 #endif
 
-  store.setDataUpdatedCallback(Mqtt::publishValue);
+  commandManager.setDataUpdatedCallback(Mqtt::publishValue);
 
-  store.setDataUpdatedLogCallback([](std::string_view key) {
+  commandManager.setDataUpdatedLogCallback([](std::string_view key) {
     // Now handled asynchronously within the Mqtt Update action
   });
 
-  // Setup lifecycle listeners to keep ebusController in sync with the Store
-  store.setCommandChangedCallback([](Command* cmd) {
+  // Setup lifecycle listeners to keep ebusController in sync with the
+  // CommandManager
+  commandManager.setCommandChangedCallback([](Command* cmd) {
     // Remove existing poll item if it was already registered
     if (cmd->getPollId() != 0) {
       char log_buf[128];
@@ -852,14 +853,17 @@ extern "C" void app_main(void) {
     }
   });
 
-  store.setCommandRemovedCallback([](Command* cmd) {
+  commandManager.setCommandRemovedCallback([](Command* cmd) {
     if (cmd->getPollId() != 0) {
       getEbusController().removePollItem(cmd->getPollId());
       cmd->setPollId(0);
     }
+    if (mqttha.isEnabled()) {
+      mqttha.removeComponent(cmd);
+    }
   });
 
-  if (!store.initFileSystem()) {
+  if (!commandManager.initFileSystem()) {
     logger.error("LittleFS initialization failed");
   }
 
@@ -869,7 +873,8 @@ extern "C" void app_main(void) {
   // std::remove("/littlefs/commands.json.tmp");
 #endif
 
-  store.loadCommands();  // Automatically registers poll items via the callback
+  commandManager
+      .loadCommands();  // Automatically registers poll items via the callback
 
   cron.initFileSystem();  // This should be called before cron.loadRules()
   cron.loadRules();

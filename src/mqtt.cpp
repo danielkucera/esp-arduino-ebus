@@ -5,6 +5,7 @@
 
 #include <functional>
 
+#include "command_manager.hpp"
 #include "ebus/detail/json_reader.hpp"
 #include "ebus/detail/json_writer.hpp"  // Include for JsonWriter
 #include "ebus/status.hpp"
@@ -12,7 +13,6 @@
 #include "logger.hpp"
 #include "main.hpp"
 #include "mqtt_ha.hpp"
-#include "store.hpp"
 
 Mqtt mqtt;
 
@@ -41,7 +41,7 @@ void Mqtt::change() {
 void Mqtt::startTask() {
   if (task_handle_ != nullptr) return;
   task_should_run_ = true;
-  xTaskCreate(&Mqtt::taskFunc, "mqtt", 5120, this, 3, &task_handle_);
+  xTaskCreate(&Mqtt::taskFunc, "mqtt", 7168, this, 3, &task_handle_);
 }
 
 void Mqtt::stopTask() {
@@ -466,7 +466,7 @@ void Mqtt::handleRead(std::string_view payload) {
 
   if (key_view.empty()) return;
 
-  Command* command = store.findCommand(key_view);
+  Command* command = commandManager.findCommand(key_view);
   if (command != nullptr) {
     command->setLast(0);  // Trigger immediate physical poll
     handleValueUpdate(key_view);
@@ -498,7 +498,7 @@ void Mqtt::handleWrite(std::string_view payload) {
 
   if (key_view.empty()) return;
 
-  Command* command = store.findCommand(key_view);
+  Command* command = commandManager.findCommand(key_view);
   if (command != nullptr) {
     if (val_view.empty()) {
       publishStream("response", 0, false,
@@ -534,7 +534,7 @@ void Mqtt::handleWrite(std::string_view payload) {
 
     if (!valueBytes.empty()) {
       ebus::Sequence fullWrite =
-          ebus::makeSequence(command->getWriteCmd(store));
+          ebus::makeSequence(command->getWriteCmd(commandManager));
       fullWrite.append(valueBytes);
 
       getEbusController().enqueue(prio_send, fullWrite);
@@ -581,7 +581,7 @@ void Mqtt::handleWrite(std::string_view payload) {
 }
 
 void Mqtt::handleValueUpdate(std::string_view key) {
-  Command* cmd = store.findCommand(key);
+  Command* cmd = commandManager.findCommand(key);
   if (!cmd) return;
 
   // Correlation Optimization: Decode once and reuse for both JSON and logging
@@ -598,8 +598,7 @@ void Mqtt::handleValueUpdate(std::string_view key) {
       publishStream(topicBuf, 0, false, [&](const ebus::JsonChunkVisitor& v) {
         ebus::detail::JsonWriter writer(v);
         auto scope = writer.objectScope();
-        writer.appendKey("value");
-        cmd->getValueJson(writer);
+        cmd->writeValuePayload(writer);
       });
     }
   }
@@ -620,7 +619,7 @@ void Mqtt::publishResponse(std::string_view id, std::string_view status,
 }
 
 void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
-  Command* command = store.findCommand(key);
+  Command* command = commandManager.findCommand(key);
   if (command == nullptr) return;
 
   ebus::Sequence valueBytes;
@@ -640,7 +639,8 @@ void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
   }
 
   if (!valueBytes.empty()) {
-    ebus::Sequence fullWrite = ebus::makeSequence(command->getWriteCmd(store));
+    ebus::Sequence fullWrite =
+        ebus::makeSequence(command->getWriteCmd(commandManager));
     fullWrite.append(valueBytes);
     getEbusController().enqueue(prio_send, fullWrite);
     command->setLast(0);

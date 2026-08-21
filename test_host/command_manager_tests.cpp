@@ -5,7 +5,7 @@
 #include <ebus/detail/json_writer.hpp>
 
 #include "command.hpp"
-#include "store.hpp"
+#include "command_manager.hpp"
 
 using namespace ebus::detail;
 
@@ -14,10 +14,11 @@ Command makeCommand(const std::string& key, const std::string& name,
                     const std::string& profile, const std::string& read_cmd) {
   std::string json =
       R"({"key":")" + key + R"(","name":")" + name + R"(","read_cmd":")" +
-      read_cmd + R"(","write_cmd":"","active":)" + (active ? "true" : "false") +
-      R"(,"interval":0,"fields":[{"name":"value","profile":")" + profile +
+      read_cmd + R"(","write_cmd":"","interval":)" + (active ? "60" : "0") +
+      R"(,"fields":[{"name":"value","profile":")" + profile +
       R"(","position":)" + std::to_string(position) + R"(,"master":)" +
-      (master ? "true" : "false") + R"(}],"ha":false,"ha_profile":""})";
+      (master ? "true" : "false") +
+      R"(,"ha":true,"ha_profile":"sensor_temperature"}],"ha":true,"ha_profile":"sensor_temperature"})";
   JsonReader reader(json);
   return Command::fromJson(reader);
 }
@@ -41,101 +42,106 @@ Command makeCommandMultiField(const std::string& key, const std::string& name,
   return Command::fromJson(reader);
 }
 
-TEST_CASE("Store insert and find by key", "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager insert and find by key", "[CommandManager]") {
+  commandManager.wipeCommands();
   Command cmd = makeCommand("01", "Test", true, true, 1, "u8", "fe070009");
-  store.insertCommand(cmd);
+  commandManager.insertCommand(cmd);
 
-  Command* found = store.findCommand("01");
+  Command* found = commandManager.findCommand("01");
   REQUIRE(found != nullptr);
   REQUIRE(found->getKey() == "01");
   REQUIRE(found->getName() == "Test");
 
-  Command* not_found = store.findCommand("99");
+  Command* not_found = commandManager.findCommand("99");
   REQUIRE(not_found == nullptr);
 }
 
-TEST_CASE("Store insert updates existing command", "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager insert updates existing command",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
   Command cmd1 = makeCommand("01", "First", true, true, 1, "u8", "fe070009");
-  store.insertCommand(cmd1);
+  commandManager.insertCommand(cmd1);
 
   Command cmd2 = makeCommand("01", "Updated", false, true, 1, "u8", "fe070009");
-  store.insertCommand(cmd2);
+  commandManager.insertCommand(cmd2);
 
-  Command* found = store.findCommand("01");
+  Command* found = commandManager.findCommand("01");
   REQUIRE(found != nullptr);
   REQUIRE(found->getName() == "Updated");
   REQUIRE(found->getActive() == false);
 }
 
-TEST_CASE("Store remove command", "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager remove command", "[CommandManager]") {
+  commandManager.wipeCommands();
   Command cmd = makeCommand("01", "Test", true, true, 1, "u8", "fe070009");
-  store.insertCommand(cmd);
+  commandManager.insertCommand(cmd);
 
-  store.removeCommand("01");
-  REQUIRE(store.findCommand("01") == nullptr);
+  commandManager.removeCommand("01");
+  REQUIRE(commandManager.findCommand("01") == nullptr);
 }
 
-TEST_CASE("Store getCommands returns all commands", "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager getCommands returns all commands",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
   for (int i = 0; i < 5; i++) {
     Command cmd = makeCommand(std::to_string(i), "Test " + std::to_string(i),
                               true, true, 1, "u8", "fe070009");
-    store.insertCommand(cmd);
+    commandManager.insertCommand(cmd);
   }
 
-  auto cmds = store.getCommands();
+  auto cmds = commandManager.getCommands();
   REQUIRE(cmds.size() == 5);
 }
 
-TEST_CASE("Store getActiveCommands counts active only", "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager getActiveCommands counts active only",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
   Command cmd1 = makeCommand("01", "Active", true, true, 1, "u8", "fe070009");
-  store.insertCommand(cmd1);
+  commandManager.insertCommand(cmd1);
 
   Command cmd2 =
       makeCommand("02", "Inactive", false, true, 1, "u8", "fe070009");
-  store.insertCommand(cmd2);
+  commandManager.insertCommand(cmd2);
 
-  REQUIRE(store.getActiveCommands() == 1);
-  REQUIRE(store.getPassiveCommands() == 1);
+  REQUIRE(commandManager.getActiveCommands() == 1);
+  REQUIRE(commandManager.getPassiveCommands() == 1);
 }
 
-TEST_CASE("Store findAllMatchingCommands matches read_cmd", "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager findAllMatchingCommands matches read_cmd",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
   Command cmd1 = makeCommand("01", "Match", true, true, 1, "u8", "fe070009");
-  store.insertCommand(cmd1);
+  commandManager.insertCommand(cmd1);
 
   Command cmd2 =
       makeCommand("02", "NoMatch", true, true, 1, "u8", "080b09010a00");
-  store.insertCommand(cmd2);
+  commandManager.insertCommand(cmd2);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09};
   ebus::ByteView master(master_bytes, 5);
 
-  auto matches = store.findAllMatchingCommands(master);
+  auto matches = commandManager.findAllMatchingCommands(master);
   REQUIRE(matches.size() == 1);
   REQUIRE(matches[0]->getKey() == "01");
 }
 
-TEST_CASE("Store updateData sets data", "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager updateData sets data", "[CommandManager]") {
+  commandManager.wipeCommands();
   Command cmd = makeCommand("01", "Test", true, true, 1, "u8", "fe070009");
-  store.insertCommand(cmd);
+  commandManager.insertCommand(cmd);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09, 0x00};
   ebus::ByteView master(master_bytes, 6);
 
-  store.updateData(nullptr, master, {});
+  commandManager.updateData(nullptr, master, {});
 
-  Command* found = store.findCommand("01");
+  Command* found = commandManager.findCommand("01");
   REQUIRE(found->getData().size() > 0);
 }
 
-TEST_CASE("Store loadCommandsFrom streams JSON from file", "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager loadCommandsFrom streams JSON from file",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
 
   const char* json = R"([
     {"key":"01","name":"Test1","read_cmd":"fe070009","write_cmd":"",
@@ -152,18 +158,18 @@ TEST_CASE("Store loadCommandsFrom streams JSON from file", "[Store]") {
   std::fwrite(json, 1, std::strlen(json), f);
   std::fclose(f);
 
-  int64_t bytes = store.loadCommandsFrom(tmp_path);
+  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
   REQUIRE(bytes >= 0);
-  REQUIRE(store.getCommandCount() == 2);
-  REQUIRE(store.findCommand("01") != nullptr);
-  REQUIRE(store.findCommand("02") != nullptr);
+  REQUIRE(commandManager.getCommandCount() == 2);
+  REQUIRE(commandManager.findCommand("01") != nullptr);
+  REQUIRE(commandManager.findCommand("02") != nullptr);
 
   std::remove(tmp_path);
 }
 
-TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
-          "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager loadCommandsFrom streams large JSON (47 commands)",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
 
   FILE* f = std::fopen("/tmp/test_large_stream.json", "wb");
   REQUIRE(f != nullptr);
@@ -187,21 +193,23 @@ TEST_CASE("Store loadCommandsFrom streams large JSON (47 commands)",
   std::fputs("]\n", f);
   std::fclose(f);
 
-  int64_t bytes = store.loadCommandsFrom("/tmp/test_large_stream.json");
+  int64_t bytes =
+      commandManager.loadCommandsFrom("/tmp/test_large_stream.json");
   REQUIRE(bytes >= 0);
-  REQUIRE(store.getCommandCount() == 47);
+  REQUIRE(commandManager.getCommandCount() == 47);
 
   for (int i = 1; i <= 47; i++) {
     char key[4];
     snprintf(key, sizeof(key), "%02d", i);
-    REQUIRE(store.findCommand(key) != nullptr);
+    REQUIRE(commandManager.findCommand(key) != nullptr);
   }
 
   std::remove("/tmp/test_large_stream.json");
 }
 
-TEST_CASE("Store loadCommandsFrom loads multi-field commands", "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager loadCommandsFrom loads multi-field commands",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
 
   const char* json = R"([
     {
@@ -221,12 +229,12 @@ TEST_CASE("Store loadCommandsFrom loads multi-field commands", "[Store]") {
   std::fwrite(json, 1, std::strlen(json), f);
   std::fclose(f);
 
-  int64_t bytes = store.loadCommandsFrom(tmp_path);
+  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
   REQUIRE(bytes >= 0);
-  REQUIRE(store.getCommandCount() == 1);
-  REQUIRE(store.findCommand("01") != nullptr);
+  REQUIRE(commandManager.getCommandCount() == 1);
+  REQUIRE(commandManager.findCommand("01") != nullptr);
 
-  Command* found = store.findCommand("01");
+  Command* found = commandManager.findCommand("01");
   REQUIRE(found->getFieldCount() == 2);
   REQUIRE(found->getFieldName(0) == std::string_view("temp"));
   REQUIRE(found->getFieldName(1) == std::string_view("sensor"));
@@ -236,9 +244,9 @@ TEST_CASE("Store loadCommandsFrom loads multi-field commands", "[Store]") {
   std::remove(tmp_path);
 }
 
-TEST_CASE("Store loadCommandsFrom streams tabular format with fields",
-          "[Store]") {
-  store.wipeCommands();
+TEST_CASE("CommandManager loadCommandsFrom streams tabular format with fields",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
 
   const char* json =
       R"([["key","name","read_cmd","write_cmd","active","interval","fields","ha","ha_profile"],
@@ -252,11 +260,11 @@ TEST_CASE("Store loadCommandsFrom streams tabular format with fields",
   std::fwrite(json, 1, std::strlen(json), f);
   std::fclose(f);
 
-  int64_t bytes = store.loadCommandsFrom(tmp_path);
+  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
   REQUIRE(bytes >= 0);
-  REQUIRE(store.getCommandCount() == 2);
-  REQUIRE(store.findCommand("01") != nullptr);
-  REQUIRE(store.findCommand("02") != nullptr);
+  REQUIRE(commandManager.getCommandCount() == 2);
+  REQUIRE(commandManager.findCommand("01") != nullptr);
+  REQUIRE(commandManager.findCommand("02") != nullptr);
 
   std::remove(tmp_path);
 }

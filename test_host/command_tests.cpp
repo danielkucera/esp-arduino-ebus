@@ -5,7 +5,7 @@
 #include <ebus/detail/json_writer.hpp>
 
 #include "command.hpp"
-#include "store.hpp"
+#include "command_manager.hpp"
 
 using namespace ebus::detail;
 
@@ -96,8 +96,8 @@ TEST_CASE("Command toJson serializes fields", "[Command]") {
     writer.writeField("key", cmd.getKey());
     writer.writeField("name", cmd.getName());
     writer.writeHexField("read_cmd", cmd.getReadCmd());
-    Store store;
-    writer.writeHexField("write_cmd", cmd.getWriteCmd(store));
+    CommandManager commandManager;
+    writer.writeHexField("write_cmd", cmd.getWriteCmd(commandManager));
     writer.writeField("active", cmd.getActive());
     writer.writeField("interval", cmd.getInterval());
 
@@ -116,9 +116,6 @@ TEST_CASE("Command toJson serializes fields", "[Command]") {
         writer.writeField("ha_profile", cmd.getFieldHAProfileName(i));
       }
     }
-
-    writer.writeField("ha", cmd.getFieldHA(0));
-    writer.writeField("ha_profile", cmd.getFieldHAProfileName(0));
   }
 
   REQUIRE(out.find("\"key\":\"01\"") != std::string::npos);
@@ -154,4 +151,53 @@ TEST_CASE("Command matches checks read_cmd at offset 1", "[Command]") {
   ebus::ByteView master(bytes, 5);
 
   REQUIRE(cmd.matches(master) == true);
+}
+
+TEST_CASE("Command writeValuePayload formats single and multi fields flat",
+          "[Command]") {
+  SECTION("Single field") {
+    std::string json =
+        R"({"key":"09","name":"Buffer/Middle_Temperature","read_cmd":"08b50903290100","fields":[{"name":"middle_temperature","profile":"d2c_c","position":1,"master":false}]})";
+    JsonReader reader(json);
+    Command cmd = Command::fromJson(reader);
+
+    // DATA2C value 49.3 C -> encoded 49.3 * 16 = 788.8 -> 0x0315 or similar
+    // bytes Let's set byte data for testing
+    ebus::Sequence data;
+    data.push_back(0x50);
+    data.push_back(0x01);
+    cmd.setData(ebus::ByteView(data));
+
+    std::string out;
+    ebus::detail::JsonWriter writer([&out](std::string_view s) { out += s; });
+    {
+      auto scope = writer.objectScope();
+      cmd.writeValuePayload(writer);
+    }
+
+    REQUIRE(out.find("\"middle_temperature\":") != std::string::npos);
+  }
+
+  SECTION("Multi field") {
+    std::string json =
+        R"({"key":"09","name":"Buffer/Middle_Temperature","read_cmd":"08b50903290100","fields":[{"name":"middle_temperature","profile":"d2c_c","position":1,"master":false},{"name":"state","profile":"u8","position":3,"master":false}]})";
+    JsonReader reader(json);
+    Command cmd = Command::fromJson(reader);
+
+    ebus::Sequence data;
+    data.push_back(0x50);
+    data.push_back(0x01);
+    data.push_back(0x55);  // 85
+    cmd.setData(ebus::ByteView(data));
+
+    std::string out;
+    ebus::detail::JsonWriter writer([&out](std::string_view s) { out += s; });
+    {
+      auto scope = writer.objectScope();
+      cmd.writeValuePayload(writer);
+    }
+
+    REQUIRE(out.find("\"middle_temperature\":") != std::string::npos);
+    REQUIRE(out.find("\"state\":85") != std::string::npos);
+  }
 }

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "adc.hpp"
+#include "command_manager.hpp"
 #include "config_manager.hpp"
 #include "cron.hpp"
 #include "ebus_accessor.hpp"
@@ -21,7 +22,6 @@
 #include "main.hpp"
 #include "mqtt.hpp"
 #include "mqtt_ha.hpp"
-#include "store.hpp"
 #include "wifi_network_manager.hpp"
 
 static httpd_handle_t configServer = nullptr;
@@ -387,7 +387,7 @@ esp_err_t handleCommandsPage(httpd_req_t* req) {
 esp_err_t handleCommands(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  store.fetchCommands([req](std::string_view chunk) {
+  commandManager.fetchCommands([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);
@@ -495,10 +495,10 @@ esp_err_t handleCommandsInsert(httpd_req_t* req) {
         continue;
       }
       row_reader.reset();
-      store.insertCommand(Command::fromTabular(row_reader));
+      commandManager.insertCommand(Command::fromTabular(row_reader));
     } else if (row_token == ebus::detail::JsonReader::Token::object_start) {
       row_reader.reset();
-      store.insertCommand(Command::fromJson(row_reader));
+      commandManager.insertCommand(Command::fromJson(row_reader));
     }
   }
   Mqtt::publishComponentDiscovery();
@@ -513,15 +513,15 @@ esp_err_t handleCommandsUpload(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  if (!store.initFileSystem()) {
+  if (!commandManager.initFileSystem()) {
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
                                  "LittleFS init failed");
     return ESP_OK;
   }
 
-  const char* kTmpPath = "/littlefs/commands.json.tmp";
+  const char* tmp_path = "/littlefs/commands.json.tmp";
 
-  FILE* file = std::fopen(kTmpPath, "wb");
+  FILE* file = std::fopen(tmp_path, "wb");
   if (file == nullptr) {
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
                                  "Failed to open temp file");
@@ -539,7 +539,7 @@ esp_err_t handleCommandsUpload(httpd_req_t* req) {
     int received = httpd_req_recv(req, buffer, to_read);
     if (received <= 0) {
       std::fclose(file);
-      std::remove(kTmpPath);
+      std::remove(tmp_path);
       HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
                                    "Receive failed");
       return ESP_OK;
@@ -547,7 +547,7 @@ esp_err_t handleCommandsUpload(httpd_req_t* req) {
     int written = std::fwrite(buffer, 1, received, file);
     if (written != received) {
       std::fclose(file);
-      std::remove(kTmpPath);
+      std::remove(tmp_path);
       HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
                                    "Write failed");
       return ESP_OK;
@@ -558,23 +558,24 @@ esp_err_t handleCommandsUpload(httpd_req_t* req) {
 
   std::fclose(file);
 
-  int64_t bytes = store.loadCommandsFrom(kTmpPath);
+  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
   if (bytes < 0) {
-    std::remove(kTmpPath);
+    std::remove(tmp_path);
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
                                  "JSON parse failed");
     return ESP_OK;
   }
 
-  if (store.saveCommands() < 0) {
-    std::remove(kTmpPath);
+  if (commandManager.saveCommands() < 0) {
+    std::remove(tmp_path);
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
                                  "Save failed");
     return ESP_OK;
   }
 
-  std::remove(kTmpPath);
-  size_t count = store.getCommandCount();
+  std::remove(tmp_path);
+  Mqtt::publishComponentDiscovery();
+  size_t count = commandManager.getCommandCount();
   char res_buf[128];
   snprintf(res_buf, sizeof(res_buf), "Uploaded %d bytes, loaded %u commands",
            total_written, (unsigned)count);
@@ -600,18 +601,18 @@ esp_err_t handleCommandsRemove(httpd_req_t* req) {
           t == ebus::detail::JsonReader::Token::end)
         break;
       if (t == ebus::detail::JsonReader::Token::string)
-        store.removeCommand(reader.value());
+        commandManager.removeCommand(reader.value());
     }
   } else {
-    auto cmds = store.getCommands();
-    for (const Command* cmd : cmds) store.removeCommand(cmd->getKey());
+    auto cmds = commandManager.getCommands();
+    for (const Command* cmd : cmds) commandManager.removeCommand(cmd->getKey());
   }
   HttpUtils::sendSuccessResponse(req, "remove");
   return ESP_OK;
 }
 
 esp_err_t handleCommandsLoad(httpd_req_t* req) {
-  int64_t bytes = store.loadCommands();
+  int64_t bytes = commandManager.loadCommands();
   if (bytes > 0) {
     Mqtt::publishComponentDiscovery();
     HttpUtils::sendSuccessResponse(
@@ -627,8 +628,9 @@ esp_err_t handleCommandsLoad(httpd_req_t* req) {
 }
 
 esp_err_t handleCommandsSave(httpd_req_t* req) {
-  int64_t bytes = store.saveCommands();
+  int64_t bytes = commandManager.saveCommands();
   if (bytes > 0) {
+    Mqtt::publishComponentDiscovery();
     HttpUtils::sendSuccessResponse(req, "save", "successful",
                                    "Saved " + std::to_string(bytes) + " bytes");
   } else if (bytes < 0) {
@@ -641,7 +643,10 @@ esp_err_t handleCommandsSave(httpd_req_t* req) {
 }
 
 esp_err_t handleCommandsWipe(httpd_req_t* req) {
-  int64_t bytes = store.wipeCommands();
+  if (mqttha.isEnabled()) {
+    mqttha.removeComponents();
+  }
+  int64_t bytes = commandManager.wipeCommands();
   if (bytes > 0) {
     HttpUtils::sendSuccessResponse(req, "wipe", "successful",
                                    "Wiped " + std::to_string(bytes) + " bytes");
@@ -746,7 +751,7 @@ esp_err_t handleValuesPage(httpd_req_t* req) {
 esp_err_t handleValues(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  store.fetchValues([req](std::string_view chunk) {
+  commandManager.fetchValues([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);
@@ -770,7 +775,7 @@ esp_err_t handleValuesWrite(httpd_req_t* req) {
     key = std::string(reader.value());
   }
 
-  Command* command = store.findCommand(key);
+  Command* command = commandManager.findCommand(key);
   if (command == nullptr) {
     HttpUtils::sendErrorResponse(req, "404 Not Found", "write",
                                  "Key '" + key + "' not found");
@@ -779,7 +784,8 @@ esp_err_t handleValuesWrite(httpd_req_t* req) {
 
   ebus::Sequence valueBytes = command->getVectorFromJson(body_sv);
   if (!valueBytes.empty()) {
-    ebus::Sequence fullWrite = ebus::makeSequence(command->getWriteCmd(store));
+    ebus::Sequence fullWrite =
+        ebus::makeSequence(command->getWriteCmd(commandManager));
     fullWrite.append(valueBytes);
     getEbusController().enqueue(prio_send, fullWrite);
     command->setLast(0);
@@ -813,7 +819,7 @@ esp_err_t handleValuesRead(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  Command* command = store.findCommand(key);
+  Command* command = commandManager.findCommand(key);
   if (command != nullptr) {
     command->setLast(0);
     HttpUtils::sendSuccessResponse(req, "read", "requested");

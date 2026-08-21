@@ -15,8 +15,8 @@ except NameError:
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-BASE_JSON = os.path.join(PROJECT_ROOT, "config", "data_profiles.json")
-OVERLAY_JSON = os.path.join(PROJECT_ROOT, "config", "data_profiles_user.json")
+BASE_JSON = os.path.join(PROJECT_ROOT, "profiles", "data_profiles.json")
+OVERLAY_JSON = os.path.join(PROJECT_ROOT, "profiles", "data_profiles_user.json")
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "include", "data_profile_gen.hpp")
 
 
@@ -44,7 +44,7 @@ def generate():
 
     lines = [
         "// AUTO-GENERATED FILE - DO NOT EDIT",
-        "// Generated from config/data_profiles.json + data_profiles_user.json by scripts/generate_data_profiles.py",
+        "// Generated from profiles/data_profiles.json + data_profiles_user.json by scripts/generate_data_profiles.py",
         "",
         "#pragma once",
         "",

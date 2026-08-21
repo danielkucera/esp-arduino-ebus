@@ -17,7 +17,7 @@ Thank you for your interest in contributing to the esp-arduino-ebus project! To 
 
 ### Memory Management
 *   **Avoid Heap Allocation in Hot Paths**: While the core `ebus` library handles its own hot path with zero heap allocation, be mindful of allocations in performance-critical sections of the main application, especially within loops or frequent callbacks.
-*   **Small Buffer Optimization**: The `ebus::Sequence` class (used by `Command` and `Store`) utilizes an internal 64-byte stack buffer before falling back to the heap. Leverage this where appropriate.
+*   **Small Buffer Optimization**: The `ebus::Sequence` class (used by `Command` and `CommandManager`) utilizes an internal 64-byte stack buffer before falling back to the heap. Leverage this where appropriate.
 *   **Standard Library**: Be mindful of `std::vector` and `std::string` usage in performance-critical sections to avoid hidden allocations.
 
 ### Component Categorization
@@ -29,11 +29,11 @@ These are internal components of the `ebus` library that process data byte-by-by
 
 **2. Application Orchestration Path (Application Logic)**
 These components manage high-level tasks like discovery, scheduling, network bridging, and UI interactions. Limited heap usage (e.g., `std::vector::reserve`, `std::map`) is permitted, but efficiency is still important for embedded targets.
-*   `Mqtt`, `Cron`, `Store`, `Http`, `ConfigManager`, `WifiNetworkManager`, `Adc`, `UpgradeManager`, `EspOtaManager`, `DNSServer`, `Logger`, `ClientManager` (from ebus lib), `AdapterVersion`.
+*   `Mqtt`, `Cron`, `CommandManager`, `Http`, `ConfigManager`, `WifiNetworkManager`, `Adc`, `UpgradeManager`, `EspOtaManager`, `DNSServer`, `Logger`, `ClientManager` (from ebus lib), `AdapterVersion`.
 *   **Note**: All orchestration components should enforce capacity limits to prevent memory exhaustion on embedded targets.
 
 ### Threading
-*   **Thread Safety**: The public APIs of `ebus::Controller`, `Mqtt`, `Cron`, `Store`, `Logger`, and `WifiNetworkManager` must be thread-safe.
+*   **Thread Safety**: The public APIs of `ebus::Controller`, `Mqtt`, `Cron`, `CommandManager`, `Logger`, and `WifiNetworkManager` must be thread-safe.
 *   **Prioritization**: Background tasks should use appropriate FreeRTOS priority levels to avoid starving critical protocol tasks (e.g., `ebus::detail::OrchestrationLimits::priority_low` for less critical tasks).
 *   **Synchronization**: Internal state updates must be synchronized using mutexes or FreeRTOS primitives, as many components operate in separate tasks.
 
@@ -59,7 +59,7 @@ To maintain stability and security on the ESP32-C3, the application follows a se
 ## Key Components
 
 *   **ebus Library (`lib/ebus`)**: The core eBUS protocol stack, handling bus communication, arbitration, message processing, and scheduling.
-*   **Store (`src/store.hpp`)**: Manages eBUS command configurations and their associated data, including persistence to LittleFS.
+*   **CommandManager (`src/command_manager.hpp`)**: Manages eBUS command configurations and their associated data, including persistence to LittleFS.
 *   **Mqtt (`src/mqtt.hpp`)**: Handles MQTT communication for publishing values, receiving commands, and Home Assistant auto-discovery.
 *   **Cron (`src/cron.hpp`)**: Manages scheduled eBUS write operations based on cron-like expressions.
 *   **Http (`src/http.hpp`)**: Provides the web UI and API endpoints for configuration, control, and data display.
@@ -89,7 +89,7 @@ To maintain stability and security on the ESP32-C3, the application follows a se
 
 ### Host Tests (Catch2 + CMake)
 
-Host tests run on the development machine (no hardware required). They cover app-layer logic for `Command` and `Store`.
+Host tests run on the development machine (no hardware required). They cover app-layer logic for `Command` and `CommandManager`.
 
 ```bash
 cd test_host && mkdir build && cd build && cmake .. && make && ./app_tests

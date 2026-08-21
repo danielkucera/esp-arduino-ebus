@@ -27,6 +27,9 @@ class MqttHA {
 
   void publishComponents() const;
 
+  void removeComponent(const Command* command) const;
+  void removeComponents() const;
+
   void publishComponent(const Command* command, size_t field_idx,
                         const bool remove) const;
 
@@ -58,10 +61,16 @@ class MqttHA {
     std::string cmd_map;
   };
 
-  static KeyValueMapping createOptions(const HAProfile* profile);
+  static KeyValueMapping createOptions(const HAProfile* profile,
+                                       std::string_view field_name);
 
   static const HAProfile* resolveProfile(const Command* command,
                                          size_t field_idx);
+
+  // Helper methods for per-field values
+  static const char* getFieldUnit(const Command* command, size_t field_idx);
+  static float getFieldMin(const Command* command, size_t field_idx);
+  static float getFieldMax(const Command* command, size_t field_idx);
 };
 
 extern MqttHA mqttha;

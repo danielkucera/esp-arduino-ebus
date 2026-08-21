@@ -1,5 +1,5 @@
 #if defined(EBUS_INTERNAL)
-#include "store.hpp"
+#include "command_manager.hpp"
 
 #include <esp_littlefs.h>
 #include <esp_timer.h>
@@ -18,7 +18,7 @@
 #include "logger.hpp"
 #include "mqtt.hpp"
 
-Store store;
+CommandManager commandManager;
 
 namespace {
 constexpr const char* littlefs_base_path = "/littlefs";
@@ -49,25 +49,28 @@ bool ensureLittlefsMounted() {
 
 }  // namespace
 
-bool Store::initFileSystem() { return ensureLittlefsMounted(); }
+bool CommandManager::initFileSystem() { return ensureLittlefsMounted(); }
 
-void Store::setDataUpdatedCallback(DataUpdatedCallback callback) {
+void CommandManager::setDataUpdatedCallback(DataUpdatedCallback callback) {
   data_updated_callback_ = std::move(callback);
 }
 
-void Store::setDataUpdatedLogCallback(DataUpdatedLogCallback callback) {
+void CommandManager::setDataUpdatedLogCallback(
+    DataUpdatedLogCallback callback) {
   data_updated_log_callback_ = std::move(callback);
 }
 
-void Store::setCommandChangedCallback(CommandChangedCallback callback) {
+void CommandManager::setCommandChangedCallback(
+    CommandChangedCallback callback) {
   command_changed_callback_ = std::move(callback);
 }
 
-void Store::setCommandRemovedCallback(CommandChangedCallback callback) {
+void CommandManager::setCommandRemovedCallback(
+    CommandChangedCallback callback) {
   command_removed_callback_ = std::move(callback);
 }
 
-void Store::insertCommand(Command command) {
+void CommandManager::insertCommand(Command command) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
     if (std::string_view(commands_[i].getKey()) ==
@@ -98,7 +101,7 @@ void Store::insertCommand(Command command) {
   }
 }
 
-void Store::removeCommand(std::string_view key) {
+void CommandManager::removeCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
     if (std::string_view(commands_[i].getKey()) == key) {
@@ -109,7 +112,7 @@ void Store::removeCommand(std::string_view key) {
   }
 }
 
-ebus::ByteView Store::getWriteCmd(size_t idx) const {
+ebus::ByteView CommandManager::getWriteCmd(size_t idx) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (idx < write_cmds_.size()) {
     return ebus::ByteView(write_cmds_[idx].data(), write_cmds_[idx].size());
@@ -117,7 +120,7 @@ ebus::ByteView Store::getWriteCmd(size_t idx) const {
   return {};
 }
 
-bool Store::addWriteCmd(PollSequence&& cmd) {
+bool CommandManager::addWriteCmd(PollSequence&& cmd) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (write_cmds_.size() >= write_cmd_capacity) {
     return false;
@@ -126,12 +129,12 @@ bool Store::addWriteCmd(PollSequence&& cmd) {
   return true;
 }
 
-size_t Store::getWriteCmdCount() const {
+size_t CommandManager::getWriteCmdCount() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   return write_cmds_.size();
 }
 
-Command* Store::findCommand(std::string_view key) {
+Command* CommandManager::findCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
     if (std::string_view(commands_[i].getKey()) == key) {
@@ -141,7 +144,7 @@ Command* Store::findCommand(std::string_view key) {
   return nullptr;
 }
 
-Command* Store::findCommand(uint16_t poll_id) {
+Command* CommandManager::findCommand(uint16_t poll_id) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
     Command* cmd = &commands_[i];
@@ -152,7 +155,8 @@ Command* Store::findCommand(uint16_t poll_id) {
   return nullptr;
 }
 
-MatchingCommands Store::findAllMatchingCommands(ebus::ByteView master) {
+MatchingCommands CommandManager::findAllMatchingCommands(
+    ebus::ByteView master) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   MatchingCommands result;
   for (size_t i = 0; i < commands_.size(); i++) {
@@ -164,13 +168,13 @@ MatchingCommands Store::findAllMatchingCommands(ebus::ByteView master) {
   return result;
 }
 
-int64_t Store::loadCommands() {
+int64_t CommandManager::loadCommands() {
   if (!ensureLittlefsMounted()) return -1;
   std::remove("/littlefs/commands.json.tmp");
   return loadCommandsFrom(commands_file_path);
 }
 
-int64_t Store::loadCommandsFrom(const char* path) {
+int64_t CommandManager::loadCommandsFrom(const char* path) {
   if (!ensureLittlefsMounted()) return -1;
 
   FILE* file = std::fopen(path, "rb");
@@ -178,7 +182,8 @@ int64_t Store::loadCommandsFrom(const char* path) {
     if (errno == ENOENT) return 0;
     char err_buf[64];
     snprintf(err_buf, sizeof(err_buf),
-             "Store: Failed to open commands file %s: %d", path, errno);
+             "CommandManager: Failed to open commands file %s: %d", path,
+             errno);
     logger.error(err_buf);
     return -1;
   }
@@ -188,15 +193,15 @@ int64_t Store::loadCommandsFrom(const char* path) {
   std::setvbuf(file, file_buf, _IOFBF, sizeof(file_buf));
 
   char log_buf[96];
-  snprintf(log_buf, sizeof(log_buf), "Store: Loading from %s", path);
+  snprintf(log_buf, sizeof(log_buf), "CommandManager: Loading from %s", path);
   logger.info(log_buf);
 
   deserializeCommands(file);
   std::fclose(file);
-  return static_cast<int64_t>(store.getCommandCount());
+  return static_cast<int64_t>(commandManager.getCommandCount());
 }
 
-int64_t Store::saveCommands() const {
+int64_t CommandManager::saveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   if (!ensureLittlefsMounted()) return -1;
   bool commands_empty = commands_.empty();
@@ -264,7 +269,7 @@ int64_t Store::saveCommands() const {
   return static_cast<int64_t>(bytes_written);
 }
 
-int64_t Store::wipeCommands() {
+int64_t CommandManager::wipeCommands() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   commands_.clear();
   if (!ensureLittlefsMounted()) return -1;
@@ -287,7 +292,8 @@ int64_t Store::wipeCommands() {
   return static_cast<int64_t>(fileStat.st_size);
 }
 
-void Store::fetchCommands(const ebus::JsonChunkVisitor& visitor) const {
+void CommandManager::fetchCommands(
+    const ebus::JsonChunkVisitor& visitor) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   ebus::detail::JsonWriter writer(visitor);
   auto array_scope = writer.arrayScope();
@@ -332,7 +338,7 @@ void Store::fetchCommands(const ebus::JsonChunkVisitor& visitor) const {
   }
 }
 
-const std::vector<Command*> Store::getCommands() {
+const std::vector<Command*> CommandManager::getCommands() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   std::vector<Command*> result;
   result.reserve(commands_.size());
@@ -342,30 +348,24 @@ const std::vector<Command*> Store::getCommands() {
   return result;
 }
 
-size_t Store::getActiveCommands() const {
+size_t CommandManager::getActiveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   return std::count_if(commands_.begin(), commands_.end(),
                        [](const Command& c) { return c.getActive(); });
 }
 
-size_t Store::getPassiveCommands() const {
+size_t CommandManager::getPassiveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   return std::count_if(commands_.begin(), commands_.end(),
                        [](const Command& c) { return !c.getActive(); });
 }
 
-size_t Store::getCommandCount() const {
+size_t CommandManager::getCommandCount() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   return commands_.size();
 }
 
-bool Store::active() const {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  return std::any_of(commands_.begin(), commands_.end(),
-                     [](const Command& c) { return c.getActive(); });
-}
-
-Command* Store::nextActiveCommand() {
+Command* CommandManager::nextActiveCommand() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   Command* next = nullptr;
   bool init = false;
@@ -390,22 +390,8 @@ Command* Store::nextActiveCommand() {
   return next;
 }
 
-MatchingCommands Store::findPassiveCommands(ebus::ByteView master) {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  MatchingCommands result;
-  for (size_t i = 0; i < commands_.size(); i++) {
-    Command* cmd = &commands_[i];
-    // Skip active commands
-    if (cmd->getActive()) continue;
-    if (cmd->matches(master)) {
-      if (!result.push_back(cmd)) break;
-    }
-  }
-  return result;
-}
-
-void Store::updateData(Command* command, ebus::ByteView master_view,
-                       ebus::ByteView slave_view) {
+void CommandManager::updateData(Command* command, ebus::ByteView master_view,
+                                ebus::ByteView slave_view) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   auto update = [this](Command* cmd, ebus::ByteView master_view,
                        ebus::ByteView slave_view) {
@@ -456,7 +442,7 @@ void Store::updateData(Command* command, ebus::ByteView master_view,
   for (Command* cmd : matchingCommands) update(cmd, master_view, slave_view);
 }
 
-void Store::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
+void CommandManager::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   ebus::detail::JsonWriter writer(visitor);
   auto array_scope = writer.arrayScope();
@@ -494,7 +480,7 @@ void Store::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
   }
 }
 
-void Store::deserializeCommands(FILE* file) {
+void CommandManager::deserializeCommands(FILE* file) {
   constexpr size_t reader_buf_size = 1536;
   constexpr size_t row_buf_size = 1024;
   constexpr size_t chunk_size = 512;
@@ -549,7 +535,8 @@ void Store::deserializeCommands(FILE* file) {
         }
         if (!feedFile()) {
           if (reader.needsMoreData()) {
-            logger.warn("Store: Command element exceeds reader buffer size");
+            logger.warn(
+                "CommandManager: Command element exceeds reader buffer size");
             return;
           }
           continue;
@@ -585,14 +572,16 @@ void Store::deserializeCommands(FILE* file) {
       } else {
         char err_buf[128];
         snprintf(err_buf, sizeof(err_buf),
-                 "Store: Command validation failed: %s", evalError.c_str());
+                 "CommandManager: Command validation failed: %s",
+                 evalError.c_str());
         logger.error(err_buf);
       }
     }
   }
 
   char res_buf[64];
-  snprintf(res_buf, sizeof(res_buf), "Store: Deserialized %u commands.",
+  snprintf(res_buf, sizeof(res_buf),
+           "CommandManager: Deserialized %u commands.",
            static_cast<unsigned>(loaded_count));
   logger.info(res_buf);
 }
