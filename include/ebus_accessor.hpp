@@ -2,6 +2,10 @@
 
 #if defined(EBUS_INTERNAL)
 
+#if defined(EBUS_SIMULATION)
+#include <esp_timer.h>
+#endif
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -22,7 +26,7 @@ void startEbus();
 void stopEbus();
 
 #if defined(EBUS_SIMULATION)
-TaskHandle_t simTaskHandle();
+esp_timer_handle_t simTimerHandle();
 void startEbusSimulation();
 #endif
 

@@ -411,9 +411,6 @@ void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
   writer.appendKey("threads");
   {
     auto array = writer.arrayScope();
-#if defined(EBUS_SIMULATION)
-    addThread("sim", simTaskHandle(), 2048);
-#endif
     addThread("mqtt", mqtt.getTaskHandle(), 5120);
     addThread("cron", cron.getTaskHandle(), 1024);
     addThread("logger", logger.getTaskHandle(), 3072);
