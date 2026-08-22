@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "adc.hpp"
+#include "app_limits.hpp"
 #include "command_manager.hpp"
 #include "config_manager.hpp"
 #include "cron.hpp"
@@ -961,18 +962,14 @@ void SetupHttpHandlers() {
   if (configServer != nullptr) return;
 
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-  config.server_port = 80;
+  config.server_port = app::limits::Network::http_port;
   config.uri_match_fn = httpd_uri_match_wildcard;
-  config.max_uri_handlers = 64;
-  // Reduced stack to save DRAM; optimized JSON writers now use less stack
-  config.stack_size = 8192;
-  // Resilience: Enable LRU purge to reclaim sockets from stalled clients
+  config.max_uri_handlers = app::limits::Http::max_uri_handlers;
+  config.stack_size = app::limits::Http::stack_size;
   config.lru_purge_enable = true;
-  // Set to 1 to minimize memory footprint on C3
-  config.max_open_sockets = 2;
-  // Give the networking stack more time to recover from packet loss
-  config.recv_wait_timeout = 10;
-  config.send_wait_timeout = 10;
+  config.max_open_sockets = app::limits::Http::max_open_sockets;
+  config.recv_wait_timeout = app::limits::Http::recv_wait_timeout;
+  config.send_wait_timeout = app::limits::Http::send_wait_timeout;
 
   if (httpd_start(&configServer, &config) != ESP_OK) {
     logger.error("Failed to start HTTP server");

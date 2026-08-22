@@ -10,12 +10,15 @@
 #include <cstdio>
 #include <cstring>
 
+#include "app_limits.hpp"
 #include "command_manager.hpp"
 #include "logger.hpp"
 
 namespace {
-constexpr uint32_t system_monitor_period_ms = 30000;
-constexpr uint32_t log_summary_interval_ms = 300000;
+constexpr uint32_t system_monitor_period_ms =
+    app::limits::Timeout::system_monitor_period_ms;
+constexpr uint32_t log_summary_interval_ms =
+    app::limits::Timeout::log_summary_interval_ms;
 constexpr size_t log_queue_size = 8;
 
 struct LogRequest {
@@ -46,8 +49,9 @@ bool SystemMonitor::begin() {
   log_queue_ = xQueueCreate(log_queue_size, sizeof(LogRequest));
   if (log_queue_ == nullptr) return false;
 
-  BaseType_t result =
-      xTaskCreate(taskEntry, "system_monitor", 3072, nullptr, 1, &task_handle_);
+  BaseType_t result = xTaskCreate(
+      taskEntry, "system_monitor", app::limits::Task::system_monitor_stack,
+      nullptr, app::limits::Task::system_monitor_priority, &task_handle_);
   return result == pdPASS;
 }
 

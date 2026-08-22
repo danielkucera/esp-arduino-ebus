@@ -7,6 +7,8 @@
 #include <ebus/detail/json_writer.hpp>
 #include <ebus/utils.hpp>
 
+#include "app_limits.hpp"
+
 Logger logger;
 
 Logger::Logger(size_t maxEntries)
@@ -18,7 +20,9 @@ Logger::Logger(size_t maxEntries)
       print_queue_(xQueueCreate(print_queue_entries, max_msg_length)),
       print_task_(nullptr) {
   if (print_queue_ != nullptr) {
-    xTaskCreate(Logger::printTaskEntry, "logger", 3072, this, 1, &print_task_);
+    xTaskCreate(Logger::printTaskEntry, "logger",
+                app::limits::Task::logger_stack, this,
+                app::limits::Task::logger_priority, &print_task_);
   }
 }
 

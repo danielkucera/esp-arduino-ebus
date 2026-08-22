@@ -17,6 +17,7 @@
 #undef INADDR_NONE
 #endif
 
+#include "app_limits.hpp"
 #include "http.hpp"
 #include "http_utils.hpp"
 #include "logger.hpp"
@@ -227,7 +228,7 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
 
   esp_http_client_config_t config = {};
   config.url = url.c_str();
-  config.timeout_ms = 20000;
+  config.timeout_ms = app::limits::Network::http_client_timeout_ms;
   config.user_agent = "esp-ebus-upgrader/1.0";
 
   esp_http_client_handle_t client = esp_http_client_init(&config);

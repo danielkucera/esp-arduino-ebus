@@ -19,6 +19,7 @@
 #include <cstring>
 #include <string>
 
+#include "app_limits.hpp"
 #include "config_manager.hpp"
 #include "logger.hpp"
 
@@ -382,8 +383,9 @@ void WifiNetworkManager::initStatusLed() {
   gpio_config(&config);
   gpio_set_level(static_cast<gpio_num_t>(statusLedPin_), 0);
   if (statusLedTaskHandle_ == nullptr) {
-    xTaskCreate(statusLedTaskEntry, "status_led", 1024, nullptr, 1,
-                &statusLedTaskHandle_);
+    xTaskCreate(statusLedTaskEntry, "status_led",
+                app::limits::Task::status_led_stack, nullptr,
+                app::limits::Task::status_led_priority, &statusLedTaskHandle_);
   }
 }
 

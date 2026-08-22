@@ -9,11 +9,12 @@
 
 #include <cstring>
 
+#include "app_limits.hpp"
 #include "logger.hpp"
 
 namespace {
 constexpr size_t dns_header_size = 12;
-constexpr size_t max_packet_size = 512;
+constexpr size_t max_packet_size = app::limits::Buffer::dns_packet;
 }  // namespace
 
 DNSServer::DNSServer() : running_(false) {}
@@ -44,7 +45,8 @@ bool DNSServer::start(uint16_t port, const char* domainName,
 
   if (taskHandle_ == nullptr) {
     running_ = true;
-    xTaskCreate(taskEntry, "dns", 2048, this, 1, &taskHandle_);
+    xTaskCreate(taskEntry, "dns", app::limits::Task::dns_stack, this,
+                app::limits::Task::dns_priority, &taskHandle_);
   }
 
   return true;

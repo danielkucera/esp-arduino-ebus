@@ -7,6 +7,7 @@
 
 #include <cstring>
 
+#include "app_limits.hpp"
 #include "logger.hpp"
 
 Adc adc;
@@ -163,7 +164,8 @@ bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
                     uint32_t samplesPerChannel, uint32_t channelMask) const {
   if (sampleRate < adc_sample_freq_hz_min) sampleRate = adc_sample_freq_hz_min;
   if (sampleRate > adc_sample_freq_hz_max) sampleRate = adc_sample_freq_hz_max;
-  if (samplesPerChannel == 0) samplesPerChannel = 2400;
+  if (samplesPerChannel == 0)
+    samplesPerChannel = app::limits::Adc::samples_per_channel_fallback;
   channelMask &= adc_channel_mask_all;
   if (channelMask == 0) channelMask = adc_channel_mask_default;
 
@@ -204,13 +206,19 @@ bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
   const uint32_t expectedDurationMs = static_cast<uint32_t>(
       (static_cast<uint64_t>(samplesPerChannel) * 1000ULL) /
       effectivePerChannelRate);
-  uint32_t noProgressTimeoutMs = expectedDurationMs * 4U + 1000U;
-  if (noProgressTimeoutMs < 3000U) noProgressTimeoutMs = 3000U;
-  if (noProgressTimeoutMs > 20000U) noProgressTimeoutMs = 20000U;
+  uint32_t noProgressTimeoutMs =
+      expectedDurationMs * app::limits::Adc::no_progress_multiplier + 1000U;
+  if (noProgressTimeoutMs < app::limits::Adc::no_progress_timeout_min_ms)
+    noProgressTimeoutMs = app::limits::Adc::no_progress_timeout_min_ms;
+  if (noProgressTimeoutMs > app::limits::Adc::no_progress_timeout_max_ms)
+    noProgressTimeoutMs = app::limits::Adc::no_progress_timeout_max_ms;
 
-  uint32_t hardTimeoutMs = expectedDurationMs * 20U + 3000U;
-  if (hardTimeoutMs < 8000U) hardTimeoutMs = 8000U;
-  if (hardTimeoutMs > 60000U) hardTimeoutMs = 60000U;
+  uint32_t hardTimeoutMs =
+      expectedDurationMs * app::limits::Adc::hard_timeout_multiplier + 3000U;
+  if (hardTimeoutMs < app::limits::Adc::hard_timeout_min_ms)
+    hardTimeoutMs = app::limits::Adc::hard_timeout_min_ms;
+  if (hardTimeoutMs > app::limits::Adc::hard_timeout_max_ms)
+    hardTimeoutMs = app::limits::Adc::hard_timeout_max_ms;
 
   const uint64_t startUs = esp_timer_get_time();
   uint64_t lastProgressUs = startUs;

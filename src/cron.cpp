@@ -18,6 +18,7 @@
 #include <string_view>
 #include <vector>
 
+#include "app_limits.hpp"
 #include "command_manager.hpp"
 #include "ebus_accessor.hpp"
 #include "logger.hpp"
@@ -277,7 +278,8 @@ bool Cron::initFileSystem() { return commandManager.initFileSystem(); }
 void Cron::start() {
   stop_runner_ = false;
   if (task_handle_ == nullptr) {
-    xTaskCreate(&Cron::taskFunc, "cron", 1536, this, 2, &task_handle_);
+    xTaskCreate(&Cron::taskFunc, "cron", app::limits::Task::cron_stack, this,
+                app::limits::Task::cron_priority, &task_handle_);
   }
 }
 

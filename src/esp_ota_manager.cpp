@@ -19,16 +19,19 @@
 #undef INADDR_NONE
 #endif
 
+#include "app_limits.hpp"
 #include "logger.hpp"
 #include "main.hpp"
 
 namespace {
-constexpr size_t ota_buffer_size = 1024;
+constexpr size_t ota_buffer_size = app::limits::Buffer::ota_buffer;
 constexpr uint8_t esp_image_magic = 0xE9;
 constexpr int esp_ota_flash_command = 0;
-constexpr uint32_t esp_ota_transfer_timeout_ms = 60000;
-constexpr uint32_t esp_ota_task_delay_ms = 10;
-constexpr uint32_t esp_ota_task_stack_size = 8192;
+constexpr uint32_t esp_ota_transfer_timeout_ms =
+    app::limits::Timeout::ota_transfer_timeout_ms;
+constexpr uint32_t esp_ota_task_delay_ms =
+    app::limits::Timeout::ota_task_delay_ms;
+constexpr uint32_t esp_ota_task_stack_size = app::limits::Task::espota_stack;
 
 std::string toHexByte(uint8_t value) {
   char buffer[8];

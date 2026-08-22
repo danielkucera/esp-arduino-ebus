@@ -9,6 +9,7 @@
 #include <cerrno>
 #include <cstring>
 
+#include "app_limits.hpp"
 #include "bus_type.hpp"
 #include "main.hpp"
 
@@ -167,14 +168,17 @@ bool startClientRuntime() {
   if (!createListenSockets()) return false;
 
   if (dataTaskHandle == nullptr) {
-    if (xTaskCreate(dataLoop, "data_loop", 10000, nullptr, 1,
+    if (xTaskCreate(dataLoop, "data_loop", app::limits::Task::data_loop_stack,
+                    nullptr, app::limits::Task::data_loop_priority,
                     &dataTaskHandle) != pdPASS) {
       return false;
     }
   }
 
   if (clientAcceptTaskHandle == nullptr) {
-    if (xTaskCreate(clientAcceptTask, "client_accept", 4096, nullptr, 1,
+    if (xTaskCreate(clientAcceptTask, "client_accept",
+                    app::limits::Task::client_accept_stack, nullptr,
+                    app::limits::Task::client_accept_priority,
                     &clientAcceptTaskHandle) != pdPASS) {
       if (dataTaskHandle != nullptr) {
         vTaskDelete(dataTaskHandle);

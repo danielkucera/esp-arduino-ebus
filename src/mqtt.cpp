@@ -5,6 +5,7 @@
 
 #include <functional>
 
+#include "app_limits.hpp"
 #include "command_manager.hpp"
 #include "ebus/detail/json_reader.hpp"
 #include "ebus/detail/json_writer.hpp"  // Include for JsonWriter
@@ -41,7 +42,8 @@ void Mqtt::change() {
 void Mqtt::startTask() {
   if (task_handle_ != nullptr) return;
   task_should_run_ = true;
-  xTaskCreate(&Mqtt::taskFunc, "mqtt", 7168, this, 3, &task_handle_);
+  xTaskCreate(&Mqtt::taskFunc, "mqtt", app::limits::Task::mqtt_stack, this,
+              app::limits::Task::mqtt_priority, &task_handle_);
 }
 
 void Mqtt::stopTask() {
@@ -50,7 +52,7 @@ void Mqtt::stopTask() {
     task_should_run_ = false;
 
     // Small delay to allow loop to exit if blocked in xQueueReceive
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(app::limits::Timeout::mqtt_stop_delay_ms));
     if (outgoing_queue_ != nullptr) {
       vQueueDelete(outgoing_queue_);
       outgoing_queue_ = nullptr;
@@ -81,9 +83,9 @@ void Mqtt::setup(const char* id) {
   mqtt_cfg_.session.last_will.qos = 1;
   mqtt_cfg_.session.last_will.retain = 1;
   // Keep-alive interval in seconds
-  mqtt_cfg_.session.keepalive = 60;
-  mqtt_cfg_.buffer.size = 1536;
-  mqtt_cfg_.buffer.out_size = 1536;
+  mqtt_cfg_.session.keepalive = app::limits::Mqtt::keepalive_s;
+  mqtt_cfg_.buffer.size = app::limits::Mqtt::buffer_size;
+  mqtt_cfg_.buffer.out_size = app::limits::Mqtt::out_buffer_size;
 }
 
 void Mqtt::setServer(const char* host, uint16_t port) {
@@ -141,7 +143,7 @@ void Mqtt::internalPublish(const char* topic, uint8_t qos, bool retain,
   if (!enabled_ || client_ == nullptr || payload == nullptr) return;
 
   const char* targetTopic = topic;
-  char fullTopic[256];
+  char fullTopic[app::limits::Mqtt::topic_buffer_size];
 
   if (prefix) {
     // Memory optimization: Use stack buffer for combined
@@ -354,7 +356,7 @@ void Mqtt::taskFunc(void* arg) {
         }
       }
     } else {
-      vTaskDelay(pdMS_TO_TICKS(100));
+      vTaskDelay(pdMS_TO_TICKS(app::limits::Timeout::mqtt_disabled_delay_ms));
     }
   }
 
