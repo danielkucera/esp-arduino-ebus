@@ -159,7 +159,7 @@ void MqttHA::publishDeviceInfo() const {
 void MqttHA::publishComponents() const {
   for (const Command* command : commandManager.getCommands()) {
     for (size_t i = 0; i < command->getFieldCount(); ++i) {
-      if (command->getFieldHA(i)) {
+      if (command->hasFieldHA(i)) {
         publishComponent(command, i, !enabled_);
       }
     }
@@ -169,7 +169,7 @@ void MqttHA::publishComponents() const {
 void MqttHA::removeComponent(const Command* command) const {
   if (!command) return;
   for (size_t i = 0; i < command->getFieldCount(); ++i) {
-    if (command->getFieldHA(i)) {
+    if (command->hasFieldHA(i)) {
       publishComponent(command, i, true);
     }
   }
@@ -472,7 +472,7 @@ MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile,
 const HAProfile* MqttHA::resolveProfile(const Command* command,
                                         size_t field_idx) {
   if (!command || field_idx >= command->getFieldCount() ||
-      !command->getFieldHA(field_idx))
+      !command->hasFieldHA(field_idx))
     return nullptr;
   return command->getFieldHAProfile(field_idx);
 }

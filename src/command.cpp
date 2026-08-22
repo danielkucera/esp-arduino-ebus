@@ -30,6 +30,54 @@ ebus::ByteView Command::getData() const {
 
 void Command::setData(ebus::ByteView data) { this->data_.assign(data); }
 
+std::string_view Command::getKey() const {
+  return StringPool::instance().lookup(key_id_);
+}
+
+std::string_view Command::getName() const {
+  return StringPool::instance().lookup(name_id_);
+}
+
+ebus::ByteView Command::getReadCmd() const {
+  return ebus::ByteView(read_cmd_.data(), read_cmd_.size());
+}
+
+bool Command::hasWriteCmd() const { return write_cmd_idx_ != 0; }
+
+ebus::ByteView Command::getWriteCmd(
+    const CommandManager& command_manager) const {
+  if (write_cmd_idx_ == 0) return {};
+  return command_manager.getWriteCmd(write_cmd_idx_ - 1);
+}
+
+void Command::setWriteCmd(PollSequence&& cmd, CommandManager& command_manager) {
+  if (cmd.empty()) {
+    write_cmd_idx_ = 0;
+    return;
+  }
+  // Try to find existing matching write_cmd
+  for (size_t i = 0; i < command_manager.getWriteCmdCount(); ++i) {
+    if (command_manager.getWriteCmd(i) == cmd) {
+      write_cmd_idx_ = static_cast<uint8_t>(i + 1);
+      return;
+    }
+  }
+  // Add new write_cmd if there's space
+  if (command_manager.addWriteCmd(std::move(cmd))) {
+    write_cmd_idx_ = static_cast<uint8_t>(command_manager.getWriteCmdCount());
+  } else {
+    write_cmd_idx_ = 0;  // No space
+  }
+}
+
+PollSequence& Command::getWriteCmdTemp() { return write_cmd_temp_; }
+
+bool Command::getActive() const { return interval_ > 0; }
+
+const uint16_t& Command::getInterval() const { return interval_; }
+
+bool Command::getMaster() const { return master_; }
+
 const command_types::FieldVector& Command::getFields() const { return fields_; }
 
 const DataProfile* Command::getFieldProfile(size_t i) const {
@@ -45,14 +93,7 @@ const char* Command::getFieldName(size_t i) const {
 
 size_t Command::getFieldPosition(size_t i) const {
   if (i >= fields_.size()) return 1;
-  // Bits 0-3: position (1-16)
-  return (fields_[i].pos_master & 0x0F) ? (fields_[i].pos_master & 0x0F) : 1;
-}
-
-bool Command::getFieldMaster(size_t i) const {
-  if (i >= fields_.size()) return false;
-  // Bit 7: master flag
-  return (fields_[i].pos_master & 0x80) != 0;
+  return fields_[i].position ? fields_[i].position : 1;
 }
 
 ebus::DataType Command::getFieldDatatype(size_t i) const {
@@ -99,54 +140,10 @@ size_t Command::getFieldIndex(std::string_view name) const {
   return 0;
 }
 
-std::string_view Command::getKey() const {
-  return StringPool::instance().lookup(key_id_);
-}
-
-std::string_view Command::getName() const {
-  return StringPool::instance().lookup(name_id_);
-}
-
-ebus::ByteView Command::getReadCmd() const {
-  return ebus::ByteView(read_cmd_.data(), read_cmd_.size());
-}
-
-ebus::ByteView Command::getWriteCmd(
-    const CommandManager& command_manager) const {
-  if (write_cmd_idx_ == 0) return {};
-  return command_manager.getWriteCmd(write_cmd_idx_ - 1);
-}
-
-void Command::setWriteCmd(PollSequence&& cmd, CommandManager& command_manager) {
-  if (cmd.empty()) {
-    write_cmd_idx_ = 0;
-    return;
-  }
-  // Try to find existing matching write_cmd
-  for (size_t i = 0; i < command_manager.getWriteCmdCount(); ++i) {
-    if (command_manager.getWriteCmd(i) == cmd) {
-      write_cmd_idx_ = static_cast<uint8_t>(i + 1);
-      return;
-    }
-  }
-  // Add new write_cmd if there's space
-  if (command_manager.addWriteCmd(std::move(cmd))) {
-    write_cmd_idx_ = static_cast<uint8_t>(command_manager.getWriteCmdCount());
-  } else {
-    write_cmd_idx_ = 0;  // No space
-  }
-}
-
-bool Command::hasWriteCmd() const { return write_cmd_idx_ != 0; }
-
-bool Command::getFieldHA(size_t i) const {
+bool Command::hasFieldHA(size_t i) const {
   if (i >= fields_.size()) return false;
   return fields_[i].ha_profile_idx != 0;
 }
-
-bool Command::getActive() const { return interval_ > 0; }
-
-const uint16_t& Command::getInterval() const { return interval_; }
 
 const HAProfile* Command::getFieldHAProfile(size_t i) const {
   if (i >= fields_.size()) return nullptr;
@@ -326,7 +323,10 @@ ebus::Sequence Command::getVectorFromString(std::string_view value,
 double Command::getDoubleFromVector() const {
   if (fields_.empty() || data_.empty()) return 0.0;
   auto dt = getFieldDatatype(0);
-  auto decoded = ebus::decode(dt, ebus::range(data_, 0, data_.size()));
+  size_t field_pos = getFieldPosition(0) - 1;
+  size_t field_len = ebus::sizeOfDataType(dt);
+  if (field_pos + field_len > data_.size()) return 0.0;
+  auto decoded = ebus::decode(dt, ebus::range(data_, field_pos, field_len));
   if (!decoded || ebus::isNull(*decoded)) return 0.0;
   return ebus::roundDigits(ebus::asFloat(*decoded) / getFieldDivider(0),
                            getFieldDigits(0));
@@ -335,7 +335,10 @@ double Command::getDoubleFromVector() const {
 const std::string Command::getStringFromVector() const {
   if (fields_.empty() || data_.empty()) return "";
   auto dt = getFieldDatatype(0);
-  auto decoded = ebus::decode(dt, ebus::range(data_, 0, data_.size()));
+  size_t field_pos = getFieldPosition(0) - 1;
+  size_t field_len = ebus::sizeOfDataType(dt);
+  if (field_pos + field_len > data_.size()) return "";
+  auto decoded = ebus::decode(dt, ebus::range(data_, field_pos, field_len));
   if (!decoded || ebus::isNull(*decoded)) return "";
 
   std::string dt_name = ebus::dataTypeToString(dt);
@@ -368,6 +371,8 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
       command.write_cmd_temp_.assign(ebus::ByteView(hex_buf, hex_len));
     } else if (key == "interval")
       command.interval_ = r.asNum<uint16_t>();
+    else if (key == "master")
+      command.master_ = r.asBool();
     else if (key == "fields") {
       if (token == ebus::detail::JsonReader::Token::array_start) {
         while (true) {
@@ -379,25 +384,22 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
           if (field_token != ebus::detail::JsonReader::Token::object_start)
             break;
           command_types::FieldRef field;
-          r.forEachField(
-              [&](std::string_view fkey, ebus::detail::JsonReader& fr) -> bool {
-                fr.next();
-                if (fkey == "name")
-                  field.name_id = StringPool::instance().intern(fr.value());
-                else if (fkey == "profile") {
-                  const DataProfile* p = findDataProfile(fr.value());
-                  field.profile_idx = p ? getProfileIndex(p) : 0;
-                } else if (fkey == "position")
-                  field.pos_master =
-                      static_cast<uint8_t>(fr.asNum<size_t>() & 0x0F);
-                else if (fkey == "master") {
-                  if (fr.asBool()) field.pos_master |= 0x80;
-                } else if (fkey == "ha_profile") {
-                  const HAProfile* p = findHAProfile(fr.value());
-                  field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
-                }
-                return true;
-              });
+          r.forEachField([&](std::string_view fkey,
+                             ebus::detail::JsonReader& fr) -> bool {
+            fr.next();
+            if (fkey == "name")
+              field.name_id = StringPool::instance().intern(fr.value());
+            else if (fkey == "profile") {
+              const DataProfile* p = findDataProfile(fr.value());
+              field.profile_idx = p ? getProfileIndex(p) : 0;
+            } else if (fkey == "position")
+              field.position = static_cast<uint8_t>(fr.asNum<size_t>() & 0x0F);
+            else if (fkey == "ha_profile") {
+              const HAProfile* p = findHAProfile(fr.value());
+              field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
+            }
+            return true;
+          });
           command.fields_.push_back(field);
         }
       }
@@ -446,10 +448,10 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
         break;
       }  // NOLINT(bugprone-branch-ctl-initializer)
       case 4:
-        (void)reader.asBool();  // read and ignore "active" for backward compat
+        command.interval_ = reader.asNum<uint16_t>();
         break;
       case 5:
-        command.interval_ = reader.asNum<uint16_t>();
+        command.master_ = reader.asBool();
         break;
       case 6: {
         if (token == ebus::detail::JsonReader::Token::array_start) {
@@ -470,11 +472,9 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
                     const DataProfile* p = findDataProfile(fr.value());
                     field.profile_idx = p ? getProfileIndex(p) : 0;
                   } else if (fkey == "position")
-                    field.pos_master =
+                    field.position =
                         static_cast<uint8_t>(fr.asNum<size_t>() & 0x0F);
-                  else if (fkey == "master") {
-                    if (fr.asBool()) field.pos_master |= 0x80;
-                  } else if (fkey == "ha_profile") {
+                  else if (fkey == "ha_profile") {
                     const HAProfile* p = findHAProfile(fr.value());
                     field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
                   }
@@ -505,11 +505,9 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
                     const DataProfile* p = findDataProfile(fr_inner.value());
                     field.profile_idx = p ? getProfileIndex(p) : 0;
                   } else if (fkey == "position")
-                    field.pos_master =
+                    field.position =
                         static_cast<uint8_t>(fr_inner.asNum<size_t>() & 0x0F);
-                  else if (fkey == "master") {
-                    if (fr_inner.asBool()) field.pos_master |= 0x80;
-                  } else if (fkey == "ha_profile") {
+                  else if (fkey == "ha_profile") {
                     const HAProfile* p = findHAProfile(fr_inner.value());
                     field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
                   }
@@ -564,6 +562,9 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
         }
       } else
         error = "Invalid type for field: " + std::string(key);
+    } else if (key == "interval") {
+      if (token != ebus::detail::JsonReader::Token::number)
+        error = "Invalid type for field: interval";
     } else if (key == "fields") {
       met.fields = (token == ebus::detail::JsonReader::Token::array_start);
       if (token == ebus::detail::JsonReader::Token::array_start) {
@@ -615,9 +616,6 @@ const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
       } else if (token != ebus::detail::JsonReader::Token::end) {
         error = "Invalid type for field: fields";
       }
-    } else if (key == "interval") {
-      if (token != ebus::detail::JsonReader::Token::number)
-        error = "Invalid type for field: interval";
     }
     return true;
   });

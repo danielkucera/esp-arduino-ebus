@@ -186,8 +186,7 @@ class Mqtt {
   void publishResponse(std::string_view id, std::string_view status,
                        size_t bytes = 0);
 
-  static void logUpdate(const Command* cmd,
-                        const std::optional<ebus::DataValue>& decoded);
+  static void logUpdate(const Command* cmd);
 };
 
 extern Mqtt mqtt;

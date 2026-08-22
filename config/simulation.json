@@ -1,82 +1,82 @@
 [
-    {
-        "key": "02",
-        "name": "Outside_Temperature",
-        "read_cmd": "feb5160301",
-        "write_cmd": "",
-        "interval": 0,
-        "fields": [
-            {
-                "name": "value",
-                "profile": "u8",
-                "position": 1,
-                "master": false,
-                "ha_profile": "sensor_temperature"
-            }
-        ]
-    },
-    {
-        "key": "11",
-        "name": "Brine/Inlet_Temperature",
-        "read_cmd": "08b50903290f00",
-        "write_cmd": "",
-        "interval": 0,
-        "fields": [
-            {
-                "name": "value",
-                "profile": "u8",
-                "position": 1,
-                "master": false,
-                "ha_profile": "sensor_temperature"
-            }
-        ]
-    },
-    {
-        "key": "12",
-        "name": "Brine/Outlet_Temperature",
-        "read_cmd": "08b509030d0800",
-        "write_cmd": "",
-        "interval": 60,
-        "fields": [
-            {
-                "name": "value",
-                "profile": "u8",
-                "position": 1,
-                "master": false,
-                "ha_profile": "sensor_temperature"
-            }
-        ]
-    },
-    {
-        "key": "13",
-        "name": "Brine/Pressure",
-        "read_cmd": "08b509030d1600",
-        "write_cmd": "",
-        "interval": 60,
-        "fields": [
-            {
-                "name": "value",
-                "profile": "u8",
-                "position": 1,
-                "master": false,
-                "ha_profile": "sensor_pressure"
-            }
-        ]
-    },
-    {
-        "key": "27",
-        "name": "GroundFloor/Temperature",
-        "read_cmd": "53b504020d00",
-        "write_cmd": "",
-        "interval": 0,
-        "fields": [
-            {
-                "name": "value",
-                "profile": "u8",
-                "position": 1,
-                "master": false,
-                "ha_profile": "sensor_temperature"
-            }
-        ]
-    }
+  {
+    "key": "02",
+    "name": "Outside_Temperature",
+    "read_cmd": "feb5160301",
+    "write_cmd": "",
+    "interval": 0,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "unit8",
+        "position": 1,
+        "ha_profile": "sensor_temperature"
+      }
+    ]
+  },
+  {
+    "key": "11",
+    "name": "Brine/Inlet_Temperature",
+    "read_cmd": "08b50903290f00",
+    "write_cmd": "",
+    "interval": 0,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "unit8",
+        "position": 1,
+        "ha_profile": "sensor_temperature"
+      }
+    ]
+  },
+  {
+    "key": "12",
+    "name": "Brine/Outlet_Temperature",
+    "read_cmd": "08b509030d0800",
+    "write_cmd": "",
+    "interval": 60,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "unit8",
+        "position": 1,
+        "ha_profile": "sensor_temperature"
+      }
+    ]
+  },
+  {
+    "key": "13",
+    "name": "Brine/Pressure",
+    "read_cmd": "08b509030d1600",
+    "write_cmd": "",
+    "interval": 60,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "unit8",
+        "position": 1,
+        "ha_profile": "sensor_pressure"
+      }
+    ]
+  },
+  {
+    "key": "27",
+    "name": "GroundFloor/Temperature",
+    "read_cmd": "53b504020d00",
+    "write_cmd": "",
+    "interval": 0,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "unit8",
+        "position": 1,
+        "ha_profile": "sensor_temperature"
+      }
+    ]
+  }
 ]

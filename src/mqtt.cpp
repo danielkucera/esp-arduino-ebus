@@ -314,7 +314,7 @@ void Mqtt::taskFunc(void* arg) {
             // publishComponents)
             if (action.command) {
               for (size_t i = 0; i < action.command->getFieldCount(); ++i) {
-                if (action.command->getFieldHA(i)) {
+                if (action.command->hasFieldHA(i)) {
                   mqttha.publishComponent(action.command, i, action.ha_remove);
                 }
               }
@@ -584,8 +584,15 @@ void Mqtt::handleValueUpdate(std::string_view key) {
   Command* cmd = commandManager.findCommand(key);
   if (!cmd) return;
 
-  // Correlation Optimization: Decode once and reuse for both JSON and logging
-  auto decoded = ebus::decode(cmd->getFieldDatatype(0), cmd->getData());
+  std::optional<ebus::DataValue> decoded;
+  if (cmd->getFieldCount() > 0) {
+    size_t field_pos = cmd->getFieldPosition(0) - 1;
+    size_t field_len = ebus::sizeOfDataType(cmd->getFieldDatatype(0));
+    if (field_pos + field_len <= cmd->getData().size()) {
+      decoded = ebus::decode(cmd->getFieldDatatype(0),
+                             ebus::range(cmd->getData(), field_pos, field_len));
+    }
+  }
 
   if (connected_) {
     char topicBuf[128];
@@ -603,7 +610,7 @@ void Mqtt::handleValueUpdate(std::string_view key) {
     }
   }
 
-  logUpdate(cmd, decoded);
+  logUpdate(cmd);
 }
 
 void Mqtt::publishResponse(std::string_view id, std::string_view status,
@@ -656,61 +663,76 @@ void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
   }
 }
 
-void Mqtt::logUpdate(const Command* cmd,
-                     const std::optional<ebus::DataValue>& decoded) {
-  char logBuf[256];
+void Mqtt::logUpdate(const Command* cmd) {
+  if (!cmd) return;
+
+  char logBuf[512];
   char* p = logBuf;
   const char* end_buf = logBuf + sizeof(logBuf);
 
-  // Helper lambda to append a string safely
   auto appendStr = [&](std::string_view s) {
-    if (p >= end_buf - 1) return;  // Leave space for null terminator
+    if (p >= end_buf - 1) return;
     size_t n = std::min(s.size(), static_cast<size_t>(end_buf - p - 1));
     std::memcpy(p, s.data(), n);
     p += n;
   };
 
-  // Helper lambda to append hex data safely
   auto appendHex = [&](ebus::ByteView data) {
     static constexpr char hex_chars[] = "0123456789abcdef";
     for (uint8_t b : data) {
-      if (p + 2 >= end_buf) break;  // Ensure space for 2 hex chars
+      if (p + 2 >= end_buf) break;
       *p++ = hex_chars[b >> 4];
       *p++ = hex_chars[b & 0xf];
     }
   };
 
-  // Build the log message
   appendStr(" '");
   appendHex(cmd->getReadCmd());
   appendStr("' [");
   appendStr(cmd->getName());
   appendStr("] ");
-  appendHex(cmd->getData());
-  appendStr(" -> ");
 
-  // Handle decoded value
-  if (!decoded || ebus::isNull(*decoded)) {
-    appendStr("null");
-  } else if (ebus::isNumeric(cmd->getFieldDatatype(0))) {
-    p = ebus::formatFloat(
-        ebus::asFloat(*decoded) / cmd->getFieldDivider(0),
-        cmd->getFieldDigits(0), p, end_buf - p,
-        ebus::detail::FormattingLimits::float_lower_threshold,
-        ebus::detail::FormattingLimits::float_upper_threshold);
-  } else {
-    appendStr(ebus::asString(*decoded));
+  size_t field_count = cmd->getFieldCount();
+  for (size_t i = 0; i < field_count; ++i) {
+    if (i > 0) appendStr(", ");
+
+    const char* fn = cmd->getFieldName(i);
+    std::string_view fname = (fn && fn[0]) ? fn : "value";
+
+    size_t field_pos = cmd->getFieldPosition(i) - 1;
+    size_t field_len = ebus::sizeOfDataType(cmd->getFieldDatatype(i));
+    auto field_data = (field_pos + field_len <= cmd->getData().size())
+                          ? ebus::range(cmd->getData(), field_pos, field_len)
+                          : ebus::ByteView{};
+    auto decoded = ebus::decode(cmd->getFieldDatatype(i), field_data);
+
+    appendStr(fname);
+    appendStr(": ");
+    appendHex(field_data);
+
+    if (decoded && !ebus::isNull(*decoded)) {
+      appendStr(" -> ");
+      if (ebus::isNumeric(cmd->getFieldDatatype(i))) {
+        p = ebus::formatFloat(
+            ebus::asFloat(*decoded) / cmd->getFieldDivider(i),
+            cmd->getFieldDigits(i), p, end_buf - p,
+            ebus::detail::FormattingLimits::float_lower_threshold,
+            ebus::detail::FormattingLimits::float_upper_threshold);
+      } else {
+        appendStr(ebus::asString(*decoded));
+      }
+
+      std::string unit = std::string(cmd->getFieldUnit(i));
+      if (!unit.empty()) {
+        appendStr(" ");
+        appendStr(unit);
+      }
+    } else {
+      appendStr(" -> null");
+    }
   }
 
-  if (!std::string(cmd->getFieldUnit(0)).empty()) {
-    appendStr(" ");
-    appendStr(cmd->getFieldUnit(0));
-  }
-
-  // Null-terminate the string
   *p = '\0';
-
-  // Log the message
   logger.debug(logBuf);
 }
 

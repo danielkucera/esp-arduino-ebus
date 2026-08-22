@@ -13,7 +13,7 @@ Data profiles define eBUS data types, unit strings, display precision, divider s
 ### Example Profile Entry
 ```json
 {
-  "name": "d2c_c",
+  "name": "data2c_celsius",
   "datatype": "DATA2C",
   "unit": "°C",
   "divider": 1.0,
@@ -24,7 +24,7 @@ Data profiles define eBUS data types, unit strings, display precision, divider s
 ```
 
 ### Fields
-- **`name`**: Profile identifier referenced in command field definitions (e.g. `"d2c_c"`).
+- **`name`**: Profile identifier referenced in command field definitions (e.g. `"data2c_celsius"`).
 - **`datatype`**: eBUS protocol data type (e.g. `DATA2C`, `DATA2B`, `UINT8`, `UINT16`, `UINT32`, `INT16`, `CHAR1`).
 - **`unit`**: Display unit string (e.g. `"°C"`, `"bar"`, `"kW"`, `"kWh"`, `"%"`).
 - **`divider`**: Value scaling divider applied during decoding (`decoded_value = raw / divider`).

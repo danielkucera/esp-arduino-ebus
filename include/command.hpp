@@ -24,8 +24,7 @@ inline constexpr size_t max_fields = COMMAND_MAX_FIELDS;
 struct FieldRef {
   uint8_t name_id = 0;
   uint8_t profile_idx = 0;
-  // Bits 0-3: position (1-16), Bit 7: master flag
-  uint8_t pos_master = 0;
+  uint8_t position = 0;
   // Home Assistant - per-field (0 = no HA profile)
   uint8_t ha_profile_idx = 0;
 };
@@ -51,11 +50,23 @@ class Command {
   ebus::ByteView getData() const;
   void setData(ebus::ByteView data);
 
+  std::string_view getKey() const;
+  std::string_view getName() const;
+  ebus::ByteView getReadCmd() const;
+
+  bool hasWriteCmd() const;
+  ebus::ByteView getWriteCmd(const class CommandManager& command_manager) const;
+  void setWriteCmd(PollSequence&& cmd, class CommandManager& command_manager);
+  PollSequence& getWriteCmdTemp();
+
+  bool getActive() const;
+  const uint16_t& getInterval() const;
+  bool getMaster() const;
+
   const command_types::FieldVector& getFields() const;
   const DataProfile* getFieldProfile(size_t i) const;
   const char* getFieldName(size_t i) const;
   size_t getFieldPosition(size_t i) const;
-  bool getFieldMaster(size_t i) const;
   ebus::DataType getFieldDatatype(size_t i) const;
   float getFieldDivider(size_t i) const;
   float getFieldMin(size_t i) const;
@@ -66,19 +77,9 @@ class Command {
   size_t getFieldIndex(std::string_view name) const;
 
   // Per-field HA accessors
-  bool getFieldHA(size_t i) const;
+  bool hasFieldHA(size_t i) const;
   const HAProfile* getFieldHAProfile(size_t i) const;
   std::string_view getFieldHAProfileName(size_t i) const;
-
-  std::string_view getKey() const;
-  std::string_view getName() const;
-  ebus::ByteView getReadCmd() const;
-  ebus::ByteView getWriteCmd(const class CommandManager& command_manager) const;
-  void setWriteCmd(PollSequence&& cmd, class CommandManager& command_manager);
-  bool hasWriteCmd() const;
-  PollSequence& getWriteCmdTemp() { return write_cmd_temp_; }
-  bool getActive() const;
-  const uint16_t& getInterval() const;
 
   bool matches(ebus::ByteView master_view) const;
 
@@ -105,15 +106,16 @@ class Command {
  private:
   uint16_t poll_id_ = 0;
   uint32_t last_ = 0;
-  ebus::Sequence data_;
+  PollSequence data_;
 
   uint8_t key_id_ = 0;
   uint8_t name_id_ = 0;
   PollSequence read_cmd_ = {};
   PollSequence write_cmd_temp_ = {};  // Temporary for deserialization
   uint8_t write_cmd_idx_ =
-      0;  // 0 = none, 1-based index into ClientMmanager::write_cmds_
+      0;  // 0 = none, 1-based index into CommandMmanager::write_cmds_
   uint16_t interval_ = 60;
+  bool master_ = false;
 
   command_types::FieldVector fields_;
 };

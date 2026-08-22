@@ -112,28 +112,6 @@ void CommandManager::removeCommand(std::string_view key) {
   }
 }
 
-ebus::ByteView CommandManager::getWriteCmd(size_t idx) const {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  if (idx < write_cmds_.size()) {
-    return ebus::ByteView(write_cmds_[idx].data(), write_cmds_[idx].size());
-  }
-  return {};
-}
-
-bool CommandManager::addWriteCmd(PollSequence&& cmd) {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  if (write_cmds_.size() >= write_cmd_capacity) {
-    return false;
-  }
-  write_cmds_.push_back(std::move(cmd));
-  return true;
-}
-
-size_t CommandManager::getWriteCmdCount() const {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  return write_cmds_.size();
-}
-
 Command* CommandManager::findCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
@@ -224,8 +202,8 @@ int64_t CommandManager::saveCommands() const {
     // Header row for compressed format
     {
       auto header_array = writer.arrayScope();
-      static const char* header[] = {"key",       "name",   "read_cmd",
-                                     "write_cmd", "active", "interval",
+      static const char* header[] = {"key",       "name",     "read_cmd",
+                                     "write_cmd", "interval", "master",
                                      "fields"};
       for (const char* h : header) writer.writeValue(h);
     }
@@ -242,8 +220,8 @@ int64_t CommandManager::saveCommands() const {
       } else {
         writer.writeValue("");
       }
-      writer.writeValue(c.getActive());
       writer.writeValue(c.getInterval());
+      writer.writeValue(c.getMaster());
 
       // Serialize fields as JSON (with per-field HA)
       {
@@ -256,8 +234,6 @@ int64_t CommandManager::saveCommands() const {
                                            : "");
           writer.writeField("position",
                             static_cast<uint32_t>(c.getFieldPosition(i)));
-          writer.writeField("master", c.getFieldMaster(i));
-          writer.writeField("ha", c.getFieldHA(i));
           writer.writeField("ha_profile", c.getFieldHAProfileName(i));
         }
       }
@@ -320,8 +296,8 @@ void CommandManager::fetchCommands(
     } else {
       writer.writeField("write_cmd", "");
     }
-    writer.writeField("active", c->getActive());
     writer.writeField("interval", c->getInterval());
+    writer.writeField("master", c->getMaster());
 
     auto arr = writer.arrayScope("fields");
     for (size_t j = 0; j < c->getFieldCount(); j++) {
@@ -331,8 +307,6 @@ void CommandManager::fetchCommands(
       writer.writeField("profile", p ? p->name : "");
       writer.writeField("position",
                         static_cast<uint32_t>(c->getFieldPosition(j)));
-      writer.writeField("master", c->getFieldMaster(j));
-      writer.writeField("ha", c->getFieldHA(j));
       writer.writeField("ha_profile", c->getFieldHAProfileName(j));
     }
   }
@@ -399,26 +373,14 @@ void CommandManager::updateData(Command* command, ebus::ByteView master_view,
 
     if (cmd->getFieldCount() == 0) return;
 
-    size_t min_pos = SIZE_MAX;
-    size_t max_end = 0;
-    bool is_master = cmd->getFieldMaster(0);
-
-    for (size_t i = 0; i < cmd->getFieldCount(); i++) {
-      auto* profile = cmd->getFieldProfile(i);
-      if (!profile) continue;
-      size_t field_len = ebus::sizeOfDataType(cmd->getFieldDatatype(i));
-      size_t end = cmd->getFieldPosition(i) + field_len;
-      min_pos = std::min(min_pos, cmd->getFieldPosition(i));
-      max_end = std::max(max_end, end);
-    }
-
-    if (min_pos > max_end) return;
-
-    size_t data_len = max_end - min_pos;
+    bool is_master = cmd->getMaster();
+    size_t data_len = 0;
     if (is_master) {
-      cmd->setData(ebus::range(master_view, 4 + min_pos, data_len));
+      if (master_view.size() >= 5) data_len = master_view[4];
+      cmd->setData(ebus::range(master_view, 5, data_len));
     } else {
-      cmd->setData(ebus::range(slave_view, min_pos, data_len));
+      if (slave_view.size() >= 1) data_len = slave_view[0];
+      cmd->setData(ebus::range(slave_view, 1, data_len));
     }
 
     // Offload heavy JSON and string work to background task via key-only
@@ -476,8 +438,29 @@ void CommandManager::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
     writer.writeField("age",
                       (cmd->getLast() > 0) ? (now - cmd->getLast()) / 1000 : 0);
     writer.writeField("write", cmd->hasWriteCmd());
-    writer.writeField("active", cmd->getActive());
   }
+}
+
+ebus::ByteView CommandManager::getWriteCmd(size_t idx) const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if (idx < write_cmds_.size()) {
+    return ebus::ByteView(write_cmds_[idx].data(), write_cmds_[idx].size());
+  }
+  return {};
+}
+
+bool CommandManager::addWriteCmd(PollSequence&& cmd) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  if (write_cmds_.size() >= write_cmd_capacity) {
+    return false;
+  }
+  write_cmds_.push_back(std::move(cmd));
+  return true;
+}
+
+size_t CommandManager::getWriteCmdCount() const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  return write_cmds_.size();
 }
 
 void CommandManager::deserializeCommands(FILE* file) {
