@@ -9,7 +9,7 @@
 class Adc {
  public:
   static constexpr size_t sample_buffer_bytes = 10 * 1024;
-  static constexpr size_t dma_store_buffer_bytes = 32 * 1024;
+  static constexpr size_t dma_store_buffer_bytes = 4 * 1024;
   static constexpr size_t result_bytes = 2;
   static constexpr size_t adc_raw_frame_bytes = 1024;
   static constexpr size_t adc_raw_http_chunk_bytes = 4096;
