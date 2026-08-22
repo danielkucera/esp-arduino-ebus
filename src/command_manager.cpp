@@ -112,6 +112,14 @@ void CommandManager::removeCommand(std::string_view key) {
   }
 }
 
+void CommandManager::removeAll() {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  for (size_t i = commands_.size(); i-- > 0;) {
+    if (command_removed_callback_) command_removed_callback_(&commands_[i]);
+  }
+  commands_.clear();
+}
+
 Command* CommandManager::findCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
@@ -364,9 +372,15 @@ Command* CommandManager::nextActiveCommand() {
   return next;
 }
 
-void CommandManager::updateData(Command* command, ebus::ByteView master_view,
+void CommandManager::updateData(uint16_t poll_id, ebus::ByteView master_view,
                                 ebus::ByteView slave_view) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+  Command* command = nullptr;
+  if (poll_id != 0) {
+    command = findCommand(poll_id);
+  }
+
   auto update = [this](Command* cmd, ebus::ByteView master_view,
                        ebus::ByteView slave_view) {
     cmd->setLast((uint32_t)(esp_timer_get_time() / 1000ULL));

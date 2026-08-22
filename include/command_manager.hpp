@@ -42,6 +42,8 @@ class CommandManager {
 
   void insertCommand(Command command);
   void removeCommand(std::string_view key);
+  void removeAll();
+
   Command* findCommand(std::string_view key);
   Command* findCommand(uint16_t poll_id);
   MatchingCommands findAllMatchingCommands(ebus::ByteView master);
@@ -61,7 +63,7 @@ class CommandManager {
 
   Command* nextActiveCommand();
 
-  void updateData(Command* command, ebus::ByteView master_view,
+  void updateData(uint16_t poll_id, ebus::ByteView master_view,
                   ebus::ByteView slave_view);
 
   void fetchValues(const ebus::JsonChunkVisitor& visitor) const;

@@ -43,69 +43,6 @@ esp_netif_t* WifiNetworkManager::apNetif_ = nullptr;
 
 namespace {
 
-TaskHandle_t socketLoggerTaskHandle_ = nullptr;
-
-void logOpenSockets() {
-#if 1
-  int detectedCount = 0;
-  int connectedCount = 0;
-  char buf[128];  // Increased buffer size for full socket info string
-
-  // Optimization: Range 64 is usually sufficient for ESP-IDF socket descriptors
-  for (int fd = 0; fd < 64; ++fd) {
-    int socketType = 0;
-    socklen_t socketTypeLen = sizeof(socketType);
-    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &socketType, &socketTypeLen) != 0)
-      continue;
-
-    detectedCount++;
-
-    sockaddr_in local{}, peer{};
-    socklen_t len = sizeof(local);
-    const char* typeStr = (socketType == SOCK_STREAM)  ? "TCP"
-                          : (socketType == SOCK_DGRAM) ? "UDP"
-                                                       : "?";
-
-    int pos = snprintf(buf, sizeof(buf), "fd=%d/%s", fd, typeStr);
-
-    if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local), &len) ==
-        0) {
-      // cppcheck-suppress unreadVariable
-      pos += snprintf(buf + pos, sizeof(buf) - pos, "/l=%s:%d",
-                      inet_ntoa(local.sin_addr), ntohs(local.sin_port));
-    } else {
-      // cppcheck-suppress unreadVariable
-      pos += snprintf(buf + pos, sizeof(buf) - pos, "/l=?/getsockname_errno=%d",
-                      errno);
-    }
-
-    len = sizeof(peer);
-    if (getpeername(fd, reinterpret_cast<struct sockaddr*>(&peer), &len) == 0) {
-      connectedCount++;
-      // snprintf(buf + pos, sizeof(buf) - pos, "/p=%s:%d",
-      //          inet_ntoa(peer.sin_addr), ntohs(peer.sin_port));
-      // logger.debug(buf);
-    }
-    // snprintf(buf + pos, sizeof(buf) - pos, "/p=%s:%d",
-    // inet_ntoa(peer.sin_addr),
-    //          ntohs(peer.sin_port));
-    // logger.debug(buf);
-  }
-
-  snprintf(buf, sizeof(buf), "[sockets] detected=%d connected=%d max=%d",
-           detectedCount, connectedCount, CONFIG_LWIP_MAX_SOCKETS);
-  logger.debug(buf);
-#endif
-}
-
-void socketLoggerTaskEntry(void* arg) {
-  (void)arg;
-  while (true) {
-    logOpenSockets();
-    vTaskDelay(pdMS_TO_TICKS(60000));
-  }
-}
-
 std::string trimCopy(const std::string& value) {
   const auto start = value.find_first_not_of(" \t\r\n");
   if (start == std::string::npos) return "";
@@ -152,12 +89,6 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   configManager_ = configManager;
   initStatusLed();
   setStatusLedMode(StatusLedMode::SlowBlink);
-
-  if (socketLoggerTaskHandle_ ==
-      nullptr) {  // Increased stack size for socket_logger
-    // xTaskCreate(socketLoggerTaskEntry, "socket_logger", 3072, nullptr, 1,
-    //             &socketLoggerTaskHandle_);
-  }
 
   std::string apPassword =
       configManager_ != nullptr
@@ -538,10 +469,6 @@ void WifiNetworkManager::handle_event(
 
 TaskHandle_t WifiNetworkManager::getStatusLedTaskHandle() {
   return statusLedTaskHandle_;
-}
-
-TaskHandle_t WifiNetworkManager::getSocketLoggerTaskHandle() {
-  return socketLoggerTaskHandle_;
 }
 
 void WifiNetworkManager::configureStaticIpIfEnabled() {

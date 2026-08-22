@@ -43,7 +43,6 @@ class WifiNetworkManager {
                            int32_t event_id, void* event_data);
 
   static TaskHandle_t getStatusLedTaskHandle();
-  static TaskHandle_t getSocketLoggerTaskHandle();
 
  private:
   enum class StatusLedMode : uint8_t { SlowBlink = 0, SolidOn = 1 };

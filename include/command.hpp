@@ -97,6 +97,7 @@ class Command {
 
   double getDoubleFromVector() const;
   const std::string getStringFromVector() const;
+  size_t writeLogMessage(char* buf, size_t len) const;
 
   static Command fromJson(ebus::detail::JsonReader& reader);
   static Command fromTabular(ebus::detail::JsonReader& reader);

@@ -27,6 +27,7 @@
 #include "ebus_accessor.hpp"
 #include "mqtt.hpp"
 #include "mqtt_ha.hpp"
+#include "system_monitor.hpp"
 #else
 #include "bus_type.hpp"
 #include "client.hpp"
@@ -419,8 +420,7 @@ void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
     addThread("dns", captiveDnsServer.getTaskHandle(), 2048);
     addThread("espota", espOtaManager.getTaskHandle(), 8192);
     addThread("status_led", WifiNetworkManager::getStatusLedTaskHandle(), 1024);
-    addThread("socket_logger", WifiNetworkManager::getSocketLoggerTaskHandle(),
-              3072);
+    addThread("system_monitor", SystemMonitor::task_handle(), 3072);
   }
 
   writer.appendKey("queues");
@@ -438,6 +438,10 @@ void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
 
     addQueue("logger", logger.getQueueSize(), 32,
              logger.getQueueHighWatermark());
+
+    addQueue("system_monitor_log", SystemMonitor::getLogQueueSize(),
+             SystemMonitor::getLogQueueCapacity(),
+             SystemMonitor::getLogQueueHighWatermark());
   }
 }
 #endif
@@ -546,6 +550,19 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
     }
   };
   writer.writeField("Home_Assistant", HaStatus{});
+
+  struct SocketsStatus {
+    static void toJson(ebus::detail::JsonWriter& w) {
+      auto obj_scope = w.objectScope();
+      int detected = 0;
+      int connected = 0;
+      SystemMonitor::collectSocketStats(detected, connected);
+      w.writeField("Detected", detected);
+      w.writeField("Connected", connected);
+      w.writeField("Max", CONFIG_LWIP_MAX_SOCKETS);
+    }
+  };
+  writer.writeField("Sockets", SocketsStatus{});
 #endif
 }
 
@@ -790,15 +807,8 @@ extern "C" void app_main(void) {
       Mqtt::publishError(info);
 
     } else {
-      Command* target = nullptr;
-      if (info.poll_id !=
-          0) {  // If it's a polling item, find the command by poll_id
-        target = commandManager.findCommand(info.poll_id);
-        logger.info("Found by poll_id");
-      }
-      // If target is nullptr, updateData will find matching commands by
-      // master_view (passive)
-      commandManager.updateData(target, info.master_view, info.slave_view);
+      commandManager.updateData(info.poll_id, info.master_view,
+                                info.slave_view);
     }
   });
 
@@ -812,11 +822,12 @@ extern "C" void app_main(void) {
   startEbusSimulation();
 #endif
 
+  SystemMonitor::begin();
+
   commandManager.setDataUpdatedCallback(Mqtt::publishValue);
 
-  commandManager.setDataUpdatedLogCallback([](std::string_view key) {
-    // Now handled asynchronously within the Mqtt Update action
-  });
+  commandManager.setDataUpdatedLogCallback(
+      [](std::string_view key) { SystemMonitor::enqueueLogRequest(key); });
 
   // Setup lifecycle listeners to keep ebusController in sync with the
   // CommandManager

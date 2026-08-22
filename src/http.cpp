@@ -604,8 +604,7 @@ esp_err_t handleCommandsRemove(httpd_req_t* req) {
         commandManager.removeCommand(reader.value());
     }
   } else {
-    auto cmds = commandManager.getCommands();
-    for (const Command* cmd : cmds) commandManager.removeCommand(cmd->getKey());
+    commandManager.removeAll();
   }
   HttpUtils::sendSuccessResponse(req, "remove");
   return ESP_OK;

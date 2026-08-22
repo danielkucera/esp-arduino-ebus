@@ -348,6 +348,77 @@ const std::string Command::getStringFromVector() const {
   return ebus::asString(*decoded);
 }
 
+size_t Command::writeLogMessage(char* buf, size_t len) const {
+  if (buf == nullptr || len == 0) return 0;
+
+  char* p = buf;
+  const char* end_buf = buf + len;
+
+  auto appendStr = [&](std::string_view s) {
+    if (p >= end_buf - 1) return;
+    size_t n = std::min(s.size(), static_cast<size_t>(end_buf - p - 1));
+    std::memcpy(p, s.data(), n);
+    p += n;
+  };
+
+  auto appendHex = [&](ebus::ByteView data) {
+    static constexpr char hex_chars[] = "0123456789abcdef";
+    for (uint8_t b : data) {
+      if (p + 2 >= end_buf) break;
+      *p++ = hex_chars[b >> 4];
+      *p++ = hex_chars[b & 0xf];
+    }
+  };
+
+  appendStr(" '");
+  appendHex(getReadCmd());
+  appendStr("' [");
+  appendStr(getName());
+  appendStr("]");
+
+  size_t field_count = fields_.size();
+  for (size_t i = 0; i < field_count; ++i) {
+    if (i > 0) appendStr(", ");
+
+    const char* fn = getFieldName(i);
+    std::string_view fname = (fn && fn[0]) ? fn : "value";
+
+    size_t field_pos = getFieldPosition(i) - 1;
+    size_t field_len = ebus::sizeOfDataType(getFieldDatatype(i));
+    auto field_data = (field_pos + field_len <= data_.size())
+                          ? ebus::range(data_, field_pos, field_len)
+                          : ebus::ByteView{};
+
+    auto decoded = ebus::decode(getFieldDatatype(i), field_data);
+
+    appendStr(fname);
+    appendStr(": ");
+    appendHex(field_data);
+
+    if (decoded && !ebus::isNull(*decoded)) {
+      appendStr(" -> ");
+      if (ebus::isNumeric(getFieldDatatype(i))) {
+        p = ebus::formatFloat(
+            ebus::asFloat(*decoded) / getFieldDivider(i), getFieldDigits(i), p,
+            end_buf - p, ebus::detail::FormattingLimits::float_lower_threshold,
+            ebus::detail::FormattingLimits::float_upper_threshold);
+      } else {
+        appendStr(ebus::asString(*decoded));
+      }
+
+      std::string_view unit = getFieldUnit(i);
+      if (!unit.empty()) {
+        appendStr(" ");
+        appendStr(unit);
+      }
+    } else {
+      appendStr(" -> null");
+    }
+  }
+
+  return static_cast<size_t>(p - buf);
+}
+
 Command Command::fromJson(ebus::detail::JsonReader& reader) {
   Command command;
   if (reader.next() != ebus::detail::JsonReader::Token::object_start) {
