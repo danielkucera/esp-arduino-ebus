@@ -66,7 +66,12 @@ function handleSimpleTable(apiEndpoint, theadId, tbodyId) {
         const keys = new Set();
         data.forEach(item => Object.keys(item || {}).forEach(k => keys.add(k)));
         const cols = Array.from(keys);
-        const rows = data.map(item => cols.map(k => item[k] === undefined ? '' : String(item[k])));
+        const rows = data.map(item => cols.map(k => {
+            const val = item[k];
+            if (val === undefined) return '';
+            if (typeof val === 'object' && val !== null) return JSON.stringify(val);
+            return String(val);
+        }));
         renderSimpleTable(theadId, tbodyId, cols, rows);
     });
 }
