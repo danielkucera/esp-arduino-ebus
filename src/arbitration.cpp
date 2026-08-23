@@ -3,7 +3,6 @@
 #include <esp_rom_sys.h>
 #include <esp_timer.h>
 
-#include "app_limits.hpp"
 #include "bus_type.hpp"
 
 // arbitration is timing sensitive. avoid communicating with WifiClient during
@@ -31,8 +30,7 @@ Arbitration::result Arbitration::start(const BusState& busstate, uint8_t master,
   uint32_t now = (uint32_t)(esp_timer_get_time());
   uint32_t microsSinceLastSyn = busstate.microsSinceLastSyn();
   uint32_t timeSinceStartBit = now - startBitTime;
-  if (timeSinceStartBit > app::limits::Arbitration::late_threshold_us ||
-      Bus.available()) {
+  if (timeSinceStartBit > 4456 || Bus.available()) {
     // if we are too late, don't try to participate and retry next round
     DEBUG_LOG("ARB LATE 0x%02x %lu us\n", BusSer.peek(), timeSinceStartBit);
     return late;
@@ -132,9 +130,7 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol,
         // esp32-c3.
         uint32_t timeSinceStartBit =
             (uint32_t)(esp_timer_get_time()) - startBitTime;
-        int delay = app::limits::Arbitration::earliest_send_us -
-                    timeSinceStartBit -
-                    app::limits::Arbitration::uart_put_on_bus_us;
+        int delay = 4300 - timeSinceStartBit - 700;
         if (delay > 0) {
           esp_rom_delay_us(delay);
         }

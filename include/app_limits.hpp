@@ -108,13 +108,6 @@ inline constexpr uint32_t log_summary_interval_ms = 300000;
 inline constexpr uint32_t sntp_sync_interval_ms = 3600000;
 }  // namespace Timeout
 
-// --- Arbitration (eBUS protocol timing) ---
-namespace Arbitration {
-inline constexpr uint32_t late_threshold_us = 4456;
-inline constexpr uint32_t earliest_send_us = 4300;
-inline constexpr uint32_t uart_put_on_bus_us = 700;
-}  // namespace Arbitration
-
 // --- ADC ---
 namespace Adc {
 inline constexpr uint32_t sample_freq_hz_min = 1000;
