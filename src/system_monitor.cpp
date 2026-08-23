@@ -69,6 +69,9 @@ void SystemMonitor::enqueueLogRequest(std::string_view key) {
   LogRequest req;
   std::snprintf(req.key, sizeof(req.key), "%.*s", (int)key.size(), key.data());
   xQueueSend(log_queue_, &req, 0);
+  if (task_handle_ != nullptr) {
+    xTaskNotifyGive(task_handle_);
+  }
 }
 
 SystemMonitor::Stats SystemMonitor::getStats() {
@@ -91,13 +94,14 @@ void SystemMonitor::taskEntry(void* arg) {
 
 void SystemMonitor::taskLoop() {
   uint32_t last_summary = 0;
-  TickType_t last_wake = xTaskGetTickCount();
 
   for (;;) {
-    vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(system_monitor_period_ms));
+    if (xTaskNotifyWait(0, 0, nullptr,
+                        pdMS_TO_TICKS(system_monitor_period_ms)) == pdTRUE) {
+      processLogRequests();
+    }
 
     collectStats();
-    processLogRequests();
 
     uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
     if (now - last_summary >= log_summary_interval_ms) {
