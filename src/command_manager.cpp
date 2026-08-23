@@ -141,12 +141,12 @@ Command* CommandManager::findCommand(uint16_t poll_id) {
   return nullptr;
 }
 
-MatchingCommands CommandManager::findAllMatchingCommands(
-    ebus::ByteView master) {
+MatchingCommands CommandManager::findPassiveCommands(ebus::ByteView master) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   MatchingCommands result;
   for (size_t i = 0; i < commands_.size(); i++) {
     Command* cmd = &commands_[i];
+    if (cmd->getActive()) continue;
     if (cmd->matches(master)) {
       if (!result.push_back(cmd)) break;
     }
@@ -383,22 +383,26 @@ void CommandManager::updateData(uint16_t poll_id, ebus::ByteView master_view,
 
   auto update = [this](Command* cmd, ebus::ByteView master_view,
                        ebus::ByteView slave_view) {
-    cmd->setLast((uint32_t)(esp_timer_get_time() / 1000ULL));
-
     if (cmd->getFieldCount() == 0) return;
 
     bool is_master = cmd->getMaster();
     size_t data_len = 0;
     if (is_master) {
       if (master_view.size() >= 5) data_len = master_view[4];
-      cmd->setData(ebus::range(master_view, 5, data_len));
     } else {
       if (slave_view.size() >= 1) data_len = slave_view[0];
+    }
+
+    if (data_len == 0) return;
+
+    cmd->setLast((uint32_t)(esp_timer_get_time() / 1000ULL));
+
+    if (is_master) {
+      cmd->setData(ebus::range(master_view, 5, data_len));
+    } else {
       cmd->setData(ebus::range(slave_view, 1, data_len));
     }
 
-    // Offload heavy JSON and string work to background task via key-only
-    // callback
     if (data_updated_callback_) {
       data_updated_callback_(cmd->getKey());
     }
@@ -413,8 +417,7 @@ void CommandManager::updateData(uint16_t poll_id, ebus::ByteView master_view,
     return;
   }
 
-  // Find all matching commands (both active and passive)
-  MatchingCommands matchingCommands = findAllMatchingCommands(master_view);
+  MatchingCommands matchingCommands = findPassiveCommands(master_view);
   for (Command* cmd : matchingCommands) update(cmd, master_view, slave_view);
 }
 

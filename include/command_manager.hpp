@@ -46,7 +46,7 @@ class CommandManager {
 
   Command* findCommand(std::string_view key);
   Command* findCommand(uint16_t poll_id);
-  MatchingCommands findAllMatchingCommands(ebus::ByteView master);
+  MatchingCommands findPassiveCommands(ebus::ByteView master);
 
   int64_t loadCommands();
   int64_t loadCommandsFrom(const char* path);

@@ -179,27 +179,28 @@ TEST_CASE("Command profile names resolve correctly after rename", "[Command]") {
   REQUIRE(cmd.getFieldDatatype(0) == ebus::DataType::data2b);
 }
 
-TEST_CASE("CommandManager findAllMatchingCommands matches read_cmd",
+TEST_CASE("CommandManager findPassiveCommands matches passive read_cmd",
           "[CommandManager]") {
   commandManager.wipeCommands();
-  Command cmd1 = makeCommand("01", "Match", true, true, 1, "unit8", "fe070009");
+  Command cmd1 =
+      makeCommand("01", "Match", false, true, 1, "unit8", "fe070009");
   commandManager.insertCommand(cmd1);
 
   Command cmd2 =
-      makeCommand("02", "NoMatch", true, true, 1, "unit8", "080b09010a00");
+      makeCommand("02", "NoMatch", false, true, 1, "unit8", "080b09010a00");
   commandManager.insertCommand(cmd2);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09};
   ebus::ByteView master(master_bytes, 5);
 
-  auto matches = commandManager.findAllMatchingCommands(master);
+  auto matches = commandManager.findPassiveCommands(master);
   REQUIRE(matches.size() == 1);
   REQUIRE(matches[0]->getKey() == "01");
 }
 
 TEST_CASE("CommandManager updateData sets data", "[CommandManager]") {
   commandManager.wipeCommands();
-  Command cmd = makeCommand("01", "Test", true, true, 1, "unit8", "fe070009");
+  Command cmd = makeCommand("01", "Test", false, true, 1, "unit8", "fe070009");
   commandManager.insertCommand(cmd);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09, 0x00};
