@@ -110,7 +110,7 @@ void SystemMonitor::taskLoop() {
 void SystemMonitor::processLogRequests() {
   LogRequest req;
   while (xQueueReceive(log_queue_, &req, 0) == pdTRUE) {
-    Command* cmd = commandManager.findCommand(req.key);
+    const Command* cmd = commandManager.findCommand(req.key);
     if (cmd != nullptr) {
       char buf[256];
       size_t len = cmd->writeLogMessage(buf, sizeof(buf));

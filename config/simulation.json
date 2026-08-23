@@ -5,12 +5,12 @@
     "read_cmd": "feb5160301",
     "write_cmd": "",
     "interval": 0,
-    "master": false,
+    "master": true,
     "fields": [
       {
         "name": "value",
-        "profile": "unit8",
-        "position": 1,
+        "profile": "data2b_celsius",
+        "position": 2,
         "ha_profile": "sensor_temperature"
       }
     ]
@@ -25,8 +25,8 @@
     "fields": [
       {
         "name": "value",
-        "profile": "unit8",
-        "position": 1,
+        "profile": "data2c_celsius",
+        "position": 3,
         "ha_profile": "sensor_temperature"
       }
     ]
@@ -41,7 +41,7 @@
     "fields": [
       {
         "name": "value",
-        "profile": "unit8",
+        "profile": "data2c_celsius",
         "position": 1,
         "ha_profile": "sensor_temperature"
       }
@@ -57,25 +57,25 @@
     "fields": [
       {
         "name": "value",
-        "profile": "unit8",
+        "profile": "int16_bar",
         "position": 1,
         "ha_profile": "sensor_pressure"
       }
     ]
   },
   {
-    "key": "27",
-    "name": "GroundFloor/Temperature",
-    "read_cmd": "53b504020d00",
+    "key": "34",
+    "name": "Heatpump/Compressor",
+    "read_cmd": "08b509030d1d00",
     "write_cmd": "",
-    "interval": 0,
+    "interval": 60,
     "master": false,
     "fields": [
       {
         "name": "value",
         "profile": "unit8",
         "position": 1,
-        "ha_profile": "sensor_temperature"
+        "ha_profile": "binary_sensor_running"
       }
     ]
   }

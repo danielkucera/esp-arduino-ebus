@@ -374,7 +374,7 @@ size_t Command::writeLogMessage(char* buf, size_t len) const {
   appendHex(getReadCmd());
   appendStr("' [");
   appendStr(getName());
-  appendStr("]");
+  appendStr("] ");
 
   size_t field_count = fields_.size();
   for (size_t i = 0; i < field_count; ++i) {
