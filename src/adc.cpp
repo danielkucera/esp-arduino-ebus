@@ -7,7 +7,6 @@
 
 #include <cstring>
 
-#include "app_limits.hpp"
 #include "logger.hpp"
 
 Adc adc;
@@ -29,6 +28,18 @@ static constexpr uint32_t adc_sample_freq_hz_max = 200000;
 #endif
 static constexpr uint32_t adc_channel_mask_all = 0x1F;      // GPIO0..4
 static constexpr uint32_t adc_channel_mask_default = 0x03;  // GPIO0,1
+
+inline constexpr uint32_t adc_samples_per_channel_fallback = 2400;
+
+inline constexpr uint32_t adc_no_progress_multiplier = 4;
+inline constexpr uint32_t adc_no_progress_base = 1000;
+inline constexpr uint32_t adc_no_progress_timeout_min_ms = 3000;
+inline constexpr uint32_t adc_no_progress_timeout_max_ms = 20000;
+
+inline constexpr uint32_t adc_hard_timeout_multiplier = 20;
+inline constexpr uint32_t adc_hard_timeout_base = 3000;
+inline constexpr uint32_t adc_hard_timeout_min_ms = 8000;
+inline constexpr uint32_t adc_hard_timeout_max_ms = 60000;
 }  // namespace
 
 bool Adc::begin() {
@@ -165,7 +176,7 @@ bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
   if (sampleRate < adc_sample_freq_hz_min) sampleRate = adc_sample_freq_hz_min;
   if (sampleRate > adc_sample_freq_hz_max) sampleRate = adc_sample_freq_hz_max;
   if (samplesPerChannel == 0)
-    samplesPerChannel = app::limits::Adc::samples_per_channel_fallback;
+    samplesPerChannel = adc_samples_per_channel_fallback;
   channelMask &= adc_channel_mask_all;
   if (channelMask == 0) channelMask = adc_channel_mask_default;
 
@@ -207,18 +218,18 @@ bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
       (static_cast<uint64_t>(samplesPerChannel) * 1000ULL) /
       effectivePerChannelRate);
   uint32_t noProgressTimeoutMs =
-      expectedDurationMs * app::limits::Adc::no_progress_multiplier + 1000U;
-  if (noProgressTimeoutMs < app::limits::Adc::no_progress_timeout_min_ms)
-    noProgressTimeoutMs = app::limits::Adc::no_progress_timeout_min_ms;
-  if (noProgressTimeoutMs > app::limits::Adc::no_progress_timeout_max_ms)
-    noProgressTimeoutMs = app::limits::Adc::no_progress_timeout_max_ms;
+      expectedDurationMs * adc_no_progress_multiplier + adc_no_progress_base;
+  if (noProgressTimeoutMs < adc_no_progress_timeout_min_ms)
+    noProgressTimeoutMs = adc_no_progress_timeout_min_ms;
+  if (noProgressTimeoutMs > adc_no_progress_timeout_max_ms)
+    noProgressTimeoutMs = adc_no_progress_timeout_max_ms;
 
   uint32_t hardTimeoutMs =
-      expectedDurationMs * app::limits::Adc::hard_timeout_multiplier + 3000U;
-  if (hardTimeoutMs < app::limits::Adc::hard_timeout_min_ms)
-    hardTimeoutMs = app::limits::Adc::hard_timeout_min_ms;
-  if (hardTimeoutMs > app::limits::Adc::hard_timeout_max_ms)
-    hardTimeoutMs = app::limits::Adc::hard_timeout_max_ms;
+      expectedDurationMs * adc_hard_timeout_multiplier + adc_hard_timeout_base;
+  if (hardTimeoutMs < adc_hard_timeout_min_ms)
+    hardTimeoutMs = adc_hard_timeout_min_ms;
+  if (hardTimeoutMs > adc_hard_timeout_max_ms)
+    hardTimeoutMs = adc_hard_timeout_max_ms;
 
   const uint64_t startUs = esp_timer_get_time();
   uint64_t lastProgressUs = startUs;

@@ -108,19 +108,6 @@ inline constexpr uint32_t log_summary_interval_ms = 300000;
 inline constexpr uint32_t sntp_sync_interval_ms = 3600000;
 }  // namespace Timeout
 
-// --- ADC ---
-namespace Adc {
-inline constexpr uint32_t sample_freq_hz_min = 1000;
-inline constexpr uint32_t sample_freq_hz_max = 100000;
-inline constexpr uint32_t samples_per_channel_fallback = 2400;
-inline constexpr uint32_t no_progress_timeout_min_ms = 3000;
-inline constexpr uint32_t no_progress_timeout_max_ms = 20000;
-inline constexpr uint32_t hard_timeout_min_ms = 8000;
-inline constexpr uint32_t hard_timeout_max_ms = 60000;
-inline constexpr uint32_t no_progress_multiplier = 4;
-inline constexpr uint32_t hard_timeout_multiplier = 20;
-}  // namespace Adc
-
 // --- Scheduler ---
 namespace Scheduler {
 inline constexpr uint32_t max_attempts = 1;
