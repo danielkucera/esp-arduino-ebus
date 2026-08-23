@@ -29,17 +29,17 @@ static constexpr uint32_t adc_sample_freq_hz_max = 200000;
 static constexpr uint32_t adc_channel_mask_all = 0x1F;      // GPIO0..4
 static constexpr uint32_t adc_channel_mask_default = 0x03;  // GPIO0,1
 
-inline constexpr uint32_t adc_samples_per_channel_fallback = 2400;
+constexpr uint32_t adc_samples_per_channel_fallback = 2400;
 
-inline constexpr uint32_t adc_no_progress_multiplier = 4;
-inline constexpr uint32_t adc_no_progress_base = 1000;
-inline constexpr uint32_t adc_no_progress_timeout_min_ms = 3000;
-inline constexpr uint32_t adc_no_progress_timeout_max_ms = 20000;
+constexpr uint32_t adc_no_progress_multiplier = 4;
+constexpr uint32_t adc_no_progress_base = 1000;
+constexpr uint32_t adc_no_progress_timeout_min_ms = 3000;
+constexpr uint32_t adc_no_progress_timeout_max_ms = 20000;
 
-inline constexpr uint32_t adc_hard_timeout_multiplier = 20;
-inline constexpr uint32_t adc_hard_timeout_base = 3000;
-inline constexpr uint32_t adc_hard_timeout_min_ms = 8000;
-inline constexpr uint32_t adc_hard_timeout_max_ms = 60000;
+constexpr uint32_t adc_hard_timeout_multiplier = 20;
+constexpr uint32_t adc_hard_timeout_base = 3000;
+constexpr uint32_t adc_hard_timeout_min_ms = 8000;
+constexpr uint32_t adc_hard_timeout_max_ms = 60000;
 }  // namespace
 
 bool Adc::begin() {

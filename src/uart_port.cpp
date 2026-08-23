@@ -2,8 +2,6 @@
 
 #include <esp_log.h>
 
-#include "app_limits.hpp"
-
 namespace {
 constexpr const char* tag = "UartPort";
 }
@@ -41,8 +39,7 @@ void UartPort::ensureInstalled(int baud, int rxPin, int txPin) {
   (void)txPin;
   int rxBuffer = static_cast<int>(rx_buffer_size_);
   int txBuffer =
-      app::limits::Buffer::uart_tx;  // Use a transmit buffer to prevent
-                                     // blocking on uart_write_bytes
+      256;  // Use a transmit buffer to prevent blocking on uart_write_bytes
   if (uart_driver_install(port_, rxBuffer, txBuffer, 0, nullptr, 0) != ESP_OK) {
     ESP_LOGE(tag, "uart_driver_install failed for port %d", port_);
   } else {

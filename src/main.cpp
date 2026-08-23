@@ -271,7 +271,7 @@ void prepareRuntimeForUpgrade() {
   }
   stopEbus();
 
-  vTaskDelay(pdMS_TO_TICKS(app::limits::Timeout::restart_handler_delay_ms));
+  vTaskDelay(pdMS_TO_TICKS(500));
 #else
   stopClientRuntime();
 #endif
@@ -357,8 +357,7 @@ void initSNTP(const char* server) {
     sntpServerStorage = DEFAULT_SNTP_SERVER;
   }
 
-  sntp_set_sync_interval(
-      app::limits::Timeout::sntp_sync_interval_ms);  // 1 hour
+  sntp_set_sync_interval(1 * 60 * 60 * 1000UL);  // 1 hour
 
   esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
   esp_sntp_setservername(
@@ -461,10 +460,8 @@ void saveParamsCallback() {
   getEbusController().setSystemResponse(
       configManager.readBool("systemResponse"));
 
-  getEbusController().setWindow(
-      configManager.readInt("busWindow", app::limits::Ebus::window_us));
-  getEbusController().setOffset(
-      configManager.readInt("busOffset", app::limits::Ebus::offset_us));
+  getEbusController().setWindow(configManager.readInt("busWindow", 4300));
+  getEbusController().setOffset(configManager.readInt("busOffset", 80));
 
   getEbusController().setScanOnStartup(configManager.readBool("scanOnStartup"));
 
@@ -483,7 +480,7 @@ void saveParamsCallback() {
   std::string mqttPassValue = configManager.readString("mqttPass");
   std::string rootTopicValue = configManager.readString("rootTopic", "");
   mqtt.setEnabled(configManager.readBool("mqttEnabled"));
-  mqtt.setServer(mqttServerValue.c_str(), app::limits::Network::mqtt_port);
+  mqtt.setServer(mqttServerValue.c_str(), 1883);
   mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
   if (!rootTopicValue.empty()) {
     mqtt.setRootTopic(rootTopicValue);
@@ -714,40 +711,31 @@ extern "C" void app_main(void) {
   runtimeConfig.system_response = false;
 
   // Bus
-  runtimeConfig.bus.window_us = app::limits::Ebus::window_us;
-  runtimeConfig.bus.offset_us = app::limits::Ebus::offset_us;
-  runtimeConfig.bus.watchdog_timeout_ms =
-      app::limits::Ebus::watchdog_timeout_ms;
+  runtimeConfig.bus.window_us = configManager.readInt("busWindow", 4300);
+  runtimeConfig.bus.offset_us = configManager.readInt("busOffset", 80);
+  runtimeConfig.bus.watchdog_timeout_ms = 250;
   runtimeConfig.bus.syn_gen = true;
 
   // Network
-  runtimeConfig.network.session_timeout_ms =
-      app::limits::Network::session_timeout_ms;
-  runtimeConfig.network.transmit_timeout_ms =
-      app::limits::Network::transmit_timeout_ms;
-  runtimeConfig.network.outbound_buffer_size =
-      app::limits::Network::outbound_buffer_size;
+  runtimeConfig.network.session_timeout_ms = 2000;
+  runtimeConfig.network.transmit_timeout_ms = 1000;
+  runtimeConfig.network.outbound_buffer_size = 2048;
   runtimeConfig.network.enable_server = true;
-  runtimeConfig.network.port_regular = app::limits::Network::tcp_port_regular;
-  runtimeConfig.network.port_readonly = app::limits::Network::tcp_port_readonly;
-  runtimeConfig.network.port_enhanced = app::limits::Network::tcp_port_enhanced;
+  runtimeConfig.network.port_regular = 3333;
+  runtimeConfig.network.port_readonly = 3334;
+  runtimeConfig.network.port_enhanced = 3335;
 
   // Device
   runtimeConfig.device.scan_on_startup = false;
-  runtimeConfig.device.initial_delay_s = app::limits::Device::initial_delay_s;
-  runtimeConfig.device.startup_interval_s =
-      app::limits::Device::startup_interval_s;
-  runtimeConfig.device.max_startup_scans =
-      app::limits::Device::max_startup_scans;
+  runtimeConfig.device.initial_delay_s = 5;
+  runtimeConfig.device.startup_interval_s = 25;
+  runtimeConfig.device.max_startup_scans = 5;
 
   // Scheduler
-  runtimeConfig.scheduler.max_attempts = app::limits::Scheduler::max_attempts;
-  runtimeConfig.scheduler.base_backoff_ms =
-      app::limits::Scheduler::base_backoff_ms;
-  runtimeConfig.scheduler.fsm_timeout_ms =
-      app::limits::Scheduler::fsm_timeout_ms;
-  runtimeConfig.scheduler.total_timeout_ms =
-      app::limits::Scheduler::total_timeout_ms;
+  runtimeConfig.scheduler.max_attempts = 1;
+  runtimeConfig.scheduler.base_backoff_ms = 100;
+  runtimeConfig.scheduler.fsm_timeout_ms = 1000;
+  runtimeConfig.scheduler.total_timeout_ms = 2000;
 
 #else
   logger.info("Running in normal eBUS mode");
@@ -769,34 +757,26 @@ extern "C" void app_main(void) {
   runtimeConfig.bus.syn_gen = false;
 
   // Network
-  runtimeConfig.network.session_timeout_ms =
-      app::limits::Network::session_timeout_ms;
-  runtimeConfig.network.transmit_timeout_ms =
-      app::limits::Network::transmit_timeout_ms;
-  runtimeConfig.network.outbound_buffer_size =
-      app::limits::Network::outbound_buffer_size;
+  runtimeConfig.network.session_timeout_ms = 2000;
+  runtimeConfig.network.transmit_timeout_ms = 1000;
+  runtimeConfig.network.outbound_buffer_size = 2048;
   runtimeConfig.network.enable_server = true;
-  runtimeConfig.network.port_regular = app::limits::Network::tcp_port_regular;
-  runtimeConfig.network.port_readonly = app::limits::Network::tcp_port_readonly;
-  runtimeConfig.network.port_enhanced = app::limits::Network::tcp_port_enhanced;
+  runtimeConfig.network.port_regular = 3333;
+  runtimeConfig.network.port_readonly = 3334;
+  runtimeConfig.network.port_enhanced = 3335;
 
   // Device
   runtimeConfig.device.scan_on_startup =
       configManager.readBool("scanOnStartup", false);
-  runtimeConfig.device.initial_delay_s = app::limits::Device::initial_delay_s;
-  runtimeConfig.device.startup_interval_s =
-      app::limits::Device::startup_interval_s;
-  runtimeConfig.device.max_startup_scans =
-      app::limits::Device::max_startup_scans;
+  runtimeConfig.device.initial_delay_s = 5;
+  runtimeConfig.device.startup_interval_s = 25;
+  runtimeConfig.device.max_startup_scans = 5;
 
   // Scheduler
-  runtimeConfig.scheduler.max_attempts = app::limits::Scheduler::max_attempts;
-  runtimeConfig.scheduler.base_backoff_ms =
-      app::limits::Scheduler::base_backoff_ms;
-  runtimeConfig.scheduler.fsm_timeout_ms =
-      app::limits::Scheduler::fsm_timeout_ms;
-  runtimeConfig.scheduler.total_timeout_ms =
-      app::limits::Scheduler::total_timeout_ms;
+  runtimeConfig.scheduler.max_attempts = 1;
+  runtimeConfig.scheduler.base_backoff_ms = 100;
+  runtimeConfig.scheduler.fsm_timeout_ms = 1000;
+  runtimeConfig.scheduler.total_timeout_ms = 2000;
 
   // BusConfig
   ebus::BusConfig busConfig = {.uart_port = UART_NUM_1,

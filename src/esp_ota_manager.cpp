@@ -24,14 +24,11 @@
 #include "main.hpp"
 
 namespace {
-constexpr size_t ota_buffer_size = app::limits::Buffer::ota_buffer;
+constexpr size_t ota_buffer_size = 1024;
 constexpr uint8_t esp_image_magic = 0xE9;
 constexpr int esp_ota_flash_command = 0;
-constexpr uint32_t esp_ota_transfer_timeout_ms =
-    app::limits::Timeout::ota_transfer_timeout_ms;
-constexpr uint32_t esp_ota_task_delay_ms =
-    app::limits::Timeout::ota_task_delay_ms;
-constexpr uint32_t esp_ota_task_stack_size = app::limits::Task::espota_stack;
+constexpr uint32_t esp_ota_transfer_timeout_ms = 60000;
+constexpr uint32_t esp_ota_task_delay_ms = 10;
 
 std::string toHexByte(uint8_t value) {
   char buffer[8];
@@ -73,8 +70,9 @@ void EspOtaManager::begin(uint16_t port) {
   logger.info("ESPOTA: listening on UDP port " + std::to_string(port_));
 
   if (task_handle_ == nullptr) {
-    BaseType_t taskResult = xTaskCreate(
-        taskEntry, "espota", esp_ota_task_stack_size, this, 1, &task_handle_);
+    BaseType_t taskResult =
+        xTaskCreate(taskEntry, "espota", app::limits::Task::espota_stack, this,
+                    app::limits::Task::espota_priority, &task_handle_);
     if (taskResult != pdPASS) {
       logger.error("ESPOTA: failed to start task");
       task_handle_ = nullptr;

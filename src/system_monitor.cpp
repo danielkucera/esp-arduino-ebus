@@ -15,10 +15,8 @@
 #include "logger.hpp"
 
 namespace {
-constexpr uint32_t system_monitor_period_ms =
-    app::limits::Timeout::system_monitor_period_ms;
-constexpr uint32_t log_summary_interval_ms =
-    app::limits::Timeout::log_summary_interval_ms;
+constexpr uint32_t system_monitor_period_ms = 30000;
+constexpr uint32_t log_summary_interval_ms = 300000;
 constexpr size_t log_queue_size = 8;
 
 struct LogRequest {

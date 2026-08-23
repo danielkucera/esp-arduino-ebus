@@ -15,7 +15,6 @@
 #include <ebus/detail/json_writer.hpp>
 #include <ebus/detail/protocol_limits.hpp>
 
-#include "app_limits.hpp"
 #include "logger.hpp"
 #include "mqtt.hpp"
 
@@ -479,9 +478,9 @@ size_t CommandManager::getWriteCmdCount() const {
 }
 
 void CommandManager::deserializeCommands(FILE* file) {
-  constexpr size_t reader_buf_size = app::limits::Buffer::json_reader;
-  constexpr size_t row_buf_size = app::limits::Buffer::json_row;
-  constexpr size_t chunk_size = app::limits::Buffer::json_chunk;
+  constexpr size_t reader_buf_size = 1536;
+  constexpr size_t row_buf_size = 1024;
+  constexpr size_t chunk_size = 512;
 
   static char reader_buf[reader_buf_size];
   static char row_buf[row_buf_size];

@@ -14,7 +14,7 @@
 
 namespace {
 constexpr size_t dns_header_size = 12;
-constexpr size_t max_packet_size = app::limits::Buffer::dns_packet;
+constexpr size_t max_packet_size = 512;
 }  // namespace
 
 DNSServer::DNSServer() : running_(false) {}
