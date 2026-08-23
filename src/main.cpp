@@ -266,10 +266,9 @@ void startCaptiveDns() {
 void prepareRuntimeForUpgrade() {
 #if defined(EBUS_INTERNAL)
   cron.stop();
-  if (mqtt.getTaskHandle() != nullptr) {  // Only stop if task is running
-    mqtt.stopTask();
-  }
+  mqtt.stopTask();
   stopEbus();
+  SystemMonitor::stop();
 
   vTaskDelay(pdMS_TO_TICKS(500));
 #else
