@@ -75,6 +75,7 @@ void CommandManager::insertCommand(Command command) {
   for (size_t i = 0; i < commands_.size(); i++) {
     if (std::string_view(commands_[i].getKey()) ==
         std::string_view(command.getKey())) {
+      uint16_t old_poll_id = commands_[i].getPollId();
       // Move write_cmd to separate storage before overwriting
       if (!command.getWriteCmdTemp().empty()) {
         command.setWriteCmd(std::move(command.getWriteCmdTemp()), *this);
@@ -84,6 +85,7 @@ void CommandManager::insertCommand(Command command) {
         command.setWriteCmd(std::move(ps), *this);
       }
       commands_[i] = std::move(command);
+      commands_[i].setPollId(old_poll_id);
       if (command_changed_callback_) command_changed_callback_(&commands_[i]);
       return;
     }

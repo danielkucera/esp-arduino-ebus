@@ -164,12 +164,12 @@ void Mqtt::publishStream(
 }
 
 void Mqtt::publishDiscovery() {
-  if (!mqtt.enabled_) return;
+  if (!mqtt.enabled_ || !mqttha.isEnabled()) return;
   enqueueOutgoing(OutgoingAction(OutgoingActionType::Discovery, ""));
 }
 
 void Mqtt::publishComponentDiscovery() {
-  if (!mqtt.enabled_) return;
+  if (!mqtt.enabled_ || !mqttha.isEnabled()) return;
   enqueueOutgoing(OutgoingAction(OutgoingActionType::Components, ""));
 }
 
@@ -348,10 +348,10 @@ void Mqtt::taskFunc(void* arg) {
             self->handleValueUpdate(action.key);
             break;
           case OutgoingActionType::Discovery:
-            mqttha.publishDeviceInfo();
+            if (mqttha.isEnabled()) mqttha.publishDeviceInfo();
             break;
           case OutgoingActionType::Components:
-            mqttha.publishComponents();
+            if (mqttha.isEnabled()) mqttha.publishComponents();
             break;
         }
       }

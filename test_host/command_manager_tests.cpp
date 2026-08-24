@@ -126,7 +126,7 @@ TEST_CASE("CommandManager updateData decodes multi-field slave correctly",
   uint8_t slave_bytes[] = {0x05, 0x00, 0x00, 0x00, 0x01, 0x00};
   ebus::ByteView slave(slave_bytes, 6);
 
-  commandManager.updateData(1, {}, slave);
+  commandManager.updateData(0, 1, {}, slave);
 
   Command* found = commandManager.findCommand("09");
   REQUIRE(found != nullptr);
@@ -206,7 +206,7 @@ TEST_CASE("CommandManager updateData sets data", "[CommandManager]") {
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09, 0x00};
   ebus::ByteView master(master_bytes, 6);
 
-  commandManager.updateData(0, master, {});
+  commandManager.updateData(0, 0, master, {});
 
   Command* found = commandManager.findCommand("01");
   REQUIRE(found->getData().size() > 0);
@@ -224,7 +224,7 @@ TEST_CASE("CommandManager updateData stores full payload for position>1",
   uint8_t slave_bytes[] = {0x05, 0x00, 0x00, 0xef, 0x03, 0x00};
   ebus::ByteView slave(slave_bytes, 6);
 
-  commandManager.updateData(1, {}, slave);
+  commandManager.updateData(0, 1, {}, slave);
 
   Command* found = commandManager.findCommand("08");
   REQUIRE(found != nullptr);
@@ -251,7 +251,7 @@ TEST_CASE("CommandManager updateData stores full payload for master position>1",
                             0x00, 0x00, 0xef, 0x03, 0x00};
   ebus::ByteView master(master_bytes, 10);
 
-  commandManager.updateData(1, master, {});
+  commandManager.updateData(0, 1, master, {});
 
   Command* found = commandManager.findCommand("08");
   REQUIRE(found != nullptr);

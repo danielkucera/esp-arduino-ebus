@@ -486,7 +486,7 @@ void saveParamsCallback() {
   }
   mqtt.change();
 
-  mqttha.setEnabled(configManager.readBool("haEnabledParam"));
+  mqttha.setEnabled(configManager.readBool("haEnabled"));
   Mqtt::publishDiscovery();
   Mqtt::publishComponentDiscovery();
 #endif
@@ -674,7 +674,7 @@ extern "C" void app_main(void) {
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
   mqttha.setWillTopic(mqtt.getWillTopic());
-  mqttha.setEnabled(configManager.readBool("haEnabledParam"));
+  mqttha.setEnabled(configManager.readBool("haEnabled"));
 
   mqttha.setThingName(configManager.readString("thingName", "esp-eBus"));
   mqttha.setThingHwVersion(getAdapterHwVersionString());
@@ -809,7 +809,7 @@ extern "C" void app_main(void) {
       Mqtt::publishError(info);
 
     } else {
-      commandManager.updateData(info.poll_id, info.session_id, info.master_view,
+      commandManager.updateData(info.session_id, info.poll_id, info.master_view,
                                 info.slave_view);
     }
   });

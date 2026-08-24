@@ -92,8 +92,6 @@
         <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config" value="130"></div>
         <div><label for="ebusAddress">eBUS Address (hex, e.g. ff)</label></div>
         <div><input id="ebusAddress" type="text" class="config" value="ff"></div>
-        <div><label><input id="systemInquiry" type="checkbox" class="config">Inquiry Of Existence</label></div>
-        <div><label><input id="systemResponse" type="checkbox" class="config">Send Response</label></div>
         <div><label for="busWindow">Bus Window (us)</label></div>
         <div><input id="busWindow" type="number" min="4250" max="4500" step="1" class="config"></div>
         <div><label for="busOffset">Bus Offset (us)</label></div>
@@ -102,6 +100,8 @@
 
     <fieldset>
         <legend>Schedule</legend>
+        <div><label><input id="systemInquiry" type="checkbox" class="config">Inquiry Of Existence</label></div>
+        <div><label><input id="systemResponse" type="checkbox" class="config">Send Response</label></div>
         <div><label><input id="scanOnStartPrm" type="checkbox" class="config"> Scan On Startup</label></div>
     </fieldset>
 
