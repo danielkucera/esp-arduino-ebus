@@ -16,6 +16,10 @@
 #include "ha_profile.hpp"
 #include "logger.hpp"
 
+const uint32_t& Command::getSessionId() const { return session_id_; }
+
+void Command::setSessionId(const uint32_t id) { session_id_ = id; }
+
 const uint16_t& Command::getPollId() const { return poll_id_; }
 
 void Command::setPollId(const uint16_t id) { poll_id_ = id; }
@@ -478,8 +482,9 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
     return true;
   });
 
-  command.last_ = 0;
+  command.session_id_ = 0;
   command.poll_id_ = 0;
+  command.last_ = 0;
   command.data_.clear();
   return command;
 }
@@ -597,8 +602,9 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
     index++;
   }
 
-  command.last_ = 0;
+  command.session_id_ = 0;
   command.poll_id_ = 0;
+  command.last_ = 0;
   command.data_.clear();
   return command;
 }

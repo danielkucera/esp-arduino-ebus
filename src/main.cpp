@@ -804,12 +804,12 @@ extern "C" void app_main(void) {
       snprintf(buf, sizeof(buf), "%s / %s",
                ebus::toString(info.master_view).c_str(),
                ebus::toString(info.slave_view).c_str());
-    logger.info(buf);
+    logger.info(buf, false, info.session_id, info.poll_id);
     if (info.is_error) {
       Mqtt::publishError(info);
 
     } else {
-      commandManager.updateData(info.poll_id, info.master_view,
+      commandManager.updateData(info.poll_id, info.session_id, info.master_view,
                                 info.slave_view);
     }
   });

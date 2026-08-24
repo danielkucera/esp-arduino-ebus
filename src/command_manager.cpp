@@ -372,7 +372,8 @@ Command* CommandManager::nextActiveCommand() {
   return next;
 }
 
-void CommandManager::updateData(uint16_t poll_id, ebus::ByteView master_view,
+void CommandManager::updateData(uint32_t session_id, uint16_t poll_id,
+                                ebus::ByteView master_view,
                                 ebus::ByteView slave_view) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
 
@@ -381,8 +382,8 @@ void CommandManager::updateData(uint16_t poll_id, ebus::ByteView master_view,
     command = findCommand(poll_id);
   }
 
-  auto update = [this](Command* cmd, ebus::ByteView master_view,
-                       ebus::ByteView slave_view) {
+  auto update = [this](Command* cmd, uint32_t session_id,
+                       ebus::ByteView master_view, ebus::ByteView slave_view) {
     if (cmd->getFieldCount() == 0) return;
 
     bool is_master = cmd->getMaster();
@@ -396,6 +397,7 @@ void CommandManager::updateData(uint16_t poll_id, ebus::ByteView master_view,
     if (data_len == 0) return;
 
     cmd->setLast((uint32_t)(esp_timer_get_time() / 1000ULL));
+    cmd->setSessionId(session_id);
 
     if (is_master) {
       cmd->setData(ebus::range(master_view, 5, data_len));
@@ -413,12 +415,13 @@ void CommandManager::updateData(uint16_t poll_id, ebus::ByteView master_view,
   };
 
   if (command) {
-    update(command, master_view, slave_view);
+    update(command, session_id, master_view, slave_view);
     return;
   }
 
   MatchingCommands matchingCommands = findPassiveCommands(master_view);
-  for (Command* cmd : matchingCommands) update(cmd, master_view, slave_view);
+  for (Command* cmd : matchingCommands)
+    update(cmd, session_id, master_view, slave_view);
 }
 
 void CommandManager::fetchValues(const ebus::JsonChunkVisitor& visitor) const {

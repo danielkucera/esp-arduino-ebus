@@ -119,7 +119,8 @@ void SystemMonitor::processLogRequests() {
       char buf[256];
       size_t len = cmd->writeLogMessage(buf, sizeof(buf));
       if (len > 0) {
-        logger.debug(std::string_view(buf, len));
+        logger.debug(std::string_view(buf, len), false, cmd->getSessionId(),
+                     cmd->getPollId());
       }
     }
   }

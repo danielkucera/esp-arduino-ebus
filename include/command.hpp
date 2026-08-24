@@ -41,6 +41,9 @@ using PollSequence =
 
 class Command {
  public:
+  const uint32_t& getSessionId() const;
+  void setSessionId(const uint32_t id);
+
   const uint16_t& getPollId() const;
   void setPollId(const uint16_t id);
 
@@ -105,6 +108,7 @@ class Command {
   static const std::string evaluate(ebus::detail::JsonReader& reader);
 
  private:
+  uint32_t session_id_ = 0;
   uint16_t poll_id_ = 0;
   uint32_t last_ = 0;
   PollSequence data_;

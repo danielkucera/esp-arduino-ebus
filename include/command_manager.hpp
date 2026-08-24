@@ -63,8 +63,8 @@ class CommandManager {
 
   Command* nextActiveCommand();
 
-  void updateData(uint16_t poll_id, ebus::ByteView master_view,
-                  ebus::ByteView slave_view);
+  void updateData(uint32_t session_id, uint16_t poll_id,
+                  ebus::ByteView master_view, ebus::ByteView slave_view);
 
   void fetchValues(const ebus::JsonChunkVisitor& visitor) const;
 
