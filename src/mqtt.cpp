@@ -137,45 +137,6 @@ const std::string& Mqtt::getRootTopic() const { return root_topic_; }
 
 const std::string& Mqtt::getWillTopic() const { return will_topic_; }
 
-void Mqtt::internalPublish(const char* topic, uint8_t qos, bool retain,
-                           const char* payload, bool prefix) {
-  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
-  if (!enabled_ || client_ == nullptr || payload == nullptr) return;
-
-  const char* targetTopic = topic;
-  char fullTopic[256];
-
-  if (prefix) {
-    // Memory optimization: Use stack buffer for combined
-    // Check potential length before calling snprintf
-    size_t expected_len =
-        std::strlen(root_topic_.c_str()) + 1 + std::strlen(topic);
-    if (expected_len < sizeof(fullTopic)) {
-      int n = snprintf(fullTopic, sizeof(fullTopic), "%s%s",
-                       root_topic_.c_str(), topic);
-      if (n > 0 && (size_t)n < sizeof(fullTopic)) {
-        targetTopic = fullTopic;
-      } else {
-        // Fallback if construction fails or is too long for buffer
-        logger.warn("[MQTT] Failed to construct MQTT topic via snprintf.");
-        return;  // Abort publish attempt
-      }
-    } else {
-      logger.warn(
-          "[MQTT] Topic concatenation exceeds stack buffer size, skipping "
-          "publish.");
-      return;
-    }
-  }
-
-  if (esp_mqtt_client_publish(client_, targetTopic, payload, 0, qos, retain) <
-      0) {
-    // Use static strings for error logging to avoid heap churn during link
-    // congestion
-    logger.warn("[MQTT] Publish failed (buffer full or slow link)");
-  }
-}
-
 void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
                    const char* payload, bool prefix) {
   internalPublish(topic, qos, retain, payload, prefix);
@@ -253,6 +214,45 @@ size_t Mqtt::getOutgoingQueueSize() const {
 
 size_t Mqtt::getOutgoingQueueHighWatermark() const {
   return max_outgoing_.load(std::memory_order_relaxed);
+}
+
+void Mqtt::internalPublish(const char* topic, uint8_t qos, bool retain,
+                           const char* payload, bool prefix) {
+  std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
+  if (!enabled_ || client_ == nullptr || payload == nullptr) return;
+
+  const char* targetTopic = topic;
+  char fullTopic[256];
+
+  if (prefix) {
+    // Memory optimization: Use stack buffer for combined
+    // Check potential length before calling snprintf
+    size_t expected_len =
+        std::strlen(root_topic_.c_str()) + 1 + std::strlen(topic);
+    if (expected_len < sizeof(fullTopic)) {
+      int n = snprintf(fullTopic, sizeof(fullTopic), "%s%s",
+                       root_topic_.c_str(), topic);
+      if (n > 0 && (size_t)n < sizeof(fullTopic)) {
+        targetTopic = fullTopic;
+      } else {
+        // Fallback if construction fails or is too long for buffer
+        logger.warn("[MQTT] Failed to construct MQTT topic via snprintf.");
+        return;  // Abort publish attempt
+      }
+    } else {
+      logger.warn(
+          "[MQTT] Topic concatenation exceeds stack buffer size, skipping "
+          "publish.");
+      return;
+    }
+  }
+
+  if (esp_mqtt_client_publish(client_, targetTopic, payload, 0, qos, retain) <
+      0) {
+    // Use static strings for error logging to avoid heap churn during link
+    // congestion
+    logger.warn("[MQTT] Publish failed (buffer full or slow link)");
+  }
 }
 
 void Mqtt::taskFunc(void* arg) {
@@ -379,10 +379,26 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
     case MQTT_EVENT_CONNECTED: {
       logger.debug("[MQTT] connected");
       self->connected_ = true;
-      esp_mqtt_client_subscribe(self->client_, self->request_topic_.c_str(), 0);
+      int msg_id1 = esp_mqtt_client_subscribe(self->client_,
+                                              self->request_topic_.c_str(), 0);
+      if (msg_id1 > 0 && self->pending_subs_count_ < self->max_pending_subs) {
+        snprintf(self->pending_subs_[self->pending_subs_count_].topic,
+                 sizeof(self->pending_subs_[self->pending_subs_count_].topic),
+                 "%s", self->request_topic_.c_str());
+        self->pending_subs_[self->pending_subs_count_].msg_id = msg_id1;
+        self->pending_subs_count_++;
+      }
       // Simplified control topic: ebus/<id>/set/#
       std::string set_topic = self->root_topic_ + "set/#";
-      esp_mqtt_client_subscribe(self->client_, set_topic.c_str(), 0);
+      int msg_id2 =
+          esp_mqtt_client_subscribe(self->client_, set_topic.c_str(), 0);
+      if (msg_id2 > 0 && self->pending_subs_count_ < self->max_pending_subs) {
+        snprintf(self->pending_subs_[self->pending_subs_count_].topic,
+                 sizeof(self->pending_subs_[self->pending_subs_count_].topic),
+                 "%s", set_topic.c_str());
+        self->pending_subs_[self->pending_subs_count_].msg_id = msg_id2;
+        self->pending_subs_count_++;
+      }
 
       self->publishStream(
           self->will_topic_.c_str(), 0, true,
@@ -401,9 +417,26 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
     case MQTT_EVENT_DISCONNECTED: {
       logger.debug("[MQTT] disconnected");
       self->connected_ = false;
+      self->pending_subs_count_ =
+          0;  // Clear pending subscriptions for reconnect
     } break;
     case MQTT_EVENT_SUBSCRIBED: {
-      logger.debug("[MQTT] " + self->request_topic_ + " subscribed");
+      for (size_t i = 0; i < self->pending_subs_count_; ++i) {
+        if (self->pending_subs_[i].msg_id == event->msg_id) {
+          char dbg_buf[128];
+          int n = snprintf(dbg_buf, sizeof(dbg_buf), "[MQTT] %s subscribed",
+                           self->pending_subs_[i].topic);
+          if (n > 0 && (size_t)n < sizeof(dbg_buf)) {
+            logger.debug(dbg_buf);
+          }
+          // Remove from pending by shifting remaining
+          for (size_t j = i + 1; j < self->pending_subs_count_; ++j) {
+            self->pending_subs_[j - 1] = self->pending_subs_[j];
+          }
+          self->pending_subs_count_--;
+          break;
+        }
+      }
     } break;
     case MQTT_EVENT_UNSUBSCRIBED:
     case MQTT_EVENT_PUBLISHED:
@@ -419,9 +452,21 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
 
       if (topic_sv == self->request_topic_) {
         ebus::detail::JsonReader reader(payload);
-        if (!reader.findKey("id")) return;
-        reader.next();
-        std::string_view id_view = reader.value();
+        if (reader.next() != ebus::detail::JsonReader::Token::object_start)
+          return;
+
+        std::string_view id_view;
+        reader.forEachField(
+            [&](std::string_view key, ebus::detail::JsonReader& r) {
+              if (key == "id") {
+                r.next();
+                id_view = r.value();
+                return false;  // Stop iteration
+              }
+              return true;
+            });
+
+        if (id_view.empty()) return;
 
         if (id_view == "read")
           self->handleRead(payload);
@@ -582,6 +627,44 @@ void Mqtt::handleWrite(std::string_view payload) {
   }
 }
 
+void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
+  Command* command = commandManager.findCommand(key);
+  if (command == nullptr) return;
+
+  ebus::Sequence valueBytes;
+  auto field_dt = command->getFieldDatatype(0);
+  if (ebus::isNumeric(field_dt)) {
+    double val = ebus::toNum<double>(val_view);
+    if ((val >= command->getFieldMin(0)) && (val <= command->getFieldMax(0))) {
+      valueBytes = command->getVectorFromDouble(val, 0);
+    }
+  } else {
+    if (val_view.size() >= 2 && val_view.front() == '"' &&
+        val_view.back() == '"') {
+      val_view.remove_prefix(1);
+      val_view.remove_suffix(1);
+    }
+    valueBytes = command->getVectorFromString(val_view, 0);
+  }
+
+  if (!valueBytes.empty()) {
+    ebus::Sequence fullWrite =
+        ebus::makeSequence(command->getWriteCmd(commandManager));
+    fullWrite.append(valueBytes);
+    getEbusController().enqueue(prio_send, fullWrite);
+    command->setLast(0);
+    char buf[128];
+    snprintf(buf, sizeof(buf), "[MQTT] Scheduled write for '%.*s'",
+             (int)key.size(), key.data());
+    logger.info(buf);
+  } else {
+    char buf[128];
+    snprintf(buf, sizeof(buf), "[MQTT] Write failed for '%.*s'",
+             (int)key.size(), key.data());
+    logger.warn(buf);
+  }
+}
+
 void Mqtt::handleValueUpdate(std::string_view key) {
   Command* cmd = commandManager.findCommand(key);
   if (!cmd) return;
@@ -623,44 +706,6 @@ void Mqtt::publishResponse(std::string_view id, std::string_view status,
     writer.writeField("status", status);
     if (bytes > 0) writer.writeField("bytes", static_cast<uint32_t>(bytes));
   });
-}
-
-void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
-  Command* command = commandManager.findCommand(key);
-  if (command == nullptr) return;
-
-  ebus::Sequence valueBytes;
-  auto field_dt = command->getFieldDatatype(0);
-  if (ebus::isNumeric(field_dt)) {
-    double val = ebus::toNum<double>(val_view);
-    if ((val >= command->getFieldMin(0)) && (val <= command->getFieldMax(0))) {
-      valueBytes = command->getVectorFromDouble(val, 0);
-    }
-  } else {
-    if (val_view.size() >= 2 && val_view.front() == '"' &&
-        val_view.back() == '"') {
-      val_view.remove_prefix(1);
-      val_view.remove_suffix(1);
-    }
-    valueBytes = command->getVectorFromString(val_view, 0);
-  }
-
-  if (!valueBytes.empty()) {
-    ebus::Sequence fullWrite =
-        ebus::makeSequence(command->getWriteCmd(commandManager));
-    fullWrite.append(valueBytes);
-    getEbusController().enqueue(prio_send, fullWrite);
-    command->setLast(0);
-    char buf[128];
-    snprintf(buf, sizeof(buf), "[MQTT] Scheduled write for '%.*s'",
-             (int)key.size(), key.data());
-    logger.info(buf);
-  } else {
-    char buf[128];
-    snprintf(buf, sizeof(buf), "[MQTT] Write failed for '%.*s'",
-             (int)key.size(), key.data());
-    logger.warn(buf);
-  }
 }
 
 #endif

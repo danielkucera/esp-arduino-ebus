@@ -164,6 +164,15 @@ class Mqtt {
   uint32_t status_publish_interval_ms_ = 10 * 1000;
   std::function<void(const ebus::JsonChunkVisitor&)> status_provider_;
 
+  // Track pending subscriptions for SUBSCRIBED event logging
+  struct PendingSub {
+    int msg_id = -1;
+    char topic[128] = {};
+  };
+  static constexpr size_t max_pending_subs = 4;
+  PendingSub pending_subs_[max_pending_subs] = {};
+  size_t pending_subs_count_ = 0;
+
   mutable std::recursive_mutex mqtt_mutex_;
 
   static constexpr size_t mqtt_pub_buffer_size = 1024;
