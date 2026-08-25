@@ -70,8 +70,8 @@ uint32_t reset_code = 0;
 struct StatusInfo {
   static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
-    writer.writeField("Reset_Code", reset_code);
-    writer.writeField("Uptime",
+    writer.writeField("reset_code", reset_code);
+    writer.writeField("uptime",
                       static_cast<uint32_t>(esp_timer_get_time() / 1000ULL));
   }
 };
@@ -81,11 +81,11 @@ struct HeapStatus {
     auto scope = writer.objectScope();
     multi_heap_info_t info;
     heap_caps_get_info(&info, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    writer.writeField("Total_Free_Bytes", info.total_free_bytes);
-    writer.writeField("Largest_Free_Block", info.largest_free_block);
-    writer.writeField("Minimum_Free_Bytes", info.minimum_free_bytes);
-    writer.writeField("Free_Blocks", info.free_blocks);
-    writer.writeField("Total_Blocks", info.total_blocks);
+    writer.writeField("total_free_bytes", info.total_free_bytes);
+    writer.writeField("largest_free_block", info.largest_free_block);
+    writer.writeField("minimum_free_bytes", info.minimum_free_bytes);
+    writer.writeField("free_blocks", info.free_blocks);
+    writer.writeField("total_blocks", info.total_blocks);
   }
 };
 
@@ -93,15 +93,15 @@ struct HeapStatus {
 struct ArbitrationInfo {
   static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
-    writer.writeField("Total", static_cast<int>(Bus.nbr_arbitrations_));
-    writer.writeField("Restarts1", static_cast<int>(Bus.nbr_restarts_1_));
-    writer.writeField("Restarts2", static_cast<int>(Bus.nbr_restarts_2_));
-    writer.writeField("Won1", static_cast<int>(Bus.nbr_won_1_));
-    writer.writeField("Won2", static_cast<int>(Bus.nbr_won_2_));
-    writer.writeField("Lost1", static_cast<int>(Bus.nbr_lost_1_));
-    writer.writeField("Lost2", static_cast<int>(Bus.nbr_lost_2_));
-    writer.writeField("Late", static_cast<int>(Bus.nbr_late_));
-    writer.writeField("Errors", static_cast<int>(Bus.nbr_errors_));
+    writer.writeField("total", static_cast<int>(Bus.nbr_arbitrations_));
+    writer.writeField("restarts1", static_cast<int>(Bus.nbr_restarts_1_));
+    writer.writeField("restarts2", static_cast<int>(Bus.nbr_restarts_2_));
+    writer.writeField("won1", static_cast<int>(Bus.nbr_won_1_));
+    writer.writeField("won2", static_cast<int>(Bus.nbr_won_2_));
+    writer.writeField("lost1", static_cast<int>(Bus.nbr_lost_1_));
+    writer.writeField("lost2", static_cast<int>(Bus.nbr_lost_2_));
+    writer.writeField("late", static_cast<int>(Bus.nbr_late_));
+    writer.writeField("errors", static_cast<int>(Bus.nbr_errors_));
   }
 };
 #endif
@@ -109,18 +109,18 @@ struct ArbitrationInfo {
 struct FirmwareStatus {
   void toJson(ebus::detail::JsonWriter& writer) const {
     auto scope = writer.objectScope();
-    writer.writeField("Version", AUTO_VERSION);
-    writer.writeField("SDK", esp_get_idf_version());
+    writer.writeField("version", AUTO_VERSION);
+    writer.writeField("esp_idf_version", esp_get_idf_version());
 #if !defined(EBUS_INTERNAL)
-    writer.writeField("Async", static_cast<bool>(USE_ASYNCHRONOUS));
-    writer.writeField("Software_Serial",
+    writer.writeField("async", static_cast<bool>(USE_ASYNCHRONOUS));
+    writer.writeField("software_serial",
                       static_cast<bool>(USE_SOFTWARE_SERIAL));
 #endif
-    writer.writeField("Unique_ID", unique_id);
-    writer.writeField("Adapter_HW_Version", getAdapterHwVersionString());
-    writer.writeField("Adapter_HW_Version_Raw", getAdapterHwVersionRaw());
-    writer.writeField("Clock_Speed", esp_clk_cpu_freq() / 1000000U);
-    writer.writeField("Apb_Speed", esp_clk_apb_freq());
+    writer.writeField("unique_id", unique_id);
+    writer.writeField("adapter_hw_version", getAdapterHwVersionString());
+    writer.writeField("adapter_hw_version_raw", getAdapterHwVersionRaw());
+    writer.writeField("clock_speed", esp_clk_cpu_freq() / 1000000U);
+    writer.writeField("apb_speed", esp_clk_apb_freq());
   }
 };
 
@@ -132,53 +132,53 @@ struct ChipStatus {
     uint32_t flash_size = 0;
     if (esp_flash_default_chip != nullptr)
       esp_flash_get_size(esp_flash_default_chip, &flash_size);
-    writer.writeField("Chip_Revision", static_cast<int>(chip_info.revision));
-    writer.writeField("Flash_Chip_Size", flash_size);
+    writer.writeField("chip_revision", static_cast<int>(chip_info.revision));
+    writer.writeField("flash_size", flash_size);
   }
 };
 
 struct WifiStatus {
   static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
-    writer.writeField("Last_Connect", WifiNetworkManager::getLastConnect());
-    writer.writeField("Reconnect_Count",
+    writer.writeField("last_connect", WifiNetworkManager::getLastConnect());
+    writer.writeField("reconnect_count",
                       WifiNetworkManager::getReconnectCount());
-    writer.writeField("RSSI", WifiNetworkManager::RSSI());
+    writer.writeField("rssi", WifiNetworkManager::RSSI());
     if (WifiNetworkManager::isStaticIpEnabled()) {
-      writer.writeField("Static_IP", true);
-      writer.writeField("IP_Address",
+      writer.writeField("static_ip", true);
+      writer.writeField("ip_address",
                         WifiNetworkManager::getConfiguredIpAddress());
-      writer.writeField("Gateway", WifiNetworkManager::getConfiguredGateway());
-      writer.writeField("Netmask", WifiNetworkManager::getConfiguredNetmask());
-      writer.writeField("DNS1", WifiNetworkManager::getConfiguredDns1());
-      writer.writeField("DNS2", WifiNetworkManager::getConfiguredDns2());
+      writer.writeField("gateway", WifiNetworkManager::getConfiguredGateway());
+      writer.writeField("netmask", WifiNetworkManager::getConfiguredNetmask());
+      writer.writeField("dns1", WifiNetworkManager::getConfiguredDns1());
+      writer.writeField("dns2", WifiNetworkManager::getConfiguredDns2());
     } else {
       esp_netif_ip_info_t staIpInfo{};
       const bool hasStaIp = WifiNetworkManager::getStaIpInfo(&staIpInfo);
       esp_ip4_addr_t dnsMain{}, dnsBackup{};
       const bool hasDnsMain = WifiNetworkManager::getDnsIp(0, &dnsMain);
       const bool hasDnsBackup = WifiNetworkManager::getDnsIp(1, &dnsBackup);
-      writer.writeField("Static_IP", false);
+      writer.writeField("static_ip", false);
       writer.writeField(
-          "IP_Address",
+          "ip_address",
           hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.ip) : "");
       writer.writeField(
-          "Gateway",
+          "gateway",
           hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.gw) : "");
       writer.writeField(
-          "Netmask",
+          "netmask",
           hasStaIp ? WifiNetworkManager::ipToString(staIpInfo.netmask) : "");
       writer.writeField(
-          "DNS1", hasDnsMain ? WifiNetworkManager::ipToString(dnsMain) : "");
-      writer.writeField("DNS2", hasDnsBackup
+          "dns1", hasDnsMain ? WifiNetworkManager::ipToString(dnsMain) : "");
+      writer.writeField("dns2", hasDnsBackup
                                     ? WifiNetworkManager::ipToString(dnsBackup)
                                     : "");
     }
-    writer.writeField("SSID", WifiNetworkManager::SSID());
-    writer.writeField("BSSID", WifiNetworkManager::BSSIDstr());
-    writer.writeField("Channel", WifiNetworkManager::channel());
-    writer.writeField("Hostname", WifiNetworkManager::getHostname());
-    writer.writeField("MAC_Address", WifiNetworkManager::macAddress());
+    writer.writeField("ssid", WifiNetworkManager::SSID());
+    writer.writeField("bssid", WifiNetworkManager::BSSIDstr());
+    writer.writeField("channel", WifiNetworkManager::channel());
+    writer.writeField("hostname", WifiNetworkManager::getHostname());
+    writer.writeField("mac_address", WifiNetworkManager::macAddress());
   }
 };
 
@@ -186,16 +186,68 @@ struct WifiStatus {
 struct SntpStatus {
   static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
-    writer.writeField("Enabled", configManager.readBool("sntpEnabled"));
+    writer.writeField("enabled", configManager.readBool("sntpEnabled"));
     const char* activeSntpServer = esp_sntp_getservername(0);
     if (activeSntpServer != nullptr) {
-      writer.writeField("Server", activeSntpServer);
+      writer.writeField("server", activeSntpServer);
     } else {
-      writer.writeField("Server", configManager.readString(
-                                      "sntpServer", DEFAULT_SNTP_SERVER));
+      writer.writeField("server", configManager.readString(
+                                      "sntp_server", DEFAULT_SNTP_SERVER));
     }
-    writer.writeField("Timezone", configManager.readString(
-                                      "sntpTimezone", DEFAULT_SNTP_TIMEZONE));
+    writer.writeField("timezone", configManager.readString(
+                                      "sntp_timezone", DEFAULT_SNTP_TIMEZONE));
+  }
+};
+
+struct EbusStatus {
+  static void toJson(ebus::detail::JsonWriter& w) {
+    auto obj_scope = w.objectScope();
+    w.writeField("pwm", configManager.readInt("pwmValue", 130));
+    w.writeField("ebus_address", configManager.readString("ebusAddress", "ff"));
+    w.writeField("bus_window", configManager.readInt("busWindow", 4300));
+    w.writeField("bus_offset", configManager.readInt("busOffset", 80));
+  }
+};
+
+struct ScheduleStatus {
+  static void toJson(ebus::detail::JsonWriter& w) {
+    auto obj_scope = w.objectScope();
+    w.writeField("system_inquiry", configManager.readBool("systemInquiry"));
+    w.writeField("system_response", configManager.readBool("systemResponse"));
+    w.writeField("scan_on_startup", configManager.readBool("scanOnStartup"));
+    w.writeField("active_commands",
+                 static_cast<uint32_t>(commandManager.getActiveCommands()));
+    w.writeField("passive_commands",
+                 static_cast<uint32_t>(commandManager.getPassiveCommands()));
+  }
+};
+
+struct MqttStatus {
+  static void toJson(ebus::detail::JsonWriter& w) {
+    auto obj_scope = w.objectScope();
+    w.writeField("enabled", mqtt.isEnabled());
+    w.writeField("server", configManager.readString("mqttServer"));
+    w.writeField("user", configManager.readString("mqttUser"));
+    w.writeField("connected", mqtt.isConnected());
+  }
+};
+
+struct HaStatus {
+  static void toJson(ebus::detail::JsonWriter& w) {
+    auto obj_scope = w.objectScope();
+    w.writeField("enabled", mqttha.isEnabled());
+  }
+};
+
+struct SocketsStatus {
+  static void toJson(ebus::detail::JsonWriter& w) {
+    auto obj_scope = w.objectScope();
+    int detected = 0;
+    int connected = 0;
+    SystemMonitor::collectSocketStats(detected, connected);
+    w.writeField("detected", detected);
+    w.writeField("connected", connected);
+    w.writeField("max", CONFIG_LWIP_MAX_SOCKETS);
   }
 };
 #endif
@@ -489,76 +541,23 @@ void saveParamsCallback() {
 void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
   auto scope = writer.objectScope();
-  writer.writeField("Status", StatusInfo{});
-  writer.writeField("Heap", HeapStatus{});
+  writer.writeField("status", StatusInfo{});
+  writer.writeField("heap", HeapStatus{});
 
 #if !defined(EBUS_INTERNAL)
-  writer.writeField("Arbitration", ArbitrationInfo{});
+  writer.writeField("arbitration", ArbitrationInfo{});
 #endif
-  writer.writeField("Firmware", FirmwareStatus{});
-  writer.writeField("Chip", ChipStatus{});
-  writer.writeField("WIFI", WifiStatus{});
+  writer.writeField("firmware", FirmwareStatus{});
+  writer.writeField("chip", ChipStatus{});
+  writer.writeField("wifi", WifiStatus{});
 
 #if defined(EBUS_INTERNAL)
-  writer.writeField("SNTP", SntpStatus{});
-
-  struct EbusStatus {
-    static void toJson(ebus::detail::JsonWriter& w) {
-      auto obj_scope = w.objectScope();
-      w.writeField("PWM", get_pwm());
-      w.writeField("Ebus_Address",
-                   configManager.readString("ebusAddress", "ff"));
-      w.writeField("Bus_Window", configManager.readInt("busWindow", 4300));
-      w.writeField("Bus_Offset", configManager.readInt("busOffset", 80));
-      w.writeField("System_Inquiry", configManager.readBool("systemInquiry"));
-      w.writeField("system_Response", configManager.readBool("systemResponse"));
-    }
-  };
-  writer.writeField("eBUS", EbusStatus{});
-
-  struct ScheduleStatus {
-    static void toJson(ebus::detail::JsonWriter& w) {
-      auto obj_scope = w.objectScope();
-      w.writeField("Scan_On_Startup", configManager.readBool("scanOnStartup"));
-      w.writeField("Active_Commands",
-                   static_cast<uint32_t>(commandManager.getActiveCommands()));
-      w.writeField("Passive_Commands",
-                   static_cast<uint32_t>(commandManager.getPassiveCommands()));
-    }
-  };
-  writer.writeField("Schedule", ScheduleStatus{});
-
-  struct MqttStatus {
-    static void toJson(ebus::detail::JsonWriter& w) {
-      auto obj_scope = w.objectScope();
-      w.writeField("Enabled", mqtt.isEnabled());
-      w.writeField("Server", configManager.readString("mqttServer"));
-      w.writeField("User", configManager.readString("mqttUser"));
-      w.writeField("Connected", mqtt.isConnected());
-    }
-  };
-  writer.writeField("MQTT", MqttStatus{});
-
-  struct HaStatus {
-    static void toJson(ebus::detail::JsonWriter& w) {
-      auto obj_scope = w.objectScope();
-      w.writeField("Enabled", mqttha.isEnabled());
-    }
-  };
-  writer.writeField("Home_Assistant", HaStatus{});
-
-  struct SocketsStatus {
-    static void toJson(ebus::detail::JsonWriter& w) {
-      auto obj_scope = w.objectScope();
-      int detected = 0;
-      int connected = 0;
-      SystemMonitor::collectSocketStats(detected, connected);
-      w.writeField("Detected", detected);
-      w.writeField("Connected", connected);
-      w.writeField("Max", CONFIG_LWIP_MAX_SOCKETS);
-    }
-  };
-  writer.writeField("Sockets", SocketsStatus{});
+  writer.writeField("sntp", SntpStatus{});
+  writer.writeField("ebus", EbusStatus{});
+  writer.writeField("schedule", ScheduleStatus{});
+  writer.writeField("mqtt", MqttStatus{});
+  writer.writeField("home_assistant", HaStatus{});
+  writer.writeField("sockets", SocketsStatus{});
 #endif
 }
 
