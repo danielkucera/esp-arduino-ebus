@@ -25,7 +25,9 @@ enum class OutgoingActionType : uint8_t {
   Data,
   Update,
   Discovery,
-  Components
+  Components,
+  HaEnable,
+  HaDisable
 };
 
 struct OutgoingAction {
@@ -109,6 +111,8 @@ class Mqtt {
   const std::string& getRootTopic() const;
   const std::string& getWillTopic() const;
 
+  static void enqueueOutgoing(const OutgoingAction& action);
+
   void publish(const char* topic, uint8_t qos, bool retain,
                const char* payload = nullptr, bool prefix = true);
 
@@ -116,8 +120,6 @@ class Mqtt {
       const char* topic, uint8_t qos, bool retain,
       const std::function<void(const ebus::JsonChunkVisitor&)>& builder,
       bool prefix = true);
-
-  static void enqueueOutgoing(const OutgoingAction& action);
 
   static void publishData(const std::string& id,
                           const std::vector<uint8_t>& master,
@@ -129,6 +131,8 @@ class Mqtt {
 
   static void publishDiscovery();
   static void publishComponentDiscovery();
+  static void publishHaEnable();
+  static void publishHaDisable();
 
   TaskHandle_t getTaskHandle() const { return task_handle_; }
   size_t getOutgoingQueueSize() const;
@@ -175,7 +179,7 @@ class Mqtt {
 
   mutable std::recursive_mutex mqtt_mutex_;
 
-  static constexpr size_t mqtt_pub_buffer_size = 1024;
+  static constexpr size_t mqtt_pub_buffer_size = 2048;
   char publish_buffers_[mqtt_pub_buffer_size] = {};
 
   void internalPublish(const char* topic, uint8_t qos, bool retain,

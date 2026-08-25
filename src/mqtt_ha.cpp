@@ -10,6 +10,30 @@
 
 MqttHA mqttha;
 
+namespace {
+void formatPrettyName(std::string_view sv, char* out, size_t max_len) {
+  if (max_len == 0) return;
+  size_t out_idx = 0;
+  bool capitalize_next = true;
+  for (size_t i = 0; i < sv.size() && out_idx < max_len - 1; ++i) {
+    char c = sv[i];
+    if (c == '/' || c == '_') {
+      out[out_idx++] = ' ';
+      capitalize_next = true;
+    } else {
+      if (capitalize_next && std::islower(static_cast<unsigned char>(c))) {
+        out[out_idx++] =
+            static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+      } else {
+        out[out_idx++] = c;
+      }
+      capitalize_next = false;
+    }
+  }
+  out[out_idx] = '\0';
+}
+}  // namespace
+
 void MqttHA::setUniqueId(const std::string& id) {
   unique_id_ = id;
   device_identifiers_ = "ebus" + unique_id_;
@@ -40,19 +64,6 @@ void MqttHA::setThingHwVersion(const std::string& hwVersion) {
 
 void MqttHA::setThingConfigurationUrl(const std::string& configurationUrl) {
   thing_configuration_url_ = configurationUrl;
-}
-
-void MqttHA::sanitizeObjectId(std::string_view source, char* out,
-                              size_t max_len) {
-  size_t i = 0;
-  for (; i < source.length() && i < max_len - 1; ++i) {
-    char c = source[i];
-    if (c == '/' || c == ' ')
-      out[i] = '_';
-    else
-      out[i] = (char)tolower((unsigned char)c);
-  }
-  out[i] = '\0';
 }
 
 void MqttHA::publishDeviceInfo() const {
@@ -105,15 +116,15 @@ void MqttHA::publishDeviceInfo() const {
   publishDiag("button", "restart", "Restart", false,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("command_topic", command_topic_);
-                w.writeField("payload_press",
-                             "{\"id\":\"restart\",\"value\":true}");
+                w.writeField("payload_press", "{\"id\":\"restart\"}");
                 w.writeField("entity_category", "config");
               });
 
   publishDiag("sensor", "reset_code", "Reset Code", false,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("state_topic", createStateTopic("", "state"));
-                w.writeField("value_template", "{{value_json.reset_code}}");
+                w.writeField("value_template",
+                             "{{value_json.Status.Reset_Code}}");
                 w.writeField("icon", "mdi:restart");
                 w.writeField("entity_category", "diagnostic");
               });
@@ -123,87 +134,184 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "s");
                 w.writeField("value_template",
-                             "{{((value_json.uptime|float)/1000)|int}}");
+                             "{{((value_json.Status.Uptime|float)/1000)|int}}");
                 w.writeField("icon", "mdi:clock-outline");
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "free_heap", "Free Heap", false,
+  // Heap
+  publishDiag("sensor", "free_heap", "Heap Total Free Bytes", false,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "B");
-                w.writeField("value_template", "{{value_json.free_heap}}");
+                w.writeField("value_template",
+                             "{{value_json.Heap.Total_Free_Bytes}}");
                 w.writeField("icon", "mdi:memory");
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "loop_duration", "Loop Duration", false,
+  publishDiag("sensor", "min_free_heap", "Heap Minimum Free Bytes", false,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("state_topic", createStateTopic("", "state"));
-                w.writeField("unit_of_measurement", "µs");
-                w.writeField("value_template", "{{value_json.loop_duration}}");
-                w.writeField("icon", "mdi:timelapse");
+                w.writeField("unit_of_measurement", "B");
+                w.writeField("value_template",
+                             "{{value_json.Heap.Minimum_Free_Bytes}}");
+                w.writeField("icon", "mdi:memory");
                 w.writeField("entity_category", "diagnostic");
               });
 
+  publishDiag("sensor", "largest_free_block", "Heap Largest Free Block", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("unit_of_measurement", "B");
+                w.writeField("value_template",
+                             "{{value_json.Heap.Largest_Free_Block}}");
+                w.writeField("icon", "mdi:memory");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  // WiFi
   publishDiag("sensor", "rssi", "WiFi RSSI", false,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "dBm");
-                w.writeField("value_template", "{{value_json.rssi}}");
+                w.writeField("value_template", "{{value_json.WIFI.RSSI}}");
                 w.writeField("icon", "mdi:wifi-strength-4");
                 w.writeField("entity_category", "diagnostic");
               });
-}
 
-void MqttHA::publishComponents() const {
-  for (const Command* command : commandManager.getCommands()) {
-    for (size_t i = 0; i < command->getFieldCount(); ++i) {
-      if (command->hasFieldHA(i)) {
-        publishComponent(command, i, !enabled_);
-      }
-    }
-  }
-}
+  publishDiag("sensor", "wifi_last_connect", "WiFi Last Connect", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template",
+                             "{{value_json.WIFI.Last_Connect}}");
+                w.writeField("icon", "mdi:wifi");
+                w.writeField("entity_category", "diagnostic");
+              });
 
-void MqttHA::removeComponent(const Command* command) const {
-  if (!command) return;
-  for (size_t i = 0; i < command->getFieldCount(); ++i) {
-    if (command->hasFieldHA(i)) {
-      publishComponent(command, i, true);
-    }
-  }
-}
+  publishDiag("sensor", "wifi_reconnect_count", "WiFi Reconnect Count", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template",
+                             "{{value_json.WIFI.Reconnect_Count}}");
+                w.writeField("icon", "mdi:wifi-refresh");
+                w.writeField("entity_category", "diagnostic");
+              });
 
-void MqttHA::removeComponents() const {
-  for (const Command* command : commandManager.getCommands()) {
-    removeComponent(command);
-  }
-}
+  // Firmware
+  publishDiag("sensor", "firmware_version", "Firmware Version", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template",
+                             "{{value_json.Firmware.Version}}");
+                w.writeField("icon", "mdi:chip");
+                w.writeField("entity_category", "diagnostic");
+              });
 
-namespace {
-void formatPrettyName(std::string_view sv, char* out, size_t max_len) {
-  if (max_len == 0) return;
-  size_t out_idx = 0;
-  bool capitalize_next = true;
-  for (size_t i = 0; i < sv.size() && out_idx < max_len - 1; ++i) {
-    char c = sv[i];
-    if (c == '/' || c == '_') {
-      out[out_idx++] = ' ';
-      capitalize_next = true;
-    } else {
-      if (capitalize_next && std::islower(static_cast<unsigned char>(c))) {
-        out[out_idx++] =
-            static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-      } else {
-        out[out_idx++] = c;
-      }
-      capitalize_next = false;
-    }
-  }
-  out[out_idx] = '\0';
+  publishDiag("sensor", "sdk_version", "Firmware SDK Version", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template", "{{value_json.Firmware.SDK}}");
+                w.writeField("icon", "mdi:chip");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  // Chip
+  publishDiag("sensor", "chip_revision", "Chip Revision", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template",
+                             "{{value_json.Chip.Chip_Revision}}");
+                w.writeField("icon", "mdi:cpu-64-bit");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "flash_size", "Chip Flash Size", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("unit_of_measurement", "B");
+                w.writeField("value_template",
+                             "{{value_json.Chip.Flash_Chip_Size}}");
+                w.writeField("icon", "mdi:memory");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  // eBUS
+  publishDiag("sensor", "ebus_pwm", "eBUS PWM", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template", "{{value_json.eBUS.PWM}}");
+                w.writeField("icon", "mdi:fan");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "ebus_address", "eBUS Address", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template",
+                             "{{value_json.eBUS.Ebus_Address}}");
+                w.writeField("icon", "mdi:network");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "bus_window", "eBUS Bus Window", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("unit_of_measurement", "µs");
+                w.writeField("value_template",
+                             "{{value_json.eBUS.Bus_Window}}");
+                w.writeField("icon", "mdi:timer");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "bus_offset", "eBUS Bus Offset", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("unit_of_measurement", "µs");
+                w.writeField("value_template",
+                             "{{value_json.eBUS.Bus_Offset}}");
+                w.writeField("icon", "mdi:timer");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  // Schedule
+  publishDiag("sensor", "active_commands", "Schedule Active Commands", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template",
+                             "{{value_json.Schedule.Active_Commands}}");
+                w.writeField("icon", "mdi:play-circle");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "passive_commands", "Schedule Passive Commands", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template",
+                             "{{value_json.Schedule.Passive_Commands}}");
+                w.writeField("icon", "mdi:pause-circle");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  // Sockets
+  publishDiag("sensor", "sockets_detected", "Sockets Detected", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template",
+                             "{{value_json.Sockets.Detected}}");
+                w.writeField("icon", "mdi:lan-connect");
+                w.writeField("entity_category", "diagnostic");
+              });
+
+  publishDiag("sensor", "sockets_connected", "Sockets Connected", false,
+              [this](ebus::detail::JsonWriter& w) {
+                w.writeField("state_topic", createStateTopic("", "state"));
+                w.writeField("value_template",
+                             "{{value_json.Sockets.Connected}}");
+                w.writeField("icon", "mdi:lan-connect");
+                w.writeField("entity_category", "diagnostic");
+              });
 }
-}  // namespace
 
 void MqttHA::publishComponent(const Command* command, size_t field_idx,
                               const bool remove) const {
@@ -363,6 +471,73 @@ void MqttHA::publishComponent(const Command* command, size_t field_idx,
         }
       },
       false);
+}
+
+void MqttHA::publishComponentIfEnabled(const Command* command,
+                                       size_t field_idx) const {
+  if (!enabled_) return;
+  if (command && field_idx < command->getFieldCount() &&
+      command->hasFieldHA(field_idx)) {
+    publishComponent(command, field_idx, false);
+  }
+}
+
+void MqttHA::publishComponents() const {
+  for (const Command* command : commandManager.getCommands()) {
+    for (size_t i = 0; i < command->getFieldCount(); ++i) {
+      if (command->hasFieldHA(i)) {
+        publishComponent(command, i, !enabled_);
+      }
+    }
+  }
+}
+
+void MqttHA::publishComponentsIfEnabled() const {
+  if (!enabled_) return;
+  publishComponents();
+}
+
+void MqttHA::removeComponent(const Command* command) const {
+  if (!command) return;
+  for (size_t i = 0; i < command->getFieldCount(); ++i) {
+    if (command->hasFieldHA(i)) {
+      publishComponent(command, i, true);
+    }
+  }
+}
+
+void MqttHA::removeComponents() const {
+  for (const Command* command : commandManager.getCommands()) {
+    removeComponent(command);
+  }
+}
+
+void MqttHA::removeComponentIfEnabled(const Command* command,
+                                      size_t field_idx) const {
+  if (!enabled_) return;
+  if (command && field_idx < command->getFieldCount() &&
+      command->hasFieldHA(field_idx)) {
+    publishComponent(command, field_idx, true);
+  }
+}
+
+void MqttHA::onMqttConnected() const {
+  if (!enabled_) return;
+  publishDeviceInfo();
+  publishComponents();
+}
+
+void MqttHA::sanitizeObjectId(std::string_view source, char* out,
+                              size_t max_len) {
+  size_t i = 0;
+  for (; i < source.length() && i < max_len - 1; ++i) {
+    char c = source[i];
+    if (c == '/' || c == ' ')
+      out[i] = '_';
+    else
+      out[i] = (char)tolower((unsigned char)c);
+  }
+  out[i] = '\0';
 }
 
 std::string MqttHA::createStateTopic(const std::string& prefix,

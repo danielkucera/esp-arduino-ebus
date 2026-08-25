@@ -25,18 +25,26 @@ class MqttHA {
 
   void publishDeviceInfo() const;
 
-  void publishComponents() const;
-
-  void removeComponent(const Command* command) const;
-  void removeComponents() const;
-
   void publishComponent(const Command* command, size_t field_idx,
                         const bool remove) const;
+  void publishComponentIfEnabled(const Command* command,
+                                 size_t field_idx) const;
+
+  void publishComponents() const;
+  void publishComponentsIfEnabled() const;
+
+  void removeComponent(const Command* command) const;
+  void removeComponentIfEnabled(const Command* command, size_t field_idx) const;
+
+  void removeComponents() const;
+
+  // Called on MQTT connect/reconnect
+  void onMqttConnected() const;
 
  private:
   std::string unique_id_;           // e.g. "8406ac"
   std::string device_identifiers_;  // e.g. "ebus8406ac"
-  std::string root_topic_;          // e.g. "ebus/8406ac/"
+  std::string root_topic_;          // e.g. "ebus8406ac/"
   std::string command_topic_;       // e.g. "ebus/8406ac/request"
   std::string will_topic_;          // e.g. "ebus/8406ac/state/available"
 

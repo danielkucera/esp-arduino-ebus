@@ -380,20 +380,6 @@ void setTimezone(const char* timezone) {
   }
 }
 
-void fetchMqttStatus(const ebus::JsonChunkVisitor& visitor) {
-  const uint32_t uptime = (uint32_t)(esp_timer_get_time() / 1000ULL);
-  ssize_t free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-  ssize_t min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
-
-  ebus::detail::JsonWriter writer(visitor);
-  auto scope = writer.objectScope();
-  writer.writeField("reset_code", reset_code);
-  writer.writeField("uptime", uptime);
-  writer.writeField("free_heap", static_cast<uint32_t>(free_heap));
-  writer.writeField("min_free_heap", static_cast<uint32_t>(min_free_heap));
-  writer.writeField("rssi", WifiNetworkManager::RSSI());
-}
-
 void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
   auto scope = writer.objectScope();
@@ -448,6 +434,7 @@ void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
 }
 #endif
 
+// unused ?
 void saveParamsCallback() {
   set_pwm();
 
@@ -487,6 +474,13 @@ void saveParamsCallback() {
   mqtt.change();
 
   mqttha.setEnabled(configManager.readBool("haEnabled"));
+  if (mqtt.isEnabled()) {
+    if (mqttha.isEnabled()) {
+      Mqtt::publishHaEnable();
+    } else {
+      Mqtt::publishHaDisable();
+    }
+  }
   Mqtt::publishDiscovery();
   Mqtt::publishComponentDiscovery();
 #endif
@@ -568,22 +562,9 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
 #endif
 }
 
-void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps,
-                                 const char* function_name) {
-  printf(
-      "%s was called but failed to allocate %zu bytes with 0x%X "
-      "capabilities.\n",
-      function_name, requested_size, (int)caps);
-}
-
 extern "C" void app_main(void) {
   DebugSer.begin(115200);
   DebugSer.setDebugOutput(true);
-
-  // esp_err_t error =
-  //     heap_caps_register_failed_alloc_callback(heap_caps_alloc_failed_hook);
-
-  // void* ptr = heap_caps_malloc(allocation_size, MALLOC_CAP_DEFAULT);
 
   logger.info("Starting esp-ebus adapter version " AUTO_VERSION);
 
@@ -669,7 +650,7 @@ extern "C" void app_main(void) {
     mqtt.setRootTopic(rootTopicValue);
   }
   mqtt.start();
-  mqtt.setStatusProvider(fetchMqttStatus);
+  mqtt.setStatusProvider(fetchStatus);
 
   mqttha.setUniqueId(mqtt.getUniqueId());
   mqttha.setRootTopic(mqtt.getRootTopic());
@@ -688,6 +669,7 @@ extern "C" void app_main(void) {
 
         if (mqttha.isEnabled()) {
           Mqtt::publishDiscovery();
+          Mqtt::publishComponentDiscovery();
         }
       });
 #endif
@@ -863,6 +845,14 @@ extern "C" void app_main(void) {
                "key '%.*s'",
                (int)cmd->getKey().size(), cmd->getKey().data());
       logger.info(log_buf);
+    }
+    // HA: publish components for this command if HA enabled and MQTT connected
+    if (mqttha.isEnabled()) {
+      for (size_t i = 0; i < cmd->getFieldCount(); ++i) {
+        if (cmd->hasFieldHA(i)) {
+          Mqtt::enqueueOutgoing(OutgoingAction(cmd, i, false));
+        }
+      }
     }
   });
 

@@ -137,6 +137,22 @@ const std::string& Mqtt::getRootTopic() const { return root_topic_; }
 
 const std::string& Mqtt::getWillTopic() const { return will_topic_; }
 
+void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
+  if (!mqtt.enabled_ || mqtt.outgoing_queue_ == nullptr) return;
+
+  if (xQueueSend(mqtt.outgoing_queue_, &action, 0) != pdPASS) {
+    // Mimic CircularBuffer behavior: drop oldest to make room for new
+    OutgoingAction dummy;
+    if (xQueueReceive(mqtt.outgoing_queue_, &dummy, 0) == pdTRUE) {
+      xQueueSend(mqtt.outgoing_queue_, &action, 0);
+    }
+    logger.warn("[MQTT] Outgoing queue full, dropped oldest message");
+  }
+
+  size_t current = uxQueueMessagesWaiting(mqtt.outgoing_queue_);
+  ebus::updateMaxAtomic(mqtt.max_outgoing_, current);
+}
+
 void Mqtt::publish(const char* topic, uint8_t qos, bool retain,
                    const char* payload, bool prefix) {
   internalPublish(topic, qos, retain, payload, prefix);
@@ -163,32 +179,6 @@ void Mqtt::publishStream(
   internalPublish(topic, qos, retain, buf, prefix);
 }
 
-void Mqtt::publishDiscovery() {
-  if (!mqtt.enabled_ || !mqttha.isEnabled()) return;
-  enqueueOutgoing(OutgoingAction(OutgoingActionType::Discovery, ""));
-}
-
-void Mqtt::publishComponentDiscovery() {
-  if (!mqtt.enabled_ || !mqttha.isEnabled()) return;
-  enqueueOutgoing(OutgoingAction(OutgoingActionType::Components, ""));
-}
-
-void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
-  if (!mqtt.enabled_ || mqtt.outgoing_queue_ == nullptr) return;
-
-  if (xQueueSend(mqtt.outgoing_queue_, &action, 0) != pdPASS) {
-    // Mimic CircularBuffer behavior: drop oldest to make room for new
-    OutgoingAction dummy;
-    if (xQueueReceive(mqtt.outgoing_queue_, &dummy, 0) == pdTRUE) {
-      xQueueSend(mqtt.outgoing_queue_, &action, 0);
-    }
-    logger.warn("[MQTT] Outgoing queue full, dropped oldest message");
-  }
-
-  size_t current = uxQueueMessagesWaiting(mqtt.outgoing_queue_);
-  ebus::updateMaxAtomic(mqtt.max_outgoing_, current);
-}
-
 void Mqtt::publishData(const std::string& id,
                        const std::vector<uint8_t>& master,
                        const std::vector<uint8_t>& slave) {
@@ -205,6 +195,26 @@ void Mqtt::publishValue(std::string_view key) {
   if (!mqtt.enabled_) return;
   enqueueOutgoing(
       OutgoingAction(OutgoingActionType::Update, key));  // Pass string_view
+}
+
+void Mqtt::publishDiscovery() {
+  if (!mqtt.enabled_ || !mqttha.isEnabled()) return;
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::Discovery, ""));
+}
+
+void Mqtt::publishComponentDiscovery() {
+  if (!mqtt.enabled_ || !mqttha.isEnabled()) return;
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::Components, ""));
+}
+
+void Mqtt::publishHaEnable() {
+  if (!mqtt.enabled_) return;
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::HaEnable, ""));
+}
+
+void Mqtt::publishHaDisable() {
+  if (!mqtt.enabled_) return;
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::HaDisable, ""));
 }
 
 size_t Mqtt::getOutgoingQueueSize() const {
@@ -353,6 +363,14 @@ void Mqtt::taskFunc(void* arg) {
           case OutgoingActionType::Components:
             if (mqttha.isEnabled()) mqttha.publishComponents();
             break;
+          case OutgoingActionType::HaEnable:
+            mqttha.setEnabled(true);
+            mqttha.onMqttConnected();
+            break;
+          case OutgoingActionType::HaDisable:
+            mqttha.onMqttConnected();  // publishes removals via !enabled_ in
+                                       // publishComponents
+            break;
         }
       }
     } else {
@@ -409,10 +427,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
           },
           false);
 
-      if (mqttha.isEnabled()) {
-        mqttha.publishDeviceInfo();
-        Mqtt::publishComponentDiscovery();
-      }
+      mqttha.onMqttConnected();
     } break;
     case MQTT_EVENT_DISCONNECTED: {
       logger.debug("[MQTT] disconnected");
