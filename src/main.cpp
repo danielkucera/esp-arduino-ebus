@@ -244,7 +244,7 @@ struct SocketsStatus {
     auto obj_scope = w.objectScope();
     int detected = 0;
     int connected = 0;
-    SystemMonitor::collectSocketStats(detected, connected);
+    SystemMonitor::getSocketStatus(detected, connected);
     w.writeField("detected", detected);
     w.writeField("connected", connected);
     w.writeField("max", CONFIG_LWIP_MAX_SOCKETS);
@@ -482,6 +482,10 @@ void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
     addQueue("system_monitor_log", SystemMonitor::getLogQueueSize(),
              SystemMonitor::getLogQueueCapacity(),
              SystemMonitor::getLogQueueHighWatermark());
+
+    addQueue("system_monitor_protocol", SystemMonitor::getProtocolQueueSize(),
+             SystemMonitor::getProtocolQueueCapacity(),
+             SystemMonitor::getProtocolQueueHighWatermark());
   }
 }
 #endif
@@ -786,13 +790,7 @@ extern "C" void app_main(void) {
                ebus::toString(info.master_view).c_str(),
                ebus::toString(info.slave_view).c_str());
     logger.info(buf, false, info.session_id, info.poll_id);
-    if (info.is_error) {
-      Mqtt::publishError(info);
-
-    } else {
-      commandManager.updateData(info.session_id, info.poll_id, info.master_view,
-                                info.slave_view);
-    }
+    SystemMonitor::enqueueProtocolInfo(info);
   });
 
   // getEbusController().setTraceCallback([](const ebus::BusEventInfo& info) {

@@ -12,6 +12,7 @@
 #include <string_view>
 
 #include "command.hpp"
+#include "ebus/callbacks.hpp"
 
 class SystemMonitor {
  public:
@@ -24,25 +25,38 @@ class SystemMonitor {
     int sockets_connected;
   };
 
+  static TaskHandle_t task_handle();
+
   static bool begin();
   static void stop();
-  static TaskHandle_t task_handle();
+
   static void enqueueLogRequest(std::string_view key);
-  static Stats getStats();
-  static void collectSocketStats(int& detected, int& connected);
+  static void enqueueProtocolInfo(const ebus::ProtocolInfo& info);
+
   static size_t getLogQueueSize();
   static size_t getLogQueueCapacity();
   static size_t getLogQueueHighWatermark();
 
+  static size_t getProtocolQueueSize();
+  static size_t getProtocolQueueCapacity();
+  static size_t getProtocolQueueHighWatermark();
+
+  static void getSocketStatus(int& detected, int& connected);
+
  private:
   static void taskEntry(void* arg);
   static void taskLoop();
+
   static void processLogRequests();
-  static void collectStats();
+  static void processProtocolInfo();
+
+  static Stats getStatus();
+  static void collectStatus();
   static void logSummary();
 
   static TaskHandle_t task_handle_;
   static QueueHandle_t log_queue_;
+  static QueueHandle_t protocol_queue_;
 
   static Stats stats_;
   static portMUX_TYPE stats_mux_;
