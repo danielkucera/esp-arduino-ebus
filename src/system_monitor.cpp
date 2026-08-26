@@ -26,8 +26,8 @@ struct LogRequest {
 };
 }  // namespace
 
-SystemMonitor::Stats SystemMonitor::stats_ = {};
-portMUX_TYPE SystemMonitor::stats_mux_ = {};
+SystemMonitor::Status SystemMonitor::status_ = {};
+portMUX_TYPE SystemMonitor::status_mux_ = {};
 std::atomic<int> SystemMonitor::sockets_detected_{0};
 std::atomic<int> SystemMonitor::sockets_connected_{0};
 TaskHandle_t SystemMonitor::task_handle_ = nullptr;
@@ -37,13 +37,13 @@ QueueHandle_t SystemMonitor::protocol_queue_ = nullptr;
 TaskHandle_t SystemMonitor::task_handle() { return task_handle_; }
 
 bool SystemMonitor::begin() {
-  stats_mux_ = portMUX_INITIALIZER_UNLOCKED;
-  stats_.uptime_seconds = 0;
-  stats_.free_heap = 0;
-  stats_.min_free_heap = 0;
-  stats_.largest_free_block = 0;
-  stats_.sockets_detected = 0;
-  stats_.sockets_connected = 0;
+  status_mux_ = portMUX_INITIALIZER_UNLOCKED;
+  status_.uptime_seconds = 0;
+  status_.free_heap = 0;
+  status_.min_free_heap = 0;
+  status_.largest_free_block = 0;
+  status_.sockets_detected = 0;
+  status_.sockets_connected = 0;
   sockets_detected_ = 0;
   sockets_connected_ = 0;
 
@@ -190,28 +190,29 @@ void SystemMonitor::processProtocolInfo() {
   }
 }
 
-SystemMonitor::Stats SystemMonitor::getStatus() {
-  Stats copy;
-  portENTER_CRITICAL(&stats_mux_);
-  copy.uptime_seconds = stats_.uptime_seconds;
-  copy.free_heap = stats_.free_heap;
-  copy.min_free_heap = stats_.min_free_heap;
-  copy.largest_free_block = stats_.largest_free_block;
+SystemMonitor::Status SystemMonitor::getStatus() {
+  Status copy;
+  portENTER_CRITICAL(&status_mux_);
+  copy.uptime_seconds = status_.uptime_seconds;
+  copy.free_heap = status_.free_heap;
+  copy.min_free_heap = status_.min_free_heap;
+  copy.largest_free_block = status_.largest_free_block;
   copy.sockets_detected = sockets_detected_.load();
   copy.sockets_connected = sockets_connected_.load();
-  portEXIT_CRITICAL(&stats_mux_);
+  portEXIT_CRITICAL(&status_mux_);
   return copy;
 }
 
 void SystemMonitor::collectStatus() {
-  portENTER_CRITICAL(&stats_mux_);
-  stats_.uptime_seconds = static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
-  stats_.free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-  stats_.min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
+  portENTER_CRITICAL(&status_mux_);
+  status_.uptime_seconds =
+      static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
+  status_.free_heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+  status_.min_free_heap = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
   multi_heap_info_t info;
   heap_caps_get_info(&info, MALLOC_CAP_8BIT);
-  stats_.largest_free_block = info.largest_free_block;
-  portEXIT_CRITICAL(&stats_mux_);
+  status_.largest_free_block = info.largest_free_block;
+  portEXIT_CRITICAL(&status_mux_);
 
   int detected = 0;
   int connected = 0;
@@ -221,7 +222,7 @@ void SystemMonitor::collectStatus() {
 }
 
 void SystemMonitor::logSummary() {
-  Stats status = getStatus();
+  Status status = getStatus();
 
   char buf[256];
   int n = std::snprintf(

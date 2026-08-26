@@ -16,7 +16,7 @@
 
 class SystemMonitor {
  public:
-  struct Stats {
+  struct Status {
     uint32_t uptime_seconds;
     size_t free_heap;
     size_t min_free_heap;
@@ -50,7 +50,7 @@ class SystemMonitor {
   static void processLogRequests();
   static void processProtocolInfo();
 
-  static Stats getStatus();
+  static Status getStatus();
   static void collectStatus();
   static void logSummary();
 
@@ -58,8 +58,8 @@ class SystemMonitor {
   static QueueHandle_t log_queue_;
   static QueueHandle_t protocol_queue_;
 
-  static Stats stats_;
-  static portMUX_TYPE stats_mux_;
+  static Status status_;
+  static portMUX_TYPE status_mux_;
   static std::atomic<int> sockets_detected_;
   static std::atomic<int> sockets_connected_;
 };
