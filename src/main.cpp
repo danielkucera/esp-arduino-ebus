@@ -192,10 +192,10 @@ struct SntpStatus {
       writer.writeField("server", activeSntpServer);
     } else {
       writer.writeField("server", configManager.readString(
-                                      "sntp_server", DEFAULT_SNTP_SERVER));
+                                      "sntpServer", DEFAULT_SNTP_SERVER));
     }
     writer.writeField("timezone", configManager.readString(
-                                      "sntp_timezone", DEFAULT_SNTP_TIMEZONE));
+                                      "sntpTimezone", DEFAULT_SNTP_TIMEZONE));
   }
 };
 
