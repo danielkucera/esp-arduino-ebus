@@ -476,7 +476,7 @@ void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
              mqtt.getOutgoingQueueCapacity(),
              mqtt.getOutgoingQueueHighWatermark());
 
-    addQueue("logger", logger.getQueueSize(), 32,
+    addQueue("logger", logger.getQueueSize(), logger.getQueueCapacity(),
              logger.getQueueHighWatermark());
 
     addQueue("system_monitor_log", SystemMonitor::getLogQueueSize(),

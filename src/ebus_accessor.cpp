@@ -29,6 +29,8 @@ esp_timer_handle_t simTimerHandle() { return sim_timer_handle; }
 void startEbusSimulation() {
   if (getEbusController().isConfigured()) {
     auto& vbus = getEbusController().getVirtualBus();
+
+    // passive commands
     // Scan
     vbus.addSlaveReaction(0x01, "08070400", "0ab54d4f434b0001020304", 0, 0);
     // Scan vaillant specific
@@ -44,6 +46,7 @@ void startEbusSimulation() {
     vbus.addSlaveReaction(0x01, "08b509030d1d00", "0101", 0, 0);
   }
 
+  // active commands
   esp_timer_create_args_t args = {};
   args.callback = [](void*) {
     if (!getEbusController().isRunning()) return;

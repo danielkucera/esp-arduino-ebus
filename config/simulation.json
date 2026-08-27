@@ -1,6 +1,6 @@
 [
   {
-    "key": "02",
+    "key": "01",
     "name": "Outside_Temperature",
     "read_cmd": "feb5160301",
     "write_cmd": "",

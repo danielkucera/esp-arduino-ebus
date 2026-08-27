@@ -373,38 +373,34 @@ Command* CommandManager::nextActiveCommand() {
 
   return next;
 }
-
-void CommandManager::updateData(uint32_t session_id, uint16_t poll_id,
-                                ebus::ByteView master_view,
-                                ebus::ByteView slave_view) {
+void CommandManager::updateData(const ebus::ProtocolInfo& info) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
 
   Command* command = nullptr;
-  if (poll_id != 0) {
-    command = findCommand(poll_id);
+  if (info.poll_id != 0) {
+    command = findCommand(info.poll_id);
   }
 
-  auto update = [this](Command* cmd, uint32_t session_id,
-                       ebus::ByteView master_view, ebus::ByteView slave_view) {
+  auto update = [this](Command* cmd, const ebus::ProtocolInfo& info) {
     if (cmd->getFieldCount() == 0) return;
 
     bool is_master = cmd->getMaster();
     size_t data_len = 0;
     if (is_master) {
-      if (master_view.size() >= 5) data_len = master_view[4];
+      if (info.master_view.size() >= 5) data_len = info.master_view[4];
     } else {
-      if (slave_view.size() >= 1) data_len = slave_view[0];
+      if (info.slave_view.size() >= 1) data_len = info.slave_view[0];
     }
 
     if (data_len == 0) return;
 
     cmd->setLast((uint32_t)(esp_timer_get_time() / 1000ULL));
-    cmd->setSessionId(session_id);
+    cmd->setSessionId(info.session_id);
 
     if (is_master) {
-      cmd->setData(ebus::range(master_view, 5, data_len));
+      cmd->setData(ebus::range(info.master_view, 5, data_len));
     } else {
-      cmd->setData(ebus::range(slave_view, 1, data_len));
+      cmd->setData(ebus::range(info.slave_view, 1, data_len));
     }
 
     if (data_updated_callback_) {
@@ -417,13 +413,12 @@ void CommandManager::updateData(uint32_t session_id, uint16_t poll_id,
   };
 
   if (command) {
-    update(command, session_id, master_view, slave_view);
+    update(command, info);
     return;
   }
 
-  MatchingCommands matchingCommands = findPassiveCommands(master_view);
-  for (Command* cmd : matchingCommands)
-    update(cmd, session_id, master_view, slave_view);
+  MatchingCommands matchingCommands = findPassiveCommands(info.master_view);
+  for (Command* cmd : matchingCommands) update(cmd, info);
 }
 
 void CommandManager::fetchValues(const ebus::JsonChunkVisitor& visitor) const {

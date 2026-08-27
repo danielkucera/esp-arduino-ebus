@@ -19,11 +19,18 @@ namespace {
 constexpr uint32_t system_monitor_period_ms = 30000;
 constexpr uint32_t log_summary_interval_ms = 300000;
 constexpr size_t log_queue_size = 8;
-constexpr size_t protocol_queue_size = 16;
+constexpr size_t protocol_queue_size = 8;
 
-struct LogRequest {
-  char key[16];
+struct LogRequestItem {
+  uint8_t key_id;
 };
+
+struct ProtocolInfoItem {
+  ebus::ProtocolInfo info;
+  ebus::StaticSequence<64> master;
+  ebus::StaticSequence<64> slave;
+};
+
 }  // namespace
 
 SystemMonitor::Status SystemMonitor::status_ = {};
@@ -47,11 +54,10 @@ bool SystemMonitor::begin() {
   sockets_detected_ = 0;
   sockets_connected_ = 0;
 
-  log_queue_ = xQueueCreate(log_queue_size, sizeof(LogRequest));
+  log_queue_ = xQueueCreate(log_queue_size, sizeof(LogRequestItem));
   if (log_queue_ == nullptr) return false;
 
-  protocol_queue_ =
-      xQueueCreate(protocol_queue_size, sizeof(ebus::ProtocolInfo));
+  protocol_queue_ = xQueueCreate(protocol_queue_size, sizeof(ProtocolInfoItem));
   if (protocol_queue_ == nullptr) {
     vQueueDelete(log_queue_);
     log_queue_ = nullptr;
@@ -81,8 +87,12 @@ void SystemMonitor::stop() {
 
 void SystemMonitor::enqueueLogRequest(std::string_view key) {
   if (log_queue_ == nullptr) return;
-  LogRequest req;
-  std::snprintf(req.key, sizeof(req.key), "%.*s", (int)key.size(), key.data());
+
+  uint8_t key_id = StringPool::instance().intern(key);
+  if (key_id == 0) return;
+
+  LogRequestItem req{};
+  req.key_id = key_id;
   xQueueSend(log_queue_, &req, 0);
   if (task_handle_ != nullptr) {
     xTaskNotifyGive(task_handle_);
@@ -91,7 +101,23 @@ void SystemMonitor::enqueueLogRequest(std::string_view key) {
 
 void SystemMonitor::enqueueProtocolInfo(const ebus::ProtocolInfo& info) {
   if (protocol_queue_ == nullptr) return;
-  xQueueSend(protocol_queue_, &info, 0);
+
+  ProtocolInfoItem item{};
+  item.info = info;
+
+  if (!info.master_view.empty()) {
+    item.master.assign(info.master_view.data(), info.master_view.size());
+  } else {
+    item.master.clear();
+  }
+
+  if (!info.slave_view.empty()) {
+    item.slave.assign(info.slave_view.data(), info.slave_view.size());
+  } else {
+    item.slave.clear();
+  }
+
+  xQueueSend(protocol_queue_, &item, 0);
   if (task_handle_ != nullptr) {
     xTaskNotifyGive(task_handle_);
   }
@@ -163,9 +189,10 @@ void SystemMonitor::taskLoop() {
 }
 
 void SystemMonitor::processLogRequests() {
-  LogRequest req;
+  LogRequestItem req;
   while (xQueueReceive(log_queue_, &req, 0) == pdTRUE) {
-    const Command* cmd = commandManager.findCommand(req.key);
+    std::string_view key = StringPool::instance().lookup(req.key_id);
+    const Command* cmd = commandManager.findCommand(key);
     if (cmd != nullptr) {
       char buf[256];
       size_t len = cmd->writeLogMessage(buf, sizeof(buf));
@@ -178,14 +205,24 @@ void SystemMonitor::processLogRequests() {
 }
 
 void SystemMonitor::processProtocolInfo() {
-  ebus::ProtocolInfo info;
+  ProtocolInfoItem item;
   while (protocol_queue_ &&
-         xQueueReceive(protocol_queue_, &info, 0) == pdTRUE) {
-    if (info.is_error) {
-      Mqtt::publishError(info);
+         xQueueReceive(protocol_queue_, &item, 0) == pdTRUE) {
+    if (!item.master.empty()) {
+      item.info.master_view = item.master;
     } else {
-      commandManager.updateData(info.poll_id, info.session_id, info.master_view,
-                                info.slave_view);
+      item.info.master_view = ebus::ByteView(nullptr, 0);
+    }
+    if (!item.slave.empty()) {
+      item.info.slave_view = item.slave;
+    } else {
+      item.info.slave_view = ebus::ByteView(nullptr, 0);
+    }
+
+    if (item.info.is_error) {
+      Mqtt::publishError(item.info);
+    } else {
+      commandManager.updateData(item.info);
     }
   }
 }
