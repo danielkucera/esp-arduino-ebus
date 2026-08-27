@@ -238,7 +238,7 @@ int WifiNetworkManager::getReconnectCount() { return reconnectCount_; }
 
 bool WifiNetworkManager::isStaConnected() { return staConnected_; }
 
-std::string WifiNetworkManager::getIpAddress() {
+std::string_view WifiNetworkManager::getIpAddress() {
   if (ipAddress_.addr != 0) return ipToString(ipAddress_);
 
   esp_netif_ip_info_t info{};
@@ -248,7 +248,7 @@ std::string WifiNetworkManager::getIpAddress() {
     netmask_ = info.netmask;
     return ipToString(ipAddress_);
   }
-  return "";
+  return {};
 }
 
 void WifiNetworkManager::setStaIpAssignedCallback(
@@ -257,7 +257,7 @@ void WifiNetworkManager::setStaIpAssignedCallback(
 
   if (staIpAssignedCallback_ == nullptr) return;
 
-  const std::string ipAddress = getIpAddress();
+  std::string ipAddress(getIpAddress());
   if (!ipAddress.empty()) {
     staIpAssignedCallback_(ipAddress);
   }
@@ -288,11 +288,11 @@ bool WifiNetworkManager::getDnsIp(uint8_t index, esp_ip4_addr_t* outIp) {
   return true;
 }
 
-std::string WifiNetworkManager::ipToString(const esp_ip4_addr_t& ip) {
-  char buffer[16]{};
+std::string_view WifiNetworkManager::ipToString(const esp_ip4_addr_t& ip) {
+  thread_local static char buffer[16]{};
   if (ip4addr_ntoa_r(reinterpret_cast<const ip4_addr_t*>(&ip), buffer,
                      sizeof(buffer)) == nullptr) {
-    return "";
+    return {};
   }
   return buffer;
 }
@@ -303,16 +303,20 @@ int32_t WifiNetworkManager::RSSI() {
   return record.rssi;
 }
 
-std::string WifiNetworkManager::SSID() {
+std::string_view WifiNetworkManager::SSID() {
+  thread_local static char buffer[33]{};
   wifi_ap_record_t record{};
-  if (esp_wifi_sta_get_ap_info(&record) != ESP_OK) return "";
-  return std::string(reinterpret_cast<char*>(record.ssid));
+  if (esp_wifi_sta_get_ap_info(&record) != ESP_OK) return {};
+  size_t len = strnlen(reinterpret_cast<char*>(record.ssid), 32);
+  std::memcpy(buffer, record.ssid, len);
+  buffer[len] = '\0';
+  return buffer;
 }
 
-std::string WifiNetworkManager::BSSIDstr() {
+std::string_view WifiNetworkManager::BSSIDstr() {
+  thread_local static char buffer[18]{};
   wifi_ap_record_t record{};
-  if (esp_wifi_sta_get_ap_info(&record) != ESP_OK) return "";
-  char buffer[18]{};
+  if (esp_wifi_sta_get_ap_info(&record) != ESP_OK) return {};
   std::snprintf(buffer, sizeof(buffer), "%02x:%02x:%02x:%02x:%02x:%02x",
                 record.bssid[0], record.bssid[1], record.bssid[2],
                 record.bssid[3], record.bssid[4], record.bssid[5]);
@@ -335,10 +339,10 @@ const char* WifiNetworkManager::getHostname() {
   return hostname;
 }
 
-std::string WifiNetworkManager::macAddress() {
+std::string_view WifiNetworkManager::macAddress() {
+  thread_local static char buffer[18]{};
   uint8_t mac[6]{};
-  if (esp_wifi_get_mac(WIFI_IF_STA, mac) != ESP_OK) return "";
-  char buffer[18]{};
+  if (esp_wifi_get_mac(WIFI_IF_STA, mac) != ESP_OK) return {};
   std::snprintf(buffer, sizeof(buffer), "%02x:%02x:%02x:%02x:%02x:%02x", mac[0],
                 mac[1], mac[2], mac[3], mac[4], mac[5]);
   return buffer;
@@ -437,7 +441,7 @@ void WifiNetworkManager::handle_event(
     }
 
     if (staIpAssignedCallback_ != nullptr) {
-      const std::string ipAddress = ipToString(ipAddress_);
+      std::string ipAddress(ipToString(ipAddress_));
       if (!ipAddress.empty()) {
         staIpAssignedCallback_(ipAddress);
       }
@@ -534,11 +538,11 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
     char buf[128];
     snprintf(buf, sizeof(buf),
              "Static IP configured: %s, Gateway: %s, DNS1: %s%s",
-             ipToString(ipAddress_).c_str(), ipToString(gateway_).c_str(),
-             ipToString(dns1_).c_str(),
+             ipToString(ipAddress_).data(), ipToString(gateway_).data(),
+             ipToString(dns1_).data(),
              (dns2Value.empty()
                   ? ""
-                  : (std::string(", DNS2: ") + ipToString(dns2_)).c_str()));
+                  : std::string(", DNS2: ").append(ipToString(dns2_)).c_str()));
     logger.info(buf);
   } else {  // Use snprintf for warning message
     logger.warn("Invalid static IP/netmask config, falling back to DHCP");

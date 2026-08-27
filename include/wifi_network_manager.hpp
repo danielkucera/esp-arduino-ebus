@@ -4,6 +4,7 @@
 #include <esp_wifi.h>
 
 #include <string>
+#include <string_view>
 
 class ConfigManager;
 
@@ -17,7 +18,7 @@ class WifiNetworkManager {
   static int getReconnectCount();
   static wifi_mode_t getMode();
   static bool isStaConnected();
-  static std::string getIpAddress();
+  static std::string_view getIpAddress();
   static void setStaIpAssignedCallback(
       void (*callback)(const std::string& ipAddress));
   static bool isStaticIpEnabled();
@@ -29,14 +30,14 @@ class WifiNetworkManager {
 
   static bool getStaIpInfo(esp_netif_ip_info_t* outInfo);
   static bool getDnsIp(uint8_t index, esp_ip4_addr_t* outIp);
-  static std::string ipToString(const esp_ip4_addr_t& ip);
+  static std::string_view ipToString(const esp_ip4_addr_t& ip);
 
   static int32_t RSSI();
-  static std::string SSID();
-  static std::string BSSIDstr();
+  static std::string_view SSID();
+  static std::string_view BSSIDstr();
   static int32_t channel();
   static const char* getHostname();
-  static std::string macAddress();
+  static std::string_view macAddress();
   static void setStatusLedPin(int pin);
 
   static void handle_event(void* arg, esp_event_base_t event_base,
