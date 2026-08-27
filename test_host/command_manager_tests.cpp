@@ -94,8 +94,9 @@ TEST_CASE("CommandManager getCommands returns all commands",
     commandManager.insertCommand(cmd);
   }
 
-  auto cmds = commandManager.getCommands();
-  REQUIRE(cmds.size() == 5);
+  size_t count = 0;
+  commandManager.forEachCommand([&](const Command*) { ++count; });
+  REQUIRE(count == 5);
 }
 
 TEST_CASE("CommandManager getActiveCommands counts active only",

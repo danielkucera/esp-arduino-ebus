@@ -322,16 +322,6 @@ void CommandManager::fetchCommands(
   }
 }
 
-const std::vector<Command*> CommandManager::getCommands() {
-  std::lock_guard<std::recursive_mutex> lock(mutex_);
-  std::vector<Command*> result;
-  result.reserve(commands_.size());
-  for (size_t i = 0; i < commands_.size(); i++) {
-    result.push_back(&commands_[i]);
-  }
-  return result;
-}
-
 size_t CommandManager::getActiveCommands() const {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   return std::count_if(commands_.begin(), commands_.end(),

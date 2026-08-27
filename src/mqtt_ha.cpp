@@ -484,13 +484,13 @@ void MqttHA::publishComponentIfEnabled(const Command* command,
 }
 
 void MqttHA::publishComponents() const {
-  for (const Command* command : commandManager.getCommands()) {
+  commandManager.forEachCommand([this](const Command* command) {
     for (size_t i = 0; i < command->getFieldCount(); ++i) {
       if (command->hasFieldHA(i)) {
         publishComponent(command, i, !enabled_);
       }
     }
-  }
+  });
 }
 
 void MqttHA::publishComponentsIfEnabled() const {
@@ -508,9 +508,8 @@ void MqttHA::removeComponent(const Command* command) const {
 }
 
 void MqttHA::removeComponents() const {
-  for (const Command* command : commandManager.getCommands()) {
-    removeComponent(command);
-  }
+  commandManager.forEachCommand(
+      [this](const Command* command) { removeComponent(command); });
 }
 
 void MqttHA::removeComponentIfEnabled(const Command* command,

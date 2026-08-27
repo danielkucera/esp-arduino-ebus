@@ -55,7 +55,13 @@ class CommandManager {
 
   void fetchCommands(const ebus::JsonChunkVisitor& visitor) const;
 
-  const std::vector<Command*> getCommands();
+  template <typename Func>
+  void forEachCommand(Func&& func) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    for (size_t i = 0; i < commands_.size(); i++) {
+      func(&commands_[i]);
+    }
+  }
 
   size_t getActiveCommands() const;
   size_t getPassiveCommands() const;
