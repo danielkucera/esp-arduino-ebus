@@ -9,7 +9,6 @@
 #include <ebus/types.hpp>
 #include <string>
 #include <string_view>
-#include <vector>
 
 // Simple circular buffer logger
 
@@ -45,7 +44,7 @@ class Logger {
 
   TaskHandle_t getTaskHandle() const { return print_task_; }
   size_t getQueueSize() const;
-  size_t getQueueCapacity() const { return max_entries_; }
+  size_t getQueueCapacity() const { return max_entries; }
   size_t getQueueHighWatermark() const;
 
  private:
@@ -59,8 +58,7 @@ class Logger {
     uint32_t poll_id;
   };
 
-  std::vector<LogEntry> buffer_;  // Use std::vector for RAII
-  size_t max_entries_;
+  LogEntry buffer_[max_entries];
   size_t index_;
   size_t entries_;
 
