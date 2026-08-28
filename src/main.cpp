@@ -204,8 +204,8 @@ struct EbusStatus {
     auto obj_scope = w.objectScope();
     w.writeField("pwm", configManager.readInt("pwmValue", 130));
     w.writeField("ebus_address", configManager.readString("ebusAddress", "ff"));
-    w.writeField("bus_window", configManager.readInt("busWindow", 4300));
-    w.writeField("bus_offset", configManager.readInt("busOffset", 80));
+    w.writeField("bus_window", configManager.readInt("busWindow", 4400));
+    w.writeField("bus_offset", configManager.readInt("busOffset", 50));
   }
 };
 
@@ -490,58 +490,6 @@ void fetchAppStatus(const ebus::JsonChunkVisitor& visitor) {
 }
 #endif
 
-// unused ?
-void saveParamsCallback() {
-  set_pwm();
-
-#if defined(EBUS_INTERNAL)
-  std::string ebusAddress = configManager.readString("ebusAddress", "ff");
-  getEbusController().setAddress(
-      uint8_t(std::strtoul(ebusAddress.c_str(), nullptr, 16)));
-  getEbusController().setSystemInquiry(configManager.readBool("systemInquiry"));
-  getEbusController().setSystemResponse(
-      configManager.readBool("systemResponse"));
-
-  getEbusController().setWindow(configManager.readInt("busWindow", 4300));
-  getEbusController().setOffset(configManager.readInt("busOffset", 80));
-
-  getEbusController().setScanOnStartup(configManager.readBool("scanOnStartup"));
-
-  if (configManager.readBool("sntpEnabled")) {
-    esp_sntp_stop();
-    initSNTP(
-        configManager.readString("sntpServer", DEFAULT_SNTP_SERVER).c_str());
-    setTimezone(configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE)
-                    .c_str());
-  } else {
-    esp_sntp_stop();
-  }
-
-  std::string mqttServerValue = configManager.readString("mqttServer");
-  std::string mqttUserValue = configManager.readString("mqttUser");
-  std::string mqttPassValue = configManager.readString("mqttPass");
-  std::string rootTopicValue = configManager.readString("rootTopic", "");
-  mqtt.setEnabled(configManager.readBool("mqttEnabled"));
-  mqtt.setServer(mqttServerValue.c_str(), 1883);
-  mqtt.setCredentials(mqttUserValue.c_str(), mqttPassValue.c_str());
-  if (!rootTopicValue.empty()) {
-    mqtt.setRootTopic(rootTopicValue);
-  }
-  mqtt.change();
-
-  mqttha.setEnabled(configManager.readBool("haEnabled"));
-  if (mqtt.isEnabled()) {
-    if (mqttha.isEnabled()) {
-      Mqtt::publishHaEnable();
-    } else {
-      Mqtt::publishHaDisable();
-    }
-  }
-  Mqtt::publishDiscovery();
-  Mqtt::publishComponentDiscovery();
-#endif
-}
-
 void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
   ebus::detail::JsonWriter writer(visitor);
   auto scope = writer.objectScope();
@@ -695,8 +643,8 @@ extern "C" void app_main(void) {
   runtimeConfig.system_response = false;
 
   // Bus
-  runtimeConfig.bus.window_us = configManager.readInt("busWindow", 4300);
-  runtimeConfig.bus.offset_us = configManager.readInt("busOffset", 80);
+  runtimeConfig.bus.window_us = configManager.readInt("busWindow", 4400);
+  runtimeConfig.bus.offset_us = configManager.readInt("busOffset", 50);
   runtimeConfig.bus.watchdog_timeout_ms = 250;
   runtimeConfig.bus.syn_gen = true;
 
@@ -735,8 +683,8 @@ extern "C" void app_main(void) {
   runtimeConfig.system_response = configManager.readBool("systemResponse");
 
   // Bus
-  runtimeConfig.bus.window_us = configManager.readInt("busWindow", 4300);
-  runtimeConfig.bus.offset_us = configManager.readInt("busOffset", 80);
+  runtimeConfig.bus.window_us = configManager.readInt("busWindow", 4400);
+  runtimeConfig.bus.offset_us = configManager.readInt("busOffset", 50);
   runtimeConfig.bus.watchdog_timeout_ms = 250;
   runtimeConfig.bus.syn_gen = false;
 
