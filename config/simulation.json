@@ -73,7 +73,7 @@
     "fields": [
       {
         "name": "value",
-        "profile": "unit8",
+        "profile": "uint8",
         "position": 1,
         "ha_profile": "binary_sensor_running"
       }
