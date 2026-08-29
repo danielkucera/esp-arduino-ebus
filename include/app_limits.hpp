@@ -25,7 +25,7 @@ inline constexpr uint32_t cron_stack = 1536;
 inline constexpr uint8_t cron_priority = 2;
 inline constexpr uint32_t mqtt_stack = 7168;
 inline constexpr uint8_t mqtt_priority = 3;
-inline constexpr uint32_t system_monitor_stack = 3072;
+inline constexpr uint32_t system_monitor_stack = 4096;
 inline constexpr uint8_t system_monitor_priority = 4;
 #endif
 }  // namespace Task

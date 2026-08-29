@@ -596,10 +596,12 @@ MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile,
   int vmLen = 0;
   int pnLen = 0;
 
-  vmLen += snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen,
-                    "%%{ set values = {");
-  pnLen += snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen,
-                    "%%{ set values = {");
+  const char value_prefix[] = "{% set values = {";
+  const char cmd_prefix[] = "{% set values = {";
+  memcpy(value_map_buf + vmLen, value_prefix, sizeof(value_prefix) - 1);
+  vmLen += sizeof(value_prefix) - 1;
+  memcpy(cmd_map_buf + pnLen, cmd_prefix, sizeof(cmd_prefix) - 1);
+  pnLen += sizeof(cmd_prefix) - 1;
 
   for (size_t i = 0; i < options_count; i++) {
     if (vmLen < (int)sizeof(value_map_buf)) {
@@ -621,13 +623,13 @@ MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile,
   }
 
   snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen,
-           " %%}{{ values[value_json.%.*s] if value_json.%.*s in "
+           "} %%}{{ values[value_json.%.*s] if value_json.%.*s in "
            "values.keys() else '%s' }}",
            (int)field_name.size(), field_name.data(), (int)field_name.size(),
            field_name.data(), options_count > 0 ? options_values[0] : "");
 
   snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen,
-           " %%}{{ values[value] if value in values.keys() else "
+           "} %%}{{ values[value] if value in values.keys() else "
            "%d }}",
            defaultOptionValue);
 
