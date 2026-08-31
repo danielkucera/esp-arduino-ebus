@@ -27,7 +27,7 @@ TEST_CASE("Command fromJson roundtrip preserves fields", "[Command]") {
   REQUIRE(cmd.getMaster() == true);
   REQUIRE(cmd.getFieldDatatype(0) == ebus::DataType::data2b);
   REQUIRE(cmd.getFieldDivider(0) == 1);
-  REQUIRE(cmd.getFieldDigits(0) == 2);
+  REQUIRE(cmd.getFieldDigits(0) == 1);
   REQUIRE(std::string(cmd.getFieldUnit(0)) == "\u00b0C");
   REQUIRE(cmd.hasFieldHA(0) == true);
   REQUIRE(std::string(cmd.getFieldHAProfileName(0)) == "sensor_temperature");
@@ -160,7 +160,7 @@ TEST_CASE("Command getStringFromVector decodes string type", "[Command]") {
 TEST_CASE("Command matches checks read_cmd at offset 1", "[Command]") {
   std::string json = R"({"key":"01","name":"Test","read_cmd":"fe070009",)"
                      R"("interval":0,"master":true,)"
-                     R"("fields":[{"name":"value","profile":"unit8",)"
+                     R"("fields":[{"name":"value","profile":"uint8",)"
                      R"("position":1,"ha_profile":"sensor_temperature"}]})";
   JsonReader reader(json);
   Command cmd = Command::fromJson(reader);
@@ -203,7 +203,7 @@ TEST_CASE("Command writeValuePayload formats single and multi fields flat",
                        R"("fields":[{"name":"middle_temperature",)"
                        R"("profile":"data2c_celsius","position":1,)"
                        R"("ha_profile":"sensor_temperature"},)"
-                       R"({"name":"state","profile":"unit8","position":3,)"
+                       R"({"name":"state","profile":"uint8","position":3,)"
                        R"("ha_profile":"sensor_enum_state"}]})";
     JsonReader reader(json);
     Command cmd = Command::fromJson(reader);

@@ -48,7 +48,7 @@ Command makeCommandMultiField(const std::string& key, const std::string& name,
 
 TEST_CASE("CommandManager insert and find by key", "[CommandManager]") {
   commandManager.wipeCommands();
-  Command cmd = makeCommand("01", "Test", true, true, 1, "unit8", "fe070009");
+  Command cmd = makeCommand("01", "Test", true, true, 1, "uint8", "fe070009");
   commandManager.insertCommand(cmd);
 
   Command* found = commandManager.findCommand("01");
@@ -63,11 +63,11 @@ TEST_CASE("CommandManager insert and find by key", "[CommandManager]") {
 TEST_CASE("CommandManager insert updates existing command",
           "[CommandManager]") {
   commandManager.wipeCommands();
-  Command cmd1 = makeCommand("01", "First", true, true, 1, "unit8", "fe070009");
+  Command cmd1 = makeCommand("01", "First", true, true, 1, "uint8", "fe070009");
   commandManager.insertCommand(cmd1);
 
   Command cmd2 =
-      makeCommand("01", "Updated", false, true, 1, "unit8", "fe070009");
+      makeCommand("01", "Updated", false, true, 1, "uint8", "fe070009");
   commandManager.insertCommand(cmd2);
 
   Command* found = commandManager.findCommand("01");
@@ -78,7 +78,7 @@ TEST_CASE("CommandManager insert updates existing command",
 
 TEST_CASE("CommandManager remove command", "[CommandManager]") {
   commandManager.wipeCommands();
-  Command cmd = makeCommand("01", "Test", true, true, 1, "unit8", "fe070009");
+  Command cmd = makeCommand("01", "Test", true, true, 1, "uint8", "fe070009");
   commandManager.insertCommand(cmd);
 
   commandManager.removeCommand("01");
@@ -90,7 +90,7 @@ TEST_CASE("CommandManager getCommands returns all commands",
   commandManager.wipeCommands();
   for (int i = 0; i < 5; i++) {
     Command cmd = makeCommand(std::to_string(i), "Test " + std::to_string(i),
-                              true, true, 1, "unit8", "fe070009");
+                              true, true, 1, "uint8", "fe070009");
     commandManager.insertCommand(cmd);
   }
 
@@ -103,11 +103,11 @@ TEST_CASE("CommandManager getActiveCommands counts active only",
           "[CommandManager]") {
   commandManager.wipeCommands();
   Command cmd1 =
-      makeCommand("01", "Active", true, true, 1, "unit8", "fe070009");
+      makeCommand("01", "Active", true, true, 1, "uint8", "fe070009");
   commandManager.insertCommand(cmd1);
 
   Command cmd2 =
-      makeCommand("02", "Inactive", false, true, 1, "unit8", "fe070009");
+      makeCommand("02", "Inactive", false, true, 1, "uint8", "fe070009");
   commandManager.insertCommand(cmd2);
 
   REQUIRE(commandManager.getActiveCommands() == 1);
@@ -119,7 +119,7 @@ TEST_CASE("CommandManager updateData decodes multi-field slave correctly",
   commandManager.wipeCommands();
   Command cmd = makeCommandMultiField("09", "Buffer/Middle_Temperature", false,
                                       "08b50903290100", false, "data2c_celsius",
-                                      1, "", "uint8_enum", 3, "");
+                                      1, "", "uint8", 3, "");
   cmd.setPollId(1);
   commandManager.insertCommand(cmd);
   Command* cmd_ptr = commandManager.findCommand("09");
@@ -151,7 +151,7 @@ TEST_CASE("CommandManager updateData decodes multi-field slave correctly",
 }
 
 TEST_CASE("Command getValueJson outputs null for empty data", "[Command]") {
-  Command cmd = makeCommand("01", "Test", true, true, 1, "unit8", "fe070009");
+  Command cmd = makeCommand("01", "Test", true, true, 1, "uint8", "fe070009");
 
   std::string out;
   ebus::detail::JsonWriter writer([&out](std::string_view s) { out += s; });
@@ -162,7 +162,7 @@ TEST_CASE("Command getValueJson outputs null for empty data", "[Command]") {
 }
 
 TEST_CASE("Command getValueJson outputs value for set data", "[Command]") {
-  Command cmd = makeCommand("01", "Test", true, true, 1, "unit8", "fe070009");
+  Command cmd = makeCommand("01", "Test", true, true, 1, "uint8", "fe070009");
 
   ebus::Sequence data;
   data.push_back(0x42);
@@ -188,11 +188,11 @@ TEST_CASE("CommandManager findPassiveCommands matches passive read_cmd",
           "[CommandManager]") {
   commandManager.wipeCommands();
   Command cmd1 =
-      makeCommand("01", "Match", false, true, 1, "unit8", "fe070009");
+      makeCommand("01", "Match", false, true, 1, "uint8", "fe070009");
   commandManager.insertCommand(cmd1);
 
   Command cmd2 =
-      makeCommand("02", "NoMatch", false, true, 1, "unit8", "080b09010a00");
+      makeCommand("02", "NoMatch", false, true, 1, "uint8", "080b09010a00");
   commandManager.insertCommand(cmd2);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09};
@@ -205,7 +205,7 @@ TEST_CASE("CommandManager findPassiveCommands matches passive read_cmd",
 
 TEST_CASE("CommandManager updateData sets data", "[CommandManager]") {
   commandManager.wipeCommands();
-  Command cmd = makeCommand("01", "Test", false, true, 1, "unit8", "fe070009");
+  Command cmd = makeCommand("01", "Test", false, true, 1, "uint8", "fe070009");
   commandManager.insertCommand(cmd);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09, 0x00};
@@ -288,9 +288,9 @@ TEST_CASE("CommandManager loadCommandsFrom streams JSON from file",
 
   const char* json =
       R"([{"key":"01","name":"Test1","read_cmd":"fe070009","write_cmd":"","interval":60,)"
-      R"("fields":[{"name":"value","profile":"unit8","interval":0,"position":1,"ha_profile":"sensor_temperature"}]},)"
+      R"("fields":[{"name":"value","profile":"uint8","interval":0,"position":1,"ha_profile":"sensor_temperature"}]},)"
       R"({"key":"02","name":"Test2","read_cmd":"fe070009","write_cmd":"",)"
-      R"("fields":[{"name":"value","profile":"unit8","position":1,"ha_profile":"sensor_temperature"}]}])";
+      R"("fields":[{"name":"value","profile":"uint8","position":1,"ha_profile":"sensor_temperature"}]}])";
 
   const char* tmp_path = "/tmp/test_commands_stream.json";
   FILE* f = std::fopen(tmp_path, "wb");
@@ -323,7 +323,7 @@ TEST_CASE("CommandManager loadCommandsFrom streams large JSON (47 commands)",
         "  {"
         "\"key\":\"%02d\",\"name\":\"Cmd_%02d\",\"read_cmd\":\"%02xb50903"
         "%02x%02x00\",\"write_cmd\":\"\",\"interval\":%s,"
-        "\"fields\":[{\"name\":\"value\",\"profile\":\"unit8\","
+        "\"fields\":[{\"name\":\"value\",\"profile\":\"uint8\","
         "\"position\":1,\"master\":false}],"
         "\"ha_profile\":\"\"}%s\n",
         i, i, (i * 10) % 256, (i * 10 + 1) % 256, (i * 10 + 2) % 256, active,
@@ -355,7 +355,7 @@ TEST_CASE("CommandManager loadCommandsFrom loads multi-field commands",
       R"([{"key":"01","name":"Multi","read_cmd":"fe070009","write_cmd":"","interval":60,"master":true)"
       R"(,"fields":[{"name":"temp","profile":"data2c_celsius",)"
       R"("position":1,"ha_profile":""},)"
-      R"({"name":"sensor","profile":"uint8_enum",)"
+      R"({"name":"sensor","profile":"uint8",)"
       R"("position":3,"ha_profile":""}]}])";
 
   const char* tmp_path = "/tmp/test_multifield_stream.json";
@@ -389,7 +389,7 @@ TEST_CASE("CommandManager loadCommandsFrom streams tabular format with fields",
       R"([{"name":"value","profile":"data2b_celsius",)"
       R"("position":1,"ha_profile":"sensor_temperature"}]],)"
       R"(["02","Test2","fe070009","","0",false,)"
-      R"([{"name":"value","profile":"unit8",)"
+      R"([{"name":"value","profile":"uint8",)"
       R"("position":1,"ha_profile":""}]])";
 
   const char* tmp_path = "/tmp/test_tabular_stream.json";
@@ -403,6 +403,35 @@ TEST_CASE("CommandManager loadCommandsFrom streams tabular format with fields",
   REQUIRE(commandManager.getCommandCount() == 2);
   REQUIRE(commandManager.findCommand("01") != nullptr);
   REQUIRE(commandManager.findCommand("02") != nullptr);
+
+  std::remove(tmp_path);
+}
+
+TEST_CASE("CommandManager loadCommandsFrom preserves min/max overrides",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
+
+  const char* json =
+      R"([{"key":"32","name":"Basement/SetPoint","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","interval":60,"master":false)"
+      R"(,"fields":[{"name":"value","profile":"data1c_celsius","position":1,"ha_profile":"number_temperature","min":15,"max":20}]}])";
+
+  const char* tmp_path = "/tmp/test_minmax_stream.json";
+  FILE* f = std::fopen(tmp_path, "wb");
+  REQUIRE(f != nullptr);
+  std::fwrite(json, 1, std::strlen(json), f);
+  std::fclose(f);
+
+  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
+  REQUIRE(bytes >= 0);
+  REQUIRE(commandManager.getCommandCount() == 1);
+
+  Command* found = commandManager.findCommand("32");
+  REQUIRE(found != nullptr);
+  REQUIRE(found->getFieldCount() == 1);
+  REQUIRE(found->getFieldMinOverride(0) == Catch::Approx(15.0f));
+  REQUIRE(found->getFieldMaxOverride(0) == Catch::Approx(20.0f));
+  REQUIRE(found->getFieldMin(0) == Catch::Approx(15.0f));
+  REQUIRE(found->getFieldMax(0) == Catch::Approx(20.0f));
 
   std::remove(tmp_path);
 }

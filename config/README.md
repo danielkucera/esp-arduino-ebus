@@ -26,9 +26,27 @@ Commands are defined as a JSON array of objects. Each command object specifies a
       },
       {
         "name": "state",
-        "profile": "unit8",
+        "profile": "uint8",
         "position": 3,
         "ha_profile": "sensor_enum_state"
+      }
+    ]
+  },
+  {
+    "key": "32",
+    "name": "Basement/Temperature_NightRoomSetPoint",
+    "read_cmd": "50b509030d3300",
+    "write_cmd": "50b509040e3300",
+    "interval": 60,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "data1c_celsius",
+        "position": 1,
+        "ha_profile": "number_temperature",
+        "min": 15,
+        "max": 20
       }
     ]
   }
@@ -51,6 +69,8 @@ Commands are defined as a JSON array of objects. Each command object specifies a
 - **`profile`** *(string)*: Reference to a Data Profile in `profiles/data_profiles.json` (e.g. `"data2c_celsius"`, `"unit8"`).
 - **`position`** *(integer)*: 1-based offset of the field within the eBUS message payload (default `1`).
 - **`ha_profile`** *(string, optional)*: Reference to an HA Profile in `profiles/ha_profiles.json` (e.g. `"sensor_temperature"`). If omitted or empty, no Home Assistant entity is registered for this field.
+- **`min`** *(float, optional)*: Override the profile's default min value for write validation (e.g. `15` for a setpoint with profile `data1c_celsius` default min=0).
+- **`max`** *(float, optional)*: Override the profile's default max value for write validation (e.g. `20` for a setpoint with profile `data1c_celsius` default max=75).
 
 ## Files
 - `simulation.json`: Command definitions used when building in simulation mode (`esp32-c3-internal-simulation`).

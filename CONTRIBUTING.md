@@ -70,6 +70,7 @@ To maintain stability and security on the ESP32-C3, the application follows a se
 *   **EspOtaManager (`src/esp_ota_manager.hpp`)**: Handles firmware updates via ESP-OTA protocol (UDP).
 *   **DNSServer (`src/dns_server.hpp`)**: Provides DNS services for the captive portal in AP mode.
 *   **Logger (`src/logger.hpp`)**: Manages application logging to a circular buffer and serial output.
+*   **SystemMonitor (`src/system_monitor.hpp`)**: Monitors system health metrics (heap, stack, task stats, WiFi RSSI) and publishes via MQTT.
 *   **AdapterVersion (`src/adapter_version.hpp`)**: Provides adapter hardware and software version information from eFuse.
 
 ## Project Structure

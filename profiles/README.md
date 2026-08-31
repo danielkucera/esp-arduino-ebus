@@ -17,7 +17,7 @@ Data profiles define eBUS data types, unit strings, display precision, divider s
   "datatype": "DATA2C",
   "unit": "°C",
   "divider": 1.0,
-  "digits": 2,
+  "digits": 1,
   "min": -50.0,
   "max": 180.0
 }
@@ -28,8 +28,8 @@ Data profiles define eBUS data types, unit strings, display precision, divider s
 - **`datatype`**: eBUS protocol data type (e.g. `DATA2C`, `DATA2B`, `UINT8`, `UINT16`, `UINT32`, `INT16`, `CHAR1`).
 - **`unit`**: Display unit string (e.g. `"°C"`, `"bar"`, `"kW"`, `"kWh"`, `"%"`).
 - **`divider`**: Value scaling divider applied during decoding (`decoded_value = raw / divider`).
-- **`digits`**: Number of decimal places for floating point formatting.
-- **`min` / `max`**: Valid numerical bounds for write validation.
+- **`digits`**: Number of decimal places for floating point formatting (aligned with ebusd `@step` annotations: `@step(0.5)` → 1 digit, integer types → 0 digits).
+- **`min` / `max`**: Default valid numerical bounds for write validation. Can be overridden per-field in command definitions.
 
 ---
 

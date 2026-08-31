@@ -14,6 +14,7 @@
 #include <ebus/detail/json_reader.hpp>
 #include <ebus/detail/json_writer.hpp>
 #include <ebus/detail/protocol_limits.hpp>
+#include <limits>
 
 #include "logger.hpp"
 #include "mqtt.hpp"
@@ -245,6 +246,14 @@ int64_t CommandManager::saveCommands() const {
           writer.writeField("position",
                             static_cast<uint32_t>(c.getFieldPosition(i)));
           writer.writeField("ha_profile", c.getFieldHAProfileName(i));
+          float min_ov = c.getFieldMinOverride(i);
+          float max_ov = c.getFieldMaxOverride(i);
+          if (!std::isnan(min_ov)) {
+            writer.writeField("min", min_ov);
+          }
+          if (!std::isnan(max_ov)) {
+            writer.writeField("max", max_ov);
+          }
         }
       }
     }
@@ -318,6 +327,14 @@ void CommandManager::fetchCommands(
       writer.writeField("position",
                         static_cast<uint32_t>(c->getFieldPosition(j)));
       writer.writeField("ha_profile", c->getFieldHAProfileName(j));
+      float min_ov = c->getFieldMinOverride(j);
+      float max_ov = c->getFieldMaxOverride(j);
+      if (!std::isnan(min_ov)) {
+        writer.writeField("min", min_ov);
+      }
+      if (!std::isnan(max_ov)) {
+        writer.writeField("max", max_ov);
+      }
     }
   }
 }

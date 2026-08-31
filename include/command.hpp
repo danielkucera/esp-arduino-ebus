@@ -6,6 +6,7 @@
 #include <ebus/detail/json_reader.hpp>
 #include <ebus/static_vector.hpp>
 #include <ebus/types.hpp>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -27,6 +28,9 @@ struct FieldRef {
   uint8_t position = 0;
   // Home Assistant - per-field (0 = no HA profile)
   uint8_t ha_profile_idx = 0;
+  // Optional per-field min/max override (NaN = use profile default)
+  float min_override = std::numeric_limits<float>::quiet_NaN();
+  float max_override = std::numeric_limits<float>::quiet_NaN();
 };
 
 using FieldVector = ebus::StaticVector<FieldRef, max_fields>;
@@ -83,6 +87,10 @@ class Command {
   bool hasFieldHA(size_t i) const;
   const HAProfile* getFieldHAProfile(size_t i) const;
   std::string_view getFieldHAProfileName(size_t i) const;
+
+  // Per-field min/max override accessors (for serialization)
+  float getFieldMinOverride(size_t i) const;
+  float getFieldMaxOverride(size_t i) const;
 
   bool matches(ebus::ByteView master_view) const;
 

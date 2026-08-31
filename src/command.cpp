@@ -116,11 +116,19 @@ float Command::getFieldDivider(size_t i) const {
 }
 
 float Command::getFieldMin(size_t i) const {
+  if (i < fields_.size()) {
+    const auto& field = fields_[i];
+    if (!std::isnan(field.min_override)) return field.min_override;
+  }
   auto* p = getFieldProfile(i);
   return p ? p->min : 0.0f;
 }
 
 float Command::getFieldMax(size_t i) const {
+  if (i < fields_.size()) {
+    const auto& field = fields_[i];
+    if (!std::isnan(field.max_override)) return field.max_override;
+  }
   auto* p = getFieldProfile(i);
   return p ? p->max : 0.0f;
 }
@@ -158,6 +166,16 @@ std::string_view Command::getFieldHAProfileName(size_t i) const {
   if (i >= fields_.size()) return {};
   const HAProfile* p = getHAProfileByIndex(fields_[i].ha_profile_idx);
   return p ? p->name : std::string_view();
+}
+
+float Command::getFieldMinOverride(size_t i) const {
+  if (i >= fields_.size()) return std::numeric_limits<float>::quiet_NaN();
+  return fields_[i].min_override;
+}
+
+float Command::getFieldMaxOverride(size_t i) const {
+  if (i >= fields_.size()) return std::numeric_limits<float>::quiet_NaN();
+  return fields_[i].max_override;
 }
 
 bool Command::matches(ebus::ByteView master_view) const {
@@ -472,7 +490,10 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
             else if (fkey == "ha_profile") {
               const HAProfile* p = findHAProfile(fr.value());
               field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
-            }
+            } else if (fkey == "min")
+              field.min_override = fr.asNum<float>();
+            else if (fkey == "max")
+              field.max_override = fr.asNum<float>();
             return true;
           });
           command.fields_.push_back(field);
@@ -553,7 +574,10 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
                   else if (fkey == "ha_profile") {
                     const HAProfile* p = findHAProfile(fr.value());
                     field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
-                  }
+                  } else if (fkey == "min")
+                    field.min_override = fr.asNum<float>();
+                  else if (fkey == "max")
+                    field.max_override = fr.asNum<float>();
                   return true;
                 });
             command.fields_.push_back(field);
@@ -586,7 +610,10 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
                   else if (fkey == "ha_profile") {
                     const HAProfile* p = findHAProfile(fr_inner.value());
                     field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
-                  }
+                  } else if (fkey == "min")
+                    field.min_override = fr_inner.asNum<float>();
+                  else if (fkey == "max")
+                    field.max_override = fr_inner.asNum<float>();
                   return true;
                 });
                 command.fields_.push_back(field);
