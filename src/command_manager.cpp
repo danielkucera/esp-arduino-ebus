@@ -77,27 +77,11 @@ void CommandManager::insertCommand(Command command) {
     if (std::string_view(commands_[i].getKey()) ==
         std::string_view(command.getKey())) {
       uint16_t old_poll_id = commands_[i].getPollId();
-      // Move write_cmd to separate storage before overwriting
-      if (!command.getWriteCmdTemp().empty()) {
-        command.setWriteCmd(std::move(command.getWriteCmdTemp()), *this);
-      } else if (command.hasWriteCmd()) {
-        PollSequence ps;
-        ps.assign(command.getWriteCmd(*this));
-        command.setWriteCmd(std::move(ps), *this);
-      }
       commands_[i] = std::move(command);
       commands_[i].setPollId(old_poll_id);
       if (command_changed_callback_) command_changed_callback_(&commands_[i]);
       return;
     }
-  }
-  // Move write_cmd to separate storage before inserting
-  if (!command.getWriteCmdTemp().empty()) {
-    command.setWriteCmd(std::move(command.getWriteCmdTemp()), *this);
-  } else if (command.hasWriteCmd()) {
-    PollSequence ps;
-    ps.assign(command.getWriteCmd(*this));
-    command.setWriteCmd(std::move(ps), *this);
   }
   if (commands_.push_back(std::move(command))) {
     if (command_changed_callback_) command_changed_callback_(&commands_.back());
@@ -108,8 +92,10 @@ void CommandManager::removeCommand(std::string_view key) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   for (size_t i = 0; i < commands_.size(); i++) {
     if (std::string_view(commands_[i].getKey()) == key) {
+      uint8_t removed_key_id = commands_[i].getKeyId();
       if (command_removed_callback_) command_removed_callback_(&commands_[i]);
       commands_.erase(commands_.begin() + i);
+      removeFieldOverrides(removed_key_id);
       return;
     }
   }
@@ -121,6 +107,7 @@ void CommandManager::removeAll() {
     if (command_removed_callback_) command_removed_callback_(&commands_[i]);
   }
   commands_.clear();
+  clearFieldOverrides();
 }
 
 Command* CommandManager::findCommand(std::string_view key) {
@@ -246,8 +233,8 @@ int64_t CommandManager::saveCommands() const {
           writer.writeField("position",
                             static_cast<uint32_t>(c.getFieldPosition(i)));
           writer.writeField("ha_profile", c.getFieldHAProfileName(i));
-          float min_ov = c.getFieldMinOverride(i);
-          float max_ov = c.getFieldMaxOverride(i);
+          float min_ov = getFieldMinOverride(c.getKeyId(), i);
+          float max_ov = getFieldMaxOverride(c.getKeyId(), i);
           if (!std::isnan(min_ov)) {
             writer.writeField("min", min_ov);
           }
@@ -267,6 +254,7 @@ int64_t CommandManager::saveCommands() const {
 int64_t CommandManager::wipeCommands() {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
   commands_.clear();
+  clearFieldOverrides();
   if (!ensureLittlefsMounted()) return -1;
 
   struct stat fileStat{};
@@ -327,8 +315,8 @@ void CommandManager::fetchCommands(
       writer.writeField("position",
                         static_cast<uint32_t>(c->getFieldPosition(j)));
       writer.writeField("ha_profile", c->getFieldHAProfileName(j));
-      float min_ov = c->getFieldMinOverride(j);
-      float max_ov = c->getFieldMaxOverride(j);
+      float min_ov = getFieldMinOverride(c->getKeyId(), j);
+      float max_ov = getFieldMaxOverride(c->getKeyId(), j);
       if (!std::isnan(min_ov)) {
         writer.writeField("min", min_ov);
       }
@@ -487,6 +475,93 @@ size_t CommandManager::getWriteCmdCount() const {
   return write_cmds_.size();
 }
 
+namespace {
+FieldOverride* findOverride(ebus::StaticVector<FieldOverride, 16>& pool,
+                            uint8_t key_id, size_t field_idx) {
+  for (size_t i = 0; i < pool.size(); ++i) {
+    if (pool[i].key_id == key_id && pool[i].field_idx == field_idx) {
+      return &pool[i];
+    }
+  }
+  return nullptr;
+}
+
+const FieldOverride* findOverride(
+    const ebus::StaticVector<FieldOverride, 16>& pool, uint8_t key_id,
+    size_t field_idx) {
+  for (size_t i = 0; i < pool.size(); ++i) {
+    if (pool[i].key_id == key_id && pool[i].field_idx == field_idx) {
+      return &pool[i];
+    }
+  }
+  return nullptr;
+}
+}  // namespace
+
+float CommandManager::getFieldMinOverride(uint8_t key_id,
+                                          size_t field_idx) const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  auto* o =
+      findOverride(field_overrides_, key_id, static_cast<uint8_t>(field_idx));
+  return o ? o->min_override : std::numeric_limits<float>::quiet_NaN();
+}
+
+float CommandManager::getFieldMaxOverride(uint8_t key_id,
+                                          size_t field_idx) const {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  auto* o =
+      findOverride(field_overrides_, key_id, static_cast<uint8_t>(field_idx));
+  return o ? o->max_override : std::numeric_limits<float>::quiet_NaN();
+}
+
+void CommandManager::setFieldMinOverride(uint8_t key_id, size_t field_idx,
+                                         float min_val) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  auto* o =
+      findOverride(field_overrides_, key_id, static_cast<uint8_t>(field_idx));
+  if (o) {
+    o->min_override = min_val;
+    return;
+  }
+  if (field_overrides_.size() >= field_overrides_.capacity()) return;
+  FieldOverride entry;
+  entry.key_id = key_id;
+  entry.field_idx = static_cast<uint8_t>(field_idx);
+  entry.min_override = min_val;
+  field_overrides_.push_back(entry);
+}
+
+void CommandManager::setFieldMaxOverride(uint8_t key_id, size_t field_idx,
+                                         float max_val) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  auto* o =
+      findOverride(field_overrides_, key_id, static_cast<uint8_t>(field_idx));
+  if (o) {
+    o->max_override = max_val;
+    return;
+  }
+  if (field_overrides_.size() >= field_overrides_.capacity()) return;
+  FieldOverride entry;
+  entry.key_id = key_id;
+  entry.field_idx = static_cast<uint8_t>(field_idx);
+  entry.max_override = max_val;
+  field_overrides_.push_back(entry);
+}
+
+void CommandManager::removeFieldOverrides(uint8_t key_id) {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  for (size_t i = field_overrides_.size(); i-- > 0;) {
+    if (field_overrides_[i].key_id == key_id) {
+      field_overrides_.erase(field_overrides_.begin() + i);
+    }
+  }
+}
+
+void CommandManager::clearFieldOverrides() {
+  std::lock_guard<std::recursive_mutex> lock(mutex_);
+  field_overrides_.clear();
+}
+
 void CommandManager::deserializeCommands(FILE* file) {
   constexpr size_t reader_buf_size = 1536;
   constexpr size_t row_buf_size = 1024;
@@ -566,6 +641,15 @@ void CommandManager::deserializeCommands(FILE* file) {
         header_seen = true;
         continue;
       }
+      // Pre-extract key to drop any stale field overrides for that key
+      // before fromTabular() repopulates the pool.
+      row_reader.reset();
+      if (row_reader.next() == ebus::detail::JsonReader::Token::array_start) {
+        if (row_reader.next() == ebus::detail::JsonReader::Token::string) {
+          uint8_t kid = StringPool::instance().intern(row_reader.value());
+          if (kid != 0) removeFieldOverrides(kid);
+        }
+      }
       row_reader.reset();
       insertCommand(Command::fromTabular(row_reader));
       loaded_count++;
@@ -573,6 +657,17 @@ void CommandManager::deserializeCommands(FILE* file) {
       row_reader.reset();
       std::string evalError = Command::evaluate(row_reader);
       if (evalError.empty()) {
+        // Pre-extract key to drop stale overrides before fromJson()
+        // repopulates.
+        row_reader.reset();
+        if (row_reader.next() ==
+            ebus::detail::JsonReader::Token::object_start) {
+          row_reader.findKey("key");
+          if (row_reader.next() == ebus::detail::JsonReader::Token::string) {
+            uint8_t kid = StringPool::instance().intern(row_reader.value());
+            if (kid != 0) removeFieldOverrides(kid);
+          }
+        }
         row_reader.reset();
         insertCommand(Command::fromJson(row_reader));
         loaded_count++;

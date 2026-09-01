@@ -38,6 +38,8 @@ std::string_view Command::getKey() const {
   return StringPool::instance().lookup(key_id_);
 }
 
+uint8_t Command::getKeyId() const { return key_id_; }
+
 std::string_view Command::getName() const {
   return StringPool::instance().lookup(name_id_);
 }
@@ -73,8 +75,6 @@ void Command::setWriteCmd(PollSequence&& cmd, CommandManager& command_manager) {
     write_cmd_idx_ = 0;  // No space
   }
 }
-
-PollSequence& Command::getWriteCmdTemp() { return write_cmd_temp_; }
 
 bool Command::getActive() const { return interval_ > 0; }
 
@@ -117,8 +117,8 @@ float Command::getFieldDivider(size_t i) const {
 
 float Command::getFieldMin(size_t i) const {
   if (i < fields_.size()) {
-    const auto& field = fields_[i];
-    if (!std::isnan(field.min_override)) return field.min_override;
+    float ov = commandManager.getFieldMinOverride(key_id_, i);
+    if (!std::isnan(ov)) return ov;
   }
   auto* p = getFieldProfile(i);
   return p ? p->min : 0.0f;
@@ -126,8 +126,8 @@ float Command::getFieldMin(size_t i) const {
 
 float Command::getFieldMax(size_t i) const {
   if (i < fields_.size()) {
-    const auto& field = fields_[i];
-    if (!std::isnan(field.max_override)) return field.max_override;
+    float ov = commandManager.getFieldMaxOverride(key_id_, i);
+    if (!std::isnan(ov)) return ov;
   }
   auto* p = getFieldProfile(i);
   return p ? p->max : 0.0f;
@@ -166,16 +166,6 @@ std::string_view Command::getFieldHAProfileName(size_t i) const {
   if (i >= fields_.size()) return {};
   const HAProfile* p = getHAProfileByIndex(fields_[i].ha_profile_idx);
   return p ? p->name : std::string_view();
-}
-
-float Command::getFieldMinOverride(size_t i) const {
-  if (i >= fields_.size()) return std::numeric_limits<float>::quiet_NaN();
-  return fields_[i].min_override;
-}
-
-float Command::getFieldMaxOverride(size_t i) const {
-  if (i >= fields_.size()) return std::numeric_limits<float>::quiet_NaN();
-  return fields_[i].max_override;
 }
 
 bool Command::matches(ebus::ByteView master_view) const {
@@ -448,6 +438,14 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
     return command;
   }
 
+  // Pending field overrides, flushed after key_id_ is known.
+  float pending_min[command_types::max_fields];
+  float pending_max[command_types::max_fields];
+  for (size_t i = 0; i < command_types::max_fields; ++i) {
+    pending_min[i] = std::numeric_limits<float>::quiet_NaN();
+    pending_max[i] = std::numeric_limits<float>::quiet_NaN();
+  }
+
   reader.forEachField([&](std::string_view key, ebus::detail::JsonReader& r) {
     auto token = r.next();
     if (key == "key")
@@ -461,7 +459,9 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
     } else if (key == "write_cmd") {
       uint8_t hex_buf[64];
       size_t hex_len = ebus::toBytes(r.value(), hex_buf, sizeof(hex_buf));
-      command.write_cmd_temp_.assign(ebus::ByteView(hex_buf, hex_len));
+      PollSequence write_cmd;
+      write_cmd.assign(ebus::ByteView(hex_buf, hex_len));
+      command.setWriteCmd(std::move(write_cmd), commandManager);
     } else if (key == "interval")
       command.interval_ = r.asNum<uint16_t>();
     else if (key == "master")
@@ -491,9 +491,9 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
               const HAProfile* p = findHAProfile(fr.value());
               field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
             } else if (fkey == "min")
-              field.min_override = fr.asNum<float>();
+              pending_min[command.fields_.size()] = fr.asNum<float>();
             else if (fkey == "max")
-              field.max_override = fr.asNum<float>();
+              pending_max[command.fields_.size()] = fr.asNum<float>();
             return true;
           });
           command.fields_.push_back(field);
@@ -502,6 +502,15 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
     }
     return true;
   });
+
+  for (size_t i = 0; i < command.fields_.size(); ++i) {
+    if (!std::isnan(pending_min[i])) {
+      commandManager.setFieldMinOverride(command.key_id_, i, pending_min[i]);
+    }
+    if (!std::isnan(pending_max[i])) {
+      commandManager.setFieldMaxOverride(command.key_id_, i, pending_max[i]);
+    }
+  }
 
   command.session_id_ = 0;
   command.poll_id_ = 0;
@@ -541,7 +550,9 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
         uint8_t hex_buf[64];
         size_t hex_len =
             ebus::toBytes(reader.value(), hex_buf, sizeof(hex_buf));
-        command.write_cmd_temp_.assign(ebus::ByteView(hex_buf, hex_len));
+        PollSequence write_cmd;
+        write_cmd.assign(ebus::ByteView(hex_buf, hex_len));
+        command.setWriteCmd(std::move(write_cmd), commandManager);
         break;
       }  // NOLINT(bugprone-branch-ctl-initializer)
       case 4:
@@ -560,26 +571,28 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
               break;
             if (ft != ebus::detail::JsonReader::Token::object_start) break;
             command_types::FieldRef field;
-            reader.forEachField(
-                [&](std::string_view fkey, ebus::detail::JsonReader& fr) {
-                  fr.next();
-                  if (fkey == "name")
-                    field.name_id = StringPool::instance().intern(fr.value());
-                  else if (fkey == "profile") {
-                    const DataProfile* p = findDataProfile(fr.value());
-                    field.profile_idx = p ? getProfileIndex(p) : 0;
-                  } else if (fkey == "position")
-                    field.position =
-                        static_cast<uint8_t>(fr.asNum<size_t>() & 0x0F);
-                  else if (fkey == "ha_profile") {
-                    const HAProfile* p = findHAProfile(fr.value());
-                    field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
-                  } else if (fkey == "min")
-                    field.min_override = fr.asNum<float>();
-                  else if (fkey == "max")
-                    field.max_override = fr.asNum<float>();
-                  return true;
-                });
+            reader.forEachField([&](std::string_view fkey,
+                                    ebus::detail::JsonReader& fr) {
+              fr.next();
+              if (fkey == "name")
+                field.name_id = StringPool::instance().intern(fr.value());
+              else if (fkey == "profile") {
+                const DataProfile* p = findDataProfile(fr.value());
+                field.profile_idx = p ? getProfileIndex(p) : 0;
+              } else if (fkey == "position")
+                field.position =
+                    static_cast<uint8_t>(fr.asNum<size_t>() & 0x0F);
+              else if (fkey == "ha_profile") {
+                const HAProfile* p = findHAProfile(fr.value());
+                field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
+              } else if (fkey == "min")
+                commandManager.setFieldMinOverride(
+                    command.key_id_, command.fields_.size(), fr.asNum<float>());
+              else if (fkey == "max")
+                commandManager.setFieldMaxOverride(
+                    command.key_id_, command.fields_.size(), fr.asNum<float>());
+              return true;
+            });
             command.fields_.push_back(field);
           }
         } else if (token == ebus::detail::JsonReader::Token::string) {
@@ -611,9 +624,13 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
                     const HAProfile* p = findHAProfile(fr_inner.value());
                     field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
                   } else if (fkey == "min")
-                    field.min_override = fr_inner.asNum<float>();
+                    commandManager.setFieldMinOverride(command.key_id_,
+                                                       command.fields_.size(),
+                                                       fr_inner.asNum<float>());
                   else if (fkey == "max")
-                    field.max_override = fr_inner.asNum<float>();
+                    commandManager.setFieldMaxOverride(command.key_id_,
+                                                       command.fields_.size(),
+                                                       fr_inner.asNum<float>());
                   return true;
                 });
                 command.fields_.push_back(field);

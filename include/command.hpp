@@ -28,9 +28,6 @@ struct FieldRef {
   uint8_t position = 0;
   // Home Assistant - per-field (0 = no HA profile)
   uint8_t ha_profile_idx = 0;
-  // Optional per-field min/max override (NaN = use profile default)
-  float min_override = std::numeric_limits<float>::quiet_NaN();
-  float max_override = std::numeric_limits<float>::quiet_NaN();
 };
 
 using FieldVector = ebus::StaticVector<FieldRef, max_fields>;
@@ -58,13 +55,13 @@ class Command {
   void setData(ebus::ByteView data);
 
   std::string_view getKey() const;
+  uint8_t getKeyId() const;
   std::string_view getName() const;
   ebus::ByteView getReadCmd() const;
 
   bool hasWriteCmd() const;
   ebus::ByteView getWriteCmd(const class CommandManager& command_manager) const;
   void setWriteCmd(PollSequence&& cmd, class CommandManager& command_manager);
-  PollSequence& getWriteCmdTemp();
 
   bool getActive() const;
   const uint16_t& getInterval() const;
@@ -87,10 +84,6 @@ class Command {
   bool hasFieldHA(size_t i) const;
   const HAProfile* getFieldHAProfile(size_t i) const;
   std::string_view getFieldHAProfileName(size_t i) const;
-
-  // Per-field min/max override accessors (for serialization)
-  float getFieldMinOverride(size_t i) const;
-  float getFieldMaxOverride(size_t i) const;
 
   bool matches(ebus::ByteView master_view) const;
 
@@ -124,7 +117,6 @@ class Command {
   uint8_t key_id_ = 0;
   uint8_t name_id_ = 0;
   PollSequence read_cmd_ = {};
-  PollSequence write_cmd_temp_ = {};  // Temporary for deserialization
   uint8_t write_cmd_idx_ =
       0;  // 0 = none, 1-based index into CommandMmanager::write_cmds_
   uint16_t interval_ = 60;

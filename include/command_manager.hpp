@@ -23,12 +23,25 @@ inline constexpr size_t write_cmd_capacity = 16;
 inline constexpr size_t write_cmd_capacity = WRITE_CMD_CAPACITY;
 #endif
 
+#ifndef OVERRIDE_FIELD_CAPACITY
+inline constexpr size_t override_field_capacity = 16;
+#else
+inline constexpr size_t override_field_capacity = OVERRIDE_FIELD_CAPACITY;
+#endif
+
 using DataUpdatedCallback = std::function<void(std::string_view key)>;
 using DataUpdatedLogCallback = std::function<void(std::string_view key)>;
 
 using CommandChangedCallback = std::function<void(Command* command)>;
 
 using MatchingCommands = ebus::StaticVector<Command*, 16>;
+
+struct FieldOverride {
+  uint8_t key_id = 0;
+  uint8_t field_idx = 0;
+  float min_override = std::numeric_limits<float>::quiet_NaN();
+  float max_override = std::numeric_limits<float>::quiet_NaN();
+};
 
 class CommandManager {
  public:
@@ -78,11 +91,20 @@ class CommandManager {
   bool addWriteCmd(PollSequence&& cmd);
   size_t getWriteCmdCount() const;
 
+  // Min/Max override storage (separate from Command to save memory)
+  float getFieldMinOverride(uint8_t key_id, size_t field_idx) const;
+  float getFieldMaxOverride(uint8_t key_id, size_t field_idx) const;
+  void setFieldMinOverride(uint8_t key_id, size_t field_idx, float min_val);
+  void setFieldMaxOverride(uint8_t key_id, size_t field_idx, float max_val);
+  void removeFieldOverrides(uint8_t key_id);
+  void clearFieldOverrides();
+
  private:
   mutable std::recursive_mutex mutex_;
 
   ebus::StaticVector<Command, command_capacity> commands_;
   ebus::StaticVector<PollSequence, write_cmd_capacity> write_cmds_;
+  ebus::StaticVector<FieldOverride, override_field_capacity> field_overrides_;
 
   DataUpdatedCallback data_updated_callback_ = nullptr;
   DataUpdatedLogCallback data_updated_log_callback_ = nullptr;

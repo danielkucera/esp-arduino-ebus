@@ -428,8 +428,10 @@ TEST_CASE("CommandManager loadCommandsFrom preserves min/max overrides",
   Command* found = commandManager.findCommand("32");
   REQUIRE(found != nullptr);
   REQUIRE(found->getFieldCount() == 1);
-  REQUIRE(found->getFieldMinOverride(0) == Catch::Approx(15.0f));
-  REQUIRE(found->getFieldMaxOverride(0) == Catch::Approx(20.0f));
+  REQUIRE(commandManager.getFieldMinOverride(found->getKeyId(), 0) ==
+          Catch::Approx(15.0f));
+  REQUIRE(commandManager.getFieldMaxOverride(found->getKeyId(), 0) ==
+          Catch::Approx(20.0f));
   REQUIRE(found->getFieldMin(0) == Catch::Approx(15.0f));
   REQUIRE(found->getFieldMax(0) == Catch::Approx(20.0f));
 
