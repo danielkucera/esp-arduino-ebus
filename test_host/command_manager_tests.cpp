@@ -1,4 +1,5 @@
 #include <catch2/catch_all.hpp>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <ebus/data_types.hpp>
@@ -436,4 +437,27 @@ TEST_CASE("CommandManager loadCommandsFrom preserves min/max overrides",
   REQUIRE(found->getFieldMax(0) == Catch::Approx(20.0f));
 
   std::remove(tmp_path);
+}
+
+TEST_CASE("CommandManager removeFieldOverrides drains pool for a key",
+          "[CommandManager]") {
+  commandManager.wipeCommands();
+
+  Command cmd = makeCommand("01", "Test", true, true, 1, "uint8", "fe070009");
+  commandManager.insertCommand(cmd);
+  Command* found = commandManager.findCommand("01");
+  REQUIRE(found != nullptr);
+
+  commandManager.setFieldMinOverride(found->getKeyId(), 0, 42.0f);
+  commandManager.setFieldMaxOverride(found->getKeyId(), 0, 84.0f);
+  REQUIRE(commandManager.getFieldMinOverride(found->getKeyId(), 0) ==
+          Catch::Approx(42.0f));
+  REQUIRE(commandManager.getFieldMaxOverride(found->getKeyId(), 0) ==
+          Catch::Approx(84.0f));
+
+  commandManager.removeFieldOverrides(found->getKeyId());
+  REQUIRE(std::isnan(commandManager.getFieldMinOverride(found->getKeyId(), 0)));
+  REQUIRE(std::isnan(commandManager.getFieldMaxOverride(found->getKeyId(), 0)));
+
+  commandManager.wipeCommands();
 }

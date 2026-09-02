@@ -476,7 +476,8 @@ size_t CommandManager::getWriteCmdCount() const {
 }
 
 namespace {
-FieldOverride* findOverride(ebus::StaticVector<FieldOverride, 16>& pool,
+template <size_t Capacity>
+FieldOverride* findOverride(ebus::StaticVector<FieldOverride, Capacity>& pool,
                             uint8_t key_id, size_t field_idx) {
   for (size_t i = 0; i < pool.size(); ++i) {
     if (pool[i].key_id == key_id && pool[i].field_idx == field_idx) {
@@ -486,8 +487,9 @@ FieldOverride* findOverride(ebus::StaticVector<FieldOverride, 16>& pool,
   return nullptr;
 }
 
+template <size_t Capacity>
 const FieldOverride* findOverride(
-    const ebus::StaticVector<FieldOverride, 16>& pool, uint8_t key_id,
+    const ebus::StaticVector<FieldOverride, Capacity>& pool, uint8_t key_id,
     size_t field_idx) {
   for (size_t i = 0; i < pool.size(); ++i) {
     if (pool[i].key_id == key_id && pool[i].field_idx == field_idx) {
