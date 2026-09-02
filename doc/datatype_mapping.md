@@ -162,12 +162,23 @@ The app maps command JSON fields (`config/simulation.json` / `commands.json`) to
 - `data_` *(Sequence)*: Latest raw payload bytes
 - `fields_` *(StaticVector<FieldRef, 4>)*: Up to 4 fields per command
 
-Each `FieldRef` uses only **6 bytes**:
+Each `FieldRef` uses only **4 bytes**:
 - `name_id` *(uint8_t)*: Field name string pool ID
 - `profile_idx` *(uint8_t)*: 1-based index into DataProfile registry
-- `pos_master` *(uint8_t)*: Bits 0-3 = offset position (1-16), Bit 7 = master flag
+- `position` *(uint8_t)*: 1-based offset position within the payload (0 = none)
 - `ha_profile_idx` *(uint8_t)*: 1-based index into HAProfile registry (`0` = disabled)
-- `min_override` *(float)*: Per-field min override (NaN = use profile default)
-- `max_override` *(float)*: Per-field max override (NaN = use profile default)
+
+Min/max overrides are **not stored in `FieldRef`**. They live in a separate
+`CommandManager::field_overrides_` pool (`ebus::StaticVector<FieldOverride, 16>`),
+mirroring how `write_cmds_` is hoisted out of `Command`. This keeps the hot
+`Command`/`FieldRef` struct at 4 bytes per field while >95 % of fields use profile
+defaults directly.
+
+`FieldOverride` (12 bytes each, ~192 bytes max for 16 entries):
+- `key_id` *(uint8_t)*: Key string pool ID of the command owning the override
+- `field_idx` *(uint8_t)*: 0-based index into that command's `fields_` vector
+- `min_override` *(float)*: `NaN` = use profile default
+- `max_override` *(float)*: `NaN` = use profile default
+
 
 
