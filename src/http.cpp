@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <ebus/detail/json_reader.hpp>
@@ -176,11 +177,13 @@ esp_err_t handleWifiScan(httpd_req_t* req) {
   uint16_t apCount = 0;
   esp_wifi_scan_get_ap_num(&apCount);
 
-  std::vector<wifi_ap_record_t> aps(apCount);
-  // Note: This still allocates a vector for all APs. For extremely large AP
-  // counts, a more advanced approach would involve iterating and processing APs
-  // directly from the WiFi driver if it supported a streaming interface, or
-  // processing in smaller batches.
+  // Cap the number of records we read to avoid heap-allocating for every AP.
+  // ESP32-C3 scans rarely see more than ~30 visible APs; 64 gives headroom
+  // without a heap allocation (replaces std::vector<wifi_ap_record_t>).
+  static constexpr size_t max_scan_aps = 64;
+  size_t scan_count = std::min(static_cast<uint16_t>(max_scan_aps), apCount);
+  std::array<wifi_ap_record_t, max_scan_aps> aps{};
+  apCount = static_cast<uint16_t>(scan_count);
   esp_wifi_scan_get_ap_records(&apCount, aps.data());
 
   httpd_resp_set_type(req, "application/json;charset=utf-8");
@@ -191,11 +194,14 @@ esp_err_t handleWifiScan(httpd_req_t* req) {
 
   {
     auto array_scope = writer.arrayScope();
-    for (const auto& ap : aps) {
+    for (size_t i = 0; i < scan_count; ++i) {
+      const auto& ap = aps[i];
       auto obj_scope = writer.objectScope();
-      std::string ssid(reinterpret_cast<const char*>(ap.ssid),
-                       strnlen(reinterpret_cast<const char*>(ap.ssid), 32));
-      writer.writeField("ssid", ssid);
+      char ssid_buf[33];
+      size_t ssid_len = strnlen(reinterpret_cast<const char*>(ap.ssid), 32);
+      memcpy(ssid_buf, ap.ssid, ssid_len);
+      ssid_buf[ssid_len] = '\0';
+      writer.writeField("ssid", ssid_buf);
       char bssidStr[18];
       snprintf(bssidStr, sizeof(bssidStr), "%02x:%02x:%02x:%02x:%02x:%02x",
                ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4],
