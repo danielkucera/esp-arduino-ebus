@@ -2,6 +2,7 @@
 #include "mqtt.hpp"
 
 #include <esp_timer.h>
+#include <freertos/task.h>
 
 #include <functional>
 
@@ -47,17 +48,51 @@ void Mqtt::startTask() {
 }
 
 void Mqtt::stopTask() {
+  // First, signal task to stop to prevent it from using the MQTT client
   if (task_handle_ != nullptr) {
-    // Signal task to stop
     task_should_run_ = false;
 
-    // Small delay to allow loop to exit if blocked in xQueueReceive
-    vTaskDelay(pdMS_TO_TICKS(50));
+    // Send a dummy action to unblock xQueueReceive if task is waiting
+    // This is safer than vQueueDelete which can cause race conditions
+    OutgoingAction dummy;
+    dummy.type = OutgoingActionType::Error;
     if (outgoing_queue_ != nullptr) {
-      vQueueDelete(outgoing_queue_);
-      outgoing_queue_ = nullptr;
+      xQueueSend(outgoing_queue_, &dummy, 0);
     }
+
+    // Wait for the task to actually terminate (up to 1 second total)
+    // This is critical to prevent the task from accessing MQTT client
+    // after it has been destroyed
+    // Note: The task will delete its own queue when it exits
+    const TickType_t xDelay = pdMS_TO_TICKS(100);
+    for (int i = 0; i < 10; ++i) {
+      if (task_exited_) {
+        break;
+      }
+      vTaskDelay(xDelay);
+    }
+
+    // Task has deleted its own queue and handle
+    std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
     task_handle_ = nullptr;
+    outgoing_queue_ = nullptr;
+    task_should_run_ = false;
+    task_exited_ = false;
+  }
+
+  // Now stop and destroy the MQTT client to prevent reconnections during
+  // upgrade This must be done AFTER the task has stopped to avoid race
+  // conditions
+  {
+    std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
+    if (connected_) {
+      esp_mqtt_client_stop(client_);
+      connected_ = false;
+    }
+    if (client_ != nullptr) {
+      esp_mqtt_client_destroy(client_);
+      client_ = nullptr;
+    }
   }
 }
 
@@ -280,6 +315,12 @@ void Mqtt::taskFunc(void* arg) {
               self->last_status_publish_ + self->status_publish_interval_ms_) {
         self->last_status_publish_ = currentMillis;
 
+        // Check if we should stop before doing telemetry
+        // This prevents accessing eBUS resources after shutdown
+        if (!self->task_should_run_) {
+          continue;
+        }
+
         // Telemetry Rotation: Cycle through different status payloads to spread
         // out heap usage and network traffic, preventing congestion on weak
         // links.
@@ -320,6 +361,11 @@ void Mqtt::taskFunc(void* arg) {
       OutgoingAction action;
       if (xQueueReceive(self->outgoing_queue_, &action,
                         pdMS_TO_TICKS(wait_ms)) == pdTRUE) {
+        // Check if we should stop before processing any action
+        // This prevents processing actions after shutdown has been initiated
+        if (!self->task_should_run_) {
+          continue;
+        }
         switch (action.type) {
           case OutgoingActionType::Component:
             // Iterate over all fields with HA enabled (same as
@@ -382,7 +428,7 @@ void Mqtt::taskFunc(void* arg) {
     vQueueDelete(self->outgoing_queue_);
     self->outgoing_queue_ = nullptr;
   }
-  self->task_handle_ = nullptr;
+  self->task_exited_ = true;
   vTaskDelete(nullptr);
 }
 
@@ -390,6 +436,12 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
                         int32_t event_id, void* event_data) {
   Mqtt* self = static_cast<Mqtt*>(handler_args);
   esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
+
+  // Guard against stale events after client is destroyed
+  if (self->client_ == nullptr) {
+    return;
+  }
+
   switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_BEFORE_CONNECT: {
       logger.debug("[MQTT] before connect");

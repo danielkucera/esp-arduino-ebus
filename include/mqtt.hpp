@@ -156,6 +156,7 @@ class Mqtt {
 
   bool enabled_ = false;
   volatile bool task_should_run_ = false;
+  volatile bool task_exited_ = false;
   bool connected_ = false;
 
   static constexpr size_t max_outgoing_queue_size = 8;

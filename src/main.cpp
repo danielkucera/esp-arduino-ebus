@@ -317,8 +317,13 @@ void startCaptiveDns() {
 
 void prepareRuntimeForUpgrade() {
 #if defined(EBUS_INTERNAL)
-  cron.stop();
+  // CRITICAL: Stop MQTT first and wait for task to fully exit
+  // This prevents the MQTT task from accessing eBUS/Cron/SystemMonitor
+  // resources while they are being stopped
   mqtt.stopTask();
+
+  // Now safe to stop other components
+  cron.stop();
   stopEbus();
   SystemMonitor::stop();
 
