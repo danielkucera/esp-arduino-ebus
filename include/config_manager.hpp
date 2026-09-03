@@ -9,7 +9,8 @@ class ConfigManager {
  public:
   static void begin();
   static void resetConfig();
-  static std::string readString(const char* key, const char* fallback = "");
+  static std::string_view readString(const char* key,
+                                     const char* fallback = "");
   static int32_t readInt(const char* key, int32_t fallback = 0);
   static bool readBool(const char* key, bool fallback = false);
   static bool writeString(const char* key, const std::string& value);

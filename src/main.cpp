@@ -576,7 +576,8 @@ extern "C" void app_main(void) {
   startCaptiveDns();
   SetupHttpHandlers();
   configManager.begin();
-  HttpUtils::setCustomHeaders(configManager.readString("httpHeaders", ""));
+  HttpUtils::setCustomHeaders(
+      std::string(configManager.readString("httpHeaders", "")));
   upgradeManager.begin();
   SetupHttpFallbackHandlers();
   upgradeManager.setPreUpgradeHook(prepareRuntimeForUpgrade);
@@ -586,18 +587,20 @@ extern "C" void app_main(void) {
 
 #if defined(EBUS_INTERNAL)
   if (configManager.readBool("sntpEnabled")) {
-    std::string sntpServerValue =
-        configManager.readString("sntpServer", DEFAULT_SNTP_SERVER);
-    std::string sntpTimezoneValue =
-        configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE);
+    std::string sntpServerValue = std::string(
+        configManager.readString("sntpServer", DEFAULT_SNTP_SERVER));
+    std::string sntpTimezoneValue = std::string(
+        configManager.readString("sntpTimezone", DEFAULT_SNTP_TIMEZONE));
     initSNTP(sntpServerValue.c_str());
     setTimezone(sntpTimezoneValue.c_str());
   }
 
-  std::string mqttServerValue = configManager.readString("mqttServer");
-  std::string mqttUserValue = configManager.readString("mqttUser");
-  std::string mqttPassValue = configManager.readString("mqttPass");
-  std::string rootTopicValue = configManager.readString("rootTopic", "");
+  std::string mqttServerValue =
+      std::string(configManager.readString("mqttServer"));
+  std::string mqttUserValue = std::string(configManager.readString("mqttUser"));
+  std::string mqttPassValue = std::string(configManager.readString("mqttPass"));
+  std::string rootTopicValue =
+      std::string(configManager.readString("rootTopic", ""));
   mqtt.setEnabled(configManager.readBool("mqttEnabled"));
   mqtt.setup(unique_id);
   mqtt.setServer(mqttServerValue.c_str(), 1883);
@@ -613,7 +616,8 @@ extern "C" void app_main(void) {
   mqttha.setWillTopic(mqtt.getWillTopic());
   mqttha.setEnabled(configManager.readBool("haEnabled"));
 
-  mqttha.setThingName(configManager.readString("thingName", "esp-eBus"));
+  mqttha.setThingName(
+      std::string(configManager.readString("thingName", "esp-eBus")));
   mqttha.setThingHwVersion(getAdapterHwVersionString());
   mqttha.setThingModel("esp-eBus Adapter");
   mqttha.setThingModelId("esp-ebus-adapter");
@@ -682,7 +686,8 @@ extern "C" void app_main(void) {
   runtimeConfig.log_level = ebus::LogLevel::debug;
 
   runtimeConfig.address = uint8_t(std::strtoul(
-      configManager.readString("ebusAddress", "ff").c_str(), nullptr, 16));
+      std::string(configManager.readString("ebusAddress", "ff")).c_str(),
+      nullptr, 16));
   runtimeConfig.lock_counter = 3;
   runtimeConfig.system_inquiry = configManager.readBool("systemInquiry");
   runtimeConfig.system_response = configManager.readBool("systemResponse");

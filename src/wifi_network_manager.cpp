@@ -91,15 +91,15 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   initStatusLed();
   setStatusLedMode(StatusLedMode::SlowBlink);
 
-  std::string apPassword =
-      configManager_ != nullptr
-          ? configManager_->readString("apModePassword", default_ap_password)
-          : std::string(default_ap_password);
+  std::string apPassword = configManager_ != nullptr
+                               ? std::string(configManager_->readString(
+                                     "apModePassword", default_ap_password))
+                               : std::string(default_ap_password);
   if (apPassword.empty()) apPassword = default_ap_password;
   const std::string configuredThingName =
-      configManager_ != nullptr
-          ? configManager_->readString("thingName", default_hostname)
-          : std::string(default_hostname);
+      configManager_ != nullptr ? std::string(configManager_->readString(
+                                      "thingName", default_hostname))
+                                : std::string(default_hostname);
   const std::string hostname =
       buildHostname(configuredThingName, default_hostname);
 
@@ -180,16 +180,18 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
     logger.info(buf);
   }
 
-  std::string staSsid = configManager_ != nullptr ? configManager_->readString(
-                                                        "wifiSsid", "ebus-test")
-                                                  : std::string("ebus-test");
+  std::string staSsid =
+      configManager_ != nullptr
+          ? std::string(configManager_->readString("wifiSsid", "ebus-test"))
+          : std::string("ebus-test");
   std::string staPass =
       configManager_ != nullptr
-          ? configManager_->readString("wifiPassword", "lectronz")
+          ? std::string(configManager_->readString("wifiPassword", "lectronz"))
           : std::string("lectronz");
-  std::string staBssid = configManager_ != nullptr
-                             ? configManager_->readString("wifiBssid", "")
-                             : std::string("");
+  std::string staBssid =
+      configManager_ != nullptr
+          ? std::string(configManager_->readString("wifiBssid", ""))
+          : std::string("");
   staConfigured_ = !staSsid.empty();
 
   if (!staConfigured_) {
@@ -405,24 +407,33 @@ bool WifiNetworkManager::isStaticIpEnabled() {
 }
 
 std::string WifiNetworkManager::getConfiguredIpAddress() {
-  return configManager_ != nullptr ? configManager_->readString("ipAddress")
-                                   : "";
+  return configManager_ != nullptr
+             ? std::string(configManager_->readString("ipAddress"))
+             : "";
 }
 
 std::string WifiNetworkManager::getConfiguredGateway() {
-  return configManager_ != nullptr ? configManager_->readString("gateway") : "";
+  return configManager_ != nullptr
+             ? std::string(configManager_->readString("gateway"))
+             : "";
 }
 
 std::string WifiNetworkManager::getConfiguredNetmask() {
-  return configManager_ != nullptr ? configManager_->readString("netmask") : "";
+  return configManager_ != nullptr
+             ? std::string(configManager_->readString("netmask"))
+             : "";
 }
 
 std::string WifiNetworkManager::getConfiguredDns1() {
-  return configManager_ != nullptr ? configManager_->readString("dns1") : "";
+  return configManager_ != nullptr
+             ? std::string(configManager_->readString("dns1"))
+             : "";
 }
 
 std::string WifiNetworkManager::getConfiguredDns2() {
-  return configManager_ != nullptr ? configManager_->readString("dns2") : "";
+  return configManager_ != nullptr
+             ? std::string(configManager_->readString("dns2"))
+             : "";
 }
 
 void WifiNetworkManager::handle_event(

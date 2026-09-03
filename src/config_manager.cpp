@@ -36,17 +36,52 @@ bool ensureNvsReady() {
   return true;
 }
 
-std::string readString(nvs_handle_t handle, const char* key,
-                       const char* fallback = "") {
+// Static buffer for NVS string reads - avoids heap allocation
+// NVS keys are typically config values (SSID, hostnames, etc.) under 128 bytes
+// But use 512 to be safe for larger values like certificates or JSON configs
+static char nvs_string_buffer[512];
+
+std::string_view readString(nvs_handle_t handle, const char* key,
+                            const char* fallback = "") {
   size_t required = 0;
   esp_err_t err = nvs_get_str(handle, key, nullptr, &required);
-  if (err == ESP_ERR_NVS_NOT_FOUND) return std::string(fallback);
-  if (err != ESP_OK || required == 0) return std::string(fallback);
+  if (err == ESP_ERR_NVS_NOT_FOUND) {
+    // Fallback is a string literal, safe to return as string_view
+    // printf("DEBUG: readString(key='%s') -> NOT FOUND, using fallback='%s'\n",
+    // key, fallback);
+    return fallback;
+  }
+  if (err != ESP_OK || required == 0) {
+    // printf("DEBUG: readString(key='%s') -> ERROR (%d) or empty, using
+    // fallback='%s'\n", key, err, fallback);
+    return fallback;
+  }
 
-  std::vector<char> buffer(required, '\0');
-  err = nvs_get_str(handle, key, buffer.data(), &required);
-  if (err != ESP_OK) return std::string(fallback);
-  return std::string(buffer.data());
+  // Ensure buffer is large enough (required includes null terminator)
+  if (required > sizeof(nvs_string_buffer)) {
+    // Not enough space - truncate to max that fits
+    required = sizeof(nvs_string_buffer) - 1;
+  }
+
+  err = nvs_get_str(handle, key, nvs_string_buffer, &required);
+  if (err != ESP_OK) {
+    return fallback;
+  }
+
+  // Debug logging
+  std::string_view result(nvs_string_buffer);
+  // printf("DEBUG: readString(key='%s', fallback='%s') -> value='%.*s'
+  // (len=%zu, required=%zu, first_byte=0x%02x, last_byte=0x%02x)\n",
+  //        key, fallback,
+  //        static_cast<int>(result.length()), result.data(),
+  //        result.length(), required,
+  //        result.empty() ? 0 : static_cast<unsigned char>(result[0]),
+  //        result.empty() ? 0 : static_cast<unsigned
+  //        char>(result[result.length() - 1]));
+
+  // nvs_get_str always null-terminates, so we can use the simple constructor
+  // which will stop at the null terminator. This also handles empty strings.
+  return result;
 }
 
 bool writeString(nvs_handle_t handle, const char* key, const std::string& value,
@@ -62,7 +97,7 @@ bool writeString(nvs_handle_t handle, const char* key, const std::string& value,
   return true;
 }
 
-bool parseStoredBool(const std::string& value) {
+bool parseStoredBool(std::string_view value) {
   return value == "selected" || value == "true" || value == "1" ||
          value == "on";
 }
@@ -155,14 +190,15 @@ void fillJsonFromNvs(ebus::detail::JsonWriter& writer, nvs_handle_t handle) {
 
 }  // namespace
 
-std::string ConfigManager::readString(const char* key, const char* fallback) {
-  if (!ensureNvsReady()) return std::string(fallback);
+std::string_view ConfigManager::readString(const char* key,
+                                           const char* fallback) {
+  if (!ensureNvsReady()) return fallback;
 
   nvs_handle_t handle = 0;
   const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READONLY, &handle);
-  if (openErr != ESP_OK) return std::string(fallback);
+  if (openErr != ESP_OK) return fallback;
 
-  std::string value = ::readString(handle, key, fallback);
+  std::string_view value = ::readString(handle, key, fallback);
   nvs_close(handle);
   return value;
 }
@@ -182,13 +218,13 @@ int32_t ConfigManager::readInt(const char* key, int32_t fallback) {
   }
 
   // Backward compatibility for values stored as strings.
-  std::string strValue = ::readString(handle, key);
+  std::string_view strValue = ::readString(handle, key);
   nvs_close(handle);
   if (strValue.empty()) return fallback;
 
   char* end = nullptr;
-  const long parsed = std::strtol(strValue.c_str(), &end, 10);
-  if (end == strValue.c_str() || *end != '\0') return fallback;
+  const long parsed = std::strtol(strValue.data(), &end, 10);
+  if (end == strValue.data() || *end != '\0') return fallback;
   return static_cast<int32_t>(parsed);
 }
 
