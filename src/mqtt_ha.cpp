@@ -8,6 +8,38 @@
 
 #include "command_manager.hpp"
 
+// clang-format off
+namespace {
+// Reference public limits from header for consistency
+inline constexpr size_t max_root_topic_length = mqtt_ha_limits::max_root_topic_length;
+inline constexpr size_t max_device_id_length = mqtt_ha_limits::max_device_id_length;
+
+namespace mqtt_ha_buffer_limits {
+// Topic and ID limits
+inline constexpr size_t max_topic_length = 96;         // MQTT discovery topic (e.g., homeassistant/number/ebusXXXX/32_name/config)
+inline constexpr size_t max_state_topic_length = 96;   // State topic (e.g., ebusXXXX/values/commandname)
+inline constexpr size_t max_object_id_length = 64;     // Sanitized object ID (e.g., 32_basement_temperature_nightroomsetpoint_value)
+inline constexpr size_t max_raw_object_id_length = 64; // Raw object ID before sanitization
+inline constexpr size_t max_uid_length = 48;           // Unique ID (e.g., ebusXXXX_32_0)
+
+inline constexpr size_t max_pretty_name_length = 64;    // Pretty-printed name (e.g., Basement Temperature NightRoomSetPoint)
+inline constexpr size_t max_entity_name_length = 
+    max_pretty_name_length * 2 + 1;                     // Entity name: pretty_cmd + " " + pretty_field
+inline constexpr size_t max_value_template_length = 48; // JSON template (e.g., {{value_json.value}})
+inline constexpr size_t max_cmd_topic_length = 48;      // Command topic (e.g., ebusXXXX/set/32)
+
+// Select/option mapping buffers
+inline constexpr size_t max_payload_buf_length = 8;     // Payload on/off (single digit)
+inline constexpr size_t max_option_value_map_length = 
+    mqtt_ha_limits::max_option_value_map_length;        // Option value/cmd map templates
+inline constexpr size_t max_options_count = 
+    mqtt_ha_limits::max_options_count;                  // Maximum key-value pairs per profile
+
+inline constexpr size_t max_lower_buf_length = 64;      // Lowercase conversion buffer in createStateTopic
+} // namespace mqtt_ha_buffer_limits
+} // namespace
+// clang-format on
+
 MqttHA mqttha;
 
 namespace {
@@ -35,12 +67,23 @@ void formatPrettyName(std::string_view sv, char* out, size_t max_len) {
 }  // namespace
 
 void MqttHA::setUniqueId(const std::string& id) {
-  unique_id_ = id;
+  // Ensure device identifier fits within limits: "ebus" + id + null <=
+  // max_device_id_length + 1
+  if (id.size() > mqtt_ha_limits::max_device_id_length - 4) {
+    unique_id_ = id.substr(0, mqtt_ha_limits::max_device_id_length - 4);
+  } else {
+    unique_id_ = id;
+  }
   device_identifiers_ = "ebus" + unique_id_;
 }
 
 void MqttHA::setRootTopic(const std::string& topic) {
-  root_topic_ = topic;
+  // Ensure root topic fits within limits
+  if (topic.size() > mqtt_ha_limits::max_root_topic_length) {
+    root_topic_ = topic.substr(0, mqtt_ha_limits::max_root_topic_length);
+  } else {
+    root_topic_ = topic;
+  }
   command_topic_ = root_topic_ + "request";
 }
 
@@ -67,29 +110,44 @@ void MqttHA::setThingConfigurationUrl(const std::string& configurationUrl) {
 }
 
 void MqttHA::publishDeviceInfo() const {
-  auto publishDiag = [this](const char* component, const char* key,
-                            const char* name, bool withDeviceInfo,
-                            auto writeFields) {
-    std::string objectId = name;
-    std::transform(objectId.begin(), objectId.end(), objectId.begin(),
-                   ::tolower);
-    std::replace(objectId.begin(), objectId.end(), '/', '_');
-    std::replace(objectId.begin(), objectId.end(), ' ', '_');
+  char state_topic_buf[mqtt_ha_buffer_limits::max_state_topic_length];
+  createStateTopic(state_topic_buf, sizeof(state_topic_buf), "", "state");
 
-    std::string topic = "homeassistant/" + std::string(component) + '/' +
-                        device_identifiers_ + '/' + objectId + "/config";
+  auto publishDiag = [this, &state_topic_buf](
+                         const char* component, const char* key,
+                         const char* name, bool with_device_info,
+                         const char* state_topic, auto write_fields) {
+    char object_id_buf[mqtt_ha_buffer_limits::max_object_id_length];
+    {
+      size_t i = 0;
+      size_t nlen = strlen(name);
+      for (; i < nlen && i < sizeof(object_id_buf) - 1; ++i) {
+        char c = name[i];
+        object_id_buf[i] =
+            (c == '/' || c == ' ') ? '_' : (char)tolower((unsigned char)c);
+      }
+      object_id_buf[i] = '\0';
+    }
+
+    char topic_buf[mqtt_ha_buffer_limits::max_topic_length];
+    snprintf(topic_buf, sizeof(topic_buf), "homeassistant/%s/%s/%s/config",
+             component, device_identifiers_.c_str(), object_id_buf);
 
     if (!enabled_) {
-      mqtt.publish(topic.c_str(), 0, true, "", false);
+      mqtt.publish(topic_buf, 0, true, "", false);
       return;
     }
 
+    char uid_buf[mqtt_ha_buffer_limits::max_uid_length];
+    snprintf(uid_buf, sizeof(uid_buf), "%s_%s", device_identifiers_.c_str(),
+             key);
+
     mqtt.publishStream(
-        topic.c_str(), 0, true,
+        topic_buf, 0, true,
         [&](const ebus::JsonChunkVisitor& v) {
           ebus::detail::JsonWriter writer(v);
           auto root = writer.objectScope();
-          writer.writeField("unique_id", device_identifiers_ + "_" + key);
+          writer.writeField("unique_id", uid_buf);
           writer.writeField("name", name);
           writer.writeField("availability_topic", will_topic_);
           writer.writeField("availability_template", "{{value_json.value}}");
@@ -97,7 +155,7 @@ void MqttHA::publishDeviceInfo() const {
           {
             auto device = writer.objectScope("device");
             writer.writeField("identifiers", device_identifiers_);
-            if (withDeviceInfo) {
+            if (with_device_info) {
               writer.writeField("name", thing_name_);
               writer.writeField("manufacturer", thing_manufacturer_);
               writer.writeField("model", thing_model_);
@@ -108,30 +166,30 @@ void MqttHA::publishDeviceInfo() const {
             }
           }
 
-          writeFields(writer);
+          if (state_topic) writer.writeField("state_topic", state_topic);
+
+          write_fields(writer);
         },
         false);
   };
 
-  publishDiag("button", "restart", "Restart", false,
+  publishDiag("button", "restart", "Restart", false, nullptr,
               [this](ebus::detail::JsonWriter& w) {
                 w.writeField("command_topic", command_topic_);
                 w.writeField("payload_press", "{\"id\":\"restart\"}");
                 w.writeField("entity_category", "config");
               });
 
-  publishDiag("sensor", "reset_code", "Reset Code", false,
+  publishDiag("sensor", "reset_code", "Reset Code", false, state_topic_buf,
               [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("value_template",
                              "{{value_json.status.reset_code}}");
                 w.writeField("icon", "mdi:restart");
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "uptime", "Uptime", true,
+  publishDiag("sensor", "uptime", "Uptime", true, state_topic_buf,
               [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "s");
                 w.writeField("value_template",
                              "{{((value_json.status.uptime|float)/1000)|int}}");
@@ -139,10 +197,8 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("entity_category", "diagnostic");
               });
 
-  // Heap
   publishDiag("sensor", "free_heap", "Heap Total Free Bytes", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("unit_of_measurement", "B");
                 w.writeField("value_template",
                              "{{value_json.heap.total_free_bytes}}");
@@ -151,8 +207,7 @@ void MqttHA::publishDeviceInfo() const {
               });
 
   publishDiag("sensor", "largest_free_block", "Heap Largest Free Block", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("unit_of_measurement", "B");
                 w.writeField("value_template",
                              "{{value_json.heap.largest_free_block}}");
@@ -161,8 +216,7 @@ void MqttHA::publishDeviceInfo() const {
               });
 
   publishDiag("sensor", "min_free_heap", "Heap Minimum Free Bytes", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("unit_of_measurement", "B");
                 w.writeField("value_template",
                              "{{value_json.heap.minimum_free_bytes}}");
@@ -170,10 +224,8 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("entity_category", "diagnostic");
               });
 
-  // WiFi
-  publishDiag("sensor", "rssi", "WiFi RSSI", false,
+  publishDiag("sensor", "rssi", "WiFi RSSI", false, state_topic_buf,
               [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "dBm");
                 w.writeField("value_template", "{{value_json.wifi.rssi}}");
                 w.writeField("icon", "mdi:wifi-strength-4");
@@ -181,8 +233,7 @@ void MqttHA::publishDeviceInfo() const {
               });
 
   publishDiag("sensor", "wifi_last_connect", "WiFi Last Connect", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("value_template",
                              "{{value_json.wifi.last_connect}}");
                 w.writeField("icon", "mdi:wifi");
@@ -190,18 +241,15 @@ void MqttHA::publishDeviceInfo() const {
               });
 
   publishDiag("sensor", "wifi_reconnect_count", "WiFi Reconnect Count", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("value_template",
                              "{{value_json.wifi.reconnect_count}}");
                 w.writeField("icon", "mdi:wifi-refresh");
                 w.writeField("entity_category", "diagnostic");
               });
 
-  // Firmware
   publishDiag("sensor", "firmware_version", "Firmware Version", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("value_template",
                              "{{value_json.firmware.version}}");
                 w.writeField("icon", "mdi:chip");
@@ -209,27 +257,23 @@ void MqttHA::publishDeviceInfo() const {
               });
 
   publishDiag("sensor", "sdk_version", "Firmware ESP-IDF Version", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("value_template",
                              "{{value_json.firmware.esp_idf_version}}");
                 w.writeField("icon", "mdi:chip");
                 w.writeField("entity_category", "diagnostic");
               });
 
-  // Chip
   publishDiag("sensor", "chip_revision", "Chip Revision", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("value_template",
                              "{{value_json.chip.chip_revision}}");
                 w.writeField("icon", "mdi:cpu-64-bit");
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "flash_size", "Chip Flash Size", false,
+  publishDiag("sensor", "flash_size", "Chip Flash Size", false, state_topic_buf,
               [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "B");
                 w.writeField("value_template",
                              "{{value_json.chip.flash_size}}");
@@ -237,27 +281,23 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("entity_category", "diagnostic");
               });
 
-  // eBUS
-  publishDiag("sensor", "ebus_pwm", "eBUS PWM", false,
+  publishDiag("sensor", "ebus_pwm", "eBUS PWM", false, state_topic_buf,
               [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("value_template", "{{value_json.ebus.pwm}}");
                 w.writeField("icon", "mdi:fan");
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "ebus_address", "eBUS Address", false,
+  publishDiag("sensor", "ebus_address", "eBUS Address", false, state_topic_buf,
               [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("value_template",
                              "{{value_json.ebus.ebus_address}}");
                 w.writeField("icon", "mdi:network");
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "bus_window", "eBUS Bus Window", false,
+  publishDiag("sensor", "bus_window", "eBUS Bus Window", false, state_topic_buf,
               [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "µs");
                 w.writeField("value_template",
                              "{{value_json.ebus.bus_window}}");
@@ -265,9 +305,8 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("entity_category", "diagnostic");
               });
 
-  publishDiag("sensor", "bus_offset", "eBUS Bus Offset", false,
+  publishDiag("sensor", "bus_offset", "eBUS Bus Offset", false, state_topic_buf,
               [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
                 w.writeField("unit_of_measurement", "µs");
                 w.writeField("value_template",
                              "{{value_json.ebus.bus_offset}}");
@@ -275,10 +314,8 @@ void MqttHA::publishDeviceInfo() const {
                 w.writeField("entity_category", "diagnostic");
               });
 
-  // Schedule
   publishDiag("sensor", "active_commands", "Schedule Active Commands", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("value_template",
                              "{{value_json.schedule.active_commands}}");
                 w.writeField("icon", "mdi:play-circle");
@@ -286,18 +323,15 @@ void MqttHA::publishDeviceInfo() const {
               });
 
   publishDiag("sensor", "passive_commands", "Schedule Passive Commands", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("value_template",
                              "{{value_json.schedule.passive_commands}}");
                 w.writeField("icon", "mdi:pause-circle");
                 w.writeField("entity_category", "diagnostic");
               });
 
-  // Sockets
   publishDiag("sensor", "sockets_detected", "Sockets Detected", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("value_template",
                              "{{value_json.sockets.detected}}");
                 w.writeField("icon", "mdi:lan-connect");
@@ -305,8 +339,7 @@ void MqttHA::publishDeviceInfo() const {
               });
 
   publishDiag("sensor", "sockets_connected", "Sockets Connected", false,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("state_topic", createStateTopic("", "state"));
+              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
                 w.writeField("value_template",
                              "{{value_json.sockets.connected}}");
                 w.writeField("icon", "mdi:lan-connect");
@@ -319,81 +352,86 @@ void MqttHA::publishComponent(const Command* command, size_t field_idx,
   const HAProfile* profile = resolveProfile(command, field_idx);
   if (!profile) return;
 
-  std::string component = profile->component;
+  std::string_view component = profile->component;
 
   const std::string& dev_id = device_identifiers_;
 
   std::string_view field_name_sv = command->getFieldName(field_idx);
   std::string_view key_sv = command->getKey();
 
-  char rawObjectIdBuf[128];
+  char raw_object_id_buf[mqtt_ha_buffer_limits::max_raw_object_id_length];
   if (!command->getName().empty()) {
-    snprintf(rawObjectIdBuf, sizeof(rawObjectIdBuf), "%.*s_%.*s_%.*s",
+    snprintf(raw_object_id_buf, sizeof(raw_object_id_buf), "%.*s_%.*s_%.*s",
              (int)key_sv.size(), key_sv.data(), (int)command->getName().size(),
              command->getName().data(), (int)field_name_sv.size(),
              field_name_sv.data());
   } else {
-    snprintf(rawObjectIdBuf, sizeof(rawObjectIdBuf), "%.*s_%.*s",
+    snprintf(raw_object_id_buf, sizeof(raw_object_id_buf), "%.*s_%.*s",
              (int)key_sv.size(), key_sv.data(), (int)field_name_sv.size(),
              field_name_sv.data());
   }
-  char objectIdBuf[128];
-  sanitizeObjectId(rawObjectIdBuf, objectIdBuf, sizeof(objectIdBuf));
+  char object_id_buf[mqtt_ha_buffer_limits::max_object_id_length];
+  sanitizeObjectId(raw_object_id_buf, object_id_buf, sizeof(object_id_buf));
 
-  char topicBuf[128];
+  char topic_buf[mqtt_ha_buffer_limits::max_topic_length];
   int tlen =
-      snprintf(topicBuf, sizeof(topicBuf), "homeassistant/%s/%s/%s/config",
-               component.c_str(), dev_id.c_str(), objectIdBuf);
-  if (tlen <= 0 || (size_t)tlen >= sizeof(topicBuf)) return;
+      snprintf(topic_buf, sizeof(topic_buf), "homeassistant/%s/%s/%s/config",
+               component.data(), dev_id.c_str(), object_id_buf);
+  if (tlen <= 0 || (size_t)tlen >= sizeof(topic_buf)) return;
 
   if (remove || !enabled_) {
-    mqtt.publish(topicBuf, 0, true, "", false);
+    mqtt.publish(topic_buf, 0, true, "", false);
     return;
   }
 
-  // Use command-level state topic (all fields share same state topic)
-  std::string state_topic = createStateTopic("values", command->getName());
+  char state_topic_buf[mqtt_ha_buffer_limits::max_state_topic_length];
+  createStateTopic(state_topic_buf, sizeof(state_topic_buf), "values",
+                   command->getName());
+
+  char value_template_buf[mqtt_ha_buffer_limits::max_value_template_length];
 
   mqtt.publishStream(
-      topicBuf, 0, true,
+      topic_buf, 0, true,
       [&](const ebus::JsonChunkVisitor& v) {
         ebus::detail::JsonWriter writer(v);
         auto root = writer.objectScope();
 
-        char prettyCmdBuf[64];
-        formatPrettyName(command->getName(), prettyCmdBuf,
-                         sizeof(prettyCmdBuf));
+        char pretty_cmd_buf[mqtt_ha_buffer_limits::max_pretty_name_length];
+        formatPrettyName(command->getName(), pretty_cmd_buf,
+                         sizeof(pretty_cmd_buf));
 
-        char entityNameBuf[128];
+        char entity_name_buf[mqtt_ha_buffer_limits::max_entity_name_length];
         if (command->getFieldCount() > 1 && field_name_sv != "value") {
-          char prettyFieldBuf[64];
-          formatPrettyName(field_name_sv, prettyFieldBuf,
-                           sizeof(prettyFieldBuf));
-          if (prettyCmdBuf[0] != '\0') {
-            snprintf(entityNameBuf, sizeof(entityNameBuf), "%s %s",
-                     prettyCmdBuf, prettyFieldBuf);
+          char pretty_field_buf[mqtt_ha_buffer_limits::max_pretty_name_length];
+          formatPrettyName(field_name_sv, pretty_field_buf,
+                           sizeof(pretty_field_buf));
+          if (pretty_cmd_buf[0] != '\0') {
+            snprintf(entity_name_buf, sizeof(entity_name_buf), "%s %s",
+                     pretty_cmd_buf, pretty_field_buf);
           } else {
-            snprintf(entityNameBuf, sizeof(entityNameBuf), "%s",
-                     prettyFieldBuf);
+            snprintf(entity_name_buf, sizeof(entity_name_buf), "%s",
+                     pretty_field_buf);
           }
         } else {
-          if (prettyCmdBuf[0] != '\0') {
-            snprintf(entityNameBuf, sizeof(entityNameBuf), "%s", prettyCmdBuf);
+          if (pretty_cmd_buf[0] != '\0') {
+            snprintf(entity_name_buf, sizeof(entity_name_buf), "%s",
+                     pretty_cmd_buf);
           } else {
-            char prettyFieldBuf[64];
-            formatPrettyName(field_name_sv, prettyFieldBuf,
-                             sizeof(prettyFieldBuf));
-            snprintf(entityNameBuf, sizeof(entityNameBuf), "%s",
-                     prettyFieldBuf);
+            char
+                pretty_field_buf[mqtt_ha_buffer_limits::max_pretty_name_length];
+            formatPrettyName(field_name_sv, pretty_field_buf,
+                             sizeof(pretty_field_buf));
+            snprintf(entity_name_buf, sizeof(entity_name_buf), "%s",
+                     pretty_field_buf);
           }
         }
 
         // Unique ID includes field_idx to distinguish multiple fields
-        char uidBuf[96];
-        snprintf(uidBuf, sizeof(uidBuf), "%s_%.*s_%zu", dev_id.c_str(),
+        char uid_buf[mqtt_ha_buffer_limits::max_uid_length];
+        snprintf(uid_buf, sizeof(uid_buf), "%s_%.*s_%zu", dev_id.c_str(),
                  (int)key_sv.size(), key_sv.data(), field_idx);
-        writer.writeField("unique_id", uidBuf);
-        writer.writeField("name", entityNameBuf);
+        writer.writeField("unique_id", uid_buf);
+        writer.writeField("name", entity_name_buf);
         writer.writeField("availability_topic", will_topic_);
         writer.writeField("availability_template", "{{value_json.value}}");
 
@@ -403,7 +441,7 @@ void MqttHA::publishComponent(const Command* command, size_t field_idx,
         }
 
         // All fields of a command share the same state topic
-        writer.writeField("state_topic", state_topic);
+        writer.writeField("state_topic", state_topic_buf);
 
         if (profile && profile->device_class && profile->device_class[0])
           writer.writeField("device_class", profile->device_class);
@@ -411,21 +449,26 @@ void MqttHA::publishComponent(const Command* command, size_t field_idx,
           writer.writeField("entity_category", profile->entity_category);
 
         if (component == "binary_sensor" || component == "switch") {
-          writer.writeField("payload_on",
-                            std::to_string(profile ? profile->payload_on : 1));
-          writer.writeField("payload_off",
-                            std::to_string(profile ? profile->payload_off : 0));
-          writer.writeField(
-              "value_template",
-              "{{value_json." + std::string(field_name_sv) + "}}");
+          char payload_on_buf[mqtt_ha_buffer_limits::max_payload_buf_length],
+              payload_off_buf[mqtt_ha_buffer_limits::max_payload_buf_length];
+          snprintf(payload_on_buf, sizeof(payload_on_buf), "%d",
+                   profile ? profile->payload_on : 1);
+          snprintf(payload_off_buf, sizeof(payload_off_buf), "%d",
+                   profile ? profile->payload_off : 0);
+          writer.writeField("payload_on", payload_on_buf);
+          writer.writeField("payload_off", payload_off_buf);
+          snprintf(value_template_buf, sizeof(value_template_buf),
+                   "{{value_json.%.*s}}", (int)field_name_sv.size(),
+                   field_name_sv.data());
+          writer.writeField("value_template", value_template_buf);
         }
 
         if (component == "switch" || component == "number" ||
             component == "select") {
-          char cmdTopicBuf[96];
-          snprintf(cmdTopicBuf, sizeof(cmdTopicBuf), "%sset/%.*s",
+          char cmd_topic_buf[mqtt_ha_buffer_limits::max_cmd_topic_length];
+          snprintf(cmd_topic_buf, sizeof(cmd_topic_buf), "%sset/%.*s",
                    root_topic_.c_str(), (int)key_sv.size(), key_sv.data());
-          writer.writeField("command_topic", cmdTopicBuf);
+          writer.writeField("command_topic", cmd_topic_buf);
         }
 
         if (component == "sensor") {
@@ -439,9 +482,10 @@ void MqttHA::publishComponent(const Command* command, size_t field_idx,
         if (component == "number") {
           writer.writeField("unit_of_measurement",
                             getFieldUnit(command, field_idx));
-          writer.writeField(
-              "value_template",
-              "{{value_json." + std::string(field_name_sv) + "}}");
+          snprintf(value_template_buf, sizeof(value_template_buf),
+                   "{{value_json.%.*s}}", (int)field_name_sv.size(),
+                   field_name_sv.data());
+          writer.writeField("value_template", value_template_buf);
           writer.writeField("command_template", "{{value}}");
           writer.writeFieldFloat("min", getFieldMin(command, field_idx));
           writer.writeFieldFloat("max", getFieldMax(command, field_idx));
@@ -466,9 +510,10 @@ void MqttHA::publishComponent(const Command* command, size_t field_idx,
           }
           writer.writeField("value_template", opt.value_map);
         } else if (component == "sensor") {
-          writer.writeField(
-              "value_template",
-              "{{value_json." + std::string(field_name_sv) + "}}");
+          snprintf(value_template_buf, sizeof(value_template_buf),
+                   "{{value_json.%.*s}}", (int)field_name_sv.size(),
+                   field_name_sv.data());
+          writer.writeField("value_template", value_template_buf);
         }
       },
       false);
@@ -540,24 +585,26 @@ void MqttHA::sanitizeObjectId(std::string_view source, char* out,
   out[i] = '\0';
 }
 
-std::string MqttHA::createStateTopic(const std::string& prefix,
-                                     std::string_view topic) const {
-  char buf[128];
-  char lowerBuf[128];
-  size_t tlen = std::min(topic.size(), sizeof(lowerBuf) - 1);
+void MqttHA::createStateTopic(char* out, size_t out_size,
+                              std::string_view prefix,
+                              std::string_view topic) const {
+  char lower_buf[mqtt_ha_buffer_limits::max_lower_buf_length];
+  size_t tlen = std::min(topic.size(), sizeof(lower_buf) - 1);
   for (size_t i = 0; i < tlen; i++) {
-    lowerBuf[i] = std::tolower(static_cast<unsigned char>(topic[i]));
+    lower_buf[i] = std::tolower(static_cast<unsigned char>(topic[i]));
   }
-  lowerBuf[tlen] = '\0';
+  lower_buf[tlen] = '\0';
 
-  int slen = snprintf(buf, sizeof(buf), "%s%s%s", root_topic_.c_str(),
-                      prefix.c_str(), prefix.empty() ? "" : "/");
-  // Append lowercased topic
-  for (size_t i = 0; i < tlen && slen < (int)sizeof(buf) - 1; i++) {
-    buf[slen++] = lowerBuf[i];
+  int slen =
+      snprintf(out, out_size, "%s%s", root_topic_.c_str(), prefix.data());
+  if (slen < 0) return;
+  if (!prefix.empty()) {
+    if ((size_t)slen < out_size - 1) out[slen++] = '/';
   }
-  buf[slen] = '\0';
-  return std::string(buf);
+  for (size_t i = 0; i < tlen && (size_t)slen < out_size - 1; i++) {
+    out[slen++] = lower_buf[i];
+  }
+  out[slen] = '\0';
 }
 
 MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile,
@@ -565,22 +612,24 @@ MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile,
   if (!profile) return KeyValueMapping{};
 
   // Use stack buffers instead of std::string to reduce heap fragmentation
-  int options_keys[5];
-  const char* options_values[5];
+  int options_keys[mqtt_ha_buffer_limits::max_options_count];
+  const char* options_values[mqtt_ha_buffer_limits::max_options_count];
   size_t options_count = 0;
 
-  for (size_t i = 0; i < profile->key_value_count && i < 5; i++) {
+  for (size_t i = 0; i < profile->key_value_count &&
+                     i < mqtt_ha_buffer_limits::max_options_count;
+       i++) {
     options_keys[i] = profile->key_value_pairs[i].first;
     options_values[i] = profile->key_value_pairs[i].second;
     options_count++;
   }
 
-  int defaultOptionValue = 0;
+  int default_option_value = 0;
   if (options_count > 0) {
-    defaultOptionValue = options_keys[0];
+    default_option_value = options_keys[0];
     for (size_t i = 0; i < options_count; i++) {
       if (options_keys[i] == profile->default_key) {
-        defaultOptionValue = options_keys[i];
+        default_option_value = options_keys[i];
         break;
       }
     }
@@ -590,59 +639,62 @@ MqttHA::KeyValueMapping MqttHA::createOptions(const HAProfile* profile,
   // Original: std::string valueMap = "{% set values = {" ... "} %}..."
   // Need to escape % for snprintf: use %% instead of %
 
-  char value_map_buf[256];
-  char cmd_map_buf[256];
+  char value_map_buf[mqtt_ha_buffer_limits::max_option_value_map_length];
+  char cmd_map_buf[mqtt_ha_buffer_limits::max_option_value_map_length];
 
-  int vmLen = 0;
-  int pnLen = 0;
+  int vm_len = 0;
+  int pn_len = 0;
 
   const char value_prefix[] = "{% set values = {";
   const char cmd_prefix[] = "{% set values = {";
-  memcpy(value_map_buf + vmLen, value_prefix, sizeof(value_prefix) - 1);
-  vmLen += sizeof(value_prefix) - 1;
-  memcpy(cmd_map_buf + pnLen, cmd_prefix, sizeof(cmd_prefix) - 1);
-  pnLen += sizeof(cmd_prefix) - 1;
+  memcpy(value_map_buf + vm_len, value_prefix, sizeof(value_prefix) - 1);
+  vm_len += sizeof(value_prefix) - 1;
+  memcpy(cmd_map_buf + pn_len, cmd_prefix, sizeof(cmd_prefix) - 1);
+  pn_len += sizeof(cmd_prefix) - 1;
 
   for (size_t i = 0; i < options_count; i++) {
-    if (vmLen < (int)sizeof(value_map_buf)) {
-      vmLen += snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen,
-                        "%d:'%s'", options_keys[i], options_values[i]);
-      if (i < options_count - 1 && vmLen < (int)sizeof(value_map_buf)) {
-        vmLen +=
-            snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen, ",");
+    if (vm_len < (int)sizeof(value_map_buf)) {
+      vm_len += snprintf(value_map_buf + vm_len, sizeof(value_map_buf) - vm_len,
+                         "%d:'%s'", options_keys[i], options_values[i]);
+      if (i < options_count - 1 && vm_len < (int)sizeof(value_map_buf)) {
+        vm_len += snprintf(value_map_buf + vm_len,
+                           sizeof(value_map_buf) - vm_len, ",");
       }
     }
-    if (pnLen < (int)sizeof(cmd_map_buf)) {
-      pnLen += snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen,
-                        "'%s':%d", options_values[i], options_keys[i]);
-      if (i < options_count - 1 && pnLen < (int)sizeof(cmd_map_buf)) {
-        pnLen +=
-            snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen, ",");
+    if (pn_len < (int)sizeof(cmd_map_buf)) {
+      pn_len += snprintf(cmd_map_buf + pn_len, sizeof(cmd_map_buf) - pn_len,
+                         "'%s':%d", options_values[i], options_keys[i]);
+      if (i < options_count - 1 && pn_len < (int)sizeof(cmd_map_buf)) {
+        pn_len +=
+            snprintf(cmd_map_buf + pn_len, sizeof(cmd_map_buf) - pn_len, ",");
       }
     }
   }
 
-  snprintf(value_map_buf + vmLen, sizeof(value_map_buf) - vmLen,
+  snprintf(value_map_buf + vm_len, sizeof(value_map_buf) - vm_len,
            "} %%}{{ values[value_json.%.*s] if value_json.%.*s in "
            "values.keys() else '%s' }}",
            (int)field_name.size(), field_name.data(), (int)field_name.size(),
            field_name.data(), options_count > 0 ? options_values[0] : "");
 
-  snprintf(cmd_map_buf + pnLen, sizeof(cmd_map_buf) - pnLen,
+  snprintf(cmd_map_buf + pn_len, sizeof(cmd_map_buf) - pn_len,
            "} %%}{{ values[value] if value in values.keys() else "
            "%d }}",
-           defaultOptionValue);
+           default_option_value);
 
-  // Build options list using StaticVector<FixedString<16>, 5>
-  ebus::StaticVector<ebus::FixedString<16>, 5> options;
+  // Build options list using StaticVector<FixedString<16>, max_options_count>
+  ebus::StaticVector<ebus::FixedString<16>, mqtt_ha_limits::max_options_count>
+      options;
   for (size_t i = 0; i < options_count; i++) {
-    options.push_back(ebus::FixedString<16>(options_values[i]));
+    options.push_back(
+        ebus::FixedString<mqtt_ha_limits::max_option_string_length>(
+            options_values[i]));
   }
 
   KeyValueMapping mapping;
   mapping.options = options;
-  mapping.value_map = std::string(value_map_buf);
-  mapping.cmd_map = std::string(cmd_map_buf);
+  mapping.value_map.assign(std::string_view(value_map_buf));
+  mapping.cmd_map.assign(std::string_view(cmd_map_buf));
   return mapping;
 }
 

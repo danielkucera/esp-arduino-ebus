@@ -5,6 +5,18 @@
 #include <ha_profile.hpp>
 #include <string>
 
+// clang-format off
+namespace mqtt_ha_limits {
+inline constexpr size_t max_root_topic_length = 32;  // e.g., "esp8406ac/"
+inline constexpr size_t max_device_id_length = 32;   // e.g., "ebus8406ac"
+
+// Option/select mapping limits
+inline constexpr size_t max_option_value_map_length = 256; // Jinja2 template buffer size
+inline constexpr size_t max_option_string_length = 16;     // Individual option string length
+inline constexpr size_t max_options_count = 5;             // Maximum key-value pairs per profile
+}  // namespace mqtt_ha_limits
+// clang-format on
+
 // Home Assistant MQTT class for auto discovery
 
 class MqttHA {
@@ -60,13 +72,16 @@ class MqttHA {
 
   static void sanitizeObjectId(std::string_view source, char* out,
                                size_t max_len);
-  std::string createStateTopic(const std::string& prefix,
-                               std::string_view topic) const;
+  void createStateTopic(char* out, size_t out_size, std::string_view prefix,
+                        std::string_view topic) const;
 
   struct KeyValueMapping {
-    ebus::StaticVector<ebus::FixedString<16>, 5> options;
-    std::string value_map;
-    std::string cmd_map;
+    ebus::StaticVector<
+        ebus::FixedString<mqtt_ha_limits::max_option_string_length>,
+        mqtt_ha_limits::max_options_count>
+        options;
+    ebus::FixedString<mqtt_ha_limits::max_option_value_map_length> value_map;
+    ebus::FixedString<mqtt_ha_limits::max_option_value_map_length> cmd_map;
   };
 
   static KeyValueMapping createOptions(const HAProfile* profile,
