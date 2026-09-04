@@ -332,34 +332,6 @@ ebus::Sequence Command::getVectorFromString(std::string_view value,
   return ebus::encode(dt, dv);
 }
 
-double Command::getDoubleFromVector() const {
-  if (fields_.empty() || data_.empty()) return 0.0;
-  auto dt = getFieldDatatype(0);
-  size_t field_pos = getFieldPosition(0) - 1;
-  size_t field_len = ebus::sizeOfDataType(dt);
-  if (field_pos + field_len > data_.size()) return 0.0;
-  auto decoded = ebus::decode(dt, ebus::range(data_, field_pos, field_len));
-  if (!decoded || ebus::isNull(*decoded)) return 0.0;
-  return ebus::roundDigits(ebus::asFloat(*decoded) / getFieldDivider(0),
-                           getFieldDigits(0));
-}
-
-const std::string Command::getStringFromVector() const {
-  if (fields_.empty() || data_.empty()) return "";
-  auto dt = getFieldDatatype(0);
-  size_t field_pos = getFieldPosition(0) - 1;
-  size_t field_len = ebus::sizeOfDataType(dt);
-  if (field_pos + field_len > data_.size()) return "";
-  auto decoded = ebus::decode(dt, ebus::range(data_, field_pos, field_len));
-  if (!decoded || ebus::isNull(*decoded)) return "";
-
-  std::string dt_name = ebus::dataTypeToString(dt);
-  if (dt_name.find("HEX") == 0) {
-    return ebus::toHexString(*decoded, 0);
-  }
-  return ebus::asString(*decoded);
-}
-
 size_t Command::writeLogMessage(char* buf, size_t len) const {
   if (buf == nullptr || len == 0) return 0;
 
@@ -653,99 +625,165 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
   return command;
 }
 
-const std::string Command::evaluate(ebus::detail::JsonReader& reader) {
-  if (reader.next() != ebus::detail::JsonReader::Token::object_start)
-    return "Record root is not a JSON object";
+// Static buffer for error messages - avoids heap allocation
+static char command_eval_error_buf[512] = {};
+
+std::string_view Command::evaluate(ebus::detail::JsonReader& reader) {
+  if (reader.next() != ebus::detail::JsonReader::Token::object_start) {
+    snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+             "Record root is not a JSON object");
+    return command_eval_error_buf;
+  }
 
   struct {
     bool key = false, name = false, read_cmd = false, fields = false;
   } met;
 
-  std::string error;
+  const char* error = nullptr;
   reader.forEachField([&](std::string_view key, ebus::detail::JsonReader& r) {
     auto token = r.next();
+    if (error) return true;  // Already have an error
     if (key == "key") {
       met.key = (token == ebus::detail::JsonReader::Token::string);
-      if (!met.key) error = "Invalid type for field: key";
+      if (!met.key) {
+        snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                 "Invalid type for field: key");
+        error = command_eval_error_buf;
+      }
     } else if (key == "name") {
       met.name = (token == ebus::detail::JsonReader::Token::string);
-      if (!met.name) error = "Invalid type for field: name";
+      if (!met.name) {
+        snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                 "Invalid type for field: name");
+        error = command_eval_error_buf;
+      }
     } else if (key == "read_cmd" || key == "write_cmd") {
       met.read_cmd = true;
       if (token == ebus::detail::JsonReader::Token::string) {
         std::string_view hex = r.value();
-        if (hex.length() % 2 != 0)
-          error = "Invalid hex string length: " + std::string(key);
-        else if (std::any_of(hex.begin(), hex.end(), [](char c) {
-                   return !isxdigit((unsigned char)c);
-                 })) {
-          error = "Invalid hex character in: " + std::string(key);
+        if (hex.length() % 2 != 0) {
+          snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                   "Invalid hex string length: %.*s",
+                   static_cast<int>(key.length()), key.data());
+          error = command_eval_error_buf;
+        } else if (std::any_of(hex.begin(), hex.end(), [](char c) {
+                     return !isxdigit((unsigned char)c);
+                   })) {
+          snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                   "Invalid hex character in: %.*s",
+                   static_cast<int>(key.length()), key.data());
+          error = command_eval_error_buf;
         }
-      } else
-        error = "Invalid type for field: " + std::string(key);
+      } else {
+        snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                 "Invalid type for field: %.*s", static_cast<int>(key.length()),
+                 key.data());
+        error = command_eval_error_buf;
+      }
     } else if (key == "interval") {
-      if (token != ebus::detail::JsonReader::Token::number)
-        error = "Invalid type for field: interval";
+      if (token != ebus::detail::JsonReader::Token::number) {
+        snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                 "Invalid type for field: interval");
+        error = command_eval_error_buf;
+      }
     } else if (key == "fields") {
       met.fields = (token == ebus::detail::JsonReader::Token::array_start);
       if (token == ebus::detail::JsonReader::Token::array_start) {
         int field_index = 0;
         while (true) {
           auto ft = r.next();
+          if (error) break;
           if (ft == ebus::detail::JsonReader::Token::array_end ||
               ft == ebus::detail::JsonReader::Token::end ||
               ft == ebus::detail::JsonReader::Token::error)
             break;
           if (ft != ebus::detail::JsonReader::Token::object_start) {
-            error = "Expected object in fields array at index " +
-                    std::to_string(field_index);
+            snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                     "Expected object in fields array at index %d",
+                     field_index);
+            error = command_eval_error_buf;
             break;
           }
           bool has_name = false, has_profile = false, has_position = false;
           r.forEachField([&](std::string_view fkey,
                              ebus::detail::JsonReader& fr) {
             auto ftoken = fr.next();
+            if (error) return false;
             if (fkey == "name")
               has_name = (ftoken == ebus::detail::JsonReader::Token::string);
             else if (fkey == "profile") {
               has_profile = (ftoken == ebus::detail::JsonReader::Token::string);
-              if (has_profile && findDataProfile(fr.value()) == nullptr)
-                error = "Unknown data profile: " + std::string(fr.value());
+              if (has_profile && findDataProfile(fr.value()) == nullptr) {
+                snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                         "Unknown data profile: %.*s",
+                         static_cast<int>(fr.value().length()),
+                         fr.value().data());
+                error = command_eval_error_buf;
+              }
             } else if (fkey == "position")
               has_position =
                   (ftoken == ebus::detail::JsonReader::Token::number);
             else if (fkey == "master") {
-              if (ftoken != ebus::detail::JsonReader::Token::boolean)
-                error = "Invalid type for field: master";
+              if (ftoken != ebus::detail::JsonReader::Token::boolean) {
+                snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                         "Invalid type for field: master");
+                error = command_eval_error_buf;
+              }
             } else if (fkey == "ha_profile") {
-              if (ftoken != ebus::detail::JsonReader::Token::string)
-                error = "Invalid type for field: ha_profile";
+              if (ftoken != ebus::detail::JsonReader::Token::string) {
+                snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                         "Invalid type for field: ha_profile");
+                error = command_eval_error_buf;
+              }
             }
             return true;
           });
-          if (!has_name)
-            error = "Missing required field: fields[" +
-                    std::to_string(field_index) + "].name";
-          else if (!has_profile)
-            error = "Missing required field: fields[" +
-                    std::to_string(field_index) + "].profile";
-          else if (!has_position)
-            error = "Missing required field: fields[" +
-                    std::to_string(field_index) + "].position";
+          if (!has_name) {
+            snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                     "Missing required field: fields[%d].name", field_index);
+            error = command_eval_error_buf;
+          } else if (!has_profile) {
+            snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                     "Missing required field: fields[%d].profile", field_index);
+            error = command_eval_error_buf;
+          } else if (!has_position) {
+            snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                     "Missing required field: fields[%d].position",
+                     field_index);
+            error = command_eval_error_buf;
+          }
           field_index++;
         }
       } else if (token != ebus::detail::JsonReader::Token::end) {
-        error = "Invalid type for field: fields";
+        snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                 "Invalid type for field: fields");
+        error = command_eval_error_buf;
       }
     }
     return true;
   });
 
-  if (!error.empty()) return error;
-  if (!met.key) return "Missing required field: key";
-  if (!met.name) return "Missing required field: name";
-  if (!met.read_cmd) return "Missing required field: read_cmd";
-  if (!met.fields) return "Missing required field: fields";
+  if (error) return error;
+  if (!met.key) {
+    snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+             "Missing required field: key");
+    return command_eval_error_buf;
+  }
+  if (!met.name) {
+    snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+             "Missing required field: name");
+    return command_eval_error_buf;
+  }
+  if (!met.read_cmd) {
+    snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+             "Missing required field: read_cmd");
+    return command_eval_error_buf;
+  }
+  if (!met.fields) {
+    snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+             "Missing required field: fields");
+    return command_eval_error_buf;
+  }
 
   return "";
 }

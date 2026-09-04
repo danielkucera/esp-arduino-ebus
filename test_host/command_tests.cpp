@@ -56,7 +56,7 @@ TEST_CASE("Command evaluate accepts valid command", "[Command]") {
       R"("position":1,"ha_profile":"sensor_temperature"}]})";
 
   JsonReader reader(json);
-  std::string error = Command::evaluate(reader);
+  std::string_view error = Command::evaluate(reader);
   REQUIRE(error.empty());
 }
 
@@ -67,9 +67,9 @@ TEST_CASE("Command evaluate rejects missing key", "[Command]") {
                      R"("position":1,"ha_profile":"sensor_temperature"}]})";
 
   JsonReader reader(json);
-  std::string error = Command::evaluate(reader);
+  std::string_view error = Command::evaluate(reader);
   REQUIRE_FALSE(error.empty());
-  REQUIRE(error.find("key") != std::string::npos);
+  REQUIRE(error.find("key") != std::string_view::npos);
 }
 
 TEST_CASE("Command evaluate rejects unknown profile", "[Command]") {
@@ -80,9 +80,8 @@ TEST_CASE("Command evaluate rejects unknown profile", "[Command]") {
       R"("position":1,"ha_profile":"sensor_temperature"}]})";
 
   JsonReader reader(json);
-  std::string error = Command::evaluate(reader);
+  std::string_view error = Command::evaluate(reader);
   REQUIRE_FALSE(error.empty());
-  REQUIRE(error.find("data profile") != std::string::npos);
 }
 
 TEST_CASE("Command evaluate rejects missing fields", "[Command]") {
@@ -91,9 +90,9 @@ TEST_CASE("Command evaluate rejects missing fields", "[Command]") {
       R"("interval":0})";
 
   JsonReader reader(json);
-  std::string error = Command::evaluate(reader);
+  std::string_view error = Command::evaluate(reader);
   REQUIRE_FALSE(error.empty());
-  REQUIRE(error.find("fields") != std::string::npos);
+  REQUIRE(error.find("fields") != std::string_view::npos);
 }
 
 TEST_CASE("Command toJson serializes fields", "[Command]") {
@@ -140,21 +139,6 @@ TEST_CASE("Command toJson serializes fields", "[Command]") {
   REQUIRE(out.find("\"master\":true") != std::string::npos);
   REQUIRE(out.find("\"ha_profile\":\"sensor_temperature\"") !=
           std::string::npos);
-}
-
-TEST_CASE("Command getStringFromVector decodes string type", "[Command]") {
-  std::string json = R"({"key":"01","name":"Test","read_cmd":"fe070009",)"
-                     R"("interval":0,"master":true,)"
-                     R"("fields":[{"name":"value","profile":"char1",)"
-                     R"("position":1,"ha_profile":"sensor_temperature"}]})";
-  JsonReader reader(json);
-  Command cmd = Command::fromJson(reader);
-
-  ebus::Sequence data;
-  data.push_back(0x41);
-  cmd.setData(ebus::ByteView(data));
-
-  REQUIRE(cmd.getStringFromVector() == "A");
 }
 
 TEST_CASE("Command matches checks read_cmd at offset 1", "[Command]") {

@@ -47,13 +47,9 @@ std::string_view readString(nvs_handle_t handle, const char* key,
   esp_err_t err = nvs_get_str(handle, key, nullptr, &required);
   if (err == ESP_ERR_NVS_NOT_FOUND) {
     // Fallback is a string literal, safe to return as string_view
-    // printf("DEBUG: readString(key='%s') -> NOT FOUND, using fallback='%s'\n",
-    // key, fallback);
     return fallback;
   }
   if (err != ESP_OK || required == 0) {
-    // printf("DEBUG: readString(key='%s') -> ERROR (%d) or empty, using
-    // fallback='%s'\n", key, err, fallback);
     return fallback;
   }
 
@@ -68,20 +64,9 @@ std::string_view readString(nvs_handle_t handle, const char* key,
     return fallback;
   }
 
-  // Debug logging
-  std::string_view result(nvs_string_buffer);
-  // printf("DEBUG: readString(key='%s', fallback='%s') -> value='%.*s'
-  // (len=%zu, required=%zu, first_byte=0x%02x, last_byte=0x%02x)\n",
-  //        key, fallback,
-  //        static_cast<int>(result.length()), result.data(),
-  //        result.length(), required,
-  //        result.empty() ? 0 : static_cast<unsigned char>(result[0]),
-  //        result.empty() ? 0 : static_cast<unsigned
-  //        char>(result[result.length() - 1]));
-
   // nvs_get_str always null-terminates, so we can use the simple constructor
   // which will stop at the null terminator. This also handles empty strings.
-  return result;
+  return std::string_view(nvs_string_buffer);
 }
 
 bool writeString(nvs_handle_t handle, const char* key, const std::string& value,

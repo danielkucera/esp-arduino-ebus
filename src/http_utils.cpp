@@ -123,24 +123,27 @@ void sendResponse(httpd_req_t* req, const char* status, const char* type,
 }
 
 std::string readBody(httpd_req_t* req) {
-  std::string out;
   int remaining = req->content_len;
-  char buffer[512];
   if (remaining > static_cast<int>(max_request_body_size)) {
     char buf[128];
     snprintf(buf, sizeof(buf),
              "HTTP: Request body too large (%d bytes), max is %zu", remaining,
              max_request_body_size);
     logger.warn(buf);
-    return "";  // Return empty string to indicate failure or rejection
+    return "";
   }
 
+  // Pre-allocate string to avoid repeated reallocations
+  std::string out;
+  out.reserve(remaining);
+
+  char tmp[512];
   while (remaining > 0) {
-    int toRead = remaining > static_cast<int>(sizeof(buffer)) ? sizeof(buffer)
-                                                              : remaining;
-    int received = httpd_req_recv(req, buffer, toRead);
+    int toRead =
+        remaining > static_cast<int>(sizeof(tmp)) ? sizeof(tmp) : remaining;
+    int received = httpd_req_recv(req, tmp, toRead);
     if (received <= 0) return "";
-    out.append(buffer, received);
+    out.append(tmp, received);
     remaining -= received;
   }
 

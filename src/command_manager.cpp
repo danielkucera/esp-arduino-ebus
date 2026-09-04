@@ -657,7 +657,7 @@ void CommandManager::deserializeCommands(FILE* file) {
       loaded_count++;
     } else if (token == ebus::detail::JsonReader::Token::object_start) {
       row_reader.reset();
-      std::string evalError = Command::evaluate(row_reader);
+      std::string_view evalError = Command::evaluate(row_reader);
       if (evalError.empty()) {
         // Pre-extract key to drop stale overrides before fromJson()
         // repopulates.
@@ -676,8 +676,8 @@ void CommandManager::deserializeCommands(FILE* file) {
       } else {
         char err_buf[128];
         snprintf(err_buf, sizeof(err_buf),
-                 "CommandManager: Command validation failed: %s",
-                 evalError.c_str());
+                 "CommandManager: Command validation failed: %.*s",
+                 static_cast<int>(evalError.length()), evalError.data());
         logger.error(err_buf);
       }
     }

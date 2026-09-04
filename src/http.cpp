@@ -417,7 +417,7 @@ esp_err_t handleCommandsEvaluate(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  std::string evalError;
+  std::string_view evalError;
   bool headerSeen = false;
   while (true) {
     std::string_view row_sv = reader.rawValue();
@@ -463,7 +463,7 @@ esp_err_t handleCommandsInsert(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  std::string evalError;
+  std::string_view evalError;
   bool headerSeen = false;
   while (true) {
     std::string_view cmd_sv = reader_eval.rawValue();

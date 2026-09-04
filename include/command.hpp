@@ -99,14 +99,12 @@ class Command {
   ebus::Sequence getVectorFromString(std::string_view value,
                                      size_t field_idx = 0) const;
 
-  double getDoubleFromVector() const;
-  const std::string getStringFromVector() const;
   size_t writeLogMessage(char* buf, size_t len) const;
 
   static Command fromJson(ebus::detail::JsonReader& reader);
   static Command fromTabular(ebus::detail::JsonReader& reader);
 
-  static const std::string evaluate(ebus::detail::JsonReader& reader);
+  static std::string_view evaluate(ebus::detail::JsonReader& reader);
 
  private:
   uint32_t session_id_ = 0;
