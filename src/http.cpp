@@ -182,7 +182,7 @@ esp_err_t handleWifiScan(httpd_req_t* req) {
   // without a heap allocation (replaces std::vector<wifi_ap_record_t>).
   static constexpr size_t max_scan_aps = 64;
   size_t scan_count = std::min(static_cast<uint16_t>(max_scan_aps), apCount);
-  std::array<wifi_ap_record_t, max_scan_aps> aps{};
+  static std::array<wifi_ap_record_t, max_scan_aps> aps{};
   apCount = static_cast<uint16_t>(scan_count);
   esp_wifi_scan_get_ap_records(&apCount, aps.data());
 
