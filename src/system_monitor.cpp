@@ -31,6 +31,13 @@ struct ProtocolInfoItem {
   ebus::StaticSequence<64> slave;
 };
 
+// Static storage for queues
+static uint8_t log_queue_storage[log_queue_size * sizeof(LogRequestItem)];
+static StaticQueue_t log_queue_cb;
+static uint8_t
+    protocol_queue_storage[protocol_queue_size * sizeof(ProtocolInfoItem)];
+static StaticQueue_t protocol_queue_cb;
+
 }  // namespace
 
 SystemMonitor::Status SystemMonitor::status_ = {};
@@ -54,15 +61,14 @@ bool SystemMonitor::begin() {
   sockets_detected_ = 0;
   sockets_connected_ = 0;
 
-  log_queue_ = xQueueCreate(log_queue_size, sizeof(LogRequestItem));
+  log_queue_ = xQueueCreateStatic(log_queue_size, sizeof(LogRequestItem),
+                                  log_queue_storage, &log_queue_cb);
   if (log_queue_ == nullptr) return false;
 
-  protocol_queue_ = xQueueCreate(protocol_queue_size, sizeof(ProtocolInfoItem));
-  if (protocol_queue_ == nullptr) {
-    vQueueDelete(log_queue_);
-    log_queue_ = nullptr;
-    return false;
-  }
+  protocol_queue_ =
+      xQueueCreateStatic(protocol_queue_size, sizeof(ProtocolInfoItem),
+                         protocol_queue_storage, &protocol_queue_cb);
+  if (protocol_queue_ == nullptr) return false;
 
   BaseType_t result = xTaskCreate(
       taskEntry, "system_monitor", app::limits::Task::system_monitor_stack,
@@ -74,14 +80,6 @@ void SystemMonitor::stop() {
   if (task_handle_ != nullptr) {
     vTaskDelete(task_handle_);
     task_handle_ = nullptr;
-  }
-  if (log_queue_ != nullptr) {
-    vQueueDelete(log_queue_);
-    log_queue_ = nullptr;
-  }
-  if (protocol_queue_ != nullptr) {
-    vQueueDelete(protocol_queue_);
-    protocol_queue_ = nullptr;
   }
 }
 
