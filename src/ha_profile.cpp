@@ -2,6 +2,7 @@
 #include "ha_profile.hpp"
 
 #include <algorithm>
+#include <iterator>
 
 #include "ha_profile_gen.hpp"
 
@@ -12,13 +13,13 @@ const HAProfile* findHAProfile(std::string_view name) {
 }
 
 const HAProfile* getHAProfileByIndex(uint8_t idx) {
-  if (idx == 0 || idx > 21) return nullptr;
+  if (idx == 0 || idx > std::size(profiles)) return nullptr;
   return &profiles[idx - 1];
 }
 
 uint8_t getProfileIndexHA(const HAProfile* p) {
   if (!p) return 0;
-  for (uint8_t i = 0; i < 21; i++) {
+  for (uint8_t i = 0; i < std::size(profiles); i++) {
     if (&profiles[i] == p) return i + 1;
   }
   return 0;
