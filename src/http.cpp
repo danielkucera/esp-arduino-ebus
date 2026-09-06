@@ -18,6 +18,7 @@
 #include "api/cron_api.hpp"
 #include "api/devices_api.hpp"
 #include "api/metrics_api.hpp"
+#include "api/status_api.hpp"
 #include "api/values_api.hpp"
 #include "config_manager.hpp"
 #include "ebus_accessor.hpp"
@@ -39,8 +40,7 @@ extern const char common_js_start[] asm("_binary_common_js_start");
 
 // cppcheck-suppress syntaxError
 extern const char root_html_start[] asm("_binary_root_html_start");
-// cppcheck-suppress syntaxError
-extern const char status_html_start[] asm("_binary_status_html_start");
+
 // cppcheck-suppress syntaxError
 extern const char config_html_start[] asm("_binary_config_html_start");
 // cppcheck-suppress syntaxError
@@ -165,42 +165,7 @@ esp_err_t handleUpgradePage(httpd_req_t* req) {
   return ESP_OK;
 }
 
-esp_err_t handleStatusPage(httpd_req_t* req) {
-  sendStatic(req, "text/html", status_html_start);
-  return ESP_OK;
-}
 
-esp_err_t handleStatus(httpd_req_t* req) {
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  HttpUtils::applyCustomHeaders(req);
-  fetchStatus([req](std::string_view chunk) {
-    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-  });
-  httpd_resp_send_chunk(req, nullptr, 0);
-  return ESP_OK;
-}
-
-#if defined(EBUS_INTERNAL)
-esp_err_t handleStatusApp(httpd_req_t* req) {
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  HttpUtils::applyCustomHeaders(req);
-  fetchAppStatus([req](std::string_view chunk) {
-    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-  });
-  httpd_resp_send_chunk(req, nullptr, 0);
-  return ESP_OK;
-}
-
-esp_err_t handleStatusLib(httpd_req_t* req) {
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  HttpUtils::applyCustomHeaders(req);
-  getEbusController().fetchStatus([req](std::string_view chunk) {
-    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-  });
-  httpd_resp_send_chunk(req, nullptr, 0);
-  return ESP_OK;
-}
-#endif
 
 #if defined(EBUS_INTERNAL)
 
@@ -309,12 +274,8 @@ void SetupHttpHandlers() {
   RegisterUri("/upgrade", HTTP_GET, handleUpgradePage);
   RegisterUri("/api/v1/wifi/scan", HTTP_POST, handleWifiScan);
 
-  RegisterUri("/status", HTTP_GET, handleStatusPage);
-  RegisterUri("/api/v1/status", HTTP_GET, handleStatus);
-#if defined(EBUS_INTERNAL)
-  RegisterUri("/api/v1/status/app", HTTP_GET, handleStatusApp);
-  RegisterUri("/api/v1/status/lib", HTTP_GET, handleStatusLib);
-#endif
+  static StatusApi status_api;
+  status_api.registerHandlers(configServer);
 
   static AdcApi adc_api(adc);
   adc_api.registerHandlers(configServer);
