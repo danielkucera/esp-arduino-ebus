@@ -49,7 +49,7 @@ esp_err_t CommandsApi::handleCommandsPage(httpd_req_t* req) {
 esp_err_t CommandsApi::handleCommands(httpd_req_t* req) {
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
-  commandManager.fetchCommands([req](std::string_view chunk) {
+  instance_->command_manager_.fetchCommands([req](std::string_view chunk) {
     httpd_resp_send_chunk(req, chunk.data(), chunk.size());
   });
   httpd_resp_send_chunk(req, nullptr, 0);
@@ -158,10 +158,11 @@ esp_err_t CommandsApi::handleCommandsInsert(httpd_req_t* req) {
         continue;
       }
       row_reader.reset();
-      commandManager.insertCommand(Command::fromTabular(row_reader));
+      instance_->command_manager_.insertCommand(
+          Command::fromTabular(row_reader));
     } else if (row_token == ebus::detail::JsonReader::Token::object_start) {
       row_reader.reset();
-      commandManager.insertCommand(Command::fromJson(row_reader));
+      instance_->command_manager_.insertCommand(Command::fromJson(row_reader));
     }
   }
   Mqtt::publishComponentDiscovery();
@@ -176,7 +177,7 @@ esp_err_t CommandsApi::handleCommandsUpload(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  if (!commandManager.initFileSystem()) {
+  if (!instance_->command_manager_.initFileSystem()) {
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
                                  "LittleFS init failed");
     return ESP_OK;
@@ -221,7 +222,7 @@ esp_err_t CommandsApi::handleCommandsUpload(httpd_req_t* req) {
 
   std::fclose(file);
 
-  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
+  int64_t bytes = instance_->command_manager_.loadCommandsFrom(tmp_path);
   if (bytes < 0) {
     std::remove(tmp_path);
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
@@ -229,7 +230,7 @@ esp_err_t CommandsApi::handleCommandsUpload(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  if (commandManager.saveCommands() < 0) {
+  if (instance_->command_manager_.saveCommands() < 0) {
     std::remove(tmp_path);
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
                                  "Save failed");
@@ -238,7 +239,7 @@ esp_err_t CommandsApi::handleCommandsUpload(httpd_req_t* req) {
 
   std::remove(tmp_path);
   Mqtt::publishComponentDiscovery();
-  size_t count = commandManager.getCommandCount();
+  size_t count = instance_->command_manager_.getCommandCount();
   char res_buf[128];
   snprintf(res_buf, sizeof(res_buf), "Uploaded %d bytes, loaded %u commands",
            total_written, (unsigned)count);
@@ -264,17 +265,17 @@ esp_err_t CommandsApi::handleCommandsRemove(httpd_req_t* req) {
           t == ebus::detail::JsonReader::Token::end)
         break;
       if (t == ebus::detail::JsonReader::Token::string)
-        commandManager.removeCommand(reader.value());
+        instance_->command_manager_.removeCommand(reader.value());
     }
   } else {
-    commandManager.removeAll();
+    instance_->command_manager_.removeAll();
   }
   HttpUtils::sendSuccessResponse(req, "remove");
   return ESP_OK;
 }
 
 esp_err_t CommandsApi::handleCommandsLoad(httpd_req_t* req) {
-  int64_t bytes = commandManager.loadCommands();
+  int64_t bytes = instance_->command_manager_.loadCommands();
   if (bytes > 0) {
     Mqtt::publishComponentDiscovery();
     HttpUtils::sendSuccessResponse(
@@ -290,7 +291,7 @@ esp_err_t CommandsApi::handleCommandsLoad(httpd_req_t* req) {
 }
 
 esp_err_t CommandsApi::handleCommandsSave(httpd_req_t* req) {
-  int64_t bytes = commandManager.saveCommands();
+  int64_t bytes = instance_->command_manager_.saveCommands();
   if (bytes > 0) {
     Mqtt::publishComponentDiscovery();
     HttpUtils::sendSuccessResponse(req, "save", "successful",
@@ -308,7 +309,7 @@ esp_err_t CommandsApi::handleCommandsWipe(httpd_req_t* req) {
   if (mqttha.isEnabled()) {
     mqttha.removeComponents();
   }
-  int64_t bytes = commandManager.wipeCommands();
+  int64_t bytes = instance_->command_manager_.wipeCommands();
   if (bytes > 0) {
     HttpUtils::sendSuccessResponse(req, "wipe", "successful",
                                    "Wiped " + std::to_string(bytes) + " bytes");
