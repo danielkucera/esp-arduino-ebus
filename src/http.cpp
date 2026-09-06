@@ -16,6 +16,7 @@
 #include "api/adc_api.hpp"
 #include "api/commands_api.hpp"
 #include "api/cron_api.hpp"
+#include "api/values_api.hpp"
 #include "config_manager.hpp"
 #include "ebus_accessor.hpp"
 #include "http_utils.hpp"
@@ -42,9 +43,6 @@ extern const char status_html_start[] asm("_binary_status_html_start");
 extern const char config_html_start[] asm("_binary_config_html_start");
 // cppcheck-suppress syntaxError
 extern const char upgrade_html_start[] asm("_binary_upgrade_html_start");
-
-// cppcheck-suppress syntaxError
-extern const char values_html_start[] asm("_binary_values_html_start");
 // cppcheck-suppress syntaxError
 extern const char devices_html_start[] asm("_binary_devices_html_start");
 // cppcheck-suppress syntaxError
@@ -207,93 +205,6 @@ esp_err_t handleStatusLib(httpd_req_t* req) {
 #endif
 
 #if defined(EBUS_INTERNAL)
-esp_err_t handleValuesPage(httpd_req_t* req) {
-  sendStatic(req, "text/html", values_html_start);
-  return ESP_OK;
-}
-
-esp_err_t handleValues(httpd_req_t* req) {
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  HttpUtils::applyCustomHeaders(req);
-  commandManager.fetchValues([req](std::string_view chunk) {
-    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-  });
-  httpd_resp_send_chunk(req, nullptr, 0);
-  return ESP_OK;
-}
-
-esp_err_t handleValuesWrite(httpd_req_t* req) {
-  HttpUtils::StreamingReader sr(req);
-  if (!sr.isValid() || !sr.feedAll()) {
-    HttpUtils::sendErrorResponse(req, "400 Bad Request", "write",
-                                 "Request body too large or invalid");
-    return ESP_OK;
-  }
-  sr.endOfInput();
-
-  std::string_view body_sv = sr.jsonReader().remaining();
-  ebus::detail::JsonReader reader(body_sv);
-  std::string key;
-  if (reader.findKey("key") &&
-      reader.next() == ebus::detail::JsonReader::Token::string) {
-    key = std::string(reader.value());
-  }
-
-  Command* command = commandManager.findCommand(key);
-  if (command == nullptr) {
-    HttpUtils::sendErrorResponse(req, "404 Not Found", "write",
-                                 "Key '" + key + "' not found");
-    return ESP_OK;
-  }
-
-  ebus::Sequence valueBytes = command->getVectorFromJson(body_sv);
-  if (!valueBytes.empty()) {
-    ebus::Sequence fullWrite =
-        ebus::makeSequence(command->getWriteCmd(commandManager));
-    fullWrite.append(valueBytes);
-    getEbusController().enqueue(prio_send, fullWrite);
-    command->setLast(0);
-    HttpUtils::sendSuccessResponse(req, "write");
-  } else {
-    HttpUtils::sendErrorResponse(req, "400 Bad Request", "write",
-                                 "Invalid value for key '" + key + "'");
-  }
-  return ESP_OK;
-}
-
-esp_err_t handleValuesRead(httpd_req_t* req) {
-  HttpUtils::StreamingReader sr(req);
-  if (!sr.isValid() || !sr.feedAll()) {
-    HttpUtils::sendErrorResponse(req, "400 Bad Request", "read",
-                                 "Request body too large or invalid");
-    return ESP_OK;
-  }
-  sr.endOfInput();
-
-  ebus::detail::JsonReader reader(sr.jsonReader().remaining());
-  std::string key;
-  if (reader.findKey("key") &&
-      reader.next() == ebus::detail::JsonReader::Token::string) {
-    key = std::string(reader.value());
-  }
-
-  if (key.empty()) {
-    HttpUtils::sendErrorResponse(req, "400 Bad Request", "read",
-                                 "invalid json payload");
-    return ESP_OK;
-  }
-
-  Command* command = commandManager.findCommand(key);
-  if (command != nullptr) {
-    command->setLast(0);
-    HttpUtils::sendSuccessResponse(req, "read", "requested");
-  } else {
-    HttpUtils::sendErrorResponse(req, "404 Not Found", "read",
-                                 "Key '" + key + "' not found");
-  }
-  return ESP_OK;
-}
-
 esp_err_t handleDevicesPage(httpd_req_t* req) {
   sendStatic(req, "text/html", devices_html_start);
   return ESP_OK;
@@ -464,10 +375,8 @@ void SetupHttpHandlers() {
   static CronApi cron_api(cron);
   cron_api.registerHandlers(configServer);
 
-  RegisterUri("/values", HTTP_GET, handleValuesPage);
-  RegisterUri("/api/v1/values", HTTP_GET, handleValues);
-  RegisterUri("/api/v1/values/write", HTTP_POST, handleValuesWrite);
-  RegisterUri("/api/v1/values/read", HTTP_POST, handleValuesRead);
+  static ValuesApi value_api(commandManager);
+  value_api.registerHandlers(configServer);
 
   RegisterUri("/devices", HTTP_GET, handleDevicesPage);
   RegisterUri("/api/v1/devices", HTTP_GET, handleDevices);
