@@ -17,6 +17,7 @@
 #include "api/commands_api.hpp"
 #include "api/cron_api.hpp"
 #include "api/devices_api.hpp"
+#include "api/metrics_api.hpp"
 #include "api/values_api.hpp"
 #include "config_manager.hpp"
 #include "ebus_accessor.hpp"
@@ -44,9 +45,6 @@ extern const char status_html_start[] asm("_binary_status_html_start");
 extern const char config_html_start[] asm("_binary_config_html_start");
 // cppcheck-suppress syntaxError
 extern const char upgrade_html_start[] asm("_binary_upgrade_html_start");
-
-// cppcheck-suppress syntaxError
-extern const char metrics_html_start[] asm("_binary_metrics_html_start");
 // cppcheck-suppress syntaxError
 extern const char logs_html_start[] asm("_binary_logs_html_start");
 
@@ -205,26 +203,6 @@ esp_err_t handleStatusLib(httpd_req_t* req) {
 #endif
 
 #if defined(EBUS_INTERNAL)
-esp_err_t handleMetricsPage(httpd_req_t* req) {
-  sendStatic(req, "text/html", metrics_html_start);
-  return ESP_OK;
-}
-
-esp_err_t handleMetrics(httpd_req_t* req) {
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  HttpUtils::applyCustomHeaders(req);
-  getEbusController().fetchMetrics([req](std::string_view chunk) {
-    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-  });
-  httpd_resp_send_chunk(req, nullptr, 0);
-  return ESP_OK;
-}
-
-esp_err_t handleMetricsReset(httpd_req_t* req) {
-  getEbusController().resetMetrics();
-  HttpUtils::sendSuccessResponse(req, "reset");
-  return ESP_OK;
-}
 
 esp_err_t handleLogsPage(httpd_req_t* req) {
   sendStatic(req, "text/html", logs_html_start);
@@ -354,9 +332,8 @@ void SetupHttpHandlers() {
   static DevicesApi devices_api;
   devices_api.registerHandlers(configServer);
 
-  RegisterUri("/metrics", HTTP_GET, handleMetricsPage);
-  RegisterUri("/api/v1/metrics", HTTP_GET, handleMetrics);
-  RegisterUri("/api/v1/metrics/reset", HTTP_POST, handleMetricsReset);
+  static MetricsApi metrics_api;
+  metrics_api.registerHandlers(configServer);
 
   RegisterUri("/logs", HTTP_GET, handleLogsPage);
   RegisterUri("/api/v1/logs", HTTP_GET, handleLogs);
