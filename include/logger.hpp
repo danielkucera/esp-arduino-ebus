@@ -44,7 +44,7 @@ class Logger {
 
   TaskHandle_t getTaskHandle() const { return print_task_; }
   size_t getQueueSize() const;
-  size_t getQueueCapacity() const { return max_entries; }
+  static size_t getQueueCapacity() { return max_entries; }
   size_t getQueueHighWatermark() const;
 
  private:
