@@ -16,6 +16,7 @@
 #include "api/adc_api.hpp"
 #include "api/commands_api.hpp"
 #include "api/cron_api.hpp"
+#include "api/devices_api.hpp"
 #include "api/values_api.hpp"
 #include "config_manager.hpp"
 #include "ebus_accessor.hpp"
@@ -43,8 +44,7 @@ extern const char status_html_start[] asm("_binary_status_html_start");
 extern const char config_html_start[] asm("_binary_config_html_start");
 // cppcheck-suppress syntaxError
 extern const char upgrade_html_start[] asm("_binary_upgrade_html_start");
-// cppcheck-suppress syntaxError
-extern const char devices_html_start[] asm("_binary_devices_html_start");
+
 // cppcheck-suppress syntaxError
 extern const char metrics_html_start[] asm("_binary_metrics_html_start");
 // cppcheck-suppress syntaxError
@@ -205,33 +205,6 @@ esp_err_t handleStatusLib(httpd_req_t* req) {
 #endif
 
 #if defined(EBUS_INTERNAL)
-esp_err_t handleDevicesPage(httpd_req_t* req) {
-  sendStatic(req, "text/html", devices_html_start);
-  return ESP_OK;
-}
-
-esp_err_t handleDevices(httpd_req_t* req) {
-  httpd_resp_set_type(req, "application/json;charset=utf-8");
-  HttpUtils::applyCustomHeaders(req);
-  getEbusController().fetchDevices([req](std::string_view chunk) {
-    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
-  });
-  httpd_resp_send_chunk(req, nullptr, 0);
-  return ESP_OK;
-}
-
-esp_err_t handleDevicesScan(httpd_req_t* req) {
-  getEbusController().scanObservedDevices();
-  HttpUtils::sendSuccessResponse(req, "scan", "initiated");
-  return ESP_OK;
-}
-
-esp_err_t handleDevicesScanFull(httpd_req_t* req) {
-  getEbusController().initFullScan(true);
-  HttpUtils::sendSuccessResponse(req, "scan_full", "initiated");
-  return ESP_OK;
-}
-
 esp_err_t handleMetricsPage(httpd_req_t* req) {
   sendStatic(req, "text/html", metrics_html_start);
   return ESP_OK;
@@ -375,13 +348,11 @@ void SetupHttpHandlers() {
   static CronApi cron_api(cron);
   cron_api.registerHandlers(configServer);
 
-  static ValuesApi value_api(commandManager);
-  value_api.registerHandlers(configServer);
+  static ValuesApi values_api(commandManager);
+  values_api.registerHandlers(configServer);
 
-  RegisterUri("/devices", HTTP_GET, handleDevicesPage);
-  RegisterUri("/api/v1/devices", HTTP_GET, handleDevices);
-  RegisterUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
-  RegisterUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
+  static DevicesApi devices_api;
+  devices_api.registerHandlers(configServer);
 
   RegisterUri("/metrics", HTTP_GET, handleMetricsPage);
   RegisterUri("/api/v1/metrics", HTTP_GET, handleMetrics);

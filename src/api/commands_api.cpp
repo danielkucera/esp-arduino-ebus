@@ -7,7 +7,6 @@
 #include "command_manager.hpp"
 #include "http.hpp"
 #include "http_utils.hpp"
-#include "logger.hpp"
 #include "mqtt.hpp"
 #include "mqtt_ha.hpp"
 

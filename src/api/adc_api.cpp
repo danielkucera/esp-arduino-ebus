@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 
 #include "adc.hpp"
 #include "http.hpp"

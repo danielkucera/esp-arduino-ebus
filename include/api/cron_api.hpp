@@ -5,7 +5,6 @@
 #include <esp_http_server.h>
 
 #include "cron.hpp"
-#include "http_utils.hpp"
 
 class CronApi {
  public:
@@ -16,13 +15,13 @@ class CronApi {
  private:
   Cron& cron_;
 
+  static CronApi* instance_;
+
   static esp_err_t handleCronPage(httpd_req_t* req);
   static esp_err_t handleCron(httpd_req_t* req);
   static esp_err_t handleCronEvaluate(httpd_req_t* req);
   static esp_err_t handleCronSave(httpd_req_t* req);
   static esp_err_t handleCronLoad(httpd_req_t* req);
-
-  static CronApi* instance_;
 };
 
 #endif

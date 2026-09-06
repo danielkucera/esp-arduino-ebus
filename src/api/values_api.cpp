@@ -2,6 +2,7 @@
 
 #if defined(EBUS_INTERNAL)
 
+#include <cstdio>
 #include <ebus/detail/json_reader.hpp>
 
 #include "command_manager.hpp"

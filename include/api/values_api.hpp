@@ -5,7 +5,6 @@
 #include <esp_http_server.h>
 
 #include "command_manager.hpp"
-#include "http_utils.hpp"
 
 class ValuesApi {
  public:
@@ -16,12 +15,12 @@ class ValuesApi {
  private:
   CommandManager& command_manager_;
 
+  static ValuesApi* instance_;
+
   static esp_err_t handleValuesPage(httpd_req_t* req);
   static esp_err_t handleValues(httpd_req_t* req);
   static esp_err_t handleValuesWrite(httpd_req_t* req);
   static esp_err_t handleValuesRead(httpd_req_t* req);
-
-  static ValuesApi* instance_;
 };
 
 #endif
