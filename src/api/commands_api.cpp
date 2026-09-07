@@ -15,6 +15,31 @@ namespace {
 // cppcheck-suppress syntaxError
 extern const char commands_html_start[] asm("_binary_commands_html_start");
 
+// Evaluate a JSON array of command objects. Returns empty string_view on
+// success, or a non-empty error message on the first failing command.
+std::string_view evaluateCommands(ebus::detail::JsonReader& reader) {
+  std::string_view eval_error;
+  bool header_seen = false;
+  while (true) {
+    std::string_view row_sv = reader.rawValue();
+    if (row_sv.empty()) break;
+    ebus::detail::JsonReader row_reader(row_sv);
+    auto row_token = row_reader.next();
+
+    if (row_token == ebus::detail::JsonReader::Token::array_start) {
+      if (!header_seen) {
+        header_seen = true;
+        continue;
+      }
+    } else if (row_token == ebus::detail::JsonReader::Token::object_start) {
+      row_reader.reset();
+      eval_error = Command::evaluate(row_reader);
+      if (!eval_error.empty()) break;
+    }
+  }
+  return eval_error;
+}
+
 }  // namespace
 
 CommandsApi* CommandsApi::instance_ = nullptr;
@@ -57,9 +82,14 @@ esp_err_t CommandsApi::handleCommands(httpd_req_t* req) {
 
 esp_err_t CommandsApi::handleCommandsEvaluate(httpd_req_t* req) {
   HttpUtils::StreamingReader sr(req);
+  if (req->content_len > static_cast<int>(HttpUtils::max_request_body_size)) {
+    HttpUtils::sendErrorResponse(req, "413 Payload Too Large", "evaluate",
+                                 "Request body too large");
+    return ESP_OK;
+  }
   if (!sr.isValid() || !sr.feedAll()) {
     HttpUtils::sendErrorResponse(req, "400 Bad Request", "evaluate",
-                                 "Request body too large or invalid");
+                                 "Invalid request body");
     return ESP_OK;
   }
   sr.endOfInput();
@@ -72,28 +102,10 @@ esp_err_t CommandsApi::handleCommandsEvaluate(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  std::string_view evalError;
-  bool headerSeen = false;
-  while (true) {
-    std::string_view row_sv = reader.rawValue();
-    if (row_sv.empty()) break;
-    ebus::detail::JsonReader row_reader(row_sv);
-    auto row_token = row_reader.next();
-
-    if (row_token == ebus::detail::JsonReader::Token::array_start) {
-      if (!headerSeen) {
-        headerSeen = true;
-        continue;
-      }
-    } else if (row_token == ebus::detail::JsonReader::Token::object_start) {
-      row_reader.reset();
-      evalError = Command::evaluate(row_reader);
-      if (!evalError.empty()) break;
-    }
-  }
-
-  if (!evalError.empty())
-    HttpUtils::sendErrorResponse(req, "400 Bad Request", "evaluate", evalError);
+  std::string_view eval_error = evaluateCommands(reader);
+  if (!eval_error.empty())
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "evaluate",
+                                 eval_error);
   else
     HttpUtils::sendSuccessResponse(req, "evaluate");
 
@@ -102,9 +114,14 @@ esp_err_t CommandsApi::handleCommandsEvaluate(httpd_req_t* req) {
 
 esp_err_t CommandsApi::handleCommandsInsert(httpd_req_t* req) {
   HttpUtils::StreamingReader sr(req);
+  if (req->content_len > static_cast<int>(HttpUtils::max_request_body_size)) {
+    HttpUtils::sendErrorResponse(req, "413 Payload Too Large", "insert",
+                                 "Request body too large");
+    return ESP_OK;
+  }
   if (!sr.isValid() || !sr.feedAll()) {
     HttpUtils::sendErrorResponse(req, "400 Bad Request", "insert",
-                                 "Request body too large or invalid");
+                                 "Invalid request body");
     return ESP_OK;
   }
   sr.endOfInput();
@@ -119,41 +136,23 @@ esp_err_t CommandsApi::handleCommandsInsert(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  std::string_view evalError;
-  bool headerSeen = false;
-  while (true) {
-    std::string_view cmd_sv = reader_eval.rawValue();
-    if (cmd_sv.empty()) break;
-    ebus::detail::JsonReader row_reader(cmd_sv);
-    auto row_token = row_reader.next();
-    if (row_token == ebus::detail::JsonReader::Token::array_start) {
-      if (!headerSeen) {
-        headerSeen = true;
-        continue;
-      }
-    } else if (row_token == ebus::detail::JsonReader::Token::object_start) {
-      row_reader.reset();
-      evalError = Command::evaluate(row_reader);
-      if (!evalError.empty()) break;
-    }
-  }
-
-  if (!evalError.empty()) {
-    HttpUtils::sendErrorResponse(req, "400 Bad Request", "insert", evalError);
+  std::string_view eval_error = evaluateCommands(reader_eval);
+  if (!eval_error.empty()) {
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "insert", eval_error);
     return ESP_OK;
   }
 
   ebus::detail::JsonReader reader_insert(body_sv);
   HttpUtils::prepareJsonReaderForArray(reader_insert, "commands", parse_error);
-  headerSeen = false;
+  bool header_seen = false;
   while (true) {
     std::string_view cmd_sv = reader_insert.rawValue();
     if (cmd_sv.empty()) break;
     ebus::detail::JsonReader row_reader(cmd_sv);
     auto row_token = row_reader.next();
     if (row_token == ebus::detail::JsonReader::Token::array_start) {
-      if (!headerSeen) {
-        headerSeen = true;
+      if (!header_seen) {
+        header_seen = true;
         continue;
       }
       row_reader.reset();
