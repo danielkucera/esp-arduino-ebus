@@ -211,4 +211,29 @@ void applyCustomHeaders(httpd_req_t* req) {
     httpd_resp_set_hdr(req, h.first.c_str(), h.second.c_str());
 }
 
+bool prepareJsonReaderForArray(ebus::detail::JsonReader& reader,
+                               std::string_view expected_array_key,
+                               std::string& error_out) {
+  auto token = reader.next();
+
+  if (token == ebus::detail::JsonReader::Token::object_start) {
+    if (reader.findKey(expected_array_key)) {
+      token = reader.next();
+    } else {
+      error_out = "JSON object must contain a '" +
+                  std::string(expected_array_key) + "' key.";
+      return false;
+    }
+  } else if (token != ebus::detail::JsonReader::Token::array_start) {
+    error_out = "JSON root must be an object or a direct array.";
+    return false;
+  }
+
+  if (token != ebus::detail::JsonReader::Token::array_start) {
+    error_out = "Expected a JSON array.";
+    return false;
+  }
+  return true;
+}
+
 }  // namespace HttpUtils

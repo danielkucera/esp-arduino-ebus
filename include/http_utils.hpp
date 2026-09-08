@@ -60,4 +60,12 @@ void sendSuccessResponse(httpd_req_t* req, std::string_view id,
 // Useful for handlers that use chunked/streaming responses.
 void applyCustomHeaders(httpd_req_t* req);
 
+// Helper to prepare a JsonReader for iterating over an array of commands/keys.
+// Handles both bare arrays and objects with a specific array key (e.g.,
+// {"commands": [...]}). On success, the reader is positioned at the start of
+// the array. On failure, returns false and populates error_out.
+bool prepareJsonReaderForArray(ebus::detail::JsonReader& reader,
+                               std::string_view expected_array_key,
+                               std::string& error_out);
+
 }  // namespace HttpUtils
