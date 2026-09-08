@@ -13,6 +13,7 @@ Thank you for your interest in contributing to the esp-arduino-ebus project! To 
 *   **Variables and Parameters**: `snake_case` (e.g., `wifi_ssid`, `poll_id`).
 *   **Constants and `constexpr`**: `snake_case` (e.g., `baud_rate`, `max_data_bytes`). Prefer grouping related constants into classes as `static constexpr` members or specific namespaces.
 *   **Private Members**: `snake_case_` with a trailing underscore (e.g., `task_handle_`, `stop_runner_`).
+*   **Macros and Feature Flags**: `SCREAMING_SNAKE_CASE` (e.g., `COMMAND_CAPACITY`, `MAX_WIFI_CLIENTS`). This style is strictly reserved for preprocessor defines.
 *   **Files and Directories**: `snake_case` (e.g., `config_manager.cpp`, `http_utils.hpp`).
 
 ### Memory Management
