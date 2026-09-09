@@ -35,6 +35,8 @@
     <button id="btnDownload" class="secondary">Save as file</button>
     <button id="btnLoad" class="apply">Apply from storage</button>
     <button id="btnSave" class="danger">Save to storage</button>
+    <button id="btnUploadFile" class="apply">Upload file to storage</button>
+    <input id="fileUploadDirect" type="file" style="display:none" accept="application/json">
     <button id="btnWipe" class="danger">Wipe all from storage</button>
     <span class="status" id="status"> </span>
     <span id="size">0 bytes</span>
@@ -102,7 +104,9 @@
         cols.forEach(k => {
           const td = document.createElement('td');
           const v = cmd[k];
-          if (typeof v === 'object' && v !== null)
+          if (Array.isArray(v))
+            td.textContent = JSON.stringify(v);
+          else if (typeof v === 'object' && v !== null)
             td.textContent = Object.entries(v).map(([key, value]) => `${key}: ${value}`).join(', ');
           else
             td.textContent = (v === undefined ? '' : String(v));
@@ -126,42 +130,51 @@
       try {
         const txt = document.getElementById('commandsArea').value;
         const obj = JSON.parse(txt);
-        renderTable(obj.commands || []);
+        renderTable(Array.isArray(obj) ? obj : (obj.commands || []));
         setStatus('Table updated from editor');
       } catch (err) {
         setStatus('Invalid JSON');
       }
     }
 
-    function handleInsert() {
+    async function handleInsert() {
       try {
         const txt = document.getElementById('commandsArea').value;
         const obj = JSON.parse(txt);
         setStatus('Uploading...');
-        fetch('/api/v1/commands/insert', {
+        const res = await fetch('/api/v1/commands/insert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
-        }).then(res => setStatus(res.ok ? 'Uploaded' : 'Upload failed'))
-          .catch(() => setStatus('Invalid JSON or upload failed'));
+        });
+        const data = await res.json();
+        if (data.status === 'successful') {
+          setStatus('Uploaded');
+          fetchCommands();
+        } else {
+          setStatus('Upload failed: ' + (data.error || data.status));
+        }
       } catch (err) {
         setStatus('Invalid JSON or upload failed');
       }
     }
 
-    function handleEvaluate() {
+    async function handleEvaluate() {
       try {
         const txt = document.getElementById('commandsArea').value;
         const obj = JSON.parse(txt);
         setStatus('Evaluating...');
-        fetch('/api/v1/commands/evaluate', {
+        const res = await fetch('/api/v1/commands/evaluate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
-        }).then(async res => {
-          const text = await res.text();
-          setStatus(text || (res.ok ? 'Evaluated' : 'Evaluation failed'));
-        }).catch(() => setStatus('Invalid JSON or evaluation failed'));
+        });
+        const data = await res.json();
+        if (data.status === 'successful') {
+          setStatus('Evaluation successful');
+        } else {
+          setStatus('Evaluation failed: ' + (data.error || data.status));
+        }
       } catch (err) {
         setStatus('Invalid JSON or evaluation failed');
       }
@@ -193,8 +206,7 @@
     function handleRemoveAll() {
       fetch('/api/v1/commands/remove', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keys: [] })
+        headers: { 'Content-Type': 'application/json' }
       }).then(res => {
         if (res.ok) {
           setStatus('All commands removed');
@@ -224,6 +236,24 @@
       fetchCommands();
     });
     document.getElementById('btnSave').addEventListener('click', () => postSimple('/api/v1/commands/save'));
+    document.getElementById('btnUploadFile').addEventListener('click', () => document.getElementById('fileUploadDirect').click());
+    document.getElementById('fileUploadDirect').addEventListener('change', ev => {
+      const f = ev.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setStatus('Uploading file...');
+        fetch('/api/v1/commands/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: e.target.result
+        }).then(res => res.text().then(text => {
+          setStatus(text || (res.ok ? 'Uploaded' : 'Error'));
+          if (res.ok) fetchCommands();
+        })).catch(() => setStatus('Upload failed'));
+      };
+      reader.readAsText(f);
+    });
     document.getElementById('btnWipe').addEventListener('click', () => {
       if (confirm('Clear all commands from NVS?')) postSimple('/api/v1/commands/wipe');
     });

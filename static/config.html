@@ -29,7 +29,8 @@
         <div><label for="wifiPassword">WiFi Password</label></div>
         <div><input id="wifiPassword" type="password" class="config"></div>
         <div><label for="wifiBssid">WiFi BSSID (MAC address)</label></div>
-        <div><input id="wifiBssid" type="text" class="config" placeholder="leave empty for dynamic selection" spellcheck="false"></div>
+        <div><input id="wifiBssid" type="text" class="config" placeholder="leave empty for dynamic selection"
+                spellcheck="false"></div>
         <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
             <button id="btnWifiScan" style="margin-right: 10px;">Scan Available Networks</button>
             <span id="scanStatus"></span>
@@ -77,18 +78,6 @@
     </fieldset>
 
     <fieldset>
-        <legend>Adapter</legend>
-        <div><label for="pwmValue">PWM</label></div>
-        <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config" value="130"></div>
-        <div><label for="ebusAddress">eBUS Address (hex, e.g. ff)</label></div>
-        <div><input id="ebusAddress" type="text" class="config" value="ff"></div>
-        <div><label for="busisrWindow">Bus ISR Window (us)</label></div>
-        <div><input id="busisrWindow" type="number" min="4250" max="4500" step="1" class="config"></div>
-        <div><label for="busisrOffset">Bus ISR Offset (us)</label></div>
-        <div><input id="busisrOffset" type="number" min="0" max="200" step="1" class="config"></div>
-    </fieldset>
-
-    <fieldset>
         <legend>SNTP</legend>
         <div><label><input id="sntpEnabled" type="checkbox" class="config"> SNTP Enabled</label></div>
         <div><label for="sntpServer">SNTP Server</label></div>
@@ -98,12 +87,22 @@
     </fieldset>
 
     <fieldset>
+        <legend>Adapter</legend>
+        <div><label for="pwmValue">PWM</label></div>
+        <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config" value="130"></div>
+        <div><label for="ebusAddress">eBUS Address (hex, e.g. ff)</label></div>
+        <div><input id="ebusAddress" type="text" class="config" value="ff"></div>
+        <div><label for="busWindow">Bus Window (us)</label></div>
+        <div><input id="busWindow" type="number" min="4250" max="4500" step="1" class="config"></div>
+        <div><label for="busOffset">Bus Offset (us)</label></div>
+        <div><input id="busOffset" type="number" min="0" max="200" step="1" class="config"></div>
+    </fieldset>
+
+    <fieldset>
         <legend>Schedule</legend>
-        <div><label><input id="inquiryExistPrm" type="checkbox" class="config"> Inquiry Of Existence</label>
-        </div>
+        <div><label><input id="systemInquiry" type="checkbox" class="config">Inquiry Of Existence</label></div>
+        <div><label><input id="systemResponse" type="checkbox" class="config">Send Response</label></div>
         <div><label><input id="scanOnStartPrm" type="checkbox" class="config"> Scan On Startup</label></div>
-        <div><label for="firstCmdAfterSt">First Command After Start (s)</label></div>
-        <div><input id="firstCmdAfterSt" type="number" min="5" max="60" step="1" class="config" value="10"></div>
     </fieldset>
 
     <fieldset>
@@ -116,20 +115,21 @@
         <div><label for="mqttPass">MQTT Password</label></div>
         <div><input id="mqttPass" type="password" class="config"></div>
         <div><label for="rootTopic">Root Topic</label></div>
-        <div><input id="rootTopic" type="text" class="config" placeholder="leave empty for ebus/&lt;<LOW_MAC>&gt;/" spellcheck="false"></div>
-        <div><label><input id="mqttPublishCnt" type="checkbox" class="config"> Publish Counter</label></div>
-        <div><label><input id="mqttPublishTmg" type="checkbox" class="config"> Publish Timing</label></div>
+        <div><input id="rootTopic" type="text" class="config" placeholder="leave empty for ebus/&lt;<LOW_MAC>&gt;/"
+                spellcheck="false"></div>
     </fieldset>
 
     <fieldset>
         <legend>Home Assistant</legend>
-        <div><label><input id="haEnabledParam" type="checkbox" class="config"> Enabled</label></div>
+        <div><label><input id="haEnabled" type="checkbox" class="config"> Enabled</label></div>
     </fieldset>
 
     <fieldset>
         <legend>HTTP</legend>
-        <div><label for="httpHeaders">Custom Response Headers (one per line, format: <code>Name: Value</code>)</label></div>
-        <div><textarea id="httpHeaders" class="config" rows="4" placeholder="Access-Control-Allow-Origin: *"></textarea></div>
+        <div><label for="httpHeaders">Custom Response Headers (one per line, format: <code>Name: Value</code>)</label>
+        </div>
+        <div><textarea id="httpHeaders" class="config" rows="4" placeholder="Access-Control-Allow-Origin: *"></textarea>
+        </div>
     </fieldset>
 
     <script src="common.js"></script>
@@ -205,7 +205,7 @@
             for (const e of el) {
                 payload[e.id] = getField(e.id);
             }
-            
+
             try {
                 const res = await fetch('/api/v1/config', {
                     method: 'POST',
@@ -297,9 +297,9 @@
             try {
                 const res = await fetch('/api/v1/wifi/scan', { method: 'POST' });
                 if (!res.ok) throw new Error('Scan failed');
-                
+
                 const networks = await res.json();
-                
+
                 if (!networks || networks.length === 0) {
                     scanStatusEl.textContent = 'No networks found';
                     return;
@@ -311,7 +311,7 @@
                 // Populate table
                 networks.forEach(network => {
                     const row = document.createElement('tr');
-                    
+
                     const ssidCell = document.createElement('td');
                     ssidCell.textContent = network.ssid || '(Hidden)';
                     ssidCell.style.border = '1px solid #ddd';
@@ -348,7 +348,7 @@
                     actionCell.style.border = '1px solid #ddd';
                     actionCell.style.padding = '8px';
                     actionCell.style.textAlign = 'center';
-                    
+
                     const selectBtn = document.createElement('button');
                     selectBtn.textContent = 'Select';
                     selectBtn.style.padding = '4px 8px';

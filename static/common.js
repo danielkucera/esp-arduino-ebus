@@ -66,7 +66,12 @@ function handleSimpleTable(apiEndpoint, theadId, tbodyId) {
         const keys = new Set();
         data.forEach(item => Object.keys(item || {}).forEach(k => keys.add(k)));
         const cols = Array.from(keys);
-        const rows = data.map(item => cols.map(k => item[k] === undefined ? '' : String(item[k])));
+        const rows = data.map(item => cols.map(k => {
+            const val = item[k];
+            if (val === undefined) return '';
+            if (typeof val === 'object' && val !== null) return JSON.stringify(val);
+            return String(val);
+        }));
         renderSimpleTable(theadId, tbodyId, cols, rows);
     });
 }
@@ -116,40 +121,102 @@ function renderNestedSections(data, containerId, sortNumbers = false, radix = 10
     const container = document.getElementById(containerId);
     container.innerHTML = '';
 
-    function createSection(sectionName, values) {
-        const sectionDiv = document.createElement('div');
-        sectionDiv.classList.add('section');
-        sectionDiv.innerHTML = `<div class="title">${sectionName}</div>`;
+    function renderEntry(parent, key, value, forceSection = false) {
+        const isObj = typeof value === 'object' && value !== null;
+        const isArr = Array.isArray(value);
 
-        const entries = Object.entries(values);
+        if (forceSection || (isObj && !isArr)) {
+            const sectionDiv = document.createElement('div');
+            sectionDiv.classList.add('section');
+            if (key) sectionDiv.innerHTML = `<div class="title">${key}</div>`;
 
-        if (sortNumbers) {
-            entries.sort(([keyA, valueA], [keyB, valueB]) => {
-                if (typeof valueA === 'number' && typeof valueB === 'number') {
-                    return parseInt(keyA, radix) - parseInt(keyB, radix);
+            if (isObj && !isArr) {
+                const entries = Object.entries(value);
+                if (sortNumbers) {
+                    entries.sort(([k1, v1], [k2, v2]) => {
+                        if (typeof v1 === 'number' && typeof v2 === 'number') {
+                            return parseInt(k1, radix) - parseInt(k2, radix);
+                        }
+                        return 0;
+                    });
                 }
-                return 0;
-            });
-        }
-
-        for (const [key, value] of entries) {
+                for (const [k, v] of entries) {
+                    renderEntry(sectionDiv, k, v);
+                }
+            } else if (isArr) {
+                if (value.length === 0) {
+                    sectionDiv.insertAdjacentHTML('beforeend', '<div class="item"><i>(empty)</i></div>');
+                } else {
+                    value.forEach((itemVal, index) => {
+                        renderEntry(sectionDiv, `[${index}]`, itemVal);
+                    });
+                }
+            } else {
+                sectionDiv.insertAdjacentHTML('beforeend', `<div class="item">${value}</div>`);
+            }
+            parent.appendChild(sectionDiv);
+        } else {
             const itemDiv = document.createElement('div');
             itemDiv.classList.add('item');
-            if (typeof value === 'object' && value !== null) {
-                const nestedSectionDiv = createSection(key, value);
-                sectionDiv.appendChild(nestedSectionDiv);
-            } else {
-                itemDiv.innerHTML = `<span class="key">${key}:</span> ${value}`;
-                sectionDiv.appendChild(itemDiv);
-            }
+            itemDiv.innerHTML = `<span class="key">${key}:</span> ${isArr ? JSON.stringify(value) : value}`;
+            parent.appendChild(itemDiv);
         }
-        return sectionDiv;
     }
-    for (const [section, values] of Object.entries(data)) {
-        const sectionDiv = createSection(section, values);
-        container.appendChild(sectionDiv);
+
+    for (const [key, value] of Object.entries(data)) {
+        // Force root level entries into sections for visual consistency
+        renderEntry(container, key, value, true);
     }
 }
+
+
+// function renderNestedSections(data, containerId, sortNumbers = false, radix = 10) {
+//     const container = document.getElementById(containerId);
+//     container.innerHTML = '';
+
+//     function createSection(sectionName, values) {
+//         const sectionDiv = document.createElement('div');
+//         sectionDiv.classList.add('section');
+//         sectionDiv.innerHTML = `<div class="title">${sectionName}</div>`;
+
+//         const entries = Object.entries(values);
+
+//         if (sortNumbers) {
+//             entries.sort(([keyA, valueA], [keyB, valueB]) => {
+//                 if (typeof valueA === 'number' && typeof valueB === 'number') {
+//                     return parseInt(keyA, radix) - parseInt(keyB, radix);
+//                 }
+//                 return 0;
+//             });
+//         }
+
+//         for (const [key, value] of entries) {
+//             const itemDiv = document.createElement('div');
+//             itemDiv.classList.add('item');
+//             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+//                 const nestedSectionDiv = createSection(key, value);
+//                 sectionDiv.appendChild(nestedSectionDiv);
+//             } else {
+//                 const valStr = Array.isArray(value) ? JSON.stringify(value) : String(value);
+//                 itemDiv.innerHTML = `<span class="key">${key}:</span> ${valStr}`;
+//                 sectionDiv.appendChild(itemDiv);
+//             }
+//         }
+//         return sectionDiv;
+//     }
+
+//     for (const [key, value] of Object.entries(data)) {
+//         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+//             container.appendChild(createSection(key, value));
+//         } else {
+//             const itemDiv = document.createElement('div');
+//             itemDiv.classList.add('item');
+//             const valStr = Array.isArray(value) ? JSON.stringify(value) : String(value);
+//             itemDiv.innerHTML = `<span class="key">${key}:</span> ${valStr}`;
+//             container.appendChild(itemDiv);
+//         }
+//     }
+// }
 
 /**
  * Downloads a text content as a file with the given filename and MIME type.

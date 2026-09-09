@@ -169,18 +169,33 @@ textarea {
     border-radius: 5px;
     font-family: monospace;
     font-size: 13px;
+    background: #fff;
+}
+
+/* Indent nested sections to show hierarchy */
+.section .section {
+    margin-left: 15px;
+    margin-right: 0;
+    border-left: 3px solid #16A1E7;
+    background: #fcfcfc;
 }
 
 .title {
     font-weight: bold;
+    color: #16A1E7;
+    margin-bottom: 5px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 3px;
 }
 
 .item {
     margin: 5px 0;
+    padding-left: 5px;
 }
 
 .key {
     font-weight: bold;
+    color: #555;
 }
 
 /* ========== Info Box ========== */

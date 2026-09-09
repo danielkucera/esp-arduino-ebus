@@ -1,0 +1,82 @@
+[
+  {
+    "key": "01",
+    "name": "Outside_Temperature",
+    "read_cmd": "feb5160301",
+    "write_cmd": "",
+    "interval": 0,
+    "master": true,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "data2b_celsius",
+        "position": 2,
+        "ha_profile": "sensor_temperature"
+      }
+    ]
+  },
+  {
+    "key": "11",
+    "name": "Brine/Inlet_Temperature",
+    "read_cmd": "08b50903290f00",
+    "write_cmd": "",
+    "interval": 0,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "data2c_celsius",
+        "position": 3,
+        "ha_profile": "sensor_temperature"
+      }
+    ]
+  },
+  {
+    "key": "12",
+    "name": "Brine/Outlet_Temperature",
+    "read_cmd": "08b509030d0800",
+    "write_cmd": "",
+    "interval": 60,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "data2c_celsius",
+        "position": 1,
+        "ha_profile": "sensor_temperature"
+      }
+    ]
+  },
+  {
+    "key": "13",
+    "name": "Brine/Pressure",
+    "read_cmd": "08b509030d1600",
+    "write_cmd": "",
+    "interval": 60,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "int16_bar",
+        "position": 1,
+        "ha_profile": "sensor_pressure"
+      }
+    ]
+  },
+  {
+    "key": "34",
+    "name": "Heatpump/Compressor",
+    "read_cmd": "08b509030d1d00",
+    "write_cmd": "",
+    "interval": 60,
+    "master": false,
+    "fields": [
+      {
+        "name": "value",
+        "profile": "uint8",
+        "position": 1,
+        "ha_profile": "binary_sensor_running"
+      }
+    ]
+  }
+]

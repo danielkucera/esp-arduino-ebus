@@ -12,19 +12,30 @@
     <h1>Status</h1>
     <div class="controls">
         <button id="btnHome">Home</button>
-        <button id="btnStatus">Status</button>
+        <button id="btnSystem">System</button>
+        <button id="btnAppResources">App Resources</button>
+        <button id="btnLibResources">Lib Resources</button>
         <span id="status">...</span>
     </div>
     <div class="container" id="statusContainer"></div>
     <script src="common.js"></script>
     <script>
+        function loadSystem() {
+            fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'));
+        }
+        function loadAppResources() {
+            fetchJson('/api/v1/status/app', data => renderNestedSections(data, 'statusContainer'));
+        }
+        function loadLibResources() {
+            fetchJson('/api/v1/status/lib', data => renderNestedSections(data, 'statusContainer', true));
+        }
         document.getElementById('btnHome').addEventListener('click', handleHome);
-        document.getElementById('btnStatus').addEventListener('click', () =>
-            fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'))
-        );
+        document.getElementById('btnSystem').addEventListener('click', loadSystem);
+        document.getElementById('btnAppResources').addEventListener('click', loadAppResources);
+        document.getElementById('btnLibResources').addEventListener('click', loadLibResources);
 
         // Initial load
-        fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'));
+        loadSystem();
     </script>
 </body>
 
