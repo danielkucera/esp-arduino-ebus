@@ -19,7 +19,7 @@
 #include <cstring>
 #include <ebus/detail/json_writer.hpp>
 
-#include "app_limits.hpp"
+#include "app/app_limits.hpp"
 #include "logger.hpp"
 
 #if defined(EBUS_INTERNAL)

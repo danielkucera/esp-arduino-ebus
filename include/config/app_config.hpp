@@ -6,10 +6,11 @@
 
 struct AppConfig {
   struct Network {
-    ebus::FixedString<32> wifi_ssid = "ebus-test";
-    ebus::FixedString<64> wifi_password = "lectronz";
+    ebus::FixedString<32> wifi_ssid;
+    ebus::FixedString<64> wifi_password;
     ebus::FixedString<18> wifi_bssid;
-    ebus::FixedString<32> ap_password = "ebusebus";
+    ebus::FixedString<32> ap_password;
+
     bool static_ip_enabled = false;
     ebus::FixedString<16> ip_address;
     ebus::FixedString<16> gateway;
@@ -20,18 +21,18 @@ struct AppConfig {
 
   struct Sntp {
     bool enabled = false;
-    ebus::FixedString<64> server = "pool.ntp.org";
-    ebus::FixedString<32> timezone = "UTC0";
+    ebus::FixedString<64> server;
+    ebus::FixedString<32> timezone;
   } sntp;
 
   struct Pwm {
-    uint8_t value = 130;
+    uint8_t value;
   } pwm;
 
   struct Bus {
-    uint16_t window_us = 4400;  // us
-    uint16_t offset_us = 50;    // us
-    ebus::FixedString<8> address = "ff";
+    uint16_t window_us;
+    uint16_t offset_us;
+    ebus::FixedString<8> address;
     bool system_inquiry = false;
     bool system_response = true;
     bool scan_on_startup = false;
@@ -45,10 +46,10 @@ struct AppConfig {
     ebus::FixedString<32> root_topic;
   } mqtt;
 
-  struct Ha {
+  struct MqttHa {
     bool enabled = false;
-    ebus::FixedString<32> thing_name = "esp-eBus";
-  } ha;
+    ebus::FixedString<32> thing_name;
+  } mqtt_ha;
 
   struct Http {
     ebus::FixedString<512> headers;

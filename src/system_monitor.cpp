@@ -10,7 +10,7 @@
 #include <cstdio>
 #include <cstring>
 
-#include "app_limits.hpp"
+#include "app/app_limits.hpp"
 #include "command_manager.hpp"
 #include "logger.hpp"
 #include "mqtt.hpp"

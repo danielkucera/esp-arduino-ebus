@@ -18,7 +18,7 @@
 #include <string_view>
 #include <vector>
 
-#include "app_limits.hpp"
+#include "app/app_limits.hpp"
 #include "command_manager.hpp"
 #include "ebus_accessor.hpp"
 #include "logger.hpp"

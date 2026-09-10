@@ -5,7 +5,22 @@
 #include <ebus/types.hpp>
 #include <string_view>
 
-void AppConfig::reset() { *this = AppConfig{}; }
+void AppConfig::reset() {
+  *this = AppConfig{};
+  network.wifi_ssid = "ebus-test";
+  network.wifi_password = "lectronz";
+  network.ap_password = "ebusebus";
+  sntp.server = "pool.ntp.org";
+  sntp.timezone = "UTC0";
+  bus.address = "ff";
+  mqtt_ha.thing_name = "esp-eBus";
+  pwm.value = 130;
+  bus.window_us = 4400;
+  bus.offset_us = 50;
+  bus.system_inquiry = false;
+  bus.system_response = true;
+  bus.scan_on_startup = false;
+}
 
 void AppConfig::toJson(ebus::detail::JsonWriter& writer) const {
   auto scope = writer.objectScope();
@@ -16,6 +31,7 @@ void AppConfig::toJson(ebus::detail::JsonWriter& writer) const {
     writer.writeField("wifi_password", network.wifi_password.c_str());
     writer.writeField("wifi_bssid", network.wifi_bssid.c_str());
     writer.writeField("ap_password", network.ap_password.c_str());
+
     writer.writeField("static_ip_enabled", network.static_ip_enabled);
     writer.writeField("ip_address", network.ip_address.c_str());
     writer.writeField("gateway", network.gateway.c_str());
@@ -53,9 +69,9 @@ void AppConfig::toJson(ebus::detail::JsonWriter& writer) const {
   }
 
   {
-    auto haScope = writer.objectScope("ha");
-    writer.writeField("enabled", ha.enabled);
-    writer.writeField("thing_name", ha.thing_name.c_str());
+    auto mqttHaScope = writer.objectScope("mqtt_ha");
+    writer.writeField("enabled", mqtt_ha.enabled);
+    writer.writeField("thing_name", mqtt_ha.thing_name.c_str());
   }
 
   writer.writeField("http_headers", http.headers.c_str());
@@ -97,6 +113,7 @@ bool AppConfig::mergeFromJson(std::string_view json) {
                 network.ap_password.assign(inner.value());
                 return true;
               }
+
               if (k == "static_ip_enabled") {
                 inner.next();
                 network.static_ip_enabled = inner.asBool();
@@ -127,7 +144,6 @@ bool AppConfig::mergeFromJson(std::string_view json) {
                 network.dns2.assign(inner.value());
                 return true;
               }
-
               return false;
             });
       }
@@ -243,18 +259,18 @@ bool AppConfig::mergeFromJson(std::string_view json) {
       return true;
     }
 
-    if (key == "ha") {
+    if (key == "mqtt_ha") {
       if (r.next() == ebus::detail::JsonReader::Token::object_start) {
         r.forEachField(
             [&](std::string_view k, ebus::detail::JsonReader& inner) {
               if (k == "enabled") {
                 inner.next();
-                ha.enabled = inner.asBool();
+                mqtt_ha.enabled = inner.asBool();
                 return true;
               }
               if (k == "thing_name") {
                 inner.next();
-                ha.thing_name.assign(inner.value());
+                mqtt_ha.thing_name.assign(inner.value());
                 return true;
               }
               return false;

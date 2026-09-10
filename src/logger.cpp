@@ -7,7 +7,7 @@
 #include <ebus/detail/json_writer.hpp>
 #include <ebus/utils.hpp>
 
-#include "app_limits.hpp"
+#include "app/app_limits.hpp"
 
 Logger logger;
 
