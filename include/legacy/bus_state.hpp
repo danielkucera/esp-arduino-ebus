@@ -1,5 +1,7 @@
 #pragma once
 
+#if !defined(EBUS_INTERNAL)
+
 #include <esp_timer.h>
 
 #include "main.hpp"
@@ -121,3 +123,5 @@ class BusState {
   uint32_t syn_time_ = 0;
   uint32_t previous_syn_time_ = 0;
 };
+
+#endif

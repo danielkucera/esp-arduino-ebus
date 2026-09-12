@@ -19,6 +19,7 @@
 #include <cstring>
 #include <ebus/detail/json_writer.hpp>
 
+#include "app/app.hpp"
 #include "app/app_limits.hpp"
 #include "logger.hpp"
 
@@ -30,8 +31,8 @@
 #include "mqtt_ha.hpp"
 #include "system_monitor.hpp"
 #else
-#include "bus_type.hpp"
-#include "client.hpp"
+#include "legacy/bus_type.hpp"
+#include "legacy/client.hpp"
 #endif
 
 #include "adapter_version.hpp"
@@ -519,6 +520,9 @@ void fetchStatus(const ebus::JsonChunkVisitor& visitor) {
 }
 
 extern "C" void app_main(void) {
+  App app;
+  app.begin();
+
   DebugSer.begin(115200);
   DebugSer.setDebugOutput(true);
 
@@ -844,5 +848,6 @@ extern "C" void app_main(void) {
     logger.error("Failed to start client runtime");
   }
 #endif
+  app.loop();
   vTaskDelete(nullptr);
 }

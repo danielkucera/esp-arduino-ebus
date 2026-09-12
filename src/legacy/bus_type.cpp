@@ -1,4 +1,6 @@
-#include "bus_type.hpp"
+#if !defined(EBUS_INTERNAL)
+
+#include "legacy/bus_type.hpp"
 
 #include <driver/uart.h>
 #include <esp_rom_sys.h>
@@ -351,3 +353,5 @@ void BusType::receive(uint8_t symbol, uint32_t startBitTime) {
       break;
   }
 }
+
+#endif

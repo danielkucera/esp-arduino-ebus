@@ -1,4 +1,6 @@
-#include "client.hpp"
+#if !defined(EBUS_INTERNAL)
+
+#include "legacy/client.hpp"
 
 #include <fcntl.h>
 #include <freertos/FreeRTOS.h>
@@ -10,7 +12,7 @@
 #include <cstring>
 
 #include "app/app_limits.hpp"
-#include "bus_type.hpp"
+#include "legacy/bus_type.hpp"
 #include "main.hpp"
 
 #define M1 0b11000000
@@ -381,3 +383,5 @@ int pushClientEnhanced(const int* clientFd, uint8_t c, uint8_t d, bool log) {
   }
   return 0;
 }
+
+#endif

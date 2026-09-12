@@ -1,6 +1,8 @@
 #pragma once
 
-#include "bus_state.hpp"
+#if !defined(EBUS_INTERNAL)
+
+#include "legacy/bus_state.hpp"
 
 // Implements the arbitration algorithm. Uses the state of the bus to decide
 // what to do. Typical usage:
@@ -50,3 +52,5 @@ class Arbitration {
   uint8_t arbitration_address_;
   int restart_count_;
 };
+
+#endif

@@ -1,9 +1,11 @@
-#include "arbitration.hpp"
+#if !defined(EBUS_INTERNAL)
+
+#include "legacy/arbitration.hpp"
 
 #include <esp_rom_sys.h>
 #include <esp_timer.h>
 
-#include "bus_type.hpp"
+#include "legacy/bus_type.hpp"
 
 // arbitration is timing sensitive. avoid communicating with WifiClient during
 // arbitration according
@@ -169,3 +171,5 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol,
   }
   return arbitrating;
 }
+
+#endif
