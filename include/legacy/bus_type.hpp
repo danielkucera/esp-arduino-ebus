@@ -1,10 +1,12 @@
 #pragma once
 
+#if !defined(EBUS_INTERNAL)
+
 #include <cstdint>
 #include <queue>
 
-#include "arbitration.hpp"
-#include "bus_state.hpp"
+#include "legacy/arbitration.hpp"
+#include "legacy/bus_state.hpp"
 
 enum responses {
   RESETTED = 0x0,
@@ -95,3 +97,5 @@ class BusType {
 };
 
 extern BusType Bus;
+
+#endif

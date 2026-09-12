@@ -6,7 +6,7 @@
 
 #include <functional>
 
-#include "app_limits.hpp"
+#include "app/app_limits.hpp"
 #include "command_manager.hpp"
 #include "ebus/detail/json_reader.hpp"
 #include "ebus/detail/json_writer.hpp"  // Include for JsonWriter
