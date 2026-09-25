@@ -182,12 +182,12 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
 
   std::string staSsid =
       configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiSsid", "ebus-test"))
-          : std::string("ebus-test");
+          ? std::string(configManager_->readString("wifiSsid", ""))
+          : std::string();
   std::string staPass =
       configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiPassword", "lectronz"))
-          : std::string("lectronz");
+          ? std::string(configManager_->readString("wifiPassword", ""))
+          : std::string();
   std::string staBssid =
       configManager_ != nullptr
           ? std::string(configManager_->readString("wifiBssid", ""))

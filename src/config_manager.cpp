@@ -8,28 +8,29 @@
 #include <cstdlib>
 #include <ebus/detail/json_reader.hpp>
 #include <ebus/detail/json_writer.hpp>
+#include <array>
 #include <string>
-#include <vector>
 
 #include "http.hpp"
 #include "http_utils.hpp"
+#include "legacy_config.hpp"
 
 extern ConfigManager configManager;
 
 namespace {
 
 constexpr const char* nvs_namespace = "esp-ebus";
+constexpr const char* legacy_eeprom_namespace = "eeprom";
+constexpr const char* legacy_eeprom_key = "eeprom";
+constexpr const char* migration_namespace = "ebus-migrate";
+constexpr const char* migration_key = "iotwebconf";
+
 
 bool ensureNvsReady() {
   static bool nvsReady = false;
   if (nvsReady) return true;
 
   esp_err_t err = nvs_flash_init();
-  if (err == ESP_ERR_NVS_NO_FREE_PAGES ||
-      err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-    nvs_flash_erase();
-    err = nvs_flash_init();
-  }
   if (err != ESP_OK) return false;
 
   nvsReady = true;
@@ -85,6 +86,83 @@ bool writeString(nvs_handle_t handle, const char* key, const std::string& value,
 bool parseStoredBool(std::string_view value) {
   return value == "selected" || value == "true" || value == "1" ||
          value == "on";
+}
+
+bool hasNvsEntry(const char* key) {
+  nvs_iterator_t it = nullptr;
+  if (nvs_entry_find("nvs", nvs_namespace, NVS_TYPE_ANY, &it) != ESP_OK) {
+    return false;
+  }
+
+  bool found = false;
+  while (it != nullptr) {
+    nvs_entry_info_t info{};
+    nvs_entry_info(it, &info);
+    if (std::strcmp(info.key, key) == 0) {
+      found = true;
+      break;
+    }
+    if (nvs_entry_next(&it) != ESP_OK) break;
+  }
+  nvs_release_iterator(it);
+  return found;
+}
+
+bool loadLegacyIotWebConf(LegacyIotWebConfConfig& legacy) {
+  nvs_handle_t handle = 0;
+  if (nvs_open(legacy_eeprom_namespace, NVS_READONLY, &handle) != ESP_OK) {
+    return false;
+  }
+
+  size_t size = 0;
+  esp_err_t err = nvs_get_blob(handle, legacy_eeprom_key, nullptr, &size);
+  constexpr size_t minimum_size = 169;
+  constexpr size_t maximum_size = 512;
+  if (err != ESP_OK || size < minimum_size || size > maximum_size) {
+    nvs_close(handle);
+    return false;
+  }
+
+  std::array<uint8_t, maximum_size> data{};
+  err = nvs_get_blob(handle, legacy_eeprom_key, data.data(), &size);
+  nvs_close(handle);
+  return err == ESP_OK && parseLegacyIotWebConfConfig(data.data(), size, legacy);
+}
+
+bool legacyMigrationComplete() {
+  nvs_handle_t handle = 0;
+  if (nvs_open(migration_namespace, NVS_READONLY, &handle) != ESP_OK) {
+    return false;
+  }
+  uint8_t complete = 0;
+  const esp_err_t err = nvs_get_u8(handle, migration_key, &complete);
+  nvs_close(handle);
+  return err == ESP_OK && complete == 1;
+}
+
+bool markLegacyMigrationComplete() {
+  nvs_handle_t handle = 0;
+  if (nvs_open(migration_namespace, NVS_READWRITE, &handle) != ESP_OK) {
+    return false;
+  }
+  bool ok = nvs_set_u8(handle, migration_key, 1) == ESP_OK;
+  if (ok) ok = nvs_commit(handle) == ESP_OK;
+  nvs_close(handle);
+  return ok;
+}
+
+bool eraseLegacyIotWebConf() {
+  nvs_handle_t handle = 0;
+  const esp_err_t openErr =
+      nvs_open(legacy_eeprom_namespace, NVS_READWRITE, &handle);
+  if (openErr == ESP_ERR_NVS_NOT_FOUND) return true;
+  if (openErr != ESP_OK) return false;
+
+  esp_err_t err = nvs_erase_key(handle, legacy_eeprom_key);
+  if (err == ESP_ERR_NVS_NOT_FOUND) err = ESP_OK;
+  if (err == ESP_OK) err = nvs_commit(handle);
+  nvs_close(handle);
+  return err == ESP_OK;
 }
 
 bool readEntryValueAsString(nvs_handle_t handle, const nvs_entry_info_t& info,
@@ -236,6 +314,62 @@ bool ConfigManager::writeString(const char* key, const std::string& value) {
   return commitErr == ESP_OK;
 }
 
+bool ConfigManager::migrateLegacyConfig() {
+  if (!ensureNvsReady()) return false;
+  if (legacyMigrationComplete()) return true;
+
+  LegacyIotWebConfConfig legacy;
+  const bool hasLegacyIotWebConf = loadLegacyIotWebConf(legacy);
+
+  nvs_handle_t handle = 0;
+  if (nvs_open(nvs_namespace, NVS_READWRITE, &handle) != ESP_OK) return false;
+
+  uint32_t legacyPwm = 0;
+  const bool hasLegacyPwm =
+      nvs_get_u32(handle, "pwm_value", &legacyPwm) == ESP_OK;
+  if (!hasLegacyIotWebConf && !hasLegacyPwm) {
+    nvs_close(handle);
+    return true;
+  }
+  if (!hasLegacyIotWebConf && hasLegacyPwm && !hasNvsEntry("wifiSsid")) {
+    nvs_close(handle);
+    return false;
+  }
+
+  bool dirty = false;
+  bool ok = true;
+  std::string error;
+  auto migrateString = [&](const char* key, const std::string& value,
+                           bool allowEmpty = false) {
+    if (!ok || (!allowEmpty && value.empty()) || hasNvsEntry(key)) return;
+    ok = ::writeString(handle, key, value, error);
+    dirty |= ok;
+  };
+
+  if (hasLegacyIotWebConf) {
+    migrateString("thingName", legacy.thing_name);
+    if (legacyAdminPasswordIsValid(legacy.admin_password)) {
+      migrateString("apModePassword", legacy.admin_password);
+    }
+    migrateString("wifiSsid", legacy.wifi_ssid, true);
+    migrateString("wifiPassword", legacy.wifi_password, true);
+    migrateString("wifiPowerSave", "false");
+  }
+
+  if (ok && hasLegacyPwm && !hasNvsEntry("pwmValue")) {
+    if (legacyPwmIsValid(legacyPwm)) {
+      ok = nvs_set_i32(handle, "pwmValue", static_cast<int32_t>(legacyPwm)) ==
+           ESP_OK;
+      dirty |= ok;
+    }
+  }
+
+  if (ok && dirty) ok = nvs_commit(handle) == ESP_OK;
+  nvs_close(handle);
+  return ok && markLegacyMigrationComplete();
+}
+
+
 void ConfigManager::resetConfig() {
   if (!ensureNvsReady()) return;
 
@@ -243,12 +377,11 @@ void ConfigManager::resetConfig() {
   const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
   if (openErr != ESP_OK) return;
 
-  const esp_err_t eraseErr = nvs_erase_all(handle);
-  if (eraseErr == ESP_OK) {
-    nvs_commit(handle);
-  }
+  esp_err_t resetErr = nvs_erase_all(handle);
+  if (resetErr == ESP_OK) resetErr = nvs_commit(handle);
 
   nvs_close(handle);
+  if (resetErr == ESP_OK) eraseLegacyIotWebConf();
 }
 
 namespace {
