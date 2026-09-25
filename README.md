@@ -82,3 +82,11 @@ This mode enables **standalone operation** without requiring external software s
 - 🧩 Compatible with existing eBUS tools and ecosystems
 
 ---
+
+## Network bridge Wi-Fi buffers
+
+Network-bridge builds use ten static RX buffers, 32 dynamic RX buffers,
+16 static TX buffers and a receive BA window of six. These runtime settings
+restore headroom for continuous bridge traffic. Internal-controller builds
+retain their existing memory-saving configuration; this change does not alter
+power saving, SSID selection or stored settings.

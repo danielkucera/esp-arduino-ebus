@@ -20,6 +20,7 @@
 #include <string>
 
 #include "app_limits.hpp"
+#include "bridge_wifi_config.hpp"
 #include "config_manager.hpp"
 #include "logger.hpp"
 
@@ -122,6 +123,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   }
 
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  applyBridgeWifiBuffers(cfg);
   if (esp_wifi_init(&cfg) != ESP_OK) {
     logger.error("esp_wifi_init failed");
     return;

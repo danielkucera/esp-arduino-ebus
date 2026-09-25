@@ -29,6 +29,12 @@ jobs:
         python-version: '3.11'
     - name: Install PlatformIO Core
       run: pip install platformio==6.1.19
+    - name: Test bridge and internal Wi-Fi buffer policy
+      run: |
+        c++ -std=c++17 -Wall -Wextra -Werror -Iinclude test_host/bridge_wifi_tests.cpp -o /tmp/bridge_wifi_tests
+        /tmp/bridge_wifi_tests
+        c++ -std=c++17 -Wall -Wextra -Werror -DEBUS_INTERNAL=1 -Iinclude test_host/bridge_wifi_tests.cpp -o /tmp/internal_wifi_tests
+        /tmp/internal_wifi_tests
     - name: Prepare release dir
       run: mkdir release
     - name: Build v5.x
@@ -86,6 +92,7 @@ jobs:
         artifacts: "release/artifact/*"
 
   deploy-pages:
+      if: github.event_name == 'push'
       needs: build
       runs-on: ubuntu-latest
       steps:
