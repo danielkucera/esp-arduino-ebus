@@ -28,6 +28,7 @@ set(APP_SOURCES
 
 # Test files
 file(GLOB TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/pwm_calibration_tests\\.cpp$")
 
 # Create test executable
 add_executable(app_tests ${APP_SOURCES} ${TEST_SOURCES})

@@ -29,6 +29,10 @@ jobs:
         python-version: '3.11'
     - name: Install PlatformIO Core
       run: pip install platformio==6.1.19
+    - name: Test passive PWM candidate selection
+      run: |
+        c++ -std=c++17 -Wall -Wextra -Werror -Iinclude test_host/pwm_calibration_tests.cpp -o /tmp/pwm_calibration_tests
+        /tmp/pwm_calibration_tests
     - name: Prepare release dir
       run: mkdir release
     - name: Build v5.x
@@ -86,6 +90,7 @@ jobs:
         artifacts: "release/artifact/*"
 
   deploy-pages:
+      if: github.event_name == 'push'
       needs: build
       runs-on: ubuntu-latest
       steps:
