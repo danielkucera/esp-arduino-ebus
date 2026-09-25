@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "app_limits.hpp"
+#include "bridge_socket_io.hpp"
 #include "bus_type.hpp"
 #include "main.hpp"
 
@@ -27,6 +28,7 @@ int wifiClients[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
 
 int wifiServerEnhancedFd = -1;
 int wifiClientsEnhanced[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
+bridge::EnhancedCommandReader enhancedReaders[MAX_WIFI_CLIENTS];
 
 int wifiServerReadOnlyFd = -1;
 int wifiClientsReadOnly[MAX_WIFI_CLIENTS] = {-1, -1, -1, -1};
@@ -112,6 +114,8 @@ void dataLoop(void* arg) {
   (void)arg;
   for (;;) {
     dataProcess();
+    // Nonblocking socket I/O must still yield to the idle-task watchdog.
+    vTaskDelay(1);
   }
 }
 
@@ -133,12 +137,7 @@ void closeSocket(int& clientFd) {
 }
 
 int socketAvailable(int clientFd) {
-  if (clientFd < 0) return 0;
-  int pending = 0;
-  if (lwip_ioctl(clientFd, FIONREAD, &pending) == 0) {
-    return pending;
-  }
-  return 0;
+  return bridge::socketHasInput(clientFd) ? 1 : 0;
 }
 
 int socketReadByte(int clientFd, int flags = MSG_DONTWAIT) {
@@ -154,12 +153,6 @@ size_t socketWriteBytes(int clientFd, const uint8_t* data, size_t size) {
   const int result = send(clientFd, data, size, 0);
   if (result < 0) return 0;
   return static_cast<size_t>(result);
-}
-
-size_t socketWriteString(int clientFd, const char* message) {
-  if (message == nullptr) return 0;
-  return socketWriteBytes(clientFd, reinterpret_cast<const uint8_t*>(message),
-                          strlen(message));
 }
 
 }  // namespace
@@ -218,6 +211,7 @@ bool handleNewClient(int serverFd, int clients[]) {
   for (i = 0; i < MAX_WIFI_CLIENTS; i++) {
     if (!isSocketConnected(clients[i])) {
       closeSocket(clients[i]);
+      if (clients == wifiClientsEnhanced) enhancedReaders[i].reset();
       clients[i] = clientFd;
       int noDelay = 1;
       setsockopt(clients[i], IPPROTO_TCP, TCP_NODELAY, &noDelay,
@@ -257,11 +251,6 @@ int pushClient(const int* clientFd, uint8_t byte) {
     return 1;
   }
   return 0;
-}
-
-void decode(int b1, int b2, uint8_t (&data)[2]) {
-  data[0] = (b1 >> 2) & 0b1111;
-  data[1] = ((b1 & 0b11) << 6) | (b2 & 0b00111111);
 }
 
 void encode(uint8_t c, uint8_t d, uint8_t (&data)[2]) {
@@ -317,49 +306,11 @@ void process_cmd(const int* clientFd, uint8_t c, uint8_t d) {
 }
 
 bool read_cmd(int* clientFd, uint8_t (&data)[2]) {
-  int b, b2;
-
-  b = socketReadByte(*clientFd);
-
-  if (b < 0) {
-    // available and read -1 ???
-    return false;
-  }
-
-  if (b < 0b10000000) {
-    data[0] = CMD_SEND;
-    data[1] = b;
-    return true;
-  }
-
-  if (b < 0b11000000) {
-    DEBUG_LOG("first command signature error\n");
-    socketWriteString(*clientFd, "first command signature error");
-    // first command signature error
-    closeSocket(*clientFd);
-    return false;
-  }
-
-  b2 = socketReadByte(*clientFd);
-
-  if (b2 < 0) {
-    // second command missing
-    DEBUG_LOG("second command missing\n");
-    socketWriteString(*clientFd, "second command missing");
-    closeSocket(*clientFd);
-    return false;
-  }
-
-  if ((b2 & 0b11000000) != 0b10000000) {
-    // second command signature error
-    DEBUG_LOG("second command signature error\n");
-    socketWriteString(*clientFd, "second command signature error");
-    closeSocket(*clientFd);
-    return false;
-  }
-
-  decode(b, b2, data);
-  return true;
+  const auto result =
+      enhancedReaders[clientFd - wifiClientsEnhanced].read(*clientFd, data);
+  if (result == bridge::CommandRead::ready) return true;
+  if (result != bridge::CommandRead::incomplete) closeSocket(*clientFd);
+  return false;
 }
 
 void handleClientEnhanced(int* clientFd) {
@@ -367,6 +318,9 @@ void handleClientEnhanced(int* clientFd) {
     uint8_t data[2];
     if (read_cmd(clientFd, data)) {
       process_cmd(clientFd, data[0], data[1]);
+    } else {
+      // A split command must wait for its remainder, not spin on its prefix.
+      break;
     }
   }
 }

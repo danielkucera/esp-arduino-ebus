@@ -82,3 +82,17 @@ This mode enables **standalone operation** without requiring external software s
 - 🧩 Compatible with existing eBUS tools and ecosystems
 
 ---
+
+## Network bridge command framing
+
+Bridge input uses nonblocking socket peeks instead of optional lwIP FIONREAD
+support. Enhanced commands may span TCP packets; each client retains its own
+incomplete command until the next byte arrives. Malformed frames close only
+that client and never insert ASCII error messages into the binary stream.
+
+Run the host regression with:
+
+```sh
+c++ -std=c++17 -Wall -Wextra -Werror -Itest_host/bridge_mocks -Iinclude test_host/bridge_socket_tests.cpp -o /tmp/bridge_socket_tests
+/tmp/bridge_socket_tests
+```
