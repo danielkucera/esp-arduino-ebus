@@ -14,8 +14,7 @@
 // SYN symbol is 4167 us. If we would receive the symbol immediately,
 // we need to wait (4300 - 4167)=133 us after we received the SYN.
 Arbitration::result Arbitration::start(const BusState& busstate, uint8_t master,
-                                       uint32_t startBitTime) {
-  static int arb = 0;
+                                       uint32_t startBitTime, bool timingValid) {
   if (arbitrating_) {
     return not_started;
   }
@@ -26,37 +25,9 @@ Arbitration::result Arbitration::start(const BusState& busstate, uint8_t master,
     return not_started;
   }
 
-  // too late if we don't have enough time to send our symbol
-  uint32_t now = (uint32_t)(esp_timer_get_time());
-  uint32_t microsSinceLastSyn = busstate.microsSinceLastSyn();
-  uint32_t timeSinceStartBit = now - startBitTime;
-  if (timeSinceStartBit > 4456 || Bus.available()) {
-    // if we are too late, don't try to participate and retry next round
-    DEBUG_LOG("ARB LATE 0x%02x %lu us\n", BusSer.peek(), timeSinceStartBit);
+  if (!timingValid || !BusSer.writeArbitration(master, startBitTime)) {
     return late;
   }
-#if USE_ASYNCHRONOUS
-  // When in async mode, we get immediately interrupted when a symbol is
-  // received on the bus The earliest allowed to send is 4300 measured from the
-  // start bit of the SYN command. We receive the exact flange of the startbit,
-  // use that to calculate the exact time to wait. Then subtract time from the
-  // wait to allow the uart to put the byte on the bus. Testing has shown this
-  // requires about 700 micros on the esp32-c3.
-  int delay = 4300 - timeSinceStartBit - 700;
-  if (delay > 0) {
-    esp_rom_delay_us(delay);
-  }
-#endif
-  Bus.write(master);
-  // Do logging of the ARB START message after writing the symbol, so enabled or
-  // disabled logging does not affect timing calculations.
-#if USE_ASYNCHRONOUS
-  DEBUG_LOG("ARB START %04i 0x%02x %lu us %i  us\n", arb++, master,
-            microsSinceLastSyn, delay);
-#else
-  DEBUG_LOG("ARB START %04i 0x%02x %lu us\n", arb++, master,
-            microsSinceLastSyn);
-#endif
   arbitration_address_ = master;
   arbitrating_ = true;
   participate_second_ = false;
@@ -64,7 +35,7 @@ Arbitration::result Arbitration::start(const BusState& busstate, uint8_t master,
 }
 
 Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol,
-                                     uint32_t startBitTime) {
+                                     uint32_t startBitTime, bool timingValid) {
   if (!arbitrating_) {
     return none;
   }
@@ -117,32 +88,13 @@ Arbitration::state Arbitration::data(BusState& busstate, uint8_t symbol,
       return arbitrating;
     case BusState::eReceivedSecondSYN:  // did we sign up for second round
                                         // arbitration?
-      if (participate_second_ && Bus.available() == 0) {
-        // execute second round of arbitration
-        uint32_t microsSinceLastSyn = busstate.microsSinceLastSyn();
-#if USE_ASYNCHRONOUS
-        // When in async mode, we get immediately interrupted when a symbol is
-        // received on the bus The earliest allowed to send is 4300 measured
-        // from the start bit of the SYN command. We receive the exact flange of
-        // the startbit, use that to calculate the exact time to wait. Then
-        // subtract time from the wait to allow the uart to put the byte on the
-        // bus. Testing has shown this requires about 700 micros on the
-        // esp32-c3.
-        uint32_t timeSinceStartBit =
-            (uint32_t)(esp_timer_get_time()) - startBitTime;
-        int delay = 4300 - timeSinceStartBit - 700;
-        if (delay > 0) {
-          esp_rom_delay_us(delay);
+      if (participate_second_) {
+        if (!timingValid ||
+            !BusSer.writeArbitration(arbitration_address_, startBitTime)) {
+          // Both rounds obey the same deadline. A missed second round must
+          // not inject an address after another master has started a frame.
+          Bus.nbr_late_++;
         }
-#endif
-        // Do logging of the ARB START message after writing the symbol, so
-        // enabled or disabled logging does not affect timing calculations.
-        Bus.write(arbitration_address_);
-        DEBUG_LOG("ARB MASTER2    0x%02x %lu us\n", arbitration_address_,
-                  microsSinceLastSyn);
-      } else {
-        DEBUG_LOG("ARB SKIP       0x%02x %lu us\n", arbitration_address_,
-                  busstate.microsSinceLastSyn());
       }
       return arbitrating;
     case BusState::eReceivedAddressAfterSecondSYN:  // did we win 2nd round of

@@ -29,6 +29,14 @@ jobs:
         python-version: '3.11'
     - name: Install PlatformIO Core
       run: pip install platformio==6.1.19
+    - name: Test bridge UART and arbitration
+      run: |
+        c++ -std=c++17 -Wall -Wextra -Werror -Iinclude test_host/bridge_timing_tests.cpp -o /tmp/bridge_timing_tests
+        /tmp/bridge_timing_tests
+        c++ -std=c++17 -Wall -Wextra -Werror -Itest_host/bridge_mocks -Iinclude test_host/bridge_arbitration_tests.cpp src/arbitration.cpp -o /tmp/bridge_arbitration_tests
+        /tmp/bridge_arbitration_tests
+        c++ -std=c++17 -Wall -Wextra -Werror -Itest_host/bridge_mocks -Iinclude test_host/bridge_uart_tests.cpp src/uart_port.cpp -o /tmp/bridge_uart_tests
+        /tmp/bridge_uart_tests
     - name: Prepare release dir
       run: mkdir release
     - name: Build v5.x
@@ -86,6 +94,7 @@ jobs:
         artifacts: "release/artifact/*"
 
   deploy-pages:
+      if: github.event_name == 'push'
       needs: build
       runs-on: ubuntu-latest
       steps:

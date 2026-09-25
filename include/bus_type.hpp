@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include <queue>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
 
 #include "arbitration.hpp"
 #include "bus_state.hpp"
@@ -49,7 +51,7 @@ class BusType {
   ~BusType();
 
   // begin and end, like with Serial
-  void begin();
+  bool begin();
   void end();
 
   // Is there a value available that should be send to a client?
@@ -72,26 +74,18 @@ class BusType {
 
  private:
   inline void push(const data& d);
-  void receive(uint8_t symbol, uint32_t startBitTime);
+  void receive(uint8_t symbol, uint32_t startBitTime, bool timingValid);
   BusState bus_state_;
   Arbitration arbitration_;
   int client_fd_;
 
-#if USE_ASYNCHRONOUS
-  // handler to be notified when there is signal change on the serial input
-  static void IRAM_ATTR receiveHandler();
-
   // queue from Bus to read method
-  QueueHandle_t queue_;
+  QueueHandle_t queue_ = nullptr;
 
   // task to read bytes form the serial object and process them with receive
   // methods
-  TaskHandle_t serial_event_task_;
-
-  static void readDataFromSoftwareSerial(void* args);
-#else
-  std::queue<data> queue_;
-#endif
+  TaskHandle_t serial_event_task_ = nullptr;
+  static void readDataFromUart(void* args);
 };
 
 extern BusType Bus;

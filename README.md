@@ -82,3 +82,17 @@ This mode enables **standalone operation** without requiring external software s
 - 🧩 Compatible with existing eBUS tools and ecosystems
 
 ---
+
+## Bridge UART timing
+
+The network bridge drains UART RX in a dedicated high-priority task, independently
+of TCP clients. Arbitration uses a reconstructed symbol start timestamp rather
+than a delayed network-loop timestamp. Batched or overflowing RX data is not
+used as evidence of a valid arbitration deadline. The byte values remain in the
+forwarding queue; a full queue increments the error counter and resets arbitration.
+
+Console output uses USB Serial/JTAG, not UART0 (GPIO21 is the eBUS RX pin).
+Application-only OTA cannot change an older bootloader's console configuration;
+the application releases that pin before initializing the bus. No partition
+layout change is included. These fixes do not claim to eliminate every physical
+bus fault; occasional self-recovering eBUS warnings remain under investigation.
