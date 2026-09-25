@@ -276,7 +276,7 @@
             if (!confirm('Restart device now?')) return;
             setStatus('Restarting...');
             try {
-                const res = await fetch('/restart');
+                const res = await fetch('/restart', { method: 'POST' });
                 const text = await res.text();
                 setStatus(res.ok ? text : `Error: ${text}`);
             } catch (err) {

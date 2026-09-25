@@ -82,3 +82,30 @@ This mode enables **standalone operation** without requiring external software s
 - 🧩 Compatible with existing eBUS tools and ecosystems
 
 ---
+
+## Web administration
+
+Use the web interface's **Restart** button for an authenticated POST request;
+GET requests no longer restart the adapter. The username is `admin` and the
+password is the configured `apModePassword`. Change the factory default before
+using administration on a shared network. HTTP Basic authentication is not
+transport encryption: keep administration on a trusted LAN, never the public
+Internet.
+
+Configuration reads/writes/resets, restart and HTTP firmware upload/URL updates
+require authentication. Configuration JSON masks stored Wi-Fi, MQTT and admin
+passwords as `********`; saving that placeholder preserves the existing secret.
+An explicit empty value is not a placeholder. Administration rejects mismatched
+Origin/Host headers when Origin is present; this is additional browser protection,
+not a replacement for credentials or a firewall.
+
+Normal builds disable the unauthenticated legacy ESPOTA service. Explicit
+`esp32-c3-ota` and `esp32-c3-internal-ota` development environments opt back in
+for isolated trusted networks. Authenticated HTTP OTA remains available.
+
+Validation checklist: missing/wrong credentials must reject restart, config and
+upload; a rejected request must not restart or modify configuration; authenticated
+restart must return202 and recover; masked secrets must survive a config save;
+a cross-origin mutation must be rejected. Live combined-firmware checks verified
+unauthenticated restart/upload rejection and an authenticated OTA/restart, not
+every possible browser or endpoint combination.

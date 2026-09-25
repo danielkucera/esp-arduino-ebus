@@ -115,6 +115,19 @@ a.link-button {
     text-align: center;
 }
 
+.inline-form {
+    margin: 0;
+    padding: 0;
+}
+
+.inline-form button.link-button {
+    width: 100%;
+    line-height: 2.4rem;
+    font-size: 1.2rem;
+    margin-right: 0;
+    margin-bottom: 5px;
+}
+
 /* ========== Tables ========== */
 table {
     width: 100%;

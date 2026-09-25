@@ -29,6 +29,10 @@ jobs:
         python-version: '3.11'
     - name: Install PlatformIO Core
       run: pip install platformio==6.1.19
+    - name: Test web administration policy
+      run: |
+        c++ -std=c++17 -Wall -Wextra -Werror -Iinclude test_host/web_admin_policy_tests.cpp -o /tmp/web_admin_policy_tests
+        /tmp/web_admin_policy_tests
     - name: Prepare release dir
       run: mkdir release
     - name: Build v5.x
@@ -86,6 +90,7 @@ jobs:
         artifacts: "release/artifact/*"
 
   deploy-pages:
+      if: github.event_name == 'push'
       needs: build
       runs-on: ubuntu-latest
       steps:

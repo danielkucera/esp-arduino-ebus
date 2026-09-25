@@ -36,10 +36,12 @@ esp_err_t handleUpgradeStatus(httpd_req_t* req) {
 }
 
 esp_err_t handleUpgradeHttp(httpd_req_t* req) {
+  if (!HttpUtils::requireAdminAuth(req)) return ESP_OK;
   return upgradeManager.handleHttpUpgrade(req);
 }
 
 esp_err_t handleUpgradeUpload(httpd_req_t* req) {
+  if (!HttpUtils::requireAdminAuth(req)) return ESP_OK;
   return upgradeManager.handleUpload(req);
 }
 }  // namespace

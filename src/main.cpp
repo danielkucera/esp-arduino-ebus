@@ -634,7 +634,9 @@ extern "C" void app_main(void) {
       });
 #endif
 
+#if defined(ENABLE_ESPOTA)
   espOtaManager.begin();
+#endif
   enableTX();
 
 #if defined(EBUS_INTERNAL)

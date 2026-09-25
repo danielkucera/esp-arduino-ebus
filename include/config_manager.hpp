@@ -14,6 +14,7 @@ class ConfigManager {
   static int32_t readInt(const char* key, int32_t fallback = 0);
   static bool readBool(const char* key, bool fallback = false);
   static bool writeString(const char* key, const std::string& value);
+  static std::string adminPassword();
 
   static esp_err_t handleGet(httpd_req_t* req);
   static esp_err_t handleSet(httpd_req_t* req);

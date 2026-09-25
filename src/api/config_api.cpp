@@ -32,11 +32,13 @@ bool ConfigApi::registerHandlers(httpd_handle_t server) {
 }
 
 esp_err_t ConfigApi::handleConfigPage(httpd_req_t* req) {
+  if (!HttpUtils::requireAdminAuth(req, false)) return ESP_OK;
   HttpUtils::sendResponse(req, "200 OK", "text/html", config_html_start);
   return ESP_OK;
 }
 
 esp_err_t ConfigApi::handleWifiScan(httpd_req_t* req) {
+  if (!HttpUtils::requireAdminAuth(req)) return ESP_OK;
   wifi_scan_config_t scanConfig = {};
   scanConfig.show_hidden = true;
   scanConfig.scan_type = WIFI_SCAN_TYPE_ACTIVE;

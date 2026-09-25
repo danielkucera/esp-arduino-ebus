@@ -92,10 +92,8 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   setStatusLedMode(StatusLedMode::SlowBlink);
 
   std::string apPassword = configManager_ != nullptr
-                               ? std::string(configManager_->readString(
-                                     "apModePassword", default_ap_password))
+                               ? configManager_->adminPassword()
                                : std::string(default_ap_password);
-  if (apPassword.empty()) apPassword = default_ap_password;
   const std::string configuredThingName =
       configManager_ != nullptr ? std::string(configManager_->readString(
                                       "thingName", default_hostname))

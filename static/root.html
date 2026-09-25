@@ -24,7 +24,10 @@
                 <a href="/devices" class="link-button internal" id="Devices">Devices</a>
                 <a href="/metrics" class="link-button internal" id="Metrics">Metrics</a>
                 <a href="/logs" class="link-button internal" id="Logs">Logs</a>
-                <a href='/restart' class="link-button danger" onclick="return confirmAction('restart');">Restart</a>
+                <form action="/restart" method="post" class="inline-form"
+                    onsubmit="return confirmAction('restart');">
+                    <button type="submit" class="link-button danger">Restart</button>
+                </form>
             </div>
             <div class="info-box">
                 <strong>Login:</strong><br>
