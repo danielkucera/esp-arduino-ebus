@@ -7,6 +7,9 @@
 #include "app/ha_profile_gen.hpp"
 
 const HAProfile* findHAProfile(std::string_view name) {
+  // HA lookups are intentionally tolerant: empty or user-supplied names can
+  // legitimately be absent while the caller chooses whether to treat that as a
+  // warning or a no-op. Callers must handle nullptr gracefully.
   auto it = std::find_if(std::begin(profiles), std::end(profiles),
                          [&](const HAProfile& p) { return name == p.name; });
   return it != std::end(profiles) ? &*it : nullptr;
