@@ -164,6 +164,7 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
       // after boot falls back to cumulative (valid inside the first
       // wrap period); later polls report true intervals.
       auto cpu = writer.arrayScope("cpu");
+      constexpr size_t max_tracked_tasks = 24;
       const UBaseType_t task_count = uxTaskGetNumberOfTasks();
       auto* states = static_cast<TaskStatus_t*>(
           heap_caps_malloc(task_count * sizeof(TaskStatus_t), MALLOC_CAP_8BIT));
@@ -176,7 +177,7 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
           uint32_t last;
         };
         static portMUX_TYPE cpu_mux = portMUX_INITIALIZER_UNLOCKED;
-        static CpuBaseline baseline[24]{};
+        static CpuBaseline baseline[max_tracked_tasks]{};
         static size_t baseline_used = 0;
         static uint32_t last_total = 0;
         static bool have_total = false;
@@ -187,11 +188,12 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
           float pct;
           uint32_t prio;
         };
-        CpuRow rows[24]{};
+        CpuRow rows[max_tracked_tasks]{};
         size_t nrows = 0;
         portENTER_CRITICAL(&cpu_mux);
         const uint32_t delta_total = total_time - last_total;
-        for (UBaseType_t i = 0; i < captured && nrows < 24; ++i) {
+        for (UBaseType_t i = 0; i < captured && nrows < max_tracked_tasks;
+             ++i) {
           size_t bi = baseline_used;
           for (size_t b = 0; b < baseline_used; ++b) {
             if (std::strncmp(baseline[b].name, states[i].pcTaskName,
@@ -208,7 +210,7 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
             pct = (100.0f * states[i].ulRunTimeCounter) / total_time;
           }
           if (bi == baseline_used) {
-            if (baseline_used >= 24) continue;
+            if (baseline_used >= max_tracked_tasks) continue;
             std::strncpy(baseline[bi].name, states[i].pcTaskName,
                          configMAX_TASK_NAME_LEN - 1);
             baseline[bi].name[configMAX_TASK_NAME_LEN - 1] = '\0';
