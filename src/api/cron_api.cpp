@@ -65,10 +65,15 @@ esp_err_t CronApi::handleCronEvaluate(httpd_req_t* req) {
 
   std::string evalError;
   while (true) {
-    std::string_view rule_sv = reader.rawValue();
-    if (rule_sv.empty()) break;
-    ebus::detail::JsonReader rule_reader(rule_sv);
-    evalError = instance_->cron_.evaluate(rule_reader);
+    const auto token = reader.next();
+    if (token == ebus::detail::JsonReader::Token::array_end ||
+        token == ebus::detail::JsonReader::Token::end)
+      break;
+    if (token != ebus::detail::JsonReader::Token::object_start) {
+      evalError = "Each cron rule must be a JSON object";
+      break;
+    }
+    evalError = instance_->cron_.evaluate(reader);
     if (!evalError.empty()) break;
   }
 

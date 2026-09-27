@@ -29,7 +29,11 @@ Cron::Cron(CommandManager& commands) : commands_(commands) {}
 Cron cron(commandManager);
 
 namespace {
+#ifndef EBUS_CRON_FILE_PATH
 constexpr const char* cron_file_path = "/littlefs/cron.json";
+#else
+constexpr const char* cron_file_path = EBUS_CRON_FILE_PATH;
+#endif
 constexpr size_t max_cron_rules = 32;
 
 template <size_t Cap>

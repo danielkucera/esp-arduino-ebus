@@ -8,7 +8,11 @@
 #include <freertos/task.h>
 
 #include <cerrno>
+#include <cstdio>
 #include <ebus/detail/json_reader.hpp>
+#ifdef EBUS_COMMANDS_TMP_FILE_PATH
+#include <unistd.h>
+#endif
 
 #include "app/command_manager.hpp"
 #include "app/mqtt.hpp"
@@ -190,6 +194,12 @@ esp_err_t CommandsApi::handleCommandsUpload(httpd_req_t* req) {
   }
 
   const char* tmp_path = "/littlefs/commands.json.tmp";
+#ifdef EBUS_COMMANDS_TMP_FILE_PATH
+  char host_tmp_path[256];
+  std::snprintf(host_tmp_path, sizeof(host_tmp_path), "%s.%ld",
+                EBUS_COMMANDS_TMP_FILE_PATH, static_cast<long>(getpid()));
+  tmp_path = host_tmp_path;
+#endif
 
   FILE* file = std::fopen(tmp_path, "wb");
   if (file == nullptr) {

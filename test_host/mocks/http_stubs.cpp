@@ -5,14 +5,29 @@
 #include <ebus/detail/json_writer.hpp>
 #include <string>
 
+#include "http_stub_state.hpp"
 #include "network/http.hpp"
 #include "network/http_utils.hpp"
 
+namespace HostHttpStub {
+namespace {
+std::vector<Route> registered_routes;
+}  // namespace
+
+void clearRoutes() { registered_routes.clear(); }
+
+void addRoute(const char* uri, httpd_method_t method,
+              esp_err_t (*handler)(httpd_req_t*)) {
+  registered_routes.push_back({uri != nullptr ? uri : "", method, handler});
+}
+
+const std::vector<Route>& routes() { return registered_routes; }
+
+}  // namespace HostHttpStub
+
 bool RegisterUri(const char* uri, httpd_method_t method,
                  esp_err_t (*handler)(httpd_req_t*)) {
-  (void)uri;
-  (void)method;
-  (void)handler;
+  HostHttpStub::addRoute(uri, method, handler);
   return true;
 }
 

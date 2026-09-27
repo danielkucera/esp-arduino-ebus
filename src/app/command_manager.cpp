@@ -15,6 +15,9 @@
 #include <ebus/detail/json_writer.hpp>
 #include <ebus/detail/protocol_limits.hpp>
 #include <limits>
+#ifdef EBUS_COMMANDS_FILE_PATH
+#include <unistd.h>
+#endif
 
 #include "app/mqtt.hpp"
 #include "system/logger.hpp"
@@ -24,7 +27,30 @@ CommandManager commandManager;
 namespace {
 constexpr const char* littlefs_base_path = "/littlefs";
 constexpr const char* littlefs_partition_label = "littlefs";
-constexpr const char* commands_file_path = "/littlefs/commands.json";
+#ifndef EBUS_COMMANDS_FILE_PATH
+const char* commandsFilePath() { return "/littlefs/commands.json"; }
+#else
+const char* commandsFilePath() {
+  static char path[256];
+  static const int path_length =
+      std::snprintf(path, sizeof(path), "%s.%ld", EBUS_COMMANDS_FILE_PATH,
+                    static_cast<long>(getpid()));
+  (void)path_length;
+  return path;
+}
+#endif
+#ifndef EBUS_COMMANDS_TMP_FILE_PATH
+const char* commandsTempFilePath() { return "/littlefs/commands.json.tmp"; }
+#else
+const char* commandsTempFilePath() {
+  static char path[256];
+  static const int path_length =
+      std::snprintf(path, sizeof(path), "%s.%ld", EBUS_COMMANDS_TMP_FILE_PATH,
+                    static_cast<long>(getpid()));
+  (void)path_length;
+  return path;
+}
+#endif
 
 bool ensureLittlefsMounted() {
   static bool mounted = false;
@@ -146,8 +172,8 @@ MatchingCommands CommandManager::findPassiveCommands(ebus::ByteView master) {
 
 int64_t CommandManager::loadCommands() {
   if (!ensureLittlefsMounted()) return -1;
-  std::remove("/littlefs/commands.json.tmp");
-  return loadCommandsFrom(commands_file_path);
+  std::remove(commandsTempFilePath());
+  return loadCommandsFrom(commandsFilePath());
 }
 
 int64_t CommandManager::loadCommandsFrom(const char* path) {
@@ -183,7 +209,7 @@ int64_t CommandManager::saveCommands() const {
   bool commands_empty = commands_.empty();
   if (commands_empty) return 0;
 
-  FILE* file = std::fopen(commands_file_path, "wb");
+  FILE* file = std::fopen(commandsFilePath(), "wb");
   if (file == nullptr) return -1;
 
   char file_buf[512];
@@ -258,12 +284,12 @@ int64_t CommandManager::wipeCommands() {
   if (!ensureLittlefsMounted()) return -1;
 
   struct stat fileStat{};
-  if (stat(commands_file_path, &fileStat) != 0) {
+  if (stat(commandsFilePath(), &fileStat) != 0) {
     if (errno == ENOENT) return 0;
     return -1;
   }
 
-  if (std::remove(commands_file_path) != 0) {
+  if (std::remove(commandsFilePath()) != 0) {
     if (errno == ENOENT) return 0;
     return -1;
   }

@@ -123,6 +123,9 @@ target_compile_definitions(app_tests PRIVATE
     EBUS_SIMULATION=0
     ESP32=1
     AUTO_VERSION="host-test"
+    EBUS_CRON_FILE_PATH="${CMAKE_CURRENT_BINARY_DIR}/cron_api_test.json"
+    EBUS_COMMANDS_FILE_PATH="${CMAKE_CURRENT_BINARY_DIR}/commands_api_test.json"
+    EBUS_COMMANDS_TMP_FILE_PATH="${CMAKE_CURRENT_BINARY_DIR}/commands_api_upload_test.json"
 )
 
 target_link_libraries(app_tests PRIVATE

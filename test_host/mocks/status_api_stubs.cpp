@@ -1,5 +1,8 @@
 #include <freertos/FreeRTOS.h>
 
+#include <algorithm>
+#include <ebus/detail/json_writer.hpp>
+
 #include "app/mqtt.hpp"
 #include "network/captive_dns.hpp"
 #include "network/http_utils.hpp"
@@ -11,6 +14,26 @@
 #include "system/esp_ota_manager.hpp"
 #include "system/logger.hpp"
 #include "system/system_monitor.hpp"
+
+namespace HostSystemApiStub {
+namespace {
+SystemMonitor::HeapSample heap_trend[SystemMonitor::heap_trend_capacity]{};
+size_t heap_trend_count = 0;
+uint64_t tap_since_millis = 0;
+}  // namespace
+
+void setHeapTrend(const SystemMonitor::HeapSample* samples, size_t count) {
+  heap_trend_count = std::min(count, SystemMonitor::heap_trend_capacity);
+  for (size_t i = 0; i < heap_trend_count; ++i) heap_trend[i] = samples[i];
+}
+
+void clearHeapTrend() { heap_trend_count = 0; }
+
+void resetTap() { tap_since_millis = 0; }
+
+uint64_t tapSinceMillis() { return tap_since_millis; }
+
+}  // namespace HostSystemApiStub
 
 uint32_t DeviceStatus::resetCode() { return 0; }
 
@@ -36,14 +59,22 @@ SystemMonitor& DeviceStatus::monitor() {
 
 void SystemMonitor::fetchTap(const ebus::JsonChunkVisitor& visitor,
                              uint64_t since_wall_ms) const {
-  (void)visitor;
-  (void)since_wall_ms;
+  HostSystemApiStub::tap_since_millis = since_wall_ms;
+  ebus::detail::JsonWriter writer(visitor);
+  {
+    auto root = writer.objectScope();
+    {
+      auto tap = writer.arrayScope("tap");
+    }
+    writer.writeField("dropped", 0);
+    writer.writeField("capacity", 0);
+  }
 }
 
 size_t SystemMonitor::fetchHeapTrend(HeapSample* out, size_t capacity) const {
-  (void)out;
-  (void)capacity;
-  return 0;
+  const size_t count = std::min(capacity, HostSystemApiStub::heap_trend_count);
+  for (size_t i = 0; i < count; ++i) out[i] = HostSystemApiStub::heap_trend[i];
+  return count;
 }
 
 TaskHandle_t SystemMonitor::task_handle() const { return nullptr; }
