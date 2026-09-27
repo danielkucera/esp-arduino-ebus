@@ -12,3 +12,7 @@ AGENTS.md
 include/app/data_profile_gen.hpp
 include/app/ha_profile_gen.hpp
 include/app/build_info_gen.hpp
+
+# User profiles
+profiles/data_profiles_user.json
+profiles/ha_profiles_user.json
