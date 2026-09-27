@@ -27,6 +27,12 @@ esp_timer_handle_t sim_timer_handle = nullptr;
 esp_timer_handle_t simTimerHandle() { return sim_timer_handle; }
 
 void startEbusSimulation() {
+  if (sim_timer_handle != nullptr) {
+    esp_timer_stop(sim_timer_handle);
+    esp_timer_delete(sim_timer_handle);
+    sim_timer_handle = nullptr;
+  }
+
   if (getEbusController().isConfigured()) {
     auto& vbus = getEbusController().getVirtualBus();
 
