@@ -138,22 +138,25 @@
     }
 
     async function handleInsert() {
+      // Streams through /upload (no body-size cap) + /load: the /insert
+      // endpoint parses in memory (8K cap) and cannot take real sets.
       try {
         const txt = document.getElementById('commandsArea').value;
-        const obj = JSON.parse(txt);
+        JSON.parse(txt);
         setStatus('Uploading...');
-        const res = await fetch('/api/v1/app/commands/insert', {
+        const up = await fetch('/api/v1/app/commands/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(obj)
+          body: txt
         });
-        const data = await res.json();
-        if (data.status === 'successful') {
-          setStatus('Uploaded');
-          fetchCommands();
-        } else {
-          setStatus('Upload failed: ' + (data.error || data.status));
+        if (!up.ok) {
+          setStatus('Upload failed: ' + (await up.text()));
+          return;
         }
+        setStatus('Loading...');
+        await postSimple('/api/v1/app/commands/load');
+        setStatus('Applied');
+        fetchCommands();
       } catch (err) {
         setStatus('Invalid JSON or upload failed');
       }
