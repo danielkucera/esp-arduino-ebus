@@ -40,6 +40,9 @@ void startEbusSimulation() {
     vbus.addSlaveReaction(0x01, "08b5090127", "094e3800000000000000", 0, 0);
     // Brine/Outlet_Temperature
     vbus.addSlaveReaction(0x01, "08b509030d0800", "039e0100", 0, 0);
+    // Buffer/Bottom_Temperature with sensor error (status 0x55 = 85 =
+    // short circuit): value 0x01f4 (31.25 C), status at data byte 5.
+    vbus.addSlaveReaction(0x01, "08b50903290700", "050700f40155", 0, 0);
     // Brine/Pressure
     vbus.addSlaveReaction(0x01, "08b509030d1600", "03170700", 0, 0);
     // Heatpump/Compressor
@@ -53,6 +56,7 @@ void startEbusSimulation() {
 
     static uint32_t count17 = 0;
     static uint32_t count25 = 0;
+    static uint32_t count31 = 0;
     auto& vbus = getEbusController().getVirtualBus();
 
     if (++count17 >= 17) {
@@ -65,6 +69,13 @@ void startEbusSimulation() {
       count25 = 0;
       // Brine/Inlet_Temperature
       vbus.injectMasterSlaveMessage(0x10, "08b50903290f00", "050f00f70100");
+    }
+
+    if (++count31 >= 31) {
+      count31 = 0;
+      // Buffer/Middle_Temperature with sensor error (status 0xaa = 170 =
+      // cutoff): value 0x0134 (19.25 C). Passive like a free foreign scan.
+      vbus.injectMasterSlaveMessage(0x10, "08b50903290100", "0501003401aa");
     }
   };
   args.arg = nullptr;

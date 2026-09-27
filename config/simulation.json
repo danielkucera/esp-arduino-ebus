@@ -16,6 +16,50 @@
   ]
  },
  {
+  "key": "09",
+  "name": "Buffer/Middle_Temperature",
+  "read_cmd": "08b50903290100",
+  "write_cmd": "",
+  "interval": 0,
+  "master": false,
+  "fields": [
+   {
+    "name": "value",
+    "profile": "data2c_celsius",
+    "position": 3,
+    "ha_profile": "sensor_temperature"
+   },
+   {
+    "name": "status",
+    "profile": "uint8",
+    "position": 5,
+    "ha_profile": "sensor_enum_sensor_state"
+   }
+  ]
+ },
+ {
+  "key": "10",
+  "name": "Buffer/Bottom_Temperature",
+  "read_cmd": "08b50903290700",
+  "write_cmd": "",
+  "interval": 60,
+  "master": false,
+  "fields": [
+   {
+    "name": "value",
+    "profile": "data2c_celsius",
+    "position": 3,
+    "ha_profile": "sensor_temperature"
+   },
+   {
+    "name": "status",
+    "profile": "uint8",
+    "position": 5,
+    "ha_profile": "sensor_enum_sensor_state"
+   }
+  ]
+ },
+ {
   "key": "11",
   "name": "Brine/Inlet_Temperature",
   "read_cmd": "08b50903290f00",
@@ -28,6 +72,12 @@
     "profile": "data2c_celsius",
     "position": 3,
     "ha_profile": "sensor_temperature"
+   },
+   {
+    "name": "status",
+    "profile": "uint8",
+    "position": 5,
+    "ha_profile": "sensor_enum_sensor_state"
    }
   ]
  },
@@ -44,6 +94,12 @@
     "profile": "data2c_celsius",
     "position": 1,
     "ha_profile": "sensor_temperature"
+   },
+   {
+    "name": "status",
+    "profile": "uint8",
+    "position": 3,
+    "ha_profile": "sensor_enum_sensor_state"
    }
   ]
  },
@@ -60,6 +116,12 @@
     "profile": "int16_bar",
     "position": 1,
     "ha_profile": "sensor_pressure"
+   },
+   {
+    "name": "status",
+    "profile": "uint8",
+    "position": 3,
+    "ha_profile": "sensor_enum_sensor_state"
    }
   ]
  },
