@@ -259,19 +259,14 @@ void Command::getValueJson(ebus::detail::JsonWriter& writer) const {
 }
 
 ebus::Sequence Command::getVectorFromJson(std::string_view json) const {
+  // rawValue() directly after findKey (no next() between: it would
+  // consume the value and rawValue would return the delimiter).
+  // findKey matches current-level keys, so consume the opening brace
+  // first (a fresh reader positions depth before it and never matches).
   ebus::detail::JsonReader reader(json);
-  if (reader.findKey("value")) {
-    reader.next();
-    return getVectorFromValue(reader.rawValue());
-  }
-  // Try parsing as full JSON object with field selection
-  {
-    ebus::detail::JsonReader r2(json);
-    if (r2.next() == ebus::detail::JsonReader::Token::object_start) {
-      if (r2.findKey("value")) {
-        r2.next();
-        return getVectorFromValue(r2.rawValue());
-      }
+  if (reader.next() == ebus::detail::JsonReader::Token::object_start) {
+    if (reader.findKey("value")) {
+      return getVectorFromValue(reader.rawValue());
     }
   }
   return ebus::Sequence{};
@@ -304,7 +299,11 @@ ebus::Sequence Command::getVectorFromValue(std::string_view value_json,
   bool is_num = ebus::isNumeric(dt);
 
   if (is_num) {
-    double val = ebus::toNum<double>(value_json);
+    // Strict parse: lenient toNum turns garbage into 0 (or a prefix),
+    // which then passes range checks and gets written silently.
+    auto parsed = ebus::toNumStrict<double>(value_json);
+    if (!parsed) return {};
+    double val = *parsed;
     float min_v = getFieldMin(field_idx);
     float max_v = getFieldMax(field_idx);
     if ((val >= min_v) && (val <= max_v)) {
@@ -343,12 +342,25 @@ ebus::Sequence Command::getVectorFromString(std::string_view value,
   auto dt = getFieldDatatype(field_idx);
   ebus::DataValue dv;
   std::string dt_name = ebus::dataTypeToString(dt);
+  const size_t need = ebus::sizeOfDataType(dt);
   if (dt_name.find("HEX") == 0) {
+    // Exact bytes demanded: 2 hex chars per byte, no silent padding or
+    // zero-substitution on malformed input (toBytes floors odd lengths
+    // and ignores from_chars errors).
+    if (value.size() != 2 * need) return {};
+    for (char c : value) {
+      if (!isxdigit((unsigned char)c)) return {};
+    }
     uint8_t hex_buf[256];
     size_t hex_len = ebus::toBytes(value, hex_buf, sizeof(hex_buf));
+    if (hex_len != need) return {};
     dv = ebus::byteToChar(ebus::ByteView(hex_buf, hex_len));
   } else {
-    dv = std::string(value.substr(0, ebus::sizeOfDataType(dt)));
+    // Exact bytes demanded for CHAR as well: short strings cannot carry
+    // explicit NUL padding through a text input, so anything short is a
+    // mistake, not an abbreviation.
+    if (value.size() != need) return {};
+    dv = std::string(value.substr(0, need));
   }
   return ebus::encode(dt, dv);
 }

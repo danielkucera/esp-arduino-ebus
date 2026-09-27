@@ -209,3 +209,43 @@ TEST_CASE("Command writeValuePayload formats single and multi fields flat",
     REQUIRE(out.find("\"state\":85") != std::string::npos);
   }
 }
+
+TEST_CASE("Command getVectorFromString demands exact bytes", "[Command]") {
+  std::string json =
+      R"({"key":"t1","name":"HexTest","read_cmd":"080704","write_cmd":"",)"
+      R"("interval":0,"master":false,)"
+      R"("fields":[{"name":"h","profile":"hex2",)"
+      R"("position":1,"ha_profile":""}]})";
+  JsonReader reader(json);
+  Command cmd = Command::fromJson(reader);
+  REQUIRE(cmd.getFieldCount() == 1);
+
+  // Exact: 4 hex chars -> 2 bytes.
+  ebus::Sequence ok = cmd.getVectorFromString("abcd", 0);
+  REQUIRE(ok.size() == 2);
+  REQUIRE(ok[0] == 0xab);
+  REQUIRE(ok[1] == 0xcd);
+
+  // Short, odd-length, and non-hex are rejected, not padded or zero-filled.
+  REQUIRE(cmd.getVectorFromString("ab", 0).empty());
+  REQUIRE(cmd.getVectorFromString("abc", 0).empty());
+  REQUIRE(cmd.getVectorFromString("zz", 0).empty());
+  REQUIRE(cmd.getVectorFromString("0xab", 0).empty());
+}
+
+TEST_CASE("Command getVectorFromJson rejects garbage numerics", "[Command]") {
+  std::string json =
+      R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009",)"
+      R"("write_cmd":"","interval":0,"master":true,)"
+      R"("fields":[{"name":"value","profile":"data2b_celsius",)"
+      R"("position":1,"ha_profile":"sensor_temperature"}]})";
+  JsonReader reader(json);
+  Command cmd = Command::fromJson(reader);
+  REQUIRE(cmd.getFieldCount() == 1);
+
+  // Garbage must not become 0 (lenient toNum wrote it silently before).
+  REQUIRE(cmd.getVectorFromJson(R"({"value":"abc"})").empty());
+  REQUIRE(cmd.getVectorFromJson(R"({"value":"21.5abc"})").empty());
+  // Genuine values still encode.
+  REQUIRE(!cmd.getVectorFromJson(R"({"value":21.5})").empty());
+}

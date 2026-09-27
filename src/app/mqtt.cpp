@@ -710,10 +710,14 @@ void Mqtt::handleWrite(std::string_view payload) {
     ebus::Sequence valueBytes;
     auto field_dt = command->getFieldDatatype(0);
     if (ebus::isNumeric(field_dt)) {
-      double val = ebus::toNum<double>(val_view);
-      if ((val >= command->getFieldMin(0)) &&
-          (val <= command->getFieldMax(0))) {
-        valueBytes = command->getVectorFromDouble(val, 0);
+      // Strict parse (see command.cpp): garbage must not become 0.
+      auto parsed = ebus::toNumStrict<double>(val_view);
+      if (parsed) {
+        double val = *parsed;
+        if ((val >= command->getFieldMin(0)) &&
+            (val <= command->getFieldMax(0))) {
+          valueBytes = command->getVectorFromDouble(val, 0);
+        }
       }
     } else {
       if (val_view.size() >= 2 && val_view.front() == '"' &&
@@ -779,9 +783,14 @@ void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
   ebus::Sequence valueBytes;
   auto field_dt = command->getFieldDatatype(0);
   if (ebus::isNumeric(field_dt)) {
-    double val = ebus::toNum<double>(val_view);
-    if ((val >= command->getFieldMin(0)) && (val <= command->getFieldMax(0))) {
-      valueBytes = command->getVectorFromDouble(val, 0);
+    // Strict parse (see command.cpp): garbage must not become 0.
+    auto parsed = ebus::toNumStrict<double>(val_view);
+    if (parsed) {
+      double val = *parsed;
+      if ((val >= command->getFieldMin(0)) &&
+          (val <= command->getFieldMax(0))) {
+        valueBytes = command->getVectorFromDouble(val, 0);
+      }
     }
   } else {
     if (val_view.size() >= 2 && val_view.front() == '"' &&
