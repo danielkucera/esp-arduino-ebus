@@ -8,8 +8,10 @@ extern "C" {
 
 #include <cstdint>
 
-static inline uint64_t esp_timer_get_time(void) {
-    return 123456789ULL;
+static inline uint64_t esp_timer_get_time(void) { return 123456789ULL; }
+
+static inline uint64_t esp_timer_get_time_ms(void) {
+  return 123456789ULL / 1000ULL;
 }
 
 static inline void esp_restart(void) {}

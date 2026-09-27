@@ -58,35 +58,60 @@ include_directories(
 
 # Use mock Logger instead of real one
 set(APP_SOURCES
+    ${PROJECT_ROOT}/src/api/adc_api.cpp
+    ${PROJECT_ROOT}/src/api/config_api.cpp
+    ${PROJECT_ROOT}/src/api/commands_api.cpp
+    ${PROJECT_ROOT}/src/api/cron_api.cpp
+    ${PROJECT_ROOT}/src/api/devices_api.cpp
+    ${PROJECT_ROOT}/src/api/logs_api.cpp
+    ${PROJECT_ROOT}/src/api/metrics_api.cpp
+    ${PROJECT_ROOT}/src/api/network_api.cpp
+    ${PROJECT_ROOT}/src/api/status_api.cpp
+    ${PROJECT_ROOT}/src/api/system_api.cpp
+    ${PROJECT_ROOT}/src/api/values_api.cpp
     ${PROJECT_ROOT}/src/app/command.cpp
     ${PROJECT_ROOT}/src/app/command_manager.cpp
+    ${PROJECT_ROOT}/src/app/cron.cpp
+    ${PROJECT_ROOT}/src/app/data_profile.cpp
+    ${PROJECT_ROOT}/src/app/ebus_accessor.cpp
+    ${PROJECT_ROOT}/src/app/ha_profile.cpp
+    ${PROJECT_ROOT}/src/app/mqtt_ha.cpp
     ${PROJECT_ROOT}/src/config/app_config.cpp
     ${PROJECT_ROOT}/src/config/app_config_loader.cpp
     ${PROJECT_ROOT}/src/config/config_manager.cpp
-    ${PROJECT_ROOT}/src/app/cron.cpp
-    ${PROJECT_ROOT}/src/app/ebus_accessor.cpp
-    ${PROJECT_ROOT}/src/app/data_profile.cpp
-    ${PROJECT_ROOT}/src/app/ha_profile.cpp
-    ${PROJECT_ROOT}/src/app/mqtt_ha.cpp
     ${PROJECT_ROOT}/src/system/string_pool.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/adc_stub.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/app_stub.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/html_stubs.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/http_stubs.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/logger.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/nvs_mock.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/http_stubs.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/app_stub.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/status_api_stubs.cpp
 )
 
 # Test files mirror src/ (explicit: adding a test file requires listing it).
 set(TEST_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/config/app_config_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/app/command_manager_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/values_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/adc_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/config_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/commands_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/cron_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/devices_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/logs_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/metrics_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/network_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/status_api_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/api/system_api_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/app/command_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/config/config_manager_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/command_manager_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/app/cron_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/app/data_profile_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/app/ha_profile_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/system/string_pool_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/network/wifi_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/app/mqtt_ha_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/app_config_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/config_manager_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/network/wifi_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/system/string_pool_tests.cpp
 )
 
 # Create test executable

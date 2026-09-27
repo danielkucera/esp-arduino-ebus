@@ -1,5 +1,7 @@
 #include "api/adc_api.hpp"
 
+#include <esp_timer.h>
+
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
