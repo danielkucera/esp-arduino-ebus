@@ -74,6 +74,18 @@ def generate():
         kv_count = p["key_value_count"]
         default_key = p["default_key"]
 
+        if len(kvp) > 5:
+            raise ValueError(
+                f"HA profile '{name}' has {len(kvp)} key/value pairs; "
+                "HAProfile::key_value_pairs is fixed-capacity 5. "
+                "Reduce the profile or adjust the generated array size."
+            )
+        if kv_count != len(kvp):
+            raise ValueError(
+                f"HA profile '{name}' has key_value_count={kv_count} but "
+                f"{len(kvp)} key/value entries were provided."
+            )
+
         if kvp:
             pairs_str = ", ".join(
                 f'{{{item["key"]}, "{item["value"]}"}}' for item in kvp
