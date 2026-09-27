@@ -9,6 +9,20 @@ on:
   pull_request:
 
 jobs:
+  host-tests:
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: Configure
+      run: cmake -S test_host -B test_host/build
+    - name: Build
+      run: cmake --build test_host/build
+    - name: Test
+      run: ctest --test-dir test_host/build -j$(nproc) --timeout 10
+
   build:
 
     runs-on: ubuntu-latest

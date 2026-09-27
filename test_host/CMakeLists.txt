@@ -1,19 +1,59 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.16.0)
 project(esp_ebus_app_tests LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Same platform define as the ebus library itself (it add_definitions(-DPOSIX)
+# on Linux): BusConfig/Controller layouts depend on it, and mismatched
+# defines between the lib and these TUs are an ODR violation (exit crash).
+if(UNIX AND NOT APPLE)
+    add_definitions(-DPOSIX)
+endif()
+
 # Project root is one level up from test_host/
 set(PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 
+# ebus source: local working tree when the lib/ebus symlink is present,
+# pinned FetchContent otherwise (CI has no symlink). Keep EBUS_PIN in sync
+# with the lib_deps pin in platformio.ini.
+set(EBUS_PIN 3bf6b6a34a47ed8b5877563cdd97bb55b1baf71f)
+if(EXISTS ${PROJECT_ROOT}/lib/ebus/CMakeLists.txt)
+    set(EBUS_SOURCE_DIR ${PROJECT_ROOT}/lib/ebus)
+    # No host utilities in test builds (faster configure/build).
+    set(EBUS_BUILD_TOOLS OFF)
+    add_subdirectory(${EBUS_SOURCE_DIR} ${CMAKE_BINARY_DIR}/ebus-lib)
+else()
+    include(FetchContent)
+    FetchContent_Declare(
+        ebus
+        GIT_REPOSITORY https://github.com/yuhu-/ebus.git
+        GIT_TAG ${EBUS_PIN}
+    )
+    # No host utilities in test builds (set before MakeAvailable).
+    set(EBUS_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(ebus)
+    set(EBUS_SOURCE_DIR ${ebus_SOURCE_DIR})
+endif()
+
+# Catch2: always our own FetchContent (hermetic, version-pinned like ebus).
+include(FetchContent)
+FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG v3.4.0
+)
+FetchContent_MakeAvailable(Catch2)
+
 # Add mocks BEFORE app includes
+# NOTE: ebus exposes its headers repository-relative, plus the explicit
+# dir below (harmless duplicate, guards older pins).
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/freertos
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/sys
     ${PROJECT_ROOT}/include
-    ${PROJECT_ROOT}/lib/ebus/include
+    ${EBUS_SOURCE_DIR}/include
 )
 
 # Use mock Logger instead of real one
@@ -35,18 +75,18 @@ set(APP_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/mocks/app_stub.cpp
 )
 
-# Test files (explicit: adding a test file requires listing it here).
+# Test files mirror src/ (explicit: adding a test file requires listing it).
 set(TEST_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/app_config_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/command_manager_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/command_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/config_manager_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cron_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/data_profile_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ha_profile_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/string_pool_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/wifi_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/mqtt_ha_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/app_config_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/command_manager_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/command_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/config/config_manager_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/cron_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/data_profile_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/ha_profile_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/system/string_pool_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/network/wifi_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/app/mqtt_ha_tests.cpp
 )
 
 # Create test executable
@@ -60,12 +100,18 @@ target_compile_definitions(app_tests PRIVATE
     AUTO_VERSION="host-test"
 )
 
-# Find and link Catch2 from the ebus library build
-find_package(Catch2 REQUIRED PATHS ${PROJECT_ROOT}/lib/ebus/build/_deps/catch2-src)
 target_link_libraries(app_tests PRIVATE
-    ${PROJECT_ROOT}/lib/ebus/build/src/ebus/libebus.a
+    ebus
     Catch2::Catch2WithMain
 )
 
 enable_testing()
 include(CTest)
+# Per-case CTest entries: timeouts apply per case,
+# failures pinpoint, same Catch.cmake module from our Catch2 sources.
+# Off for sanitizer/valgrind runs (they drive the binary directly).
+option(DISABLE_CATCH_DISCOVERY "Skip post-build test discovery" OFF)
+if(NOT DISABLE_CATCH_DISCOVERY)
+  include(${catch2_SOURCE_DIR}/extras/Catch.cmake)
+  catch_discover_tests(app_tests)
+endif()
