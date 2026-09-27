@@ -2,6 +2,7 @@
 #include "app/data_profile.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <iterator>
 
@@ -12,7 +13,11 @@ const DataProfile* findDataProfile(std::string_view name) {
   auto it = std::find_if(std::begin(profiles), std::end(profiles),
                          [&](const DataProfile& p) { return name == p.name; });
   if (it == std::end(profiles)) {
-    logger.warn("DataProfile: not found: " + std::string(name));
+    char buffer[128];
+    std::snprintf(buffer, sizeof(buffer), "DataProfile: not found: %.*s",
+                  static_cast<int>(std::min<size_t>(name.size(), 96)),
+                  name.data());
+    logger.warn(buffer);
     return nullptr;
   }
   return &*it;
