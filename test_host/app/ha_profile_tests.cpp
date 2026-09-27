@@ -40,10 +40,10 @@ TEST_CASE("HAProfile index roundtrip is consistent", "[ha_profile]") {
   for (uint8_t i = 1; i <= count; ++i) {
     const HAProfile* p = getHAProfileByIndex(i);
     REQUIRE(p != nullptr);
-    REQUIRE(getProfileIndexHA(p) == i);
+    REQUIRE(getHaProfileIndex(p) == i);
     REQUIRE(findHAProfile(p->name) == p);
   }
 
   REQUIRE(getHAProfileByIndex(0) == nullptr);
-  REQUIRE(getProfileIndexHA(nullptr) == 0);
+  REQUIRE(getHaProfileIndex(nullptr) == 0);
 }

@@ -7,6 +7,8 @@
 #include <string>
 #include <utility>
 
+inline constexpr size_t max_key_value_pairs = 5;
+
 struct HAProfile {
   const char* name;
   const char* component;
@@ -19,13 +21,13 @@ struct HAProfile {
   uint8_t payload_off;
   // Key-value pairs for select/sensor_enum components
   // Empty means no key-value mapping
-  std::array<std::pair<int, const char*>, 5> key_value_pairs;
+  std::array<std::pair<int, const char*>, max_key_value_pairs> key_value_pairs;
   size_t key_value_count;
   int default_key;
 };
 
 const HAProfile* findHAProfile(std::string_view name);
 const HAProfile* getHAProfileByIndex(uint8_t idx);
-uint8_t getProfileIndexHA(const HAProfile* p);
+uint8_t getHaProfileIndex(const HAProfile* p);
 
 #endif

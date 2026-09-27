@@ -17,7 +17,7 @@ const HAProfile* getHAProfileByIndex(uint8_t idx) {
   return &profiles[idx - 1];
 }
 
-uint8_t getProfileIndexHA(const HAProfile* p) {
+uint8_t getHaProfileIndex(const HAProfile* p) {
   if (!p) return 0;
   for (uint8_t i = 0; i < std::size(profiles); i++) {
     if (&profiles[i] == p) return i + 1;

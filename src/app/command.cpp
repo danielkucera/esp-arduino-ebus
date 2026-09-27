@@ -494,7 +494,7 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
               field.position = static_cast<uint8_t>(fr.asNum<size_t>() & 0x0F);
             else if (fkey == "ha_profile") {
               const HAProfile* p = findHAProfile(fr.value());
-              field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
+              field.ha_profile_idx = p ? getHaProfileIndex(p) : 0;
             } else if (fkey == "min")
               pending_min[command.fields_.size()] = fr.asNum<float>();
             else if (fkey == "max")
@@ -589,7 +589,7 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
                     static_cast<uint8_t>(fr.asNum<size_t>() & 0x0F);
               else if (fkey == "ha_profile") {
                 const HAProfile* p = findHAProfile(fr.value());
-                field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
+                field.ha_profile_idx = p ? getHaProfileIndex(p) : 0;
               } else if (fkey == "min")
                 commandManager.setFieldMinOverride(
                     command.key_id_, command.fields_.size(), fr.asNum<float>());
@@ -627,7 +627,7 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
                         static_cast<uint8_t>(fr_inner.asNum<size_t>() & 0x0F);
                   else if (fkey == "ha_profile") {
                     const HAProfile* p = findHAProfile(fr_inner.value());
-                    field.ha_profile_idx = p ? getProfileIndexHA(p) : 0;
+                    field.ha_profile_idx = p ? getHaProfileIndex(p) : 0;
                   } else if (fkey == "min")
                     commandManager.setFieldMinOverride(command.key_id_,
                                                        command.fields_.size(),

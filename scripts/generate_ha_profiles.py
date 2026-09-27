@@ -60,6 +60,7 @@ def generate():
         "constexpr HAProfile profiles[] = {",
     ]
 
+    max_key_value_pairs = 5
     for p in profiles:
         name = p["name"]
         component = p["component"]
@@ -74,10 +75,10 @@ def generate():
         kv_count = p["key_value_count"]
         default_key = p["default_key"]
 
-        if len(kvp) > 5:
+        if len(kvp) > max_key_value_pairs:
             raise ValueError(
                 f"HA profile '{name}' has {len(kvp)} key/value pairs; "
-                "HAProfile::key_value_pairs is fixed-capacity 5. "
+                f"HAProfile::key_value_pairs is fixed-capacity {max_key_value_pairs}. "
                 "Reduce the profile or adjust the generated array size."
             )
         if kv_count != len(kvp):
