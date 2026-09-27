@@ -187,3 +187,72 @@ bool AppConfig::mergeFlatJson(
 
   return true;
 }
+
+namespace {
+// FixedString capacities differ per field; compare by content view.
+template <size_t N, size_t M>
+bool driftStr(const ebus::FixedString<N>& a, const ebus::FixedString<M>& b) {
+  return std::string_view(a.c_str(), a.size()) !=
+         std::string_view(b.c_str(), b.size());
+}
+}  // namespace
+
+void AppConfig::collectDrift(const AppConfig& live, const AppConfig& requested,
+                             std::vector<std::string>& keys) {
+  // Mirrors isKnownFlatKey order; NVS key names are reported (safe for HTTP).
+  if (driftStr(live.network.wifi_ssid, requested.network.wifi_ssid))
+    keys.emplace_back("wifiSsid");
+  if (driftStr(live.network.wifi_password, requested.network.wifi_password))
+    keys.emplace_back("wifiPassword");
+  if (driftStr(live.network.wifi_bssid, requested.network.wifi_bssid))
+    keys.emplace_back("wifiBssid");
+  if (driftStr(live.network.ap_password, requested.network.ap_password))
+    keys.emplace_back("apModePassword");
+  if (live.network.static_ip_enabled != requested.network.static_ip_enabled)
+    keys.emplace_back("staticIPEnabled");
+  if (driftStr(live.network.ip_address, requested.network.ip_address))
+    keys.emplace_back("ipAddress");
+  if (driftStr(live.network.gateway, requested.network.gateway))
+    keys.emplace_back("gateway");
+  if (driftStr(live.network.netmask, requested.network.netmask))
+    keys.emplace_back("netmask");
+  if (driftStr(live.network.dns1, requested.network.dns1))
+    keys.emplace_back("dns1");
+  if (driftStr(live.network.dns2, requested.network.dns2))
+    keys.emplace_back("dns2");
+  if (live.sntp.enabled != requested.sntp.enabled)
+    keys.emplace_back("sntpEnabled");
+  if (driftStr(live.sntp.server, requested.sntp.server))
+    keys.emplace_back("sntpServer");
+  if (driftStr(live.sntp.timezone, requested.sntp.timezone))
+    keys.emplace_back("sntpTimezone");
+  if (live.pwm.value != requested.pwm.value) keys.emplace_back("pwmValue");
+  if (driftStr(live.bus.address, requested.bus.address))
+    keys.emplace_back("ebusAddress");
+  if (live.bus.window_us != requested.bus.window_us)
+    keys.emplace_back("busWindow");
+  if (live.bus.offset_us != requested.bus.offset_us)
+    keys.emplace_back("busOffset");
+  if (live.bus.system_inquiry != requested.bus.system_inquiry)
+    keys.emplace_back("systemInquiry");
+  if (live.bus.system_response != requested.bus.system_response)
+    keys.emplace_back("systemResponse");
+  if (live.bus.scan_on_startup != requested.bus.scan_on_startup)
+    keys.emplace_back("scanOnStartup");
+  if (live.mqtt.enabled != requested.mqtt.enabled)
+    keys.emplace_back("mqttEnabled");
+  if (driftStr(live.mqtt.server, requested.mqtt.server))
+    keys.emplace_back("mqttServer");
+  if (driftStr(live.mqtt.user, requested.mqtt.user))
+    keys.emplace_back("mqttUser");
+  if (driftStr(live.mqtt.pass, requested.mqtt.pass))
+    keys.emplace_back("mqttPass");
+  if (driftStr(live.mqtt.root_topic, requested.mqtt.root_topic))
+    keys.emplace_back("rootTopic");
+  if (live.mqtt_ha.enabled != requested.mqtt_ha.enabled)
+    keys.emplace_back("haEnabled");
+  if (driftStr(live.mqtt_ha.thing_name, requested.mqtt_ha.thing_name))
+    keys.emplace_back("thingName");
+  if (driftStr(live.http.headers, requested.http.headers))
+    keys.emplace_back("httpHeaders");
+}

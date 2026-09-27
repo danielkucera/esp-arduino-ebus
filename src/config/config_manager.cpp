@@ -12,8 +12,10 @@
 #include <vector>
 
 #include "app/app.hpp"
+#include "config/app_config_loader.hpp"
 #include "network/http.hpp"
 #include "network/http_utils.hpp"
+#include "system/device_status.hpp"
 
 extern ConfigManager configManager;
 
@@ -267,6 +269,34 @@ esp_err_t handleConfigSet(httpd_req_t* req) {
 esp_err_t handleConfigReset(httpd_req_t* req) {
   return configManager.handleReset(req);
 }
+
+// Staged-vs-live drift: NVS (requested, incl. unapplied saves) vs the
+// running snapshot (applied). Key names only — safe for HTTP.
+esp_err_t handleConfigDrift(httpd_req_t* req) {
+  AppConfig requested;
+  AppConfigLoader loader(configManager);
+  if (!loader.load(requested)) {
+    HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "drift",
+                                 "Config load failed");
+    return ESP_OK;
+  }
+  std::vector<std::string> keys;
+  AppConfig::collectDrift(DeviceStatus::config(), requested, keys);
+  httpd_resp_set_type(req, "application/json;charset=utf-8");
+  HttpUtils::applyCustomHeaders(req);
+  ebus::detail::JsonWriter writer([req](std::string_view chunk) {
+    httpd_resp_send_chunk(req, chunk.data(), chunk.size());
+  });
+  auto root = writer.objectScope();
+  writer.writeField("staged", !keys.empty());
+  writer.appendKey("keys");
+  {
+    auto arr = writer.arrayScope();
+    for (const auto& k : keys) writer.writeValue(std::string_view(k));
+  }
+  httpd_resp_send_chunk(req, nullptr, 0);
+  return ESP_OK;
+}
 }  // namespace
 
 void ConfigManager::begin() { ensureNvsReady(); }
@@ -277,6 +307,7 @@ void ConfigManager::registerHandlers() {
   RegisterUri("/api/v1/app/config", HTTP_GET, handleConfigGet);
   RegisterUri("/api/v1/app/config", HTTP_POST, handleConfigSet);
   RegisterUri("/api/v1/app/config/reset", HTTP_POST, handleConfigReset);
+  RegisterUri("/api/v1/app/config/drift", HTTP_GET, handleConfigDrift);
 }
 
 void ConfigManager::fetchConfig(const ebus::JsonChunkVisitor& visitor) {

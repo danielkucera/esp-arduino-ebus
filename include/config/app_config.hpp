@@ -79,4 +79,13 @@ struct AppConfig {
 
   /** @brief True if the key is a known flat NVS config key. */
   static bool isKnownFlatKey(std::string_view key);
+
+  /**
+   * @brief Collects NVS key names whose values differ between the live
+   * snapshot and a freshly NVS-loaded struct (staged-but-unapplied edits).
+   * Passwords compare by value but only key *names* are reported, so the
+   * output is safe to serve over HTTP.
+   */
+  static void collectDrift(const AppConfig& live, const AppConfig& requested,
+                           std::vector<std::string>& keys);
 };

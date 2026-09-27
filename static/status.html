@@ -74,6 +74,20 @@
         function loadHealth() {
             loadView('health', 'btnHealth', 'statusContainer', '/api/v1/health', data => {
                 renderSummaryTable(data, 'statusContainer');
+                // Staged config: NVS saved but not yet applied (restart
+                // pending). Key names only — no secret values in the UI.
+                fetch('/api/v1/app/config/drift').then(res => {
+                    if (!res.ok) return;
+                    return res.json();
+                }).then(drift => {
+                    if (!drift || !drift.staged) return;
+                    const keys = (drift.keys || []).join(', ');
+                    const banner = document.createElement('div');
+                    banner.style.cssText = 'padding:8px;margin-bottom:8px;border:1px solid #ddd;background:#fff8e1;';
+                    banner.textContent = 'Staged config changes — restart to apply: ' + keys;
+                    const c = document.getElementById('statusContainer');
+                    c.insertBefore(banner, c.firstChild);
+                }).catch(() => { });
             });
         }
         function loadSystem() {

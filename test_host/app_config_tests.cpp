@@ -114,3 +114,20 @@ TEST_CASE("AppConfig mergeFlatJson collects unknown keys", "[app_config]") {
   REQUIRE(AppConfig::isKnownFlatKey("wifiSsid") == true);
   REQUIRE(AppConfig::isKnownFlatKey("customKey") == false);
 }
+
+TEST_CASE("AppConfig::collectDrift reports staged keys only", "[app_config]") {
+  AppConfig live;
+  live.reset();
+  AppConfig requested = live;
+
+  std::vector<std::string> keys;
+  AppConfig::collectDrift(live, requested, keys);
+  REQUIRE(keys.empty());
+
+  requested.bus.address.assign("30");
+  requested.mqtt.enabled = true;
+  AppConfig::collectDrift(live, requested, keys);
+  REQUIRE(keys.size() == 2);
+  REQUIRE(keys[0] == "ebusAddress");
+  REQUIRE(keys[1] == "mqttEnabled");
+}
