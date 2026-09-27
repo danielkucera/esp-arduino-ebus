@@ -21,7 +21,7 @@ TEST_CASE("HAProfile enum mapping is intact", "[ha_profile]") {
   REQUIRE(mode != nullptr);
   REQUIRE(mode->key_value_count == 5);
   REQUIRE(mode->default_key == 3);
-  REQUIRE(std::string(mode->key_value_pairs[0].second) == "On");
+  REQUIRE(std::string(mode->key_value_pairs[0].second) == "on");
 }
 
 TEST_CASE("HAProfile lookup rejects unknown names", "[ha_profile]") {

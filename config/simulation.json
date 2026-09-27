@@ -142,36 +142,36 @@
   ]
  },
  {
-  "key": "99",
-  "name": "identification",
-  "read_cmd": "080704",
+  "key": "48",
+  "name": "MF/Status",
+  "read_cmd": "08b511020300",
   "write_cmd": "",
   "interval": 0,
   "master": false,
   "fields": [
    {
-    "name": "manufacturer",
-    "profile": "uint8",
+    "name": "temp",
+    "profile": "data2c_celsius",
     "position": 1,
-    "ha_profile": ""
+    "ha_profile": "sensor_temperature"
    },
    {
-    "name": "unit_id",
-    "profile": "char5",
-    "position": 2,
-    "ha_profile": ""
+    "name": "press",
+    "profile": "int16_bar",
+    "position": 3,
+    "ha_profile": "sensor_pressure"
    },
    {
-    "name": "software_version",
-    "profile": "hex2",
+    "name": "press_1",
+    "profile": "int16_bar",
+    "position": 5,
+    "ha_profile": "sensor_pressure"
+   },
+   {
+    "name": "hcmode2",
+    "profile": "uint8",
     "position": 7,
-    "ha_profile": ""
-   },
-   {
-    "name": "hardware_version",
-    "profile": "hex2",
-    "position": 9,
-    "ha_profile": ""
+    "ha_profile": "sensor_enum_hcmode2"
    }
   ]
  }

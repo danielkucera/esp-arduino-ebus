@@ -32,6 +32,13 @@
             const thead = document.getElementById('valuesTableHeader');
             const tbody = document.getElementById('valuesTableBody');
 
+            // HA enum display name wins over the raw number when present.
+            // Page-local: only this table knows the text/value row shape.
+            function cellText(item, col) {
+                if (col === 'value' && item.text !== undefined) return String(item.text);
+                return (item[col] === undefined ? '' : String(item[col]));
+            }
+
             // Initialize headers if empty
             if (thead.children.length === 0) {
                 const cols = ['key', 'name', 'value', 'unit', 'age'];
@@ -95,7 +102,7 @@
                     const tds = tr.querySelectorAll('td');
                     cols.forEach((col, idx) => {
                         if (tds[idx]) {
-                            tds[idx].textContent = (item[col] === undefined ? '' : String(item[col]));
+                            tds[idx].textContent = cellText(item, col);
                         }
                     });
 
@@ -112,7 +119,7 @@
                     tr = document.createElement('tr');
                     cols.forEach(k => {
                         const td = document.createElement('td');
-                        td.textContent = (item[k] === undefined ? '' : String(item[k]));
+                        td.textContent = cellText(item, k);
                         tr.appendChild(td);
                     });
 

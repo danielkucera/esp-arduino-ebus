@@ -472,6 +472,7 @@ void CommandManager::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
           unit = std::string(cmd->getFieldUnit(0));
         }
         writer.writeField("unit", unit);
+        if (fields > 0) cmd->writeFieldText(writer, 0);
         writer.writeField("age", age);
         writer.writeField("write", cmd->hasWriteCmd());
         writer.writeField("active", cmd->getActive());
@@ -494,6 +495,7 @@ void CommandManager::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
 
           writer.writeField("unit",
                             cmd->getFieldUnit(f) ? cmd->getFieldUnit(f) : "");
+          cmd->writeFieldText(writer, f);
           writer.writeField("age", age);
           writer.writeField("write", cmd->hasWriteCmd());
           writer.writeField("active", cmd->getActive());

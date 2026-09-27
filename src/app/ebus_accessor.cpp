@@ -57,6 +57,7 @@ void startEbusSimulation() {
     static uint32_t count17 = 0;
     static uint32_t count25 = 0;
     static uint32_t count31 = 0;
+    static uint32_t count37 = 0;
     auto& vbus = getEbusController().getVirtualBus();
 
     if (++count17 >= 17) {
@@ -76,6 +77,14 @@ void startEbusSimulation() {
       // Buffer/Middle_Temperature with sensor error (status 0xaa = 170 =
       // cutoff): value 0x0134 (19.25 C). Passive like a free foreign scan.
       vbus.injectMasterSlaveMessage(0x10, "08b50903290100", "0501003401aa");
+    }
+
+    if (++count37 >= 37) {
+      count37 = 0;
+      // MF/Status (B511 ext 03), replicated live traffic: temp 24.1 C,
+      // press 2.4/1.8 bar, hcmode2 off. Passive.
+      vbus.injectMasterSlaveMessage(0x10, "08b511020300",
+                                    "0a82018609080700280000");
     }
   };
   args.arg = nullptr;

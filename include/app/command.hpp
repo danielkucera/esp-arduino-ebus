@@ -88,6 +88,9 @@ class Command {
   bool matches(ebus::ByteView master_view) const;
 
   void writeFieldValue(ebus::detail::JsonWriter& writer, size_t i) const;
+  // Writes "text" with the HA enum display name when the decoded number
+  // maps (key_value_pairs); returns false (writes nothing) otherwise.
+  bool writeFieldText(ebus::detail::JsonWriter& writer, size_t i) const;
   void writeValuePayload(ebus::detail::JsonWriter& writer) const;
 
   void getValueJson(ebus::detail::JsonWriter& writer) const;

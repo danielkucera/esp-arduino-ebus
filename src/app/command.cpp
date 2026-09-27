@@ -214,6 +214,27 @@ void Command::writeFieldValue(ebus::detail::JsonWriter& writer,
   }
 }
 
+bool Command::writeFieldText(ebus::detail::JsonWriter& writer, size_t i) const {
+  if (i >= fields_.size()) return false;
+  const HAProfile* hp = getFieldHAProfile(i);
+  if (hp == nullptr || hp->key_value_count == 0) return false;
+  auto dt = getFieldDatatype(i);
+  if (!ebus::isNumeric(dt)) return false;
+  size_t field_len = ebus::sizeOfDataType(dt);
+  size_t field_pos = getFieldPosition(i) - 1;
+  if (field_pos + field_len > data_.size()) return false;
+  auto decoded = ebus::decode(dt, ebus::range(data_, field_pos, field_len));
+  if (!decoded || ebus::isNull(*decoded)) return false;
+  const int64_t num = ebus::asInt64(*decoded);
+  for (size_t k = 0; k < hp->key_value_count; ++k) {
+    if (hp->key_value_pairs[k].first == num) {
+      writer.writeField("text", hp->key_value_pairs[k].second);
+      return true;
+    }
+  }
+  return false;
+}
+
 void Command::writeValuePayload(ebus::detail::JsonWriter& writer) const {
   for (size_t i = 0; i < fields_.size(); ++i) {
     const char* fn = getFieldName(i);
