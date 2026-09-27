@@ -16,6 +16,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+    - name: Generate profile headers
+      run: |
+        python3 scripts/generate_data_profiles.py
+        python3 scripts/generate_ha_profiles.py
+        python3 scripts/generate_build_info.py
     - name: Configure
       run: cmake -S test_host -B test_host/build
     - name: Build
