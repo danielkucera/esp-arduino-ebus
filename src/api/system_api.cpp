@@ -240,8 +240,8 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
         for (size_t i = 0; i < nrows; ++i) {
           auto item = writer.objectScope();
           writer.writeField("name", rows[i].name);
-          writer.writeFieldFloat("pct", rows[i].pct);
-          writer.writeField("prio", rows[i].prio);
+          writer.writeFieldFloat("percent", rows[i].pct);
+          writer.writeField("priority", rows[i].prio);
         }
         heap_caps_free(states);
       }
