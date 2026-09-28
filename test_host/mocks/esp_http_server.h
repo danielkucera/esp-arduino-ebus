@@ -41,6 +41,10 @@ typedef struct httpd_req {
   int content_len = 0;
   httpd_method_t method = HTTP_GET;
   bool has_query = false;
+  size_t recv_chunk_limit = 0;
+  int recv_fail_after = -1;
+  int recv_failure_result = -1;
+  size_t received_bytes = 0;
 } httpd_req_t;
 typedef struct httpd_data* httpd_handle_t;
 typedef struct httpd_uri httpd_uri_t;
@@ -129,10 +133,24 @@ inline esp_err_t httpd_query_key_value(const char* query, const char* key,
 
 inline int httpd_req_recv(httpd_req_t* req, char* buf, size_t len) {
   if (req == nullptr || buf == nullptr || len == 0) return 0;
+  if (req->recv_fail_after >= 0 &&
+      req->received_bytes >= static_cast<size_t>(req->recv_fail_after)) {
+    return req->recv_failure_result;
+  }
   if (req->body.empty()) return 0;
-  const size_t to_copy = std::min(req->body.size(), len);
+  size_t to_copy = std::min(req->body.size(), len);
+  if (req->recv_chunk_limit > 0) {
+    to_copy = std::min(to_copy, req->recv_chunk_limit);
+  }
+  if (req->recv_fail_after >= 0) {
+    const size_t before_failure =
+        static_cast<size_t>(req->recv_fail_after) - req->received_bytes;
+    to_copy = std::min(to_copy, before_failure);
+  }
+  if (to_copy == 0) return req->recv_failure_result;
   std::memcpy(buf, req->body.data(), to_copy);
   req->body.erase(0, to_copy);
+  req->received_bytes += to_copy;
   return static_cast<int>(to_copy);
 }
 

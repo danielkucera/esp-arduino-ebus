@@ -133,6 +133,20 @@ target_link_libraries(app_tests PRIVATE
     Catch2::Catch2WithMain
 )
 
+add_executable(http_utils_tests
+    ${PROJECT_ROOT}/src/network/http_utils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/http_utils/http_utils_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/http_utils/logger_stub.cpp
+)
+target_include_directories(http_utils_tests BEFORE PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/http_utils/mocks
+    ${CMAKE_CURRENT_SOURCE_DIR}/http_utils
+)
+target_link_libraries(http_utils_tests PRIVATE
+    ebus
+    Catch2::Catch2WithMain
+)
+
 enable_testing()
 include(CTest)
 # Per-case CTest entries: timeouts apply per case,
@@ -142,4 +156,5 @@ option(DISABLE_CATCH_DISCOVERY "Skip post-build test discovery" OFF)
 if(NOT DISABLE_CATCH_DISCOVERY)
   include(${catch2_SOURCE_DIR}/extras/Catch.cmake)
   catch_discover_tests(app_tests)
+  catch_discover_tests(http_utils_tests)
 endif()
