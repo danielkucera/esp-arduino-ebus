@@ -4,8 +4,8 @@
 #include <string>
 
 #include "api/system_api.hpp"
-#include "ebus_test_helpers.hpp"
-#include "system_api_stub_state.hpp"
+#include "api/system_api_stub_state.hpp"
+#include "app/ebus_test_helpers.hpp"
 #undef private
 
 TEST_CASE("SystemApi system endpoint serializes firmware and chip details",

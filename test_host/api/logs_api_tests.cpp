@@ -4,7 +4,7 @@
 #include <string>
 
 #include "api/logs_api.hpp"
-#include "system_api_stub_state.hpp"
+#include "api/system_api_stub_state.hpp"
 #undef private
 
 TEST_CASE("LogsApi serves the logs page", "[logs_api]") {

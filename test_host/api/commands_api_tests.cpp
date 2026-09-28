@@ -6,8 +6,8 @@
 #include <utility>
 
 #include "api/commands_api.hpp"
+#include "api/http_stub_state.hpp"
 #include "app/command_manager.hpp"
-#include "http_stub_state.hpp"
 #undef private
 
 namespace {

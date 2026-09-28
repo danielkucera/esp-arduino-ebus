@@ -4,8 +4,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <string>
 
-#include "adc_stub_state.hpp"
 #include "api/adc_api.hpp"
+#include "api/adc_stub_state.hpp"
 #include "hardware/adc.hpp"
 #undef private
 #undef protected

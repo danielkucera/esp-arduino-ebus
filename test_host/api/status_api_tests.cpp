@@ -2,8 +2,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <string>
 
+#include "api/http_stub_state.hpp"
 #include "api/status_api.hpp"
-#include "http_stub_state.hpp"
 #undef private
 
 TEST_CASE("StatusApi serves the status page", "[status_api]") {

@@ -2,8 +2,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstring>
 
+#include "api/http_stub_state.hpp"
 #include "api/network_api.hpp"
-#include "http_stub_state.hpp"
 #undef private
 #include <esp_wifi.h>
 

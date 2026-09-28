@@ -3,7 +3,7 @@
 #include <ebus/detail/json_reader.hpp>
 
 #include "api/metrics_api.hpp"
-#include "ebus_test_helpers.hpp"
+#include "app/ebus_test_helpers.hpp"
 #undef private
 
 TEST_CASE("MetricsApi streams valid metrics JSON", "[metrics_api]") {

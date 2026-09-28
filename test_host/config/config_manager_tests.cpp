@@ -5,8 +5,8 @@
 #include "config/config_manager.hpp"
 
 // The ConfigManager instance backing these tests. NVS itself is the
-// in-memory host mock (test_host/mocks/nvs_mock.cpp), so each case starts
-// from resetConfig() for isolation.
+// in-memory host mock (test_host/mocks/config/nvs_mock.cpp), so each case
+// starts from resetConfig() for isolation.
 ConfigManager configManager;
 
 TEST_CASE("ConfigManager string roundtrip", "[config_nvs]") {

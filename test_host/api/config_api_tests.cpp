@@ -2,7 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "api/config_api.hpp"
-#include "http_stub_state.hpp"
+#include "api/http_stub_state.hpp"
 #undef private
 
 TEST_CASE("ConfigApi serves the configuration page", "[config_api]") {

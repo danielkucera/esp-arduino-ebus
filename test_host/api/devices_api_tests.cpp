@@ -3,7 +3,7 @@
 #include <ebus/detail/json_reader.hpp>
 
 #include "api/devices_api.hpp"
-#include "ebus_test_helpers.hpp"
+#include "app/ebus_test_helpers.hpp"
 #undef private
 
 TEST_CASE("DevicesApi serves the devices page", "[devices_api]") {
