@@ -24,7 +24,7 @@
     <div class="container" id="heapContainer" style="display:none">
         <h2>heap</h2>
         <div id="heapCurrent"></div>
-        <h2>trend (hourly)</h2>
+        <h2>trend</h2>
         <table>
             <thead id="heapTableHeader"></thead>
             <tbody id="heapTableBody"></tbody>
@@ -36,7 +36,7 @@
             <thead id="threadsTableHeader"></thead>
             <tbody id="threadsTableBody"></tbody>
         </table>
-        <h2>cpu share since last poll (%)</h2>
+        <h2>cpu share</h2>
         <table>
             <thead id="cpuTableHeader"></thead>
             <tbody id="cpuTableBody"></tbody>
@@ -115,7 +115,7 @@
                 renderRows('threadsTableHeader', 'threadsTableBody',
                     ['name', 'stack_size', 'stack_free'], data.threads || [], true);
                 renderRows('cpuTableHeader', 'cpuTableBody',
-                    ['name', 'pct', 'prio'], data.cpu || [], true);
+                    ['name', 'percent', 'priority'], data.cpu || [], true);
             });
         }
         function showView(id) {
