@@ -27,7 +27,7 @@
         <div><label for="wifiSsid">WiFi SSID</label></div>
         <div><input id="wifiSsid" type="text" class="config"></div>
         <div><label for="wifiPassword">WiFi Password</label></div>
-        <div><input id="wifiPassword" type="password" class="config"></div>
+        <div><input id="wifiPassword" type="password" class="config" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');"></div>
         <div><label for="wifiBssid">WiFi BSSID (MAC address)</label></div>
         <div><input id="wifiBssid" type="text" class="config" placeholder="leave empty for dynamic selection"
                 spellcheck="false"></div>
@@ -59,7 +59,7 @@
         <div><label for="thingName">Thing Name</label></div>
         <div><input id="thingName" type="text" class="config" value="esp-eBus"></div>
         <div><label for="apModePassword">AP Mode Password</label></div>
-        <div><input id="apModePassword" type="password" class="config" value="ebusebus"></div>
+        <div><input id="apModePassword" type="password" class="config" value="ebusebus" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');"></div>
     </fieldset>
 
     <fieldset>
@@ -87,7 +87,7 @@
     </fieldset>
 
     <fieldset>
-        <legend>Adapter</legend>
+        <legend>Bus</legend>
         <div><label for="pwmValue">PWM</label></div>
         <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config" value="130"></div>
         <div><label for="ebusAddress">eBUS Address (hex, e.g. ff)</label></div>
@@ -96,13 +96,9 @@
         <div><input id="busWindow" type="number" min="4250" max="4500" step="1" class="config"></div>
         <div><label for="busOffset">Bus Offset (us)</label></div>
         <div><input id="busOffset" type="number" min="0" max="200" step="1" class="config"></div>
-    </fieldset>
-
-    <fieldset>
-        <legend>Schedule</legend>
         <div><label><input id="systemInquiry" type="checkbox" class="config">Inquiry Of Existence</label></div>
         <div><label><input id="systemResponse" type="checkbox" class="config">Send Response</label></div>
-        <div><label><input id="scanOnStartPrm" type="checkbox" class="config"> Scan On Startup</label></div>
+        <div><label><input id="scanOnStartup" type="checkbox" class="config"> Scan On Startup</label></div>
     </fieldset>
 
     <fieldset>
@@ -113,7 +109,7 @@
         <div><label for="mqttUser">MQTT User</label></div>
         <div><input id="mqttUser" type="text" class="config"></div>
         <div><label for="mqttPass">MQTT Password</label></div>
-        <div><input id="mqttPass" type="password" class="config"></div>
+        <div><input id="mqttPass" type="password" class="config" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');"></div>
         <div><label for="rootTopic">Root Topic</label></div>
         <div><input id="rootTopic" type="text" class="config" placeholder="leave empty for ebus/&lt;<LOW_MAC>&gt;/"
                 spellcheck="false"></div>
@@ -179,7 +175,7 @@
             setStatus('Loading...');
             resetFieldsToDefaultValues();
             try {
-                const res = await fetch('/api/v1/config');
+                const res = await fetch('/api/v1/app/config');
                 if (!res.ok) throw new Error('Load failed');
                 const cfg_obj = await res.json();
                 const cfg = cfg_obj.config || {};
@@ -187,6 +183,16 @@
                 for (const key in cfg) {
                     if (cfg.hasOwnProperty(key)) {
                         setField(key, cfg[key]);
+                    }
+                }
+                // Passwords are never served (secret scrub): force the
+                // fields empty so a stale/autofilled value can never be
+                // mistaken for stored credentials on save (empty = keep).
+                for (const id of ['wifiPassword', 'apModePassword', 'mqttPass']) {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.value = '';
+                        el.setAttribute('readonly', 'readonly');
                     }
                 }
                 setStatus('Loaded');
@@ -207,7 +213,7 @@
             }
 
             try {
-                const res = await fetch('/api/v1/config', {
+                const res = await fetch('/api/v1/app/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -262,7 +268,7 @@
             if (!confirm('Reset all saved configuration values?')) return;
             setStatus('Resetting...');
             try {
-                const res = await fetch('/api/v1/config/reset', { method: 'POST' });
+                const res = await fetch('/api/v1/app/config/reset', { method: 'POST' });
                 const text = await res.text();
                 setStatus(res.ok ? text : `Error: ${text}`);
                 if (res.ok) await loadConfig();
@@ -276,7 +282,7 @@
             if (!confirm('Restart device now?')) return;
             setStatus('Restarting...');
             try {
-                const res = await fetch('/restart');
+                const res = await fetch('/restart', { method: 'POST' });
                 const text = await res.text();
                 setStatus(res.ok ? text : `Error: ${text}`);
             } catch (err) {
@@ -295,7 +301,7 @@
             resultsEl.style.display = 'none';
 
             try {
-                const res = await fetch('/api/v1/wifi/scan', { method: 'POST' });
+                const res = await fetch('/api/v1/network/wifi/scan', { method: 'POST' });
                 if (!res.ok) throw new Error('Scan failed');
 
                 const networks = await res.json();

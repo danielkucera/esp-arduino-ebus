@@ -4,16 +4,18 @@
 
 #include <esp_http_server.h>
 
-#include "command_manager.hpp"
+#include "app/command_manager.hpp"
+#include "app/mqtt_ha.hpp"
 
 class CommandsApi {
  public:
-  explicit CommandsApi(CommandManager& command_manager);
+  explicit CommandsApi(CommandManager& command_manager, MqttHA& mqtt_ha);
 
-  bool registerHandlers(httpd_handle_t server);
+  static bool registerHandlers(httpd_handle_t server);
 
  private:
   CommandManager& command_manager_;
+  MqttHA& mqtt_ha_;
 
   static CommandsApi* instance_;
 

@@ -5,10 +5,10 @@
 #include <cstdio>
 #include <ebus/detail/json_reader.hpp>
 
-#include "command_manager.hpp"
-#include "ebus_accessor.hpp"
-#include "http.hpp"
-#include "http_utils.hpp"
+#include "app/command_manager.hpp"
+#include "app/ebus_accessor.hpp"
+#include "network/http.hpp"
+#include "network/http_utils.hpp"
 
 namespace {
 
@@ -28,9 +28,9 @@ bool ValuesApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
   RegisterUri("/values", HTTP_GET, handleValuesPage);
-  RegisterUri("/api/v1/values", HTTP_GET, handleValues);
-  RegisterUri("/api/v1/values/write", HTTP_POST, handleValuesWrite);
-  RegisterUri("/api/v1/values/read", HTTP_POST, handleValuesRead);
+  RegisterUri("/api/v1/app/values", HTTP_GET, handleValues);
+  RegisterUri("/api/v1/app/values/write", HTTP_POST, handleValuesWrite);
+  RegisterUri("/api/v1/app/values/read", HTTP_POST, handleValuesRead);
 
   return true;
 }
@@ -62,7 +62,10 @@ esp_err_t ValuesApi::handleValuesWrite(httpd_req_t* req) {
   std::string_view body_sv = sr.jsonReader().remaining();
   ebus::detail::JsonReader reader(body_sv);
   std::string key;
-  if (reader.findKey("key") &&
+  // findKey matches current-level keys: consume the opening brace first
+  // (a fresh reader positions depth before it and never matches).
+  if (reader.next() == ebus::detail::JsonReader::Token::object_start &&
+      reader.findKey("key") &&
       reader.next() == ebus::detail::JsonReader::Token::string) {
     key = std::string(reader.value());
   }
@@ -100,7 +103,10 @@ esp_err_t ValuesApi::handleValuesRead(httpd_req_t* req) {
 
   ebus::detail::JsonReader reader(sr.jsonReader().remaining());
   std::string key;
-  if (reader.findKey("key") &&
+  // findKey matches current-level keys: consume the opening brace first
+  // (a fresh reader positions depth before it and never matches).
+  if (reader.next() == ebus::detail::JsonReader::Token::object_start &&
+      reader.findKey("key") &&
       reader.next() == ebus::detail::JsonReader::Token::string) {
     key = std::string(reader.value());
   }

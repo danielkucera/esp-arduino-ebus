@@ -2,13 +2,13 @@
 
 #include <esp_http_server.h>
 
-#include "adc.hpp"
+#include "hardware/adc.hpp"
 
 class AdcApi {
  public:
   explicit AdcApi(Adc& adc);
 
-  bool registerHandlers(httpd_handle_t server);
+  static bool registerHandlers(httpd_handle_t server);
 
  private:
   Adc& adc_;

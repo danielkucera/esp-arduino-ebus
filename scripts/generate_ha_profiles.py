@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Pre-build script for PlatformIO.
-Reads ha_profiles.json + ha_profiles_user.json and generates include/ha_profile_gen.hpp
+Reads ha_profiles.json + ha_profiles_user.json and generates include/app/ha_profile_gen.hpp
 with a static C++ array (base profiles merged with user overlay).
 """
 
@@ -17,7 +17,7 @@ except NameError:
 
 BASE_JSON = os.path.join(PROJECT_ROOT, "profiles", "ha_profiles.json")
 OVERLAY_JSON = os.path.join(PROJECT_ROOT, "profiles", "ha_profiles_user.json")
-OUTPUT_FILE = os.path.join(PROJECT_ROOT, "include", "ha_profile_gen.hpp")
+OUTPUT_FILE = os.path.join(PROJECT_ROOT, "include", "app", "ha_profile_gen.hpp")
 
 
 def load_profiles(path):
@@ -50,7 +50,7 @@ def generate():
         "",
         "#if defined(EBUS_INTERNAL)",
         "",
-        '#include "ha_profile.hpp"',
+        '#include "app/ha_profile.hpp"',
         "",
         "namespace {",
         "// clang-format off",
@@ -60,6 +60,7 @@ def generate():
         "constexpr HAProfile profiles[] = {",
     ]
 
+    max_key_value_pairs = 5
     for p in profiles:
         name = p["name"]
         component = p["component"]
@@ -73,6 +74,18 @@ def generate():
         kvp = p["key_value_pairs"]
         kv_count = p["key_value_count"]
         default_key = p["default_key"]
+
+        if len(kvp) > max_key_value_pairs:
+            raise ValueError(
+                f"HA profile '{name}' has {len(kvp)} key/value pairs; "
+                f"HAProfile::key_value_pairs is fixed-capacity {max_key_value_pairs}. "
+                "Reduce the profile or adjust the generated array size."
+            )
+        if kv_count != len(kvp):
+            raise ValueError(
+                f"HA profile '{name}' has key_value_count={kv_count} but "
+                f"{len(kvp)} key/value entries were provided."
+            )
 
         if kvp:
             pairs_str = ", ".join(

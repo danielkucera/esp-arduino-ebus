@@ -73,4 +73,8 @@ You can define custom or overridden profiles without modifying the core files by
 - `data_profiles_user.json`
 - `ha_profiles_user.json`
 
+Start by copying the shipped templates (`*.example`) to the real names.
+The real overlay files are git-ignored (personal content); only the
+examples are versioned.
+
 During compilation, entries in the user overlay files override or extend base profiles in `data_profiles.json` and `ha_profiles.json`.

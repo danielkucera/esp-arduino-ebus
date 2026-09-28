@@ -169,55 +169,6 @@ function renderNestedSections(data, containerId, sortNumbers = false, radix = 10
     }
 }
 
-
-// function renderNestedSections(data, containerId, sortNumbers = false, radix = 10) {
-//     const container = document.getElementById(containerId);
-//     container.innerHTML = '';
-
-//     function createSection(sectionName, values) {
-//         const sectionDiv = document.createElement('div');
-//         sectionDiv.classList.add('section');
-//         sectionDiv.innerHTML = `<div class="title">${sectionName}</div>`;
-
-//         const entries = Object.entries(values);
-
-//         if (sortNumbers) {
-//             entries.sort(([keyA, valueA], [keyB, valueB]) => {
-//                 if (typeof valueA === 'number' && typeof valueB === 'number') {
-//                     return parseInt(keyA, radix) - parseInt(keyB, radix);
-//                 }
-//                 return 0;
-//             });
-//         }
-
-//         for (const [key, value] of entries) {
-//             const itemDiv = document.createElement('div');
-//             itemDiv.classList.add('item');
-//             if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-//                 const nestedSectionDiv = createSection(key, value);
-//                 sectionDiv.appendChild(nestedSectionDiv);
-//             } else {
-//                 const valStr = Array.isArray(value) ? JSON.stringify(value) : String(value);
-//                 itemDiv.innerHTML = `<span class="key">${key}:</span> ${valStr}`;
-//                 sectionDiv.appendChild(itemDiv);
-//             }
-//         }
-//         return sectionDiv;
-//     }
-
-//     for (const [key, value] of Object.entries(data)) {
-//         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-//             container.appendChild(createSection(key, value));
-//         } else {
-//             const itemDiv = document.createElement('div');
-//             itemDiv.classList.add('item');
-//             const valStr = Array.isArray(value) ? JSON.stringify(value) : String(value);
-//             itemDiv.innerHTML = `<span class="key">${key}:</span> ${valStr}`;
-//             container.appendChild(itemDiv);
-//         }
-//     }
-// }
-
 /**
  * Downloads a text content as a file with the given filename and MIME type.
  * @param {string} text - The content to download.
@@ -351,4 +302,234 @@ function togglePause(labelId) {
         clearTimeout(pollTimeout);
     else
         setPollingTimeout(pollInterval, handleValues);
+}
+
+/**
+ * Renders a flat key-value object as a 2-column summary table
+ * (label | value). Used for the status page "alive?" landing view.
+ * @param {object} data - Flat key-value object to render.
+ * @param {string} containerId - ID of the container element.
+ */
+function renderSummaryTable(data, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    const table = document.createElement('table');
+    table.classList.add('kv');
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['metric', 'value'].forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+
+    for (const [key, value] of Object.entries(data)) {
+        // One level of nesting expands to parent.child rows so small
+        // objects (health.heap, health.logger) stay readable. Deeper
+        // structures still render as JSON — they don't belong here.
+        if (typeof value === 'object' && value !== null &&
+            Object.values(value).every(
+                v => v === null || typeof v !== 'object')) {
+            for (const [sub, subValue] of Object.entries(value)) {
+                addRow(`${key}.${sub}`, subValue);
+            }
+            continue;
+        }
+        addRow(key, value);
+    }
+
+    function addRow(label, val) {
+        const row = document.createElement('tr');
+
+        const labelCell = document.createElement('td');
+        labelCell.textContent = label;
+        labelCell.style.fontWeight = 'bold';
+
+        const valueCell = document.createElement('td');
+        if (typeof val === 'boolean') {
+            valueCell.textContent = val ? 'yes' : 'no';
+            if (!val) valueCell.style.color = '#888';
+        } else if (typeof val === 'number') {
+            valueCell.textContent = String(val);
+        } else if (typeof val === 'object' && val !== null) {
+            valueCell.textContent = JSON.stringify(val);
+        } else {
+            valueCell.textContent = String(val);
+        }
+
+        row.appendChild(labelCell);
+        row.appendChild(valueCell);
+        tbody.appendChild(row);
+    }
+
+    table.appendChild(tbody);
+    container.appendChild(table);
+}
+
+/**
+ * Renders nested JSON data as collapsible <details> sections.
+ * Each object/array becomes a <details> with a <summary> showing the
+ * key and a preview; primitives render as plain items.
+ * @param {object} data - The JSON object to render.
+ * @param {string} containerId - The ID of the container element.
+ */
+function renderDetailsSections(data, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    function formatValue(value) {
+        if (typeof value === 'boolean') return value ? 'yes' : 'no';
+        if (typeof value === 'number') return String(value);
+        if (typeof value === 'string') return value;
+        if (value === null) return 'null';
+        return JSON.stringify(value);
+    }
+
+    function entrySummary(key, value) {
+        const isObj = typeof value === 'object' && value !== null;
+        if (isObj) {
+            const preview = Array.isArray(value)
+                ? `[${value.length} items]`
+                : `{${Object.keys(value).length} fields}`;
+            return key ? `${key}: ${preview}` : preview;
+        }
+        return key ? `${key}: ${formatValue(value)}` : formatValue(value);
+    }
+
+    function renderEntry(parent, key, value) {
+        const isObj = typeof value === 'object' && value !== null;
+
+        if (isObj) {
+            const details = document.createElement('details');
+            const summary = document.createElement('summary');
+            summary.textContent = entrySummary(key, value);
+            details.appendChild(summary);
+
+            const childDiv = document.createElement('div');
+            for (const [k, v] of Object.entries(value)) {
+                renderEntry(childDiv, k, v);
+            }
+            details.appendChild(childDiv);
+            parent.appendChild(details);
+        } else {
+            const itemDiv = document.createElement('div');
+            itemDiv.classList.add('item');
+            itemDiv.innerHTML = key
+                ? `<span class="key">${key}:</span> ${formatValue(value)}`
+                : formatValue(value);
+            parent.appendChild(itemDiv);
+        }
+    }
+
+    for (const [key, value] of Object.entries(data)) {
+        renderEntry(container, key, value);
+    }
+}
+
+/**
+ * Renders nested JSON data as one <h2> table per top-level object.
+ * Arrays of objects become column tables, plain objects become
+ * key/value tables, primitives become single rows. Tables, not
+ * collapsed sections: every value visible without clicking.
+ * @param {object} data - The JSON object to render.
+ * @param {string} containerId - ID of the container element.
+ * @param {boolean} [alignFirst=false] - Align first columns page-wide
+ * (adds the "kv" class); use for stacked tables sharing a column.
+ */
+function renderTables(data, containerId, alignFirst = false) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    function formatCell(v) {
+        if (v === undefined || v === null) return '';
+        if (typeof v === 'object') return JSON.stringify(v);
+        return String(v);
+    }
+    function addTable(title, cols, rows) {
+        const h = document.createElement('h2');
+        h.textContent = title;
+        container.appendChild(h);
+        const table = document.createElement('table');
+        if (cols.length === 2) table.classList.add('kv');
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        cols.forEach(c => {
+            const th = document.createElement('th');
+            th.textContent = c;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        rows.forEach(r => {
+            const tr = document.createElement('tr');
+            r.forEach(cell => {
+                const td = document.createElement('td');
+                td.textContent = cell;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.appendChild(table);
+    }
+    for (const [key, value] of Object.entries(data || {})) {
+        if (Array.isArray(value)) {
+            const cols = [];
+            value.forEach(item => {
+                if (item && typeof item === 'object') {
+                    Object.keys(item).forEach(k => {
+                        if (!cols.includes(k)) cols.push(k);
+                    });
+                }
+            });
+            addTable(key, cols, value.map(item =>
+                cols.map(c => formatCell(item ? item[c] : ''))));
+        } else if (value && typeof value === 'object') {
+            addTable(key, ['key', 'value'], Object.entries(value).map(
+                ([k, v]) => [k, formatCell(v)]));
+        } else {
+            addTable(key, ['value'], [[formatCell(value)]]);
+        }
+    }
+}
+
+/**
+ * Renders array-of-object rows into an existing <thead>/<tbody> pair
+ * using an explicit column list. Used for heap trend, thread stacks
+ * and CPU shares tables.
+ * @param {string} theadId - ID of the <thead> element.
+ * @param {string} tbodyId - ID of the <tbody> element.
+ * @param {Array<string>} cols - Column keys, in order.
+ * @param {Array<object>} items - Row objects.
+ * @param {boolean} [alignFirst=false] - Align first column page-wide
+ * (adds the "kv" class); use for stacked tables sharing a column.
+ */
+function renderRows(theadId, tbodyId, cols, items, alignFirst = false) {
+    const thead = document.getElementById(theadId);
+    const tbody = document.getElementById(tbodyId);
+    const table = thead.closest('table');
+    if (table && (alignFirst || cols.length === 2)) table.classList.add('kv');
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
+    const headerRow = document.createElement('tr');
+    cols.forEach(c => {
+        const th = document.createElement('th');
+        th.textContent = c;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    items.forEach(item => {
+        const tr = document.createElement('tr');
+        cols.forEach(c => {
+            const td = document.createElement('td');
+            const v = item[c];
+            td.textContent = (v === undefined || v === null) ? '' : String(v);
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
 }
