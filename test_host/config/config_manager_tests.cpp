@@ -112,3 +112,65 @@ TEST_CASE("AppConfigLoader load overlays stored keys on defaults",
   REQUIRE(loaded.pwm.value == 210);
   REQUIRE(loaded.bus.window_us == 4400);
 }
+
+TEST_CASE("AppConfigLoader preserves provisioning defaults and open station credentials",
+          "[config_nvs]") {
+  configManager.resetConfig();
+  AppConfigLoader loader(configManager);
+  AppConfig loaded;
+  REQUIRE(loader.load(loaded));
+  REQUIRE(loaded.network.wifi_ssid.empty());
+  REQUIRE(loaded.network.wifi_password.empty());
+  REQUIRE(loaded.network.wifi_full_scan);
+  REQUIRE(loaded.isValid());
+
+  REQUIRE(ConfigManager::writeString("wifiSsid", "open-test-network"));
+  REQUIRE(ConfigManager::writeString("wifiPassword", ""));
+  REQUIRE(ConfigManager::writeString("wifiPowerSave", "true"));
+  REQUIRE(loader.load(loaded));
+  REQUIRE(std::string(loaded.network.wifi_ssid.c_str()) == "open-test-network");
+  REQUIRE(loaded.network.wifi_password.empty());
+  REQUIRE(loaded.network.wifi_full_scan);
+}
+
+TEST_CASE("AppConfigLoader roundtrips Wi-Fi policy and full-length recovery credentials",
+          "[config_nvs]") {
+  configManager.resetConfig();
+  AppConfigLoader loader(configManager);
+  AppConfig written;
+  written.reset();
+  written.network.wifi_ssid = "test-network";
+  written.network.wifi_password = "synthetic-station-password";
+  written.network.wifi_bssid = "02:00:00:00:00:01";
+  written.network.ap_password.assign(std::string(63, 'p'));
+  written.network.wifi_full_scan = false;
+  written.network.static_ip_enabled = true;
+  written.network.ip_address = "192.0.2.7";
+  written.network.gateway = "192.0.2.1";
+  written.network.netmask = "255.255.255.0";
+  written.network.dns1 = "192.0.2.2";
+  written.network.dns2 = "192.0.2.3";
+  REQUIRE(loader.save(written));
+  REQUIRE_FALSE(ConfigManager::readBool("wifiFullScan", true));
+
+  AppConfig loaded;
+  REQUIRE(loader.load(loaded));
+  std::vector<std::string> drift;
+  // Restrict the comparison to network fields: unrelated upstream defaults
+  // are outside this test's scope.
+  AppConfig expected = loaded;
+  expected.network = written.network;
+  AppConfig::collectDrift(expected, loaded, drift);
+  REQUIRE(drift.empty());
+  REQUIRE(loaded.network.recoveryApPassword() == std::string(63, 'p'));
+  REQUIRE_FALSE(loaded.network.wifi_full_scan);
+
+  const AppConfig boot = loaded;
+  loaded.network.wifi_full_scan = true;
+  REQUIRE(loader.save(loaded));
+  REQUIRE(loader.load(loaded));
+  REQUIRE(loaded.network.wifi_full_scan);
+  REQUIRE_FALSE(boot.network.wifi_full_scan);
+  AppConfig::collectDrift(boot, loaded, drift);
+  REQUIRE(drift == std::vector<std::string>{"wifiFullScan"});
+}

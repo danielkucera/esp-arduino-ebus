@@ -91,7 +91,7 @@ bool App::initConfig() {
 }
 
 void App::initNetwork() {
-  WifiNetworkManager::begin(&config_manager_);
+  WifiNetworkManager::begin(config_);
   startCaptiveDns();
 }
 

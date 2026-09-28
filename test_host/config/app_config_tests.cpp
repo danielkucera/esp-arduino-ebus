@@ -19,7 +19,10 @@ TEST_CASE("AppConfig reset provides migration-safe defaults", "[app_config]") {
   REQUIRE(std::string(cfg.sntp.timezone.c_str()) == "UTC0");
   REQUIRE(std::string(cfg.mqtt_ha.thing_name.c_str()) == "esp-eBus");
 
-  // reset() ships test WiFi credentials, so the default snapshot validates
+  // A fresh adapter has no station credentials and can use its recovery AP.
+  REQUIRE(cfg.network.wifi_ssid.empty());
+  REQUIRE(cfg.network.wifi_password.empty());
+  REQUIRE(cfg.network.wifi_full_scan);
   REQUIRE(cfg.isValid() == true);
 }
 
@@ -55,7 +58,7 @@ TEST_CASE("AppConfig isValid rejects out-of-range values", "[app_config]") {
 
   bad = cfg;
   bad.network.wifi_ssid.assign("");
-  REQUIRE(bad.isValid() == false);
+  REQUIRE(bad.isValid() == true); // Empty SSID enables provisioning AP mode.
 }
 
 TEST_CASE("AppConfig mergeFlatJson applies NVS-keyed string values",
@@ -130,4 +133,43 @@ TEST_CASE("AppConfig::collectDrift reports staged keys only", "[app_config]") {
   REQUIRE(keys.size() == 2);
   REQUIRE(keys[0] == "ebusAddress");
   REQUIRE(keys[1] == "mqttEnabled");
+}
+
+TEST_CASE("AppConfig owns full scan parsing and restart drift", "[app_config]") {
+  AppConfig live;
+  live.reset();
+  REQUIRE(AppConfig::isKnownFlatKey("wifiFullScan"));
+  REQUIRE_FALSE(AppConfig::isKnownFlatKey("wifiPowerSave"));
+  REQUIRE(live.network.wifi_full_scan);
+
+  AppConfig staged = live;
+  std::vector<std::pair<std::string, std::string>> unknowns;
+  REQUIRE(staged.mergeFlatJson(R"({"wifiFullScan":"false"})", &unknowns));
+  REQUIRE(unknowns.empty());
+  REQUIRE_FALSE(staged.network.wifi_full_scan);
+  REQUIRE(live.network.wifi_full_scan);
+  std::vector<std::string> keys;
+  AppConfig::collectDrift(live, staged, keys);
+  REQUIRE(keys == std::vector<std::string>{"wifiFullScan"});
+
+  for (const auto* value : {"selected", "true", "1", "on"}) {
+    REQUIRE(staged.mergeFlatJson(std::string(R"({"wifiFullScan":")") +
+                                value + R"("})"));
+    REQUIRE(staged.network.wifi_full_scan);
+  }
+  REQUIRE_FALSE(staged.mergeFlatJson(R"({"wifiFullScan":true})"));
+}
+
+TEST_CASE("AppConfig evaluates recovery AP password bounds", "[app_config]") {
+  AppConfig config;
+  config.reset();
+  for (const auto length : {0u, 7u, 64u, 80u}) {
+    config.network.ap_password.assign(std::string(length, 'x'));
+    REQUIRE(config.network.recoveryApPassword() == "ebusebus");
+  }
+  for (const auto length : {8u, 32u, 63u}) {
+    const std::string password(length, 'x');
+    config.network.ap_password.assign(password);
+    REQUIRE(config.network.recoveryApPassword() == password);
+  }
 }

@@ -21,11 +21,10 @@
 #include <string>
 
 #include "app/app_limits.hpp"
-#include "config/config_manager.hpp"
 #include "network/detail/wifi.hpp"
 #include "system/logger.hpp"
 
-ConfigManager* WifiNetworkManager::configManager_ = nullptr;
+AppConfig::Network WifiNetworkManager::networkConfig_{};
 esp_ip4_addr_t WifiNetworkManager::ipAddress_{};
 esp_ip4_addr_t WifiNetworkManager::gateway_{};
 esp_ip4_addr_t WifiNetworkManager::netmask_{};
@@ -33,7 +32,6 @@ esp_ip4_addr_t WifiNetworkManager::dns1_{};
 esp_ip4_addr_t WifiNetworkManager::dns2_{};
 uint32_t WifiNetworkManager::lastConnect_ = 0;
 int WifiNetworkManager::reconnectCount_ = 0;
-int WifiNetworkManager::consecutiveFailures_ = 0;
 bool WifiNetworkManager::staConnected_ = false;
 bool WifiNetworkManager::staConfigured_ = false;
 TaskHandle_t WifiNetworkManager::statusLedTaskHandle_ = nullptr;
@@ -74,28 +72,19 @@ void scheduleReconnect(uint64_t delayUs) {
 
 }  // namespace
 
-bool WifiNetworkManager::begin(ConfigManager* configManager) {
+bool WifiNetworkManager::begin(const AppConfig& config) {
   static constexpr const char* default_hostname = "esp-eBus";
   static constexpr const char* default_ap_ssid = "esp-eBus";
-  static constexpr const char* default_ap_password = "ebusebus";
   static bool started = false;
   if (started) return getMode() != WIFI_MODE_NULL;
   started = true;
 
-  configManager_ = configManager;
+  networkConfig_ = config.network;
   initStatusLed();
   setStatusLedMode(StatusLedMode::SlowBlink);
 
-  std::string apPassword = configManager_ != nullptr
-                               ? std::string(configManager_->readString("apModePassword", default_ap_password))
-                               : std::string(default_ap_password);
-  if (apPassword.size() < 8 || apPassword.size() > 63) {
-    apPassword = default_ap_password;
-  }
-  const std::string configuredThingName =
-      configManager_ != nullptr ? std::string(configManager_->readString(
-                                      "thingName", default_hostname))
-                                : std::string(default_hostname);
+  const std::string apPassword(networkConfig_.recoveryApPassword());
+  const std::string configuredThingName(config.mqtt_ha.thing_name.c_str());
   const std::string hostname = network::detail::wifi::buildHostname(
       configuredThingName, default_hostname);
 
@@ -190,22 +179,10 @@ bool WifiNetworkManager::begin(ConfigManager* configManager) {
     logger.info(buf);
   }
 
-  std::string staSsid =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiSsid", ""))
-          : std::string();
-  std::string staPass =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiPassword", ""))
-          : std::string();
-  std::string staBssid =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiBssid", ""))
-          : std::string("");
-  const bool wifi_full_scan =
-      configManager_ != nullptr
-          ? configManager_->readBool("wifiFullScan", true)
-          : true;
+  const std::string staSsid(networkConfig_.wifi_ssid.c_str());
+  const std::string staPass(networkConfig_.wifi_password.c_str());
+  const std::string staBssid(networkConfig_.wifi_bssid.c_str());
+  const bool wifi_full_scan = networkConfig_.wifi_full_scan;
   staConfigured_ = !staSsid.empty();
 
   if (!staConfigured_) {
@@ -325,8 +302,7 @@ void WifiNetworkManager::setStaIpAssignedCallback(
 }
 
 bool WifiNetworkManager::isStaticIpEnabled() {
-  return configManager_ != nullptr &&
-         configManager_->readBool("staticIPEnabled");
+  return networkConfig_.static_ip_enabled;
 }
 
 wifi_mode_t WifiNetworkManager::getMode() {
@@ -336,33 +312,23 @@ wifi_mode_t WifiNetworkManager::getMode() {
 }
 
 std::string WifiNetworkManager::getConfiguredIpAddress() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("ipAddress"))
-             : "";
+  return std::string(networkConfig_.ip_address.c_str());
 }
 
 std::string WifiNetworkManager::getConfiguredGateway() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("gateway"))
-             : "";
+  return std::string(networkConfig_.gateway.c_str());
 }
 
 std::string WifiNetworkManager::getConfiguredNetmask() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("netmask"))
-             : "";
+  return std::string(networkConfig_.netmask.c_str());
 }
 
 std::string WifiNetworkManager::getConfiguredDns1() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("dns1"))
-             : "";
+  return std::string(networkConfig_.dns1.c_str());
 }
 
 std::string WifiNetworkManager::getConfiguredDns2() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("dns2"))
-             : "";
+  return std::string(networkConfig_.dns2.c_str());
 }
 
 bool WifiNetworkManager::getStaIpInfo(esp_netif_ip_info_t* outInfo) {
@@ -645,33 +611,6 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
   } else {  // Use snprintf for warning message
     logger.warn("Invalid static IP/netmask config, falling back to DHCP");
   }
-}
-
-// Console-only diagnostics (see header): full WiFi slice with password.
-// Worst case ~261 chars (bounded by FixedString sizes), fits max_msg_length.
-void WifiNetworkManager::logWifiSlice() {
-  const std::string ssid =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiSsid", ""))
-          : std::string("");
-  const std::string pass =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiPassword", ""))
-          : std::string("");
-  const std::string bssid =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiBssid", ""))
-          : std::string("");
-  char buf[320];
-  const int n = snprintf(
-      buf, sizeof(buf),
-      "wifi: ssid='%s' pass='%s' bssid='%s' static=%s ip=%s gw=%s mask=%s "
-      "dns1=%s dns2=%s",
-      ssid.c_str(), pass.c_str(), bssid.c_str(),
-      isStaticIpEnabled() ? "true" : "false", getConfiguredIpAddress().c_str(),
-      getConfiguredGateway().c_str(), getConfiguredNetmask().c_str(),
-      getConfiguredDns1().c_str(), getConfiguredDns2().c_str());
-  if (n > 0) logger.warn(buf);
 }
 
 void appendWifiStatus(ebus::detail::JsonWriter& writer) {

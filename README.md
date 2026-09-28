@@ -100,6 +100,13 @@ handled in their own event families, preventing overlapping numeric IDs from
 being interpreted as the wrong event. This does not change station credentials
 or automatically tune PWM.
 
+Wi-Fi consumes a boot-time copy of the loaded `AppConfig`; it does not read
+NVS directly. `AppConfigLoader` loads and saves `wifiFullScan` alongside the
+other network fields through `ConfigManager`. Saved changes are staged until
+restart and included in configuration drift reporting. A missing or empty SSID
+keeps the adapter in provisioning AP mode. Recovery AP password fallback is
+evaluated by `AppConfig`, preserving valid passphrases up to 63 characters.
+
 Hardware verification must cover successful STA boot, a missing configured AP,
 recovery AP reachability and STA restoration. The combined candidate was tested
 for continuous reachability after OTA and restart; not every failure scenario
@@ -108,6 +115,6 @@ has been exercised on every supported board.
 The Wi-Fi regression tests use Catch2 and run through the existing CTest/GitHub
 Actions host-test workflow. They compile the production Wi-Fi manager for both
 bridge and INTERNAL profiles with isolated ESP-IDF mocks, covering modem-sleep
-policy, shared configuration-buffer lifetimes, event-family separation,
+policy, typed boot configuration, event-family separation,
 bounded reconnects, retry failures and persistent recovery AP state.
 These host tests do not emulate RF conditions, DHCP or actual AP reachability.

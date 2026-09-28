@@ -7,13 +7,14 @@
 #include <string>
 #include <string_view>
 
-class ConfigManager;
+#include "config/app_config.hpp"
 
 class WifiNetworkManager {
  public:
   WifiNetworkManager() = delete;
 
-  static bool begin(ConfigManager* configManager);
+  // Copies the loaded boot configuration; staged NVS edits require a restart.
+  static bool begin(const AppConfig& config);
 
   static uint32_t getLastConnect();
   static int getReconnectCount();
@@ -25,7 +26,7 @@ class WifiNetworkManager {
   static void setStaIpAssignedCallback(
       void (*callback)(const std::string& ipAddress));
   static bool isStaticIpEnabled();
-  
+
   static std::string getConfiguredIpAddress();
   static std::string getConfiguredGateway();
   static std::string getConfiguredNetmask();
@@ -59,15 +60,7 @@ class WifiNetworkManager {
   static void initStatusLed();
   static void setStatusLedMode(StatusLedMode mode);
   static void configureStaticIpIfEnabled();
-  // One-shot diagnostics: after N consecutive STA failures the console is
-  // likely the only channel left (no WiFi = no HTTP), so log the full WiFi
-  // slice including the password (physical access implies full control
-  // anyway). Counter resets on every successful connect.
-  static void logWifiSlice();
-  static int consecutiveFailures_;
-  static constexpr int maxConsecutiveFailures = 5;
-
-  static ConfigManager* configManager_;
+  static AppConfig::Network networkConfig_;
   static esp_ip4_addr_t ipAddress_;
   static esp_ip4_addr_t gateway_;
   static esp_ip4_addr_t netmask_;

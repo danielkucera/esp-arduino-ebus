@@ -2,7 +2,7 @@
 #include <array>
 #include <string>
 
-#include "config/config_manager.hpp"
+#include "config/app_config.hpp"
 #include "network/wifi_network_manager.hpp"
 #include "system/logger.hpp"
 #include "wifi_sdk.hpp"
@@ -10,6 +10,21 @@
 Logger logger;
 
 namespace {
+AppConfig makeConfig() {
+  AppConfig config;
+  config.reset();
+  config.network.wifi_ssid = "test-network";
+  config.network.wifi_password = "synthetic-station-password";
+  config.network.wifi_bssid = "02:00:00:00:00:01";
+  config.network.ap_password = "synthetic-recovery-password";
+  config.network.static_ip_enabled = true;
+  config.network.ip_address = "192.0.2.7";
+  config.network.netmask = "255.255.255.0";
+  config.network.gateway = "192.0.2.1";
+  config.network.dns1 = "192.0.2.2";
+  config.network.dns2 = "192.0.2.3";
+  return config;
+}
 void gotIp() {
   ip_event_got_ip_t event{};
   event.ip_info.ip.addr = ESP_IP4TOADDR(192, 0, 2, 7);
@@ -22,13 +37,8 @@ void disconnect() {
 }
 struct ConnectedWifi {
   ConnectedWifi() {
-    static ConfigManager config;
-    config.values = {{"wifiSsid", "test-network"},
-                     {"wifiPassword", "synthetic-station-password"},
-                     {"wifiBssid", "02:00:00:00:00:01"},
-                     {"apModePassword", "synthetic-recovery-password"},
-                     {"wifiPowerSave", "true"}};
-    REQUIRE(WifiNetworkManager::begin(&config));
+    const AppConfig config = makeConfig();
+    REQUIRE(WifiNetworkManager::begin(config));
     wifi_mock::mode_result = ESP_OK;
     wifi_mock::connect_result = ESP_OK;
     wifi_mock::get_ps_result = ESP_OK;
@@ -42,15 +52,10 @@ struct ConnectedWifi {
 };
 }
 
-TEST_CASE("Wifi startup disables modem sleep and preserves distinct config strings", "[wifi][manager]") {
+TEST_CASE("Wifi startup disables modem sleep and applies the typed boot snapshot", "[wifi][manager]") {
   // Inspect the initial startup policy before the fixture resets event state.
-  static ConfigManager config;
-  config.values = {{"wifiSsid", "test-network"},
-                   {"wifiPassword", "synthetic-station-password"},
-                   {"wifiBssid", "02:00:00:00:00:01"},
-                   {"apModePassword", "synthetic-recovery-password"},
-                   {"wifiPowerSave", "true"}};
-  REQUIRE(WifiNetworkManager::begin(&config));
+  const AppConfig config = makeConfig();
+  REQUIRE(WifiNetworkManager::begin(config));
   REQUIRE(wifi_mock::ps_calls == 1);
   REQUIRE(wifi_mock::power_save == WIFI_PS_NONE);
   REQUIRE(wifi_mock::initial_connect_power_save == WIFI_PS_NONE);
@@ -141,4 +146,24 @@ TEST_CASE_METHOD(ConnectedWifi, "Wifi status exposes driver policy and reports u
   wifi_mock::get_config_result = ESP_FAIL;
   REQUIRE(std::string(WifiNetworkManager::powerSaveMode()) == "unavailable");
   REQUIRE(std::string(WifiNetworkManager::scanMethod()) == "unavailable");
+}
+
+TEST_CASE_METHOD(ConnectedWifi, "Wifi status keeps its boot snapshot until restart", "[wifi][manager]") {
+  auto staged = makeConfig();
+  staged.network.static_ip_enabled = false;
+  staged.network.ip_address = "192.0.2.99";
+  staged.network.gateway = "192.0.2.98";
+  staged.network.netmask = "255.255.0.0";
+  staged.network.dns1 = "192.0.2.97";
+  staged.network.dns2 = "192.0.2.96";
+  staged.network.wifi_full_scan = false;
+  // Calling begin again must not silently replace the applied configuration.
+  REQUIRE(WifiNetworkManager::begin(staged));
+  REQUIRE(WifiNetworkManager::isStaticIpEnabled());
+  REQUIRE(WifiNetworkManager::getConfiguredIpAddress() == "192.0.2.7");
+  REQUIRE(WifiNetworkManager::getConfiguredGateway() == "192.0.2.1");
+  REQUIRE(WifiNetworkManager::getConfiguredNetmask() == "255.255.255.0");
+  REQUIRE(WifiNetworkManager::getConfiguredDns1() == "192.0.2.2");
+  REQUIRE(WifiNetworkManager::getConfiguredDns2() == "192.0.2.3");
+  REQUIRE(std::string(WifiNetworkManager::scanMethod()) == "all_channels");
 }

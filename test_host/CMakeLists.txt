@@ -182,10 +182,11 @@ target_link_libraries(network_tests PRIVATE
 )
 
 # Exercise the production Wi-Fi manager in both firmware profiles, replacing
-# only the ESP-IDF/configuration boundary. Keep mocks isolated from API tests.
+# only the ESP-IDF boundary. Keep mocks isolated from API tests.
 foreach(profile bridge internal)
     add_executable(wifi_manager_${profile}_tests
         ${PROJECT_ROOT}/src/network/wifi_network_manager.cpp
+        ${PROJECT_ROOT}/src/config/app_config.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/network/wifi_manager_tests.cpp
     )
     target_include_directories(wifi_manager_${profile}_tests PRIVATE
