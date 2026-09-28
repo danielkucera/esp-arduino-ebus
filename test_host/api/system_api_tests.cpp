@@ -4,6 +4,7 @@
 #include <string>
 
 #include "api/system_api.hpp"
+#include "ebus_test_helpers.hpp"
 #include "system_api_stub_state.hpp"
 #undef private
 
@@ -31,6 +32,8 @@ TEST_CASE("SystemApi system endpoint serializes firmware and chip details",
 
 TEST_CASE("SystemApi tasks endpoint serializes thread and cpu arrays",
           "[system_api]") {
+  REQUIRE(configureHostEbusController());
+
   SystemApi api;
   httpd_req_t req{};
 
@@ -39,7 +42,16 @@ TEST_CASE("SystemApi tasks endpoint serializes thread and cpu arrays",
   std::string body;
   for (const auto& chunk : req.chunks) body += chunk;
   REQUIRE(ebus::detail::JsonReader::validate(body));
-  REQUIRE(body == R"({"threads":[],"cpu":[]})");
+  REQUIRE(body.find(R"("name":"ebus_bus","stack_size":-1,"stack_free":-1)") !=
+          std::string::npos);
+  REQUIRE(
+      body.find(R"("name":"ebus_client","stack_size":-1,"stack_free":-1)") !=
+      std::string::npos);
+  REQUIRE(
+      body.find(R"("name":"ebus_reactor","stack_size":-1,"stack_free":-1)") !=
+      std::string::npos);
+  REQUIRE(body.find(R"("name":"ebus_bus_syn")") == std::string::npos);
+  REQUIRE(body.find(R"("cpu":[]})") != std::string::npos);
   REQUIRE(req.chunks.back().empty());
 }
 

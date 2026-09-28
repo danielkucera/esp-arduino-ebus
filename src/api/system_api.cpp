@@ -19,6 +19,7 @@
 
 #include "app/app_limits.hpp"
 #include "app/cron.hpp"
+#include "app/ebus_accessor.hpp"
 #include "app/mqtt.hpp"
 #include "network/captive_dns.hpp"
 #include "network/http.hpp"
@@ -155,6 +156,15 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
                 app::limits::Task::status_led_stack);
       addThread("system_monitor", DeviceStatus::monitor().task_handle(),
                 app::limits::Task::system_monitor_stack);
+      getEbusController().fetchStatus(
+          [&](const ebus::SystemResources& resources) {
+            for (const auto& thread : resources.threads) {
+              auto item = writer.objectScope();
+              writer.writeField("name", thread.name.c_str());
+              writer.writeField("stack_size", thread.stack_size);
+              writer.writeField("stack_free", thread.stack_free);
+            }
+          });
     }
     {
       // Per-task CPU share as % of the interval since the last poll
