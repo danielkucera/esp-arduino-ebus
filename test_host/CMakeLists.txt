@@ -135,14 +135,29 @@ target_link_libraries(app_tests PRIVATE
 
 add_executable(http_utils_tests
     ${PROJECT_ROOT}/src/network/http_utils.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/http_utils/http_utils_tests.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/http_utils/logger_stub.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/network/http_utils_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/http_utils/logger_stub.cpp
 )
 target_include_directories(http_utils_tests BEFORE PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/http_utils/mocks
-    ${CMAKE_CURRENT_SOURCE_DIR}/http_utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/http_utils
 )
 target_link_libraries(http_utils_tests PRIVATE
+    ebus
+    Catch2::Catch2WithMain
+)
+
+add_executable(logger_tests
+    ${PROJECT_ROOT}/src/system/logger.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/system/logger_tests.cpp
+)
+target_include_directories(logger_tests BEFORE PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/logger
+)
+target_include_directories(logger_tests BEFORE PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks/logger/freertos
+)
+target_compile_definitions(logger_tests PRIVATE LOGGER_MAX_ENTRIES=4)
+target_link_libraries(logger_tests PRIVATE
     ebus
     Catch2::Catch2WithMain
 )
@@ -157,4 +172,5 @@ if(NOT DISABLE_CATCH_DISCOVERY)
   include(${catch2_SOURCE_DIR}/extras/Catch.cmake)
   catch_discover_tests(app_tests)
   catch_discover_tests(http_utils_tests)
+  catch_discover_tests(logger_tests)
 endif()

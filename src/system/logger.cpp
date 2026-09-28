@@ -157,8 +157,9 @@ void Logger::log(LogLevel level, std::string_view message, bool is_json,
     std::memcpy(item.msg, message.data(), len);
     item.msg[len] = '\0';
     if (xQueueSend(print_queue_, &item, 0) == pdPASS) {
-      ebus::updateMaxAtomic(max_queue_size_,
-                            uxQueueMessagesWaiting(print_queue_));
+      ebus::updateMaxAtomic(
+          max_queue_size_,
+          static_cast<size_t>(uxQueueMessagesWaiting(print_queue_)));
     } else {
       print_drops_.fetch_add(1, std::memory_order_relaxed);
     }
