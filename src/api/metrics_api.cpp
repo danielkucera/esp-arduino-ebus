@@ -2,9 +2,9 @@
 
 #if defined(EBUS_INTERNAL)
 
-#include "ebus_accessor.hpp"
-#include "http.hpp"
-#include "http_utils.hpp"
+#include "app/ebus_accessor.hpp"
+#include "network/http.hpp"
+#include "network/http_utils.hpp"
 
 namespace {
 
@@ -13,9 +13,7 @@ extern const char metrics_html_start[] asm("_binary_metrics_html_start");
 
 }  // namespace
 
-MetricsApi* MetricsApi::instance_ = nullptr;
-
-MetricsApi::MetricsApi() { instance_ = this; }
+MetricsApi::MetricsApi() {}
 
 bool MetricsApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
@@ -23,6 +21,7 @@ bool MetricsApi::registerHandlers(httpd_handle_t server) {
   RegisterUri("/metrics", HTTP_GET, handleMetricsPage);
   RegisterUri("/api/v1/metrics", HTTP_GET, handleMetrics);
   RegisterUri("/api/v1/metrics/reset", HTTP_POST, handleMetricsReset);
+  RegisterUri("/api/v1/metrics/breaker/reset", HTTP_POST, handleBreakerReset);
 
   return true;
 }
@@ -45,6 +44,15 @@ esp_err_t MetricsApi::handleMetrics(httpd_req_t* req) {
 esp_err_t MetricsApi::handleMetricsReset(httpd_req_t* req) {
   getEbusController().resetMetrics();
   HttpUtils::sendSuccessResponse(req, "reset");
+  return ESP_OK;
+}
+
+// Ops/diagnostics: close the TX breaker now so the next scheduled poll
+// becomes an immediate single probe. Lets a capture (ebusread + console)
+// bracket exactly one attempt instead of waiting out the cooldown.
+esp_err_t MetricsApi::handleBreakerReset(httpd_req_t* req) {
+  getEbusController().resetBreaker();
+  HttpUtils::sendSuccessResponse(req, "breaker_reset");
   return ESP_OK;
 }
 

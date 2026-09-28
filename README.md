@@ -85,9 +85,11 @@ This mode enables **standalone operation** without requiring external software s
 
 ## Wi-Fi policy and recovery
 
-The configuration page exposes `wifiPowerSave` and `wifiFullScan` (both default
-true). Power saving may increase bridge latency; disable it when testing a
-latency-sensitive installation. Full scan considers all channels and sorts by
+Wi-Fi modem sleep is disabled (`WIFI_PS_NONE`) in both bridge and INTERNAL
+profiles, following upstream's reliability policy. There is no power-saving
+setting; any previously stored `wifiPowerSave` value is ignored.
+The configuration page exposes `wifiFullScan` (default true).
+Full scan considers all channels and sorts by
 signal strength; a configured BSSID still pins selection. The status API reports
 the effective power-save and scan policies.
 
@@ -102,3 +104,10 @@ Hardware verification must cover successful STA boot, a missing configured AP,
 recovery AP reachability and STA restoration. The combined candidate was tested
 for continuous reachability after OTA and restart; not every failure scenario
 has been exercised on every supported board.
+
+The Wi-Fi regression tests use Catch2 and run through the existing CTest/GitHub
+Actions host-test workflow. They compile the production Wi-Fi manager for both
+bridge and INTERNAL profiles with isolated ESP-IDF mocks, covering modem-sleep
+policy, shared configuration-buffer lifetimes, event-family separation,
+bounded reconnects, retry failures and persistent recovery AP state.
+These host tests do not emulate RF conditions, DHCP or actual AP reachability.

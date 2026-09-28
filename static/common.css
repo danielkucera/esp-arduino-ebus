@@ -126,6 +126,25 @@ table {
     overflow: hidden;
 }
 
+/* Key/value tables only (class "kv"): fixed layout with a shared
+ * first-column width so stacked 2-column tables align their second
+ * column on the same vertical line, page-wide. Multi-column tables
+ * (values, devices, logs) keep auto layout so data fits without wrap.
+ */
+table.kv {
+    table-layout: fixed;
+}
+
+table.kv th:first-child,
+table.kv td:first-child {
+    width: 35%;
+    overflow-wrap: anywhere;
+}
+
+table.kv td {
+    overflow-wrap: anywhere;
+}
+
 th,
 td {
     border: 1px solid #ddd;

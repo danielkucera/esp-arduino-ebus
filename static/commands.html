@@ -65,7 +65,7 @@
     }
 
     function fetchCommands() {
-      fetchJson('/api/v1/commands', js => {
+      fetchJson('/api/v1/app/commands', js => {
         document.getElementById('commandsArea').value = JSON.stringify(js, null, 2);
         renderTable(js || []);
         setStatus('Fetched');
@@ -138,22 +138,25 @@
     }
 
     async function handleInsert() {
+      // Streams through /upload (no body-size cap) + /load: the /insert
+      // endpoint parses in memory (8K cap) and cannot take real sets.
       try {
         const txt = document.getElementById('commandsArea').value;
-        const obj = JSON.parse(txt);
+        JSON.parse(txt);
         setStatus('Uploading...');
-        const res = await fetch('/api/v1/commands/insert', {
+        const up = await fetch('/api/v1/app/commands/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(obj)
+          body: txt
         });
-        const data = await res.json();
-        if (data.status === 'successful') {
-          setStatus('Uploaded');
-          fetchCommands();
-        } else {
-          setStatus('Upload failed: ' + (data.error || data.status));
+        if (!up.ok) {
+          setStatus('Upload failed: ' + (await up.text()));
+          return;
         }
+        setStatus('Loading...');
+        await postSimple('/api/v1/app/commands/load');
+        setStatus('Applied');
+        fetchCommands();
       } catch (err) {
         setStatus('Invalid JSON or upload failed');
       }
@@ -164,7 +167,7 @@
         const txt = document.getElementById('commandsArea').value;
         const obj = JSON.parse(txt);
         setStatus('Evaluating...');
-        const res = await fetch('/api/v1/commands/evaluate', {
+        const res = await fetch('/api/v1/app/commands/evaluate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
@@ -185,7 +188,7 @@
         .map(checkbox => checkbox.closest('tr').dataset.key);
 
       if (selectedKeys.length > 0) {
-        fetch('/api/v1/commands/remove', {
+        fetch('/api/v1/app/commands/remove', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ keys: selectedKeys })
@@ -204,7 +207,7 @@
     }
 
     function handleRemoveAll() {
-      fetch('/api/v1/commands/remove', {
+      fetch('/api/v1/app/commands/remove', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       }).then(res => {
@@ -231,11 +234,11 @@
       downloadTextFile(text, 'commands.json', 'application/json');
     });
     document.getElementById('btnLoad').addEventListener('click', async () => {
-      await postSimple('/api/v1/commands/load');
+      await postSimple('/api/v1/app/commands/load');
       clearTextarea('commandsArea', 'size');
       fetchCommands();
     });
-    document.getElementById('btnSave').addEventListener('click', () => postSimple('/api/v1/commands/save'));
+    document.getElementById('btnSave').addEventListener('click', () => postSimple('/api/v1/app/commands/save'));
     document.getElementById('btnUploadFile').addEventListener('click', () => document.getElementById('fileUploadDirect').click());
     document.getElementById('fileUploadDirect').addEventListener('change', ev => {
       const f = ev.target.files[0];
@@ -243,7 +246,7 @@
       const reader = new FileReader();
       reader.onload = (e) => {
         setStatus('Uploading file...');
-        fetch('/api/v1/commands/upload', {
+        fetch('/api/v1/app/commands/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: e.target.result
@@ -255,7 +258,7 @@
       reader.readAsText(f);
     });
     document.getElementById('btnWipe').addEventListener('click', () => {
-      if (confirm('Clear all commands from NVS?')) postSimple('/api/v1/commands/wipe');
+      if (confirm('Clear all commands from NVS?')) postSimple('/api/v1/app/commands/wipe');
     });
 
     document.getElementById('commandsArea').addEventListener('input', updateSize);

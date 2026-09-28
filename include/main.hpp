@@ -4,7 +4,11 @@
 #include <ebus/types.hpp>
 #include <string>
 
-#include "uart_port.hpp"
+#include "hardware/uart_port.hpp"
+
+// Early platform helpers (moved out of main.cpp)
+#include "hardware/board_control.hpp"
+#include "system/device_identity.hpp"
 
 #define MAX_WIFI_CLIENTS 4
 
@@ -22,7 +26,3 @@ class JsonWriter;  // Forward declaration
 inline int DEBUG_LOG(const char* format, ...) { return 0; }
 int DEBUG_LOG_IMPL(const char* format, ...);
 // #define DEBUG_LOG DEBUG_LOG_IMPL
-
-void restart();
-void fetchStatus(const ebus::JsonChunkVisitor& visitor);
-void fetchAppStatus(const ebus::JsonChunkVisitor& visitor);

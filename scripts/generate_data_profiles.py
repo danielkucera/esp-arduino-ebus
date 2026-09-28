@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Pre-build script for PlatformIO.
-Reads data_profiles.json + data_profiles_user.json and generates include/data_profile_gen.hpp
+Reads data_profiles.json + data_profiles_user.json and generates include/app/data_profile_gen.hpp
 with a static C++ array (base profiles merged with user overlay).
 """
 
@@ -17,7 +17,7 @@ except NameError:
 
 BASE_JSON = os.path.join(PROJECT_ROOT, "profiles", "data_profiles.json")
 OVERLAY_JSON = os.path.join(PROJECT_ROOT, "profiles", "data_profiles_user.json")
-OUTPUT_FILE = os.path.join(PROJECT_ROOT, "include", "data_profile_gen.hpp")
+OUTPUT_FILE = os.path.join(PROJECT_ROOT, "include", "app", "data_profile_gen.hpp")
 
 
 def load_profiles(path):
@@ -50,7 +50,7 @@ def generate():
         "",
         "#if defined(EBUS_INTERNAL)",
         "",
-        '#include "data_profile.hpp"',
+        '#include "app/data_profile.hpp"',
         "",
         "namespace {",
         "// clang-format off",
