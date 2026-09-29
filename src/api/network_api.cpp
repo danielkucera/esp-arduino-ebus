@@ -24,8 +24,8 @@ NetworkApi::NetworkApi() {}
 bool NetworkApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/api/v1/network", HTTP_GET, handleNetwork);
-  RegisterUri("/api/v1/network/wifi/scan", HTTP_POST, handleWifiScan);
+  registerUri("/api/v1/network", HTTP_GET, handleNetwork);
+  registerUri("/api/v1/network/wifi/scan", HTTP_POST, handleWifiScan);
 
   return true;
 }
@@ -71,28 +71,28 @@ esp_err_t NetworkApi::handleNetwork(httpd_req_t* req) {
 }
 
 esp_err_t NetworkApi::handleWifiScan(httpd_req_t* req) {
-  wifi_scan_config_t scanConfig = {};
-  scanConfig.show_hidden = true;
-  scanConfig.scan_type = WIFI_SCAN_TYPE_ACTIVE;
-  scanConfig.scan_time.active.min = 0;
-  scanConfig.scan_time.active.max = 0;
-  scanConfig.scan_time.passive = 100;
+  wifi_scan_config_t scan_config = {};
+  scan_config.show_hidden = true;
+  scan_config.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+  scan_config.scan_time.active.min = 0;
+  scan_config.scan_time.active.max = 0;
+  scan_config.scan_time.passive = 100;
 
-  esp_err_t err = esp_wifi_scan_start(&scanConfig, true);
+  esp_err_t err = esp_wifi_scan_start(&scan_config, true);
   if (err != ESP_OK) {
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "wifi_scan",
                                  "WiFi scan failed");
     return ESP_OK;
   }
 
-  uint16_t apCount = 0;
-  esp_wifi_scan_get_ap_num(&apCount);
+  uint16_t ap_count = 0;
+  esp_wifi_scan_get_ap_num(&ap_count);
 
   static constexpr size_t max_scan_aps = 64;
-  size_t scan_count = std::min(static_cast<uint16_t>(max_scan_aps), apCount);
+  size_t scan_count = std::min(static_cast<uint16_t>(max_scan_aps), ap_count);
   static std::array<wifi_ap_record_t, max_scan_aps> aps{};
-  apCount = static_cast<uint16_t>(scan_count);
-  esp_wifi_scan_get_ap_records(&apCount, aps.data());
+  ap_count = static_cast<uint16_t>(scan_count);
+  esp_wifi_scan_get_ap_records(&ap_count, aps.data());
 
   httpd_resp_set_type(req, "application/json;charset=utf-8");
   HttpUtils::applyCustomHeaders(req);
@@ -110,44 +110,44 @@ esp_err_t NetworkApi::handleWifiScan(httpd_req_t* req) {
       memcpy(ssid_buf, ap.ssid, ssid_len);
       ssid_buf[ssid_len] = '\0';
       writer.writeField("ssid", ssid_buf);
-      char bssidStr[18];
-      snprintf(bssidStr, sizeof(bssidStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+      char bssid_str[18];
+      snprintf(bssid_str, sizeof(bssid_str), "%02x:%02x:%02x:%02x:%02x:%02x",
                ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4],
                ap.bssid[5]);
-      writer.writeField("bssid", bssidStr);
+      writer.writeField("bssid", bssid_str);
       writer.writeField("rssi", ap.rssi);
       writer.writeField("channel", ap.primary);
 
-      const char* authMode = "UNKNOWN";
+      const char* auth_mode = "UNKNOWN";
       switch (ap.authmode) {
         case WIFI_AUTH_OPEN:
-          authMode = "OPEN";
+          auth_mode = "OPEN";
           break;
         case WIFI_AUTH_WEP:
-          authMode = "WEP";
+          auth_mode = "WEP";
           break;
         case WIFI_AUTH_WPA_PSK:
-          authMode = "WPA_PSK";
+          auth_mode = "WPA_PSK";
           break;
         case WIFI_AUTH_WPA2_PSK:
-          authMode = "WPA2_PSK";
+          auth_mode = "WPA2_PSK";
           break;
         case WIFI_AUTH_WPA_WPA2_PSK:
-          authMode = "WPA_WPA2_PSK";
+          auth_mode = "WPA_WPA2_PSK";
           break;
         case WIFI_AUTH_WPA2_ENTERPRISE:
-          authMode = "WPA2_ENTERPRISE";
+          auth_mode = "WPA2_ENTERPRISE";
           break;
         case WIFI_AUTH_WPA3_PSK:
-          authMode = "WPA3_PSK";
+          auth_mode = "WPA3_PSK";
           break;
         case WIFI_AUTH_WPA2_WPA3_PSK:
-          authMode = "WPA2_WPA3_PSK";
+          auth_mode = "WPA2_WPA3_PSK";
           break;
         default:
           break;
       }
-      writer.writeField("authMode", authMode);
+      writer.writeField("authMode", auth_mode);
     }
   }
   httpd_resp_send_chunk(req, nullptr, 0);

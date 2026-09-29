@@ -9,10 +9,11 @@ Thank you for your interest in contributing to the esp-arduino-ebus project! To 
 
 ### Naming Conventions
 *   **Classes and Structs**: `PascalCase` (e.g., `ConfigManager`, `WifiNetworkManager`).
-*   **Methods and Functions**: `camelCase` (e.g., `getCommandsJson`, `handleValuesWrite`).
+*   **Methods and Functions**: `camelCase` (e.g., `getCommandsJson`, `handleValuesWrite`). Exceptions: Container-like interface methods (e.g., `size()`, `empty()`, `clear()`) and std-style traits (e.g., `is_*`, `has_*`) use `snake_case` for STL compatibility (mirrors ebus library rule).
 *   **Variables and Parameters**: `snake_case` (e.g., `wifi_ssid`, `poll_id`).
 *   **Constants and `constexpr`**: `snake_case` (e.g., `baud_rate`, `max_data_bytes`). Prefer grouping related constants into classes as `static constexpr` members or specific namespaces.
-*   **Private Members**: `snake_case_` with a trailing underscore (e.g., `task_handle_`, `stop_runner_`).
+*   **Enumerators**: `lowercase` (e.g., `debug`, `info`) — enumerators are constants.
+*   **Private Members**: `snake_case_` with a trailing underscore (e.g., `task_handle_`, `stop_runner_`). Plain data fields of structs (public or nested-private, e.g., `LogEntry::session_id`, `Status::uptime_seconds`) take no underscore — only class state does.
 *   **Macros and Feature Flags**: `SCREAMING_SNAKE_CASE` (e.g., `COMMAND_CAPACITY`, `MAX_WIFI_CLIENTS`). This style is strictly reserved for preprocessor defines.
 *   **Files and Directories**: `snake_case` (e.g., `config_manager.cpp`, `http_utils.hpp`).
 

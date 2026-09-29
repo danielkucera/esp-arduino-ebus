@@ -7,7 +7,7 @@
 
 void decode(int first, int second, uint8_t (&data)[2]);
 void encode(uint8_t command, uint8_t value, uint8_t (&frame)[2]);
-bool read_cmd(int* client_fd, uint8_t (&data)[2]);
+bool readCmd(int* client_fd, uint8_t (&data)[2]);
 
 namespace {
 class SocketPair {
@@ -68,7 +68,7 @@ TEST_CASE("Enhanced bridge command parser accepts raw and encoded commands",
     writeBytes(sockets.peer(), &byte, 1);
 
     uint8_t command[2]{};
-    REQUIRE(read_cmd(&sockets.client(), command));
+    REQUIRE(readCmd(&sockets.client(), command));
     REQUIRE(command[0] == 1);
     REQUIRE(command[1] == byte);
   }
@@ -80,7 +80,7 @@ TEST_CASE("Enhanced bridge command parser accepts raw and encoded commands",
     writeBytes(sockets.peer(), frame, sizeof(frame));
 
     uint8_t command[2]{};
-    REQUIRE(read_cmd(&sockets.client(), command));
+    REQUIRE(readCmd(&sockets.client(), command));
     REQUIRE(command[0] == 0x0B);
     REQUIRE(command[1] == 0xD2);
   }
@@ -95,7 +95,7 @@ TEST_CASE(
     writeBytes(sockets.peer(), frame, sizeof(frame));
 
     uint8_t command[2]{};
-    REQUIRE_FALSE(read_cmd(&sockets.client(), command));
+    REQUIRE_FALSE(readCmd(&sockets.client(), command));
     REQUIRE(sockets.client() == -1);
     REQUIRE(readPeerMessage(sockets.peer()) == "first command signature error");
   }
@@ -106,7 +106,7 @@ TEST_CASE(
     writeBytes(sockets.peer(), frame, sizeof(frame));
 
     uint8_t command[2]{};
-    REQUIRE_FALSE(read_cmd(&sockets.client(), command));
+    REQUIRE_FALSE(readCmd(&sockets.client(), command));
     REQUIRE(sockets.client() == -1);
     REQUIRE(readPeerMessage(sockets.peer()) ==
             "second command signature error");
@@ -118,7 +118,7 @@ TEST_CASE(
     writeBytes(sockets.peer(), &first, 1);
 
     uint8_t command[2]{};
-    REQUIRE_FALSE(read_cmd(&sockets.client(), command));
+    REQUIRE_FALSE(readCmd(&sockets.client(), command));
     REQUIRE(sockets.client() == -1);
     REQUIRE(readPeerMessage(sockets.peer()) == "second command missing");
   }

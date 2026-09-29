@@ -21,8 +21,8 @@
 #include "network/wifi_network_manager.hpp"
 #include "system/logger.hpp"
 
-static httpd_handle_t configServer = nullptr;
-static bool fallbackHandlersRegistered = false;
+static httpd_handle_t config_server = nullptr;
+static bool fallback_handlers_registered = false;
 
 namespace {
 
@@ -81,22 +81,22 @@ esp_err_t handleNotFound(httpd_req_t* req) {
 
 }  // namespace
 
-bool RegisterUri(const char* uri, httpd_method_t method,
+bool registerUri(const char* uri, httpd_method_t method,
                  esp_err_t (*handler)(httpd_req_t*)) {
-  if (configServer == nullptr) {
+  if (config_server == nullptr) {
     logger.error(std::string("HTTP server not started; cannot register ") +
                  uri);
     return false;
   }
-  return HttpUtils::registerRoute(configServer, uri, method, handler);
+  return HttpUtils::registerRoute(config_server, uri, method, handler);
 }
 
 #if defined(EBUS_INTERNAL)
-void SetupHttpHandlers(MqttHA& mqtt_ha) {
+void setupHttpHandlers(MqttHA& mqtt_ha) {
 #else
-void SetupHttpHandlers() {
+void setupHttpHandlers() {
 #endif
-  if (configServer != nullptr) return;
+  if (config_server != nullptr) return;
 
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
   config.server_port = 80;
@@ -108,7 +108,7 @@ void SetupHttpHandlers() {
   config.recv_wait_timeout = 10;
   config.send_wait_timeout = 10;
 
-  if (httpd_start(&configServer, &config) != ESP_OK) {
+  if (httpd_start(&config_server, &config) != ESP_OK) {
     logger.error("Failed to start HTTP server");
     return;
   }
@@ -117,53 +117,53 @@ void SetupHttpHandlers() {
   // loops themselves; keep the component from spamming the log for them.
   esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
 
-  RegisterUri("/common.css", HTTP_GET, handleCommonCss);
-  RegisterUri("/common.js", HTTP_GET, handleCommonJs);
-  RegisterUri("/", HTTP_GET, handleRoot);
-  RegisterUri("/upgrade", HTTP_GET, handleUpgradePage);
+  registerUri("/common.css", HTTP_GET, handleCommonCss);
+  registerUri("/common.js", HTTP_GET, handleCommonJs);
+  registerUri("/", HTTP_GET, handleRoot);
+  registerUri("/upgrade", HTTP_GET, handleUpgradePage);
 
   static ConfigApi config_api;
-  config_api.registerHandlers(configServer);
+  config_api.registerHandlers(config_server);
 
   static StatusApi status_api;
-  status_api.registerHandlers(configServer);
+  status_api.registerHandlers(config_server);
 
   static AdcApi adc_api(adc);
-  adc_api.registerHandlers(configServer);
+  adc_api.registerHandlers(config_server);
 
 #if defined(EBUS_INTERNAL)
-  static CommandsApi commands_api(commandManager, mqtt_ha);
-  commands_api.registerHandlers(configServer);
+  static CommandsApi commands_api(command_manager, mqtt_ha);
+  commands_api.registerHandlers(config_server);
 
   static CronApi cron_api(cron);
-  cron_api.registerHandlers(configServer);
+  cron_api.registerHandlers(config_server);
 
-  static ValuesApi values_api(commandManager);
-  values_api.registerHandlers(configServer);
+  static ValuesApi values_api(command_manager);
+  values_api.registerHandlers(config_server);
 
   static DevicesApi devices_api;
-  devices_api.registerHandlers(configServer);
+  devices_api.registerHandlers(config_server);
 
   static MetricsApi metrics_api;
-  metrics_api.registerHandlers(configServer);
+  metrics_api.registerHandlers(config_server);
 
   static NetworkApi network_api;
-  network_api.registerHandlers(configServer);
+  network_api.registerHandlers(config_server);
 
   static SystemApi system_api;
-  system_api.registerHandlers(configServer);
+  system_api.registerHandlers(config_server);
 
   static LogsApi logs_api(logger);
-  logs_api.registerHandlers(configServer);
+  logs_api.registerHandlers(config_server);
 
 #endif
 
-  RegisterUri("/restart", HTTP_POST, handleRestart);
+  registerUri("/restart", HTTP_POST, handleRestart);
 }  // namespace
 
-void SetupHttpFallbackHandlers() {
-  if (configServer == nullptr || fallbackHandlersRegistered) return;
-  RegisterUri("/*", HTTP_GET, handleNotFound);
-  RegisterUri("/*", HTTP_POST, handleNotFound);
-  fallbackHandlersRegistered = true;
+void setupHttpFallbackHandlers() {
+  if (config_server == nullptr || fallback_handlers_registered) return;
+  registerUri("/*", HTTP_GET, handleNotFound);
+  registerUri("/*", HTTP_POST, handleNotFound);
+  fallback_handlers_registered = true;
 }

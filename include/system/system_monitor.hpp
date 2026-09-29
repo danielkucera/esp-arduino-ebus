@@ -47,7 +47,7 @@ class SystemMonitor {
   // Copies up to capacity trend samples (oldest first), returns count.
   size_t fetchHeapTrend(HeapSample* out, size_t capacity) const;
 
-  TaskHandle_t task_handle() const;
+  TaskHandle_t taskHandle() const;
 
   bool begin();
   void stop();
@@ -61,7 +61,7 @@ class SystemMonitor {
   // No-op unless EBUS_BUS_TAP=1.
   void tapBusByte(uint64_t boot_us, uint8_t byte);
   void fetchTap(const ebus::JsonChunkVisitor& visitor,
-                uint64_t sinceWallMs) const;
+                uint64_t since_wall_ms) const;
 
   size_t getLogQueueSize();
   size_t getLogQueueCapacity() const;

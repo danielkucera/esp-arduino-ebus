@@ -22,7 +22,7 @@
 #include "app/mqtt.hpp"
 #include "system/logger.hpp"
 
-CommandManager commandManager;
+CommandManager command_manager;
 
 namespace {
 constexpr const char* littlefs_base_path = "/littlefs";
@@ -202,7 +202,7 @@ int64_t CommandManager::loadCommandsFrom(const char* path) {
 
   deserializeCommands(file);
   std::fclose(file);
-  return static_cast<int64_t>(commandManager.getCommandCount());
+  return static_cast<int64_t>(command_manager.getCommandCount());
 }
 
 int64_t CommandManager::saveCommands() const {
@@ -285,8 +285,8 @@ int64_t CommandManager::wipeCommands() {
   clearFieldOverrides();
   if (!ensureLittlefsMounted()) return -1;
 
-  struct stat fileStat{};
-  if (stat(commandsFilePath(), &fileStat) != 0) {
+  struct stat file_stat{};
+  if (stat(commandsFilePath(), &file_stat) != 0) {
     if (errno == ENOENT) return 0;
     return -1;
   }
@@ -296,11 +296,11 @@ int64_t CommandManager::wipeCommands() {
     return -1;
   }
 
-  if (fileStat.st_size <= 0) {
+  if (file_stat.st_size <= 0) {
     return 0;
   }
 
-  return static_cast<int64_t>(fileStat.st_size);
+  return static_cast<int64_t>(file_stat.st_size);
 }
 
 void CommandManager::fetchCommands(
@@ -453,8 +453,8 @@ void CommandManager::updateData(const ebus::ProtocolInfo& info) {
     return;
   }
 
-  MatchingCommands matchingCommands = findPassiveCommands(info.master_view);
-  for (Command* cmd : matchingCommands) update(cmd, info);
+  MatchingCommands matching_commands = findPassiveCommands(info.master_view);
+  for (Command* cmd : matching_commands) update(cmd, info);
 }
 
 void CommandManager::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
@@ -549,7 +549,7 @@ ebus::ByteView CommandManager::getWriteCmd(size_t idx) const {
 
 bool CommandManager::addWriteCmd(PollSequence&& cmd) {
   std::lock_guard<std::recursive_mutex> lock(mutex_);
-  if (write_cmds_.size() >= write_cmd_capacity) {
+  if (write_cmds_.size() >= write_cmd_capacity_) {
     return false;
   }
   write_cmds_.push_back(std::move(cmd));
@@ -665,7 +665,7 @@ void CommandManager::deserializeCommands(FILE* file) {
   size_t loaded_count = 0;
   bool header_seen = false;
 
-  auto feedFile = [&]() -> bool {
+  auto feed_file = [&]() -> bool {
     if (eof) return false;
     size_t n = std::fread(chunk_buf, 1, sizeof(chunk_buf), file);
     if (n > 0) {
@@ -677,13 +677,13 @@ void CommandManager::deserializeCommands(FILE* file) {
     return false;
   };
 
-  feedFile();
+  feed_file();
 
   // Expect root array
   while (true) {
     auto t = reader.next();
     if (t == ebus::detail::JsonReader::Token::need_more_data) {
-      if (!feedFile()) {
+      if (!feed_file()) {
         t = reader.next();
         if (t == ebus::detail::JsonReader::Token::need_more_data) return;
       }
@@ -703,7 +703,7 @@ void CommandManager::deserializeCommands(FILE* file) {
         if (eof) {
           reader.endOfInput();
         }
-        if (!feedFile()) {
+        if (!feed_file()) {
           if (reader.needsMoreData()) {
             logger.warn(
                 "CommandManager: Command element exceeds reader buffer size");
@@ -743,8 +743,8 @@ void CommandManager::deserializeCommands(FILE* file) {
       loaded_count++;
     } else if (token == ebus::detail::JsonReader::Token::object_start) {
       row_reader.reset();
-      std::string_view evalError = Command::evaluate(row_reader);
-      if (evalError.empty()) {
+      std::string_view eval_error = Command::evaluate(row_reader);
+      if (eval_error.empty()) {
         // Pre-extract key to drop stale overrides before fromJson()
         // repopulates.
         row_reader.reset();
@@ -763,7 +763,7 @@ void CommandManager::deserializeCommands(FILE* file) {
         char err_buf[128];
         snprintf(err_buf, sizeof(err_buf),
                  "CommandManager: Command validation failed: %.*s",
-                 static_cast<int>(evalError.length()), evalError.data());
+                 static_cast<int>(eval_error.length()), eval_error.data());
         logger.error(err_buf);
       }
     }

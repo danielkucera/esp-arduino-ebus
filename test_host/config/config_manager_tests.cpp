@@ -7,10 +7,10 @@
 // The ConfigManager instance backing these tests. NVS itself is the
 // in-memory host mock (test_host/mocks/config/nvs_mock.cpp), so each case
 // starts from resetConfig() for isolation.
-ConfigManager configManager;
+ConfigManager config_manager;
 
 TEST_CASE("ConfigManager string roundtrip", "[config_nvs]") {
-  configManager.resetConfig();
+  config_manager.resetConfig();
 
   REQUIRE(ConfigManager::writeString("wifiSsid", "my-ssid") == true);
   REQUIRE(std::string(ConfigManager::readString("wifiSsid")) == "my-ssid");
@@ -26,7 +26,7 @@ TEST_CASE("ConfigManager string roundtrip", "[config_nvs]") {
 
 TEST_CASE("ConfigManager int parsing matches firmware semantics",
           "[config_nvs]") {
-  configManager.resetConfig();
+  config_manager.resetConfig();
 
   REQUIRE(ConfigManager::writeString("busWindow", "4300") == true);
   REQUIRE(ConfigManager::readInt("busWindow", 4400) == 4300);
@@ -41,7 +41,7 @@ TEST_CASE("ConfigManager int parsing matches firmware semantics",
 
 TEST_CASE("ConfigManager bool parsing matches firmware semantics",
           "[config_nvs]") {
-  configManager.resetConfig();
+  config_manager.resetConfig();
 
   for (auto truthy : {"true", "1", "selected", "on"}) {
     REQUIRE(ConfigManager::writeString("sntpEnabled", truthy) == true);
@@ -52,19 +52,19 @@ TEST_CASE("ConfigManager bool parsing matches firmware semantics",
     REQUIRE(ConfigManager::readBool("sntpEnabled") == false);
   }
   // Missing keys yield the fallback.
-  configManager.resetConfig();
+  config_manager.resetConfig();
   REQUIRE(ConfigManager::readBool("sntpEnabled", true) == true);
   REQUIRE(ConfigManager::readBool("sntpEnabled") == false);
 }
 
 TEST_CASE("ConfigManager resetConfig clears stored keys", "[config_nvs]") {
   REQUIRE(ConfigManager::writeString("wifiSsid", "my-ssid") == true);
-  configManager.resetConfig();
+  config_manager.resetConfig();
   REQUIRE(std::string(ConfigManager::readString("wifiSsid", "fb")) == "fb");
 }
 
 TEST_CASE("ConfigManager fetchConfig dumps stored keys", "[config_nvs]") {
-  configManager.resetConfig();
+  config_manager.resetConfig();
   REQUIRE(ConfigManager::writeString("wifiSsid", "my-ssid") == true);
 
   std::string out;
@@ -75,7 +75,7 @@ TEST_CASE("ConfigManager fetchConfig dumps stored keys", "[config_nvs]") {
 }
 
 TEST_CASE("AppConfigLoader save/load roundtrip", "[config_nvs]") {
-  configManager.resetConfig();
+  config_manager.resetConfig();
 
   AppConfig written;
   written.reset();
@@ -86,7 +86,7 @@ TEST_CASE("AppConfigLoader save/load roundtrip", "[config_nvs]") {
   written.sntp.enabled = true;
   written.mqtt.server.assign("mqtt.local");
 
-  AppConfigLoader loader(configManager);
+  AppConfigLoader loader(config_manager);
   REQUIRE(loader.save(written) == true);
 
   AppConfig loaded;
@@ -103,11 +103,11 @@ TEST_CASE("AppConfigLoader save/load roundtrip", "[config_nvs]") {
 
 TEST_CASE("AppConfigLoader load overlays stored keys on defaults",
           "[config_nvs]") {
-  configManager.resetConfig();
+  config_manager.resetConfig();
   REQUIRE(ConfigManager::writeString("pwmValue", "210") == true);
 
   AppConfig loaded;
-  AppConfigLoader loader(configManager);
+  AppConfigLoader loader(config_manager);
   REQUIRE(loader.load(loaded) == true);
   REQUIRE(loaded.pwm.value == 210);
   REQUIRE(loaded.bus.window_us == 4400);

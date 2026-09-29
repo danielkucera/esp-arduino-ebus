@@ -34,9 +34,9 @@ class MqttHA {
 
   void setThingName(const std::string& name);
   void setThingModel(const std::string& model);
-  void setThingModelId(const std::string& modelId);
-  void setThingHwVersion(const std::string& hwVersion);
-  void setThingConfigurationUrl(const std::string& configurationUrl);
+  void setThingModelId(const std::string& model_id);
+  void setThingHwVersion(const std::string& hw_version);
+  void setThingConfigurationUrl(const std::string& configuration_url);
 
   // Transport toward the broker, injected by App (MqttHA owns no socket).
   // Unset callbacks silently drop publishes.

@@ -8,21 +8,21 @@
 #include "bridge/arbitration.hpp"
 #include "bridge/bus_state.hpp"
 
-enum responses {
-  RESETTED = 0x0,
-  RECEIVED = 0x1,
-  STARTED = 0x2,
-  INFO = 0x3,
-  FAILED = 0xa,
-  ERROR_EBUS = 0xb,
-  ERROR_HOST = 0xc
+enum Responses {
+  resetted = 0x0,
+  received = 0x1,
+  started = 0x2,
+  info = 0x3,
+  failed = 0xa,
+  error_ebus = 0xb,
+  error_host = 0xc
 };
 
-enum errors { ERR_FRAMING = 0x00, ERR_OVERRUN = 0x01 };
+enum Errors { err_framing = 0x00, err_overrun = 0x01 };
 
-void getArbitrationClient(int& clientFd, uint8_t& address);
+void getArbitrationClient(int& client_fd, uint8_t& address);
 void clearArbitrationClient();
-bool setArbitrationClient(int& clientFd, uint8_t& address);
+bool setArbitrationClient(int& client_fd, uint8_t& address);
 
 void arbitrationDone();
 int arbitrationRequested(uint8_t& address);
@@ -40,7 +40,7 @@ class BusType {
   // "receive" data should go to all clients that are not in arbitration mode
   // "enhanced" data should go only to the arbitrating client
   // a client is in arbitration mode if _client is not null
-  struct data {
+  struct Data {
     bool enhanced;         // is this an enhanced command?
     uint8_t c;             // command byte, only used when in "enhanced" mode
     uint8_t d;             // data byte for both regular and enhanced command
@@ -55,26 +55,26 @@ class BusType {
   void end();
 
   // Is there a value available that should be send to a client?
-  bool read(data& d);
+  bool read(Data& d);
   static size_t write(uint8_t symbol);
   static int availableForWrite();
   int available();
 
   // std::atomic seems not well supported on esp12e, besides it is also not
   // needed there
-  ATOMIC_INT nbr_restarts_1_;
-  ATOMIC_INT nbr_restarts_2_;
-  ATOMIC_INT nbr_arbitrations_;
-  ATOMIC_INT nbr_lost_1_;
-  ATOMIC_INT nbr_lost_2_;
-  ATOMIC_INT nbr_won_1_;
-  ATOMIC_INT nbr_won_2_;
-  ATOMIC_INT nbr_errors_;
-  ATOMIC_INT nbr_late_;
+  ATOMIC_INT nbr_restarts_1;
+  ATOMIC_INT nbr_restarts_2;
+  ATOMIC_INT nbr_arbitrations;
+  ATOMIC_INT nbr_lost_1;
+  ATOMIC_INT nbr_lost_2;
+  ATOMIC_INT nbr_won_1;
+  ATOMIC_INT nbr_won_2;
+  ATOMIC_INT nbr_errors;
+  ATOMIC_INT nbr_late;
 
  private:
-  inline void push(const data& d);
-  void receive(uint8_t symbol, uint32_t startBitTime);
+  inline void push(const Data& d);
+  void receive(uint8_t symbol, uint32_t start_bit_time);
   BusState bus_state_;
   Arbitration arbitration_;
   int client_fd_;
@@ -92,10 +92,10 @@ class BusType {
 
   static void readDataFromSoftwareSerial(void* args);
 #else
-  std::queue<data> queue_;
+  std::queue<Data> queue_;
 #endif
 };
 
-extern BusType Bus;
+extern BusType bus;
 
 #endif

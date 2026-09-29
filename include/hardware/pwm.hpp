@@ -3,5 +3,5 @@
 #include <cstdint>
 
 void initPwm();
-void set_pwm(uint8_t value);
-uint32_t get_pwm();
+void setPwm(uint8_t value);
+uint32_t getPwm();

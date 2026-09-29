@@ -14,11 +14,11 @@ class CommandManager;
 // (Moved out of cron.cpp's anonymous namespace; zero ESP dependencies.)
 namespace app::detail::cron {
 
-bool matchField(std::string_view expr, int value, int minValue, int maxValue,
-                bool dayOfWeek);
-bool validateFieldExpression(std::string_view expr, int minValue, int maxValue,
-                             bool dayOfWeek);
-bool matchSchedule(const std::string& schedule, const tm& localTime);
+bool matchField(std::string_view expr, int value, int min_value, int max_value,
+                bool day_of_week);
+bool validateFieldExpression(std::string_view expr, int min_value,
+                             int max_value, bool day_of_week);
+bool matchSchedule(const std::string& schedule, const tm& local_time);
 std::string validateRule(const Cron::Rule& rule, CommandManager& commands);
 
 }  // namespace app::detail::cron

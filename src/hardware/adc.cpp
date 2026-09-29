@@ -45,12 +45,12 @@ constexpr uint32_t adc_hard_timeout_max_ms = 60000;
 bool Adc::begin() {
   if (configured_) return true;
 
-  adc_continuous_handle_cfg_t handleConfig = {};
-  handleConfig.max_store_buf_size = dma_store_buffer_bytes;
-  handleConfig.conv_frame_size = adc_raw_frame_bytes;
-  handleConfig.flags.flush_pool = 1;
+  adc_continuous_handle_cfg_t handle_config = {};
+  handle_config.max_store_buf_size = dma_store_buffer_bytes_;
+  handle_config.conv_frame_size = raw_frame_bytes_;
+  handle_config.flags.flush_pool = 1;
 
-  esp_err_t err = adc_continuous_new_handle(&handleConfig, &adc_handle_);
+  esp_err_t err = adc_continuous_new_handle(&handle_config, &adc_handle_);
   if (err != ESP_OK) {
     logError("adc_continuous_new_handle", err);
     configured_ = false;
@@ -104,29 +104,32 @@ void Adc::stopCapture() const {
   }
 }
 
-bool Adc::configureController(uint32_t sampleRate, uint32_t channelMask) const {
+bool Adc::configureController(uint32_t sample_rate,
+                              uint32_t channel_mask) const {
   if (adc_handle_ == nullptr) return false;
-  if (sampleRate < adc_sample_freq_hz_min) sampleRate = adc_sample_freq_hz_min;
-  if (sampleRate > adc_sample_freq_hz_max) sampleRate = adc_sample_freq_hz_max;
-  channelMask &= adc_channel_mask_all;
-  if (channelMask == 0) channelMask = adc_channel_mask_default;
+  if (sample_rate < adc_sample_freq_hz_min)
+    sample_rate = adc_sample_freq_hz_min;
+  if (sample_rate > adc_sample_freq_hz_max)
+    sample_rate = adc_sample_freq_hz_max;
+  channel_mask &= adc_channel_mask_all;
+  if (channel_mask == 0) channel_mask = adc_channel_mask_default;
 
   std::memset(adc_pattern_, 0, sizeof(adc_pattern_));
-  uint8_t patternCount = 0;
+  uint8_t pattern_count = 0;
   for (uint8_t ch = 0; ch <= 4; ++ch) {
-    if ((channelMask & (1U << ch)) == 0) continue;
-    adc_pattern_[patternCount].atten = ADC_ATTEN_DB_12;
-    adc_pattern_[patternCount].channel = ch;
-    adc_pattern_[patternCount].unit = ADC_UNIT_1;
-    adc_pattern_[patternCount].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
-    ++patternCount;
+    if ((channel_mask & (1U << ch)) == 0) continue;
+    adc_pattern_[pattern_count].atten = ADC_ATTEN_DB_12;
+    adc_pattern_[pattern_count].channel = ch;
+    adc_pattern_[pattern_count].unit = ADC_UNIT_1;
+    adc_pattern_[pattern_count].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
+    ++pattern_count;
   }
-  if (patternCount == 0) return false;
+  if (pattern_count == 0) return false;
 
   adc_continuous_config_t config = {};
-  config.pattern_num = patternCount;
+  config.pattern_num = pattern_count;
   config.adc_pattern = adc_pattern_;
-  config.sample_freq_hz = sampleRate;
+  config.sample_freq_hz = sample_rate;
   config.conv_mode = ADC_CONV_SINGLE_UNIT_1;
   config.format = ADC_DIGI_OUTPUT_FORMAT_TYPE2;
 
@@ -146,158 +149,164 @@ void Adc::logError(const char* stage, int err) {
 
 bool Adc::isRunning() const { return configured_; }
 
-uint32_t Adc::effectivePerChannelSampleRate(uint32_t sampleRate,
-                                            uint32_t channelMask) {
-  if (sampleRate < adc_sample_freq_hz_min) sampleRate = adc_sample_freq_hz_min;
-  if (sampleRate > adc_sample_freq_hz_max) sampleRate = adc_sample_freq_hz_max;
-  channelMask &= adc_channel_mask_all;
-  if (channelMask == 0) channelMask = adc_channel_mask_default;
+uint32_t Adc::effectivePerChannelSampleRate(uint32_t sample_rate,
+                                            uint32_t channel_mask) {
+  if (sample_rate < adc_sample_freq_hz_min)
+    sample_rate = adc_sample_freq_hz_min;
+  if (sample_rate > adc_sample_freq_hz_max)
+    sample_rate = adc_sample_freq_hz_max;
+  channel_mask &= adc_channel_mask_all;
+  if (channel_mask == 0) channel_mask = adc_channel_mask_default;
 
-  uint32_t numActiveChannels = 0;
+  uint32_t num_active_channels = 0;
   for (uint8_t ch = 0; ch <= 4; ++ch) {
-    if ((channelMask & (1U << ch)) != 0) ++numActiveChannels;
+    if ((channel_mask & (1U << ch)) != 0) ++num_active_channels;
   }
-  if (numActiveChannels == 0) numActiveChannels = 1;
+  if (num_active_channels == 0) num_active_channels = 1;
 
-  uint64_t controllerSampleRate =
-      static_cast<uint64_t>(sampleRate) * numActiveChannels;
-  if (controllerSampleRate < adc_sample_freq_hz_min)
-    controllerSampleRate = adc_sample_freq_hz_min;
-  if (controllerSampleRate > adc_sample_freq_hz_max)
-    controllerSampleRate = adc_sample_freq_hz_max;
+  uint64_t controller_sample_rate =
+      static_cast<uint64_t>(sample_rate) * num_active_channels;
+  if (controller_sample_rate < adc_sample_freq_hz_min)
+    controller_sample_rate = adc_sample_freq_hz_min;
+  if (controller_sample_rate > adc_sample_freq_hz_max)
+    controller_sample_rate = adc_sample_freq_hz_max;
 
-  uint32_t effectivePerChannelRate =
-      static_cast<uint32_t>(controllerSampleRate / numActiveChannels);
-  return effectivePerChannelRate == 0 ? 1 : effectivePerChannelRate;
+  uint32_t effective_per_channel_rate =
+      static_cast<uint32_t>(controller_sample_rate / num_active_channels);
+  return effective_per_channel_rate == 0 ? 1 : effective_per_channel_rate;
 }
 
-bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sampleRate,
-                    uint32_t samplesPerChannel, uint32_t channelMask) const {
-  if (sampleRate < adc_sample_freq_hz_min) sampleRate = adc_sample_freq_hz_min;
-  if (sampleRate > adc_sample_freq_hz_max) sampleRate = adc_sample_freq_hz_max;
-  if (samplesPerChannel == 0)
-    samplesPerChannel = adc_samples_per_channel_fallback;
-  channelMask &= adc_channel_mask_all;
-  if (channelMask == 0) channelMask = adc_channel_mask_default;
+bool Adc::streamRaw(const ebus::JsonChunkVisitor& visitor, uint32_t sample_rate,
+                    uint32_t samples_per_channel, uint32_t channel_mask) const {
+  if (sample_rate < adc_sample_freq_hz_min)
+    sample_rate = adc_sample_freq_hz_min;
+  if (sample_rate > adc_sample_freq_hz_max)
+    sample_rate = adc_sample_freq_hz_max;
+  if (samples_per_channel == 0)
+    samples_per_channel = adc_samples_per_channel_fallback;
+  channel_mask &= adc_channel_mask_all;
+  if (channel_mask == 0) channel_mask = adc_channel_mask_default;
 
   // Count active channels first so requested sampleRate can be interpreted
   // as per-channel rate even in multi-channel scans.
-  uint32_t numActiveChannels = 0;
+  uint32_t num_active_channels = 0;
   for (uint8_t ch = 0; ch <= 4; ++ch) {
-    if ((channelMask & (1U << ch)) != 0) ++numActiveChannels;
+    if ((channel_mask & (1U << ch)) != 0) ++num_active_channels;
   }
-  if (numActiveChannels == 0) numActiveChannels = 1;
+  if (num_active_channels == 0) num_active_channels = 1;
 
-  uint64_t controllerSampleRate =
+  uint64_t controller_sample_rate =
       static_cast<uint64_t>(
-          effectivePerChannelSampleRate(sampleRate, channelMask)) *
-      numActiveChannels;
-  if (controllerSampleRate < adc_sample_freq_hz_min)
-    controllerSampleRate = adc_sample_freq_hz_min;
-  if (controllerSampleRate > adc_sample_freq_hz_max)
-    controllerSampleRate = adc_sample_freq_hz_max;
+          effectivePerChannelSampleRate(sample_rate, channel_mask)) *
+      num_active_channels;
+  if (controller_sample_rate < adc_sample_freq_hz_min)
+    controller_sample_rate = adc_sample_freq_hz_min;
+  if (controller_sample_rate > adc_sample_freq_hz_max)
+    controller_sample_rate = adc_sample_freq_hz_max;
 
   // Reconfigure safely in INIT state.
   stopCapture();
-  if (!configureController(static_cast<uint32_t>(controllerSampleRate),
-                           channelMask))
+  if (!configureController(static_cast<uint32_t>(controller_sample_rate),
+                           channel_mask))
     return false;
   if (!startCapture()) return false;
 
   // samplesPerChannel is per-channel; total bytes accounts for all active
   // channels.
-  const uint64_t totalSamples =
-      static_cast<uint64_t>(samplesPerChannel) * numActiveChannels;
-  const uint64_t targetBytes = totalSamples * result_bytes;
-  uint64_t sentBytes = 0;
+  const uint64_t total_samples =
+      static_cast<uint64_t>(samples_per_channel) * num_active_channels;
+  const uint64_t target_bytes = total_samples * result_bytes;
+  uint64_t sent_bytes = 0;
 
-  const uint32_t effectivePerChannelRate =
-      effectivePerChannelSampleRate(sampleRate, channelMask);
+  const uint32_t effective_per_channel_rate =
+      effectivePerChannelSampleRate(sample_rate, channel_mask);
 
-  const uint32_t expectedDurationMs = static_cast<uint32_t>(
-      (static_cast<uint64_t>(samplesPerChannel) * 1000ULL) /
-      effectivePerChannelRate);
-  uint32_t noProgressTimeoutMs =
-      expectedDurationMs * adc_no_progress_multiplier + adc_no_progress_base;
-  if (noProgressTimeoutMs < adc_no_progress_timeout_min_ms)
-    noProgressTimeoutMs = adc_no_progress_timeout_min_ms;
-  if (noProgressTimeoutMs > adc_no_progress_timeout_max_ms)
-    noProgressTimeoutMs = adc_no_progress_timeout_max_ms;
+  const uint32_t expected_duration_ms = static_cast<uint32_t>(
+      (static_cast<uint64_t>(samples_per_channel) * 1000ULL) /
+      effective_per_channel_rate);
+  uint32_t no_progress_timeout_ms =
+      expected_duration_ms * adc_no_progress_multiplier + adc_no_progress_base;
+  if (no_progress_timeout_ms < adc_no_progress_timeout_min_ms)
+    no_progress_timeout_ms = adc_no_progress_timeout_min_ms;
+  if (no_progress_timeout_ms > adc_no_progress_timeout_max_ms)
+    no_progress_timeout_ms = adc_no_progress_timeout_max_ms;
 
-  uint32_t hardTimeoutMs =
-      expectedDurationMs * adc_hard_timeout_multiplier + adc_hard_timeout_base;
-  if (hardTimeoutMs < adc_hard_timeout_min_ms)
-    hardTimeoutMs = adc_hard_timeout_min_ms;
-  if (hardTimeoutMs > adc_hard_timeout_max_ms)
-    hardTimeoutMs = adc_hard_timeout_max_ms;
+  uint32_t hard_timeout_ms =
+      expected_duration_ms * adc_hard_timeout_multiplier +
+      adc_hard_timeout_base;
+  if (hard_timeout_ms < adc_hard_timeout_min_ms)
+    hard_timeout_ms = adc_hard_timeout_min_ms;
+  if (hard_timeout_ms > adc_hard_timeout_max_ms)
+    hard_timeout_ms = adc_hard_timeout_max_ms;
 
-  const uint64_t startUs = esp_timer_get_time();
-  uint64_t lastProgressUs = startUs;
+  const uint64_t start_us = esp_timer_get_time();
+  uint64_t last_progress_us = start_us;
 
-  uint32_t txFill = 0;
-  while (sentBytes < targetBytes) {
-    const uint64_t elapsedMs =
-        static_cast<uint64_t>((esp_timer_get_time() - startUs) / 1000ULL);
-    const uint64_t noProgressMs = static_cast<uint64_t>(
-        (esp_timer_get_time() - lastProgressUs) / 1000ULL);
-    if (noProgressMs > noProgressTimeoutMs || elapsedMs > hardTimeoutMs) break;
+  uint32_t tx_fill = 0;
+  while (sent_bytes < target_bytes) {
+    const uint64_t elapsed_ms =
+        static_cast<uint64_t>((esp_timer_get_time() - start_us) / 1000ULL);
+    const uint64_t no_progress_ms = static_cast<uint64_t>(
+        (esp_timer_get_time() - last_progress_us) / 1000ULL);
+    if (no_progress_ms > no_progress_timeout_ms || elapsed_ms > hard_timeout_ms)
+      break;
 
-    uint32_t bytesRead = 0;
+    uint32_t bytes_read = 0;
     esp_err_t err = adc_continuous_read(adc_handle_, dma_buffer_,
-                                        adc_raw_frame_bytes, &bytesRead, 10);
+                                        raw_frame_bytes_, &bytes_read, 10);
 
-    if (err == ESP_ERR_TIMEOUT || bytesRead == 0) {
+    if (err == ESP_ERR_TIMEOUT || bytes_read == 0) {
       continue;
     }
 
     if (err == ESP_ERR_INVALID_STATE) {
       // Ringbuffer full: drain one frame and retry.
       uint32_t drained = 0;
-      adc_continuous_read(adc_handle_, dma_buffer_, adc_raw_frame_bytes,
-                          &drained, 0);
+      adc_continuous_read(adc_handle_, dma_buffer_, raw_frame_bytes_, &drained,
+                          0);
       continue;
     }
 
     if (err != ESP_OK) break;
 
-    uint32_t parsedSamples = 0;
-    err = adc_continuous_parse_data(adc_handle_, dma_buffer_, bytesRead,
-                                    parsed_buffer_, &parsedSamples);
+    uint32_t parsed_samples = 0;
+    err = adc_continuous_parse_data(adc_handle_, dma_buffer_, bytes_read,
+                                    parsed_buffer_, &parsed_samples);
     if (err != ESP_OK) {
       logError("adc_continuous_parse_data", err);
       break;
     }
 
-    for (uint32_t i = 0; i < parsedSamples && sentBytes < targetBytes; ++i) {
+    for (uint32_t i = 0; i < parsed_samples && sent_bytes < target_bytes; ++i) {
       if (!parsed_buffer_[i].valid || parsed_buffer_[i].unit != ADC_UNIT_1)
         continue;
 
       const uint8_t channel = static_cast<uint8_t>(parsed_buffer_[i].channel);
       if (channel > 4) continue;
       // Only send channels that were requested in the mask.
-      if ((channelMask & (1U << channel)) == 0) continue;
+      if ((channel_mask & (1U << channel)) == 0) continue;
 
       const uint16_t packed = static_cast<uint16_t>(
           (static_cast<uint16_t>(parsed_buffer_[i].raw_data) & 0x0FFFU) |
           (static_cast<uint16_t>(channel) << 13));
 
-      if (txFill + result_bytes > adc_raw_http_chunk_bytes) {
+      if (tx_fill + result_bytes > raw_http_chunk_bytes_) {
         visitor(std::string_view(reinterpret_cast<const char*>(tx_buffer_),
-                                 txFill));
-        txFill = 0;
+                                 tx_fill));
+        tx_fill = 0;
       }
-      std::memcpy(tx_buffer_ + txFill, &packed, result_bytes);
-      txFill += result_bytes;
-      sentBytes += result_bytes;
+      std::memcpy(tx_buffer_ + tx_fill, &packed, result_bytes);
+      tx_fill += result_bytes;
+      sent_bytes += result_bytes;
     }
-    lastProgressUs = esp_timer_get_time();
+    last_progress_us = esp_timer_get_time();
   }
 
-  if (txFill > 0) {
+  if (tx_fill > 0) {
     visitor(
-        std::string_view(reinterpret_cast<const char*>(tx_buffer_), txFill));
+        std::string_view(reinterpret_cast<const char*>(tx_buffer_), tx_fill));
   }
 
   stopCapture();
-  return sentBytes >= targetBytes;
+  return sent_bytes >= target_bytes;
 }

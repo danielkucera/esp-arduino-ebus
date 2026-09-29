@@ -29,9 +29,9 @@ StatusApi::StatusApi() {}
 bool StatusApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/status", HTTP_GET, handleStatusPage);
+  registerUri("/status", HTTP_GET, handleStatusPage);
 #if defined(EBUS_INTERNAL)
-  RegisterUri("/api/v1/health", HTTP_GET, handleHealth);
+  registerUri("/api/v1/health", HTTP_GET, handleHealth);
 #endif
 
   return true;
@@ -77,7 +77,7 @@ esp_err_t StatusApi::handleHealth(httpd_req_t* req) {
     writer.writeField("uptime",
                       static_cast<uint64_t>(esp_timer_get_time() / 1000ULL));
     writer.writeField("reset_code", DeviceStatus::resetCode());
-    writer.writeField("rssi", WifiNetworkManager::RSSI());
+    writer.writeField("rssi", WifiNetworkManager::rssi());
     writer.writeField("wifi_reconnects",
                       WifiNetworkManager::getReconnectCount());
     writer.writeField("mqtt_connected", DeviceStatus::mqtt().isConnected());

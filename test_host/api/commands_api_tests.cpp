@@ -30,9 +30,9 @@ void insertCommands(const std::string& commands) {
 }  // namespace
 
 TEST_CASE("CommandsApi rejects malformed command arrays", "[commands_api]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   MqttHA mqtt_ha;
-  CommandsApi api(commandManager, mqtt_ha);
+  CommandsApi api(command_manager, mqtt_ha);
 
   httpd_req_t req{};
   req.body = R"({"commands":{}})";
@@ -45,9 +45,9 @@ TEST_CASE("CommandsApi rejects malformed command arrays", "[commands_api]") {
 }
 
 TEST_CASE("CommandsApi inserts a valid command", "[commands_api]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   MqttHA mqtt_ha;
-  CommandsApi api(commandManager, mqtt_ha);
+  CommandsApi api(command_manager, mqtt_ha);
 
   httpd_req_t req{};
   req.body =
@@ -59,15 +59,15 @@ TEST_CASE("CommandsApi inserts a valid command", "[commands_api]") {
   REQUIRE(CommandsApi::handleCommandsInsert(&req) == ESP_OK);
   REQUIRE(req.status == "200 OK");
   REQUIRE(req.final_body.find(R"("status":"successful")") != std::string::npos);
-  REQUIRE(commandManager.findCommand("api01") != nullptr);
-  commandManager.wipeCommands();
+  REQUIRE(command_manager.findCommand("api01") != nullptr);
+  command_manager.wipeCommands();
 }
 
 TEST_CASE("CommandsApi serves page and lists inserted commands",
           "[commands_api]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   MqttHA mqtt_ha;
-  CommandsApi api(commandManager, mqtt_ha);
+  CommandsApi api(command_manager, mqtt_ha);
 
   httpd_req_t page_req{};
   REQUIRE(CommandsApi::handleCommandsPage(&page_req) == ESP_OK);
@@ -85,14 +85,14 @@ TEST_CASE("CommandsApi serves page and lists inserted commands",
   REQUIRE(body.find(R"("key":"api01")") != std::string::npos);
   REQUIRE(body.find(R"("name":"Api_Test")") != std::string::npos);
   REQUIRE(list_req.chunks.back().empty());
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 }
 
 TEST_CASE("CommandsApi evaluates valid commands and rejects invalid ones",
           "[commands_api]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   MqttHA mqtt_ha;
-  CommandsApi api(commandManager, mqtt_ha);
+  CommandsApi api(command_manager, mqtt_ha);
 
   httpd_req_t valid_req{};
   valid_req.body = R"({"commands":[)" + commandJson("api01", "Api_Test") + "]}";
@@ -110,16 +110,16 @@ TEST_CASE("CommandsApi evaluates valid commands and rejects invalid ones",
   REQUIRE(invalid_req.status == "400 Bad Request");
   REQUIRE(invalid_req.final_body.find(R"("status":"failed")") !=
           std::string::npos);
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 }
 
 TEST_CASE("CommandsApi removes selected commands", "[commands_api]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   MqttHA mqtt_ha;
-  CommandsApi api(commandManager, mqtt_ha);
+  CommandsApi api(command_manager, mqtt_ha);
   insertCommands(commandJson("api01", "First") + "," +
                  commandJson("api02", "Second"));
-  REQUIRE(commandManager.getCommandCount() == 2);
+  REQUIRE(command_manager.getCommandCount() == 2);
 
   httpd_req_t req{};
   req.body = R"({"keys":["api01"]})";
@@ -127,15 +127,15 @@ TEST_CASE("CommandsApi removes selected commands", "[commands_api]") {
   REQUIRE(CommandsApi::handleCommandsRemove(&req) == ESP_OK);
   REQUIRE(req.status == "200 OK");
   REQUIRE(req.final_body.find(R"("id":"remove")") != std::string::npos);
-  REQUIRE(commandManager.findCommand("api01") == nullptr);
-  REQUIRE(commandManager.findCommand("api02") != nullptr);
-  commandManager.wipeCommands();
+  REQUIRE(command_manager.findCommand("api01") == nullptr);
+  REQUIRE(command_manager.findCommand("api02") != nullptr);
+  command_manager.wipeCommands();
 }
 
 TEST_CASE("CommandsApi saves and loads commands", "[commands_api]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   MqttHA mqtt_ha;
-  CommandsApi api(commandManager, mqtt_ha);
+  CommandsApi api(command_manager, mqtt_ha);
   insertCommands(commandJson("api01", "Api_Test"));
 
   httpd_req_t save_req{};
@@ -145,18 +145,18 @@ TEST_CASE("CommandsApi saves and loads commands", "[commands_api]") {
           std::string::npos);
   REQUIRE(save_req.final_body.find("Saved ") != std::string::npos);
 
-  commandManager.removeAll();
-  REQUIRE(commandManager.getCommandCount() == 0);
+  command_manager.removeAll();
+  REQUIRE(command_manager.getCommandCount() == 0);
   httpd_req_t load_req{};
   REQUIRE(CommandsApi::handleCommandsLoad(&load_req) == ESP_OK);
   REQUIRE(load_req.status == "200 OK");
   REQUIRE(load_req.final_body.find(R"("status":"successful")") !=
           std::string::npos);
-  REQUIRE(commandManager.findCommand("api01") != nullptr);
+  REQUIRE(command_manager.findCommand("api01") != nullptr);
 
   httpd_req_t wipe_req{};
   REQUIRE(CommandsApi::handleCommandsWipe(&wipe_req) == ESP_OK);
-  REQUIRE(commandManager.getCommandCount() == 0);
+  REQUIRE(command_manager.getCommandCount() == 0);
   REQUIRE(wipe_req.final_body.find(R"("id":"wipe")") != std::string::npos);
   if (wipe_req.status == "200 OK") {
     REQUIRE(wipe_req.final_body.find(R"("status":"successful")") !=
@@ -171,10 +171,10 @@ TEST_CASE("CommandsApi saves and loads commands", "[commands_api]") {
 }
 
 TEST_CASE("CommandsApi uploads a command file", "[commands_api]") {
-  commandManager.wipeCommands();
-  commandManager.removeAll();
+  command_manager.wipeCommands();
+  command_manager.removeAll();
   MqttHA mqtt_ha;
-  CommandsApi api(commandManager, mqtt_ha);
+  CommandsApi api(command_manager, mqtt_ha);
 
   const std::string payload = "[" + commandJson("api01", "Uploaded_Test") + "]";
   httpd_req_t req{};
@@ -187,25 +187,25 @@ TEST_CASE("CommandsApi uploads a command file", "[commands_api]") {
   REQUIRE(req.final_body.find(R"("id":"upload")") != std::string::npos);
   REQUIRE(req.final_body.find("Uploaded ") != std::string::npos);
   REQUIRE(req.final_body.find("loaded 1 commands") != std::string::npos);
-  REQUIRE(commandManager.findCommand("api01") != nullptr);
-  commandManager.removeAll();
+  REQUIRE(command_manager.findCommand("api01") != nullptr);
+  command_manager.removeAll();
 }
 
 TEST_CASE("CommandsApi rejects non-POST uploads", "[commands_api]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   MqttHA mqtt_ha;
-  CommandsApi api(commandManager, mqtt_ha);
+  CommandsApi api(command_manager, mqtt_ha);
   httpd_req_t req{};
 
   REQUIRE(CommandsApi::handleCommandsUpload(&req) == ESP_OK);
   REQUIRE(req.status == "405 Method Not Allowed");
   REQUIRE(req.final_body.find(R"("id":"upload")") != std::string::npos);
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 }
 
 TEST_CASE("CommandsApi registers all command routes", "[commands_api]") {
   MqttHA mqtt_ha;
-  CommandsApi api(commandManager, mqtt_ha);
+  CommandsApi api(command_manager, mqtt_ha);
   HostHttpStub::clearRoutes();
 
   REQUIRE_FALSE(CommandsApi::registerHandlers(nullptr));

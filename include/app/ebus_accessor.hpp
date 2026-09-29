@@ -11,11 +11,13 @@
 
 #include <ebus.hpp>
 
-static constexpr uint8_t prio_internal = 5;  // highest
-static constexpr uint8_t prio_send = 4;      // manual send
-static constexpr uint8_t prio_schedule = 3;  // schedule commands
-static constexpr uint8_t prio_scan = 2;      // manual scan
-static constexpr uint8_t prio_fullscan = 1;  // manual full scan
+namespace app::priority {
+inline constexpr uint8_t internal = 5;  // highest
+inline constexpr uint8_t send = 4;      // manual send
+inline constexpr uint8_t schedule = 3;  // schedule commands
+inline constexpr uint8_t scan = 2;      // manual scan
+inline constexpr uint8_t fullscan = 1;  // manual full scan
+}  // namespace app::priority
 
 ebus::EbusConfig& getEbusConfig();
 ebus::Controller& getEbusController();

@@ -17,15 +17,15 @@
 #include "network/http_utils.hpp"
 #include "system/device_status.hpp"
 
-extern ConfigManager configManager;
+extern ConfigManager config_manager;
 
 namespace {
 
 constexpr const char* nvs_namespace = "esp-ebus";
 
 bool ensureNvsReady() {
-  static bool nvsReady = false;
-  if (nvsReady) return true;
+  static bool nvs_ready = false;
+  if (nvs_ready) return true;
 
   esp_err_t err = nvs_flash_init();
   if (err == ESP_ERR_NVS_NO_FREE_PAGES ||
@@ -35,7 +35,7 @@ bool ensureNvsReady() {
   }
   if (err != ESP_OK) return false;
 
-  nvsReady = true;
+  nvs_ready = true;
   return true;
 }
 
@@ -186,8 +186,8 @@ std::string_view ConfigManager::readString(const char* key,
   if (!ensureNvsReady()) return fallback;
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READONLY, &handle);
-  if (openErr != ESP_OK) return fallback;
+  const esp_err_t open_err = nvs_open(nvs_namespace, NVS_READONLY, &handle);
+  if (open_err != ESP_OK) return fallback;
 
   std::string_view value = ::readString(handle, key, fallback);
   nvs_close(handle);
@@ -198,8 +198,8 @@ int32_t ConfigManager::readInt(const char* key, int32_t fallback) {
   if (!ensureNvsReady()) return fallback;
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READONLY, &handle);
-  if (openErr != ESP_OK) return fallback;
+  const esp_err_t open_err = nvs_open(nvs_namespace, NVS_READONLY, &handle);
+  if (open_err != ESP_OK) return fallback;
 
   int32_t value = fallback;
   esp_err_t err = nvs_get_i32(handle, key, &value);
@@ -209,13 +209,13 @@ int32_t ConfigManager::readInt(const char* key, int32_t fallback) {
   }
 
   // Backward compatibility for values stored as strings.
-  std::string_view strValue = ::readString(handle, key);
+  std::string_view str_value = ::readString(handle, key);
   nvs_close(handle);
-  if (strValue.empty()) return fallback;
+  if (str_value.empty()) return fallback;
 
   char* end = nullptr;
-  const long parsed = std::strtol(strValue.data(), &end, 10);
-  if (end == strValue.data() || *end != '\0') return fallback;
+  const long parsed = std::strtol(str_value.data(), &end, 10);
+  if (end == str_value.data() || *end != '\0') return fallback;
   return static_cast<int32_t>(parsed);
 }
 
@@ -227,8 +227,8 @@ bool ConfigManager::writeString(const char* key, const std::string& value) {
   if (!ensureNvsReady()) return false;
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
-  if (openErr != ESP_OK) return false;
+  const esp_err_t open_err = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
+  if (open_err != ESP_OK) return false;
 
   std::string error;
   const bool ok = ::writeString(handle, key, value, error);
@@ -237,20 +237,20 @@ bool ConfigManager::writeString(const char* key, const std::string& value) {
     return false;
   }
 
-  const esp_err_t commitErr = nvs_commit(handle);
+  const esp_err_t commit_err = nvs_commit(handle);
   nvs_close(handle);
-  return commitErr == ESP_OK;
+  return commit_err == ESP_OK;
 }
 
 void ConfigManager::resetConfig() {
   if (!ensureNvsReady()) return;
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
-  if (openErr != ESP_OK) return;
+  const esp_err_t open_err = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
+  if (open_err != ESP_OK) return;
 
-  const esp_err_t eraseErr = nvs_erase_all(handle);
-  if (eraseErr == ESP_OK) {
+  const esp_err_t erase_err = nvs_erase_all(handle);
+  if (erase_err == ESP_OK) {
     nvs_commit(handle);
   }
 
@@ -259,22 +259,22 @@ void ConfigManager::resetConfig() {
 
 namespace {
 esp_err_t handleConfigGet(httpd_req_t* req) {
-  return configManager.handleGet(req);
+  return config_manager.handleGet(req);
 }
 
 esp_err_t handleConfigSet(httpd_req_t* req) {
-  return configManager.handleSet(req);
+  return config_manager.handleSet(req);
 }
 
 esp_err_t handleConfigReset(httpd_req_t* req) {
-  return configManager.handleReset(req);
+  return config_manager.handleReset(req);
 }
 
 // Staged-vs-live drift: NVS (requested, incl. unapplied saves) vs the
 // running snapshot (applied). Key names only — safe for HTTP.
 esp_err_t handleConfigDrift(httpd_req_t* req) {
   AppConfig requested;
-  AppConfigLoader loader(configManager);
+  AppConfigLoader loader(config_manager);
   if (!loader.load(requested)) {
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "drift",
                                  "Config load failed");
@@ -304,10 +304,10 @@ void ConfigManager::begin() { ensureNvsReady(); }
 void ConfigManager::registerHandlers() {
   // Requires a running HTTP server (see SetupHttpHandlers): called from
   // App::initHttp, not from begin().
-  RegisterUri("/api/v1/app/config", HTTP_GET, handleConfigGet);
-  RegisterUri("/api/v1/app/config", HTTP_POST, handleConfigSet);
-  RegisterUri("/api/v1/app/config/reset", HTTP_POST, handleConfigReset);
-  RegisterUri("/api/v1/app/config/drift", HTTP_GET, handleConfigDrift);
+  registerUri("/api/v1/app/config", HTTP_GET, handleConfigGet);
+  registerUri("/api/v1/app/config", HTTP_POST, handleConfigSet);
+  registerUri("/api/v1/app/config/reset", HTTP_POST, handleConfigReset);
+  registerUri("/api/v1/app/config/drift", HTTP_GET, handleConfigDrift);
 }
 
 void ConfigManager::fetchConfig(const ebus::JsonChunkVisitor& visitor) {
@@ -317,8 +317,8 @@ void ConfigManager::fetchConfig(const ebus::JsonChunkVisitor& visitor) {
   }
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READONLY, &handle);
-  if (openErr != ESP_OK) {
+  const esp_err_t open_err = nvs_open(nvs_namespace, NVS_READONLY, &handle);
+  if (open_err != ESP_OK) {
     visitor("{}");
     return;
   }
@@ -346,9 +346,9 @@ bool ConfigManager::writeConfigJson(std::string_view body, std::string& error) {
   }
 
   nvs_handle_t handle = 0;
-  const esp_err_t openErr = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
-  if (openErr != ESP_OK) {
-    error = std::string("Failed to open NVS: ") + esp_err_to_name(openErr);
+  const esp_err_t open_err = nvs_open(nvs_namespace, NVS_READWRITE, &handle);
+  if (open_err != ESP_OK) {
+    error = std::string("Failed to open NVS: ") + esp_err_to_name(open_err);
     return false;
   }
 

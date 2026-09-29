@@ -18,10 +18,10 @@ MetricsApi::MetricsApi() {}
 bool MetricsApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/metrics", HTTP_GET, handleMetricsPage);
-  RegisterUri("/api/v1/metrics", HTTP_GET, handleMetrics);
-  RegisterUri("/api/v1/metrics/reset", HTTP_POST, handleMetricsReset);
-  RegisterUri("/api/v1/metrics/breaker/reset", HTTP_POST, handleBreakerReset);
+  registerUri("/metrics", HTTP_GET, handleMetricsPage);
+  registerUri("/api/v1/metrics", HTTP_GET, handleMetrics);
+  registerUri("/api/v1/metrics/reset", HTTP_POST, handleMetricsReset);
+  registerUri("/api/v1/metrics/breaker/reset", HTTP_POST, handleBreakerReset);
 
   return true;
 }

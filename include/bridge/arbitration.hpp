@@ -11,7 +11,7 @@
 //   which will then tell you what the state of the arbitration is
 class Arbitration {
  public:
-  enum state {
+  enum State {
     none,         // no arbitration ongoing
     arbitrating,  // arbitration ongoing
     won1,         // won
@@ -38,13 +38,14 @@ class Arbitration {
   //                + the master address is SYN
   // - late        : arbitration not started because the start is too late
   //                 compared to the SYN symbol received
-  enum result { started, not_started, late };
-  result start(const BusState& busstate, uint8_t master, uint32_t startBitTime);
+  enum Result { started, not_started, late };
+  Result start(const BusState& busstate, uint8_t master,
+               uint32_t start_bit_time);
 
   // A symbol was received on the bus, what does this do to the arbitration
   // state? Return values: see description of state enum value
-  Arbitration::state data(BusState& busstate, uint8_t symbol,
-                          uint32_t startBitTime);
+  Arbitration::State data(BusState& busstate, uint8_t symbol,
+                          uint32_t start_bit_time);
 
  private:
   bool arbitrating_;

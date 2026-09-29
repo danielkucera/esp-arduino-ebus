@@ -17,7 +17,7 @@ ConfigApi::ConfigApi() {}
 bool ConfigApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/config", HTTP_GET, handleConfigPage);
+  registerUri("/config", HTTP_GET, handleConfigPage);
 
   return true;
 }

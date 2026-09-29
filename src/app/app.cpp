@@ -61,19 +61,19 @@ bool App::begin() {
 }
 
 void App::initPlatform() {
-  check_reset();
+  checkReset();
 
   calcUniqueId();
   loadAdapterHwVersionFromEfuse();
   if (getAdapterHwVersionRaw() ==
-      static_cast<uint8_t>(AdapterHwVersionEfuse::V7_0)) {
+      static_cast<uint8_t>(AdapterHwVersionEfuse::v7_0)) {
     WifiNetworkManager::setStatusLedPin(5);
   } else {
     WifiNetworkManager::setStatusLedPin(3);
   }
 
 #if !defined(EBUS_INTERNAL)
-  Bus.begin();
+  bus.begin();
 #endif
 
   disableTX();
@@ -84,7 +84,7 @@ void App::initPlatform() {
 }
 
 bool App::initConfig() {
-  configManager.begin();
+  config_manager.begin();
   if (!loadConfig()) return false;
   DeviceStatus::setConfig(&config_);
   return true;
@@ -96,10 +96,10 @@ void App::initNetwork() {
 }
 
 #if defined(EBUS_INTERNAL)
-void App::onStaIpAssigned(const std::string& ipAddress) {
-  if (ipAddress.empty()) return;
+void App::onStaIpAssigned(const std::string& ip_address) {
+  if (ip_address.empty()) return;
 
-  mqtt_ha_.setThingConfigurationUrl("http://" + ipAddress + "/");
+  mqtt_ha_.setThingConfigurationUrl("http://" + ip_address + "/");
 
   if (mqtt_ha_.isEnabled()) {
     Mqtt::publishDiscovery();
@@ -109,14 +109,14 @@ void App::onStaIpAssigned(const std::string& ipAddress) {
 #endif
 
 bool App::initServices() {
-  set_pwm(config_.pwm.value);
+  setPwm(config_.pwm.value);
 #if defined(EBUS_INTERNAL) && defined(PWM_PIN)
   getEbusController().resetMetrics();
 #endif
 
 #if defined(EBUS_INTERNAL)
   if (config_.sntp.enabled) {
-    initSNTP(config_.sntp);
+    initSntp(config_.sntp);
     setTimezone(config_.sntp);
   }
 
@@ -162,8 +162,8 @@ bool App::initServices() {
        },
        [this]() { mqtt_ha_.onMqttConnected(); }});
   WifiNetworkManager::setStaIpAssignedCallback(
-      [](const std::string& ipAddress) {
-        if (App* app = App::instance()) app->onStaIpAssigned(ipAddress);
+      [](const std::string& ip_address) {
+        if (App* app = App::instance()) app->onStaIpAssigned(ip_address);
       });
 #endif
 
@@ -311,14 +311,14 @@ bool App::initServices() {
   DeviceStatus::setMqtt(&mqtt_);
   DeviceStatus::setMqttHa(&mqtt_ha_);
 
-  commandManager.setDataUpdatedCallback(Mqtt::publishValue);
+  command_manager.setDataUpdatedCallback(Mqtt::publishValue);
 
-  commandManager.setDataUpdatedLogCallback(
+  command_manager.setDataUpdatedLogCallback(
       [this](std::string_view key) { monitor_.enqueueLogRequest(key); });
 
   // Setup lifecycle listeners to keep ebusController in sync with the
   // CommandManager
-  commandManager.setCommandChangedCallback([this](Command* cmd) {
+  command_manager.setCommandChangedCallback([this](Command* cmd) {
     // Remove existing poll item if it was already registered
     if (cmd->getPollId() != 0) {
       char log_buf[128];
@@ -359,7 +359,7 @@ bool App::initServices() {
     }
   });
 
-  commandManager.setCommandRemovedCallback([this](Command* cmd) {
+  command_manager.setCommandRemovedCallback([this](Command* cmd) {
     if (cmd->getPollId() != 0) {
       getEbusController().removePollItem(cmd->getPollId());
       cmd->setPollId(0);
@@ -369,7 +369,7 @@ bool App::initServices() {
     }
   });
 
-  if (!commandManager.initFileSystem()) {
+  if (!command_manager.initFileSystem()) {
     logger.error("LittleFS initialization failed");
     return false;
   }
@@ -380,7 +380,7 @@ bool App::initServices() {
   // std::remove("/littlefs/commands.json.tmp");
 #endif
 
-  commandManager
+  command_manager
       .loadCommands();  // Automatically registers poll items via the callback
 
   cron.initFileSystem();  // This should be called before cron.loadRules()
@@ -395,14 +395,14 @@ bool App::initServices() {
 
 void App::initHttp() {
 #if defined(EBUS_INTERNAL)
-  SetupHttpHandlers(mqtt_ha_);
+  setupHttpHandlers(mqtt_ha_);
 #else
-  SetupHttpHandlers();
+  setupHttpHandlers();
 #endif
   ConfigManager::registerHandlers();
   HttpUtils::setCustomHeaders(std::string(config_.http.headers.c_str()));
   upgrade_manager_.begin();
-  SetupHttpFallbackHandlers();
+  setupHttpFallbackHandlers();
   upgrade_manager_.setPreUpgradeHook([this]() { stop(); });
 #if EBUS_ENABLE_OTA
   esp_ota_manager_.setPreUpgradeHook([this]() { stop(); });

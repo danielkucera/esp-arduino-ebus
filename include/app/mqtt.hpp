@@ -22,15 +22,15 @@
 #include "ebus/types.hpp"
 
 enum class OutgoingActionType : uint8_t {
-  Component,
-  Error,
-  Data,
-  Update,
-  Discovery,
-  Components,
-  HaEnable,
-  HaDisable,
-  HaConnected
+  component,
+  error,
+  data,
+  update,
+  discovery,
+  components,
+  ha_enable,
+  ha_disable,
+  ha_connected
 };
 
 struct OutgoingAction {
@@ -53,19 +53,19 @@ struct OutgoingAction {
   OutgoingAction()
       : command(nullptr),
         field_idx(0),
-        type(OutgoingActionType::Component),
+        type(OutgoingActionType::component),
         ha_remove(false) {}
 
   explicit OutgoingAction(const Command* cmd, size_t f_idx, bool remove)
       : command(cmd),
         field_idx(f_idx),
-        type(OutgoingActionType::Component),
+        type(OutgoingActionType::component),
         ha_remove(remove) {}
 
   explicit OutgoingAction(const ebus::ProtocolInfo& info)
       : command(nullptr),
         field_idx(0),
-        type(OutgoingActionType::Error),
+        type(OutgoingActionType::error),
         ha_remove(false),
         protocol_info(info) {
     master.assign(info.master_view.data(), info.master_view.size());
@@ -74,18 +74,18 @@ struct OutgoingAction {
     protocol_info.slave_view = slave;
   }
 
-  // Constructor for OutgoingActionType::Data
+  // Constructor for OutgoingActionType::data
   OutgoingAction(std::string_view i, ebus::ByteView m, ebus::ByteView s)
       : command(nullptr),
         field_idx(0),
-        type(OutgoingActionType::Data),
+        type(OutgoingActionType::data),
         ha_remove(false),
         id(i) {
     master.assign(m.data(), m.size());
     slave.assign(s.data(), s.size());
   }
 
-  // Constructor for OutgoingActionType::Update
+  // Constructor for OutgoingActionType::update
   OutgoingAction(OutgoingActionType t, std::string_view k)
       : command(nullptr), field_idx(0), type(t), ha_remove(false), key(k) {}
 };
@@ -157,7 +157,7 @@ class Mqtt {
 
   TaskHandle_t getTaskHandle() const { return task_handle_; }
   size_t getOutgoingQueueSize() const;
-  static size_t getOutgoingQueueCapacity() { return max_outgoing_queue_size; }
+  static size_t getOutgoingQueueCapacity() { return max_outgoing_queue_size_; }
   size_t getOutgoingQueueHighWatermark() const;
   uint32_t getPublishedCount() const {
     return published_.load(std::memory_order_relaxed);
@@ -192,7 +192,7 @@ class Mqtt {
   volatile bool task_exited_ = false;
   bool connected_ = false;
 
-  static constexpr size_t max_outgoing_queue_size = 8;
+  static constexpr size_t max_outgoing_queue_size_ = 8;
 
   QueueHandle_t outgoing_queue_ = nullptr;
   std::atomic<size_t> max_outgoing_ = 0;
@@ -210,14 +210,14 @@ class Mqtt {
     int msg_id = -1;
     char topic[128] = {};
   };
-  static constexpr size_t max_pending_subs = 4;
-  PendingSub pending_subs_[max_pending_subs] = {};
+  static constexpr size_t max_pending_subs_ = 4;
+  PendingSub pending_subs_[max_pending_subs_] = {};
   size_t pending_subs_count_ = 0;
 
   mutable std::recursive_mutex mqtt_mutex_;
 
-  static constexpr size_t mqtt_pub_buffer_size = 2048;
-  char publish_buffers_[mqtt_pub_buffer_size] = {};
+  static constexpr size_t mqtt_pub_buffer_size_ = 2048;
+  char publish_buffers_[mqtt_pub_buffer_size_] = {};
 
   void internalPublish(const char* topic, uint8_t qos, bool retain,
                        const char* payload, bool prefix);

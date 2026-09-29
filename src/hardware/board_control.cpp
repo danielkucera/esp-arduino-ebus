@@ -43,12 +43,12 @@ void restart() {
   esp_restart();
 }
 
-void check_reset() {
+void checkReset() {
   // check if RESET_PIN being hold low and reset
   configureGpioInputPullup(RESET_PIN);
-  uint32_t resetStart = (uint32_t)(esp_timer_get_time() / 1000ULL);
+  uint32_t reset_start = (uint32_t)(esp_timer_get_time() / 1000ULL);
   while (gpio_get_level(static_cast<gpio_num_t>(RESET_PIN)) == 0) {
-    if ((uint32_t)(esp_timer_get_time() / 1000ULL) > resetStart + RESET_MS) {
+    if ((uint32_t)(esp_timer_get_time() / 1000ULL) > reset_start + RESET_MS) {
       ConfigManager::resetConfig();
       restart();
     }

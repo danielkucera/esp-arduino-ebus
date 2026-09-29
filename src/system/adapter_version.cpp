@@ -14,12 +14,12 @@ static const esp_efuse_desc_t adapter_hw_version_efuse_desc = {
 static const esp_efuse_desc_t* adapter_hw_version_efuse_field[] = {
     &adapter_hw_version_efuse_desc, nullptr};
 
-static uint8_t adapterHwVersionRaw = 0xEE;
-static std::string adapterHwVersion = "unread";
+static uint8_t adapter_hw_version_raw = 0xEE;
+static std::string adapter_hw_version = "unread";
 
 static std::string formatAdapterHwVersion(const uint8_t raw) {
   if (static_cast<AdapterHwVersionEfuse>(raw) ==
-      AdapterHwVersionEfuse::PRE_7_0) {
+      AdapterHwVersionEfuse::pre_7_0) {
     return "pre-7.0";
   }
 
@@ -40,17 +40,17 @@ void loadAdapterHwVersionFromEfuse() {
   const esp_err_t err = esp_efuse_read_field_blob(
       adapter_hw_version_efuse_field, &raw, adapter_hw_version_efuse_bits);
   if (err != ESP_OK) {
-    adapterHwVersionRaw = 0xEE;
-    adapterHwVersion = "reading error";
+    adapter_hw_version_raw = 0xEE;
+    adapter_hw_version = "reading error";
     return;
   }
 
-  adapterHwVersionRaw = raw;
-  adapterHwVersion = formatAdapterHwVersion(raw);
+  adapter_hw_version_raw = raw;
+  adapter_hw_version = formatAdapterHwVersion(raw);
 }
 
-uint8_t getAdapterHwVersionRaw() { return adapterHwVersionRaw; }
+uint8_t getAdapterHwVersionRaw() { return adapter_hw_version_raw; }
 
-const std::string& getAdapterHwVersionString() { return adapterHwVersion; }
+const std::string& getAdapterHwVersionString() { return adapter_hw_version; }
 
 std::pair<uint8_t, uint8_t> getAdapterSwVersion() { return {0x07, 0x02}; }

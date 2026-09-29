@@ -21,32 +21,32 @@ DNSServer::DNSServer() : running_(false) {}
 
 DNSServer::~DNSServer() { stop(); }
 
-bool DNSServer::start(uint16_t port, const char* domainName,
-                      const esp_ip4_addr_t& resolvedIp) {
+bool DNSServer::start(uint16_t port, const char* domain_name,
+                      const esp_ip4_addr_t& resolved_ip) {
   stop();
   port_ = port;
-  domain_ = domainName != nullptr ? domainName : "*";
-  resolvedIp_ = resolvedIp;
+  domain_ = domain_name != nullptr ? domain_name : "*";
+  resolved_ip_ = resolved_ip;
 
-  socketFd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (socketFd_ < 0) return false;
+  socket_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (socket_fd_ < 0) return false;
 
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
   addr.sin_port = htons(port_);
-  if (bind(socketFd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+  if (bind(socket_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
     stop();
     return false;
   }
 
-  int flags = fcntl(socketFd_, F_GETFL, 0);
-  fcntl(socketFd_, F_SETFL, flags | O_NONBLOCK);
+  int flags = fcntl(socket_fd_, F_GETFL, 0);
+  fcntl(socket_fd_, F_SETFL, flags | O_NONBLOCK);
 
-  if (taskHandle_ == nullptr) {
+  if (task_handle_ == nullptr) {
     running_ = true;
     xTaskCreate(taskEntry, "dns", app::limits::Task::dns_stack, this,
-                app::limits::Task::dns_priority, &taskHandle_);
+                app::limits::Task::dns_priority, &task_handle_);
   }
 
   return true;
@@ -66,18 +66,18 @@ void DNSServer::taskLoop() {
     processNextRequest();
     vTaskDelay(pdMS_TO_TICKS(10));
   }
-  taskHandle_ = nullptr;
+  task_handle_ = nullptr;
   vTaskDelete(nullptr);
 }
 
 void DNSServer::processNextRequest() {
-  if (socketFd_ < 0) return;
+  if (socket_fd_ < 0) return;
 
   uint8_t buffer[max_packet_size];
   sockaddr_in client{};
-  socklen_t clientLen = sizeof(client);
-  int received = recvfrom(socketFd_, buffer, sizeof(buffer), 0,
-                          reinterpret_cast<sockaddr*>(&client), &clientLen);
+  socklen_t client_len = sizeof(client);
+  int received = recvfrom(socket_fd_, buffer, sizeof(buffer), 0,
+                          reinterpret_cast<sockaddr*>(&client), &client_len);
   if (received <= 0) return;
   char buf[64];
   snprintf(buf, sizeof(buf), "Received DNS request from %s",
@@ -95,11 +95,11 @@ void DNSServer::processNextRequest() {
   }
   if (idx + 5 > static_cast<size_t>(received)) return;
 
-  size_t questionLen = (idx + 5) - dns_header_size;
-  size_t responseLen = dns_header_size + questionLen;
+  size_t question_len = (idx + 5) - dns_header_size;
+  size_t response_len = dns_header_size + question_len;
 
   uint8_t response[max_packet_size];
-  std::memcpy(response, buffer, responseLen);
+  std::memcpy(response, buffer, response_len);
 
   response[2] = 0x81;
   response[3] = 0x80;
@@ -110,36 +110,36 @@ void DNSServer::processNextRequest() {
   response[10] = 0x00;
   response[11] = 0x00;
 
-  response[responseLen++] = 0xC0;
-  response[responseLen++] = 0x0C;
-  response[responseLen++] = 0x00;
-  response[responseLen++] = 0x01;
-  response[responseLen++] = 0x00;
-  response[responseLen++] = 0x01;
-  response[responseLen++] = 0x00;
-  response[responseLen++] = 0x00;
-  response[responseLen++] = 0x00;
-  response[responseLen++] = 0x00;
-  response[responseLen++] = 0x00;
-  response[responseLen++] = 0x04;
+  response[response_len++] = 0xC0;
+  response[response_len++] = 0x0C;
+  response[response_len++] = 0x00;
+  response[response_len++] = 0x01;
+  response[response_len++] = 0x00;
+  response[response_len++] = 0x01;
+  response[response_len++] = 0x00;
+  response[response_len++] = 0x00;
+  response[response_len++] = 0x00;
+  response[response_len++] = 0x00;
+  response[response_len++] = 0x00;
+  response[response_len++] = 0x04;
 
-  const ip4_addr_t* ip = reinterpret_cast<const ip4_addr_t*>(&resolvedIp_);
-  response[responseLen++] = ip4_addr1_16(ip);
-  response[responseLen++] = ip4_addr2_16(ip);
-  response[responseLen++] = ip4_addr3_16(ip);
-  response[responseLen++] = ip4_addr4_16(ip);
+  const ip4_addr_t* ip = reinterpret_cast<const ip4_addr_t*>(&resolved_ip_);
+  response[response_len++] = ip4_addr1_16(ip);
+  response[response_len++] = ip4_addr2_16(ip);
+  response[response_len++] = ip4_addr3_16(ip);
+  response[response_len++] = ip4_addr4_16(ip);
 
-  sendto(socketFd_, response, responseLen, 0,
-         reinterpret_cast<sockaddr*>(&client), clientLen);
+  sendto(socket_fd_, response, response_len, 0,
+         reinterpret_cast<sockaddr*>(&client), client_len);
 }
 
 void DNSServer::stop() {
   if (!running_) return;
   running_ = false;
   vTaskDelay(pdMS_TO_TICKS(20));  // Allow loop to exit
-  if (socketFd_ >= 0) {
-    close(socketFd_);
-    socketFd_ = -1;
+  if (socket_fd_ >= 0) {
+    close(socket_fd_);
+    socket_fd_ = -1;
   }
-  taskHandle_ = nullptr;
+  task_handle_ = nullptr;
 }

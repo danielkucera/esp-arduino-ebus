@@ -18,10 +18,10 @@ DevicesApi::DevicesApi() {}
 bool DevicesApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/devices", HTTP_GET, handleDevicesPage);
-  RegisterUri("/api/v1/devices", HTTP_GET, handleDevices);
-  RegisterUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
-  RegisterUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
+  registerUri("/devices", HTTP_GET, handleDevicesPage);
+  registerUri("/api/v1/devices", HTTP_GET, handleDevices);
+  registerUri("/api/v1/devices/scan", HTTP_POST, handleDevicesScan);
+  registerUri("/api/v1/devices/scan/full", HTTP_POST, handleDevicesScanFull);
 
   return true;
 }

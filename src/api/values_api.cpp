@@ -27,10 +27,10 @@ ValuesApi::ValuesApi(CommandManager& command_manager)
 bool ValuesApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/values", HTTP_GET, handleValuesPage);
-  RegisterUri("/api/v1/app/values", HTTP_GET, handleValues);
-  RegisterUri("/api/v1/app/values/write", HTTP_POST, handleValuesWrite);
-  RegisterUri("/api/v1/app/values/read", HTTP_POST, handleValuesRead);
+  registerUri("/values", HTTP_GET, handleValuesPage);
+  registerUri("/api/v1/app/values", HTTP_GET, handleValues);
+  registerUri("/api/v1/app/values/write", HTTP_POST, handleValuesWrite);
+  registerUri("/api/v1/app/values/read", HTTP_POST, handleValuesRead);
 
   return true;
 }
@@ -77,12 +77,12 @@ esp_err_t ValuesApi::handleValuesWrite(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  ebus::Sequence valueBytes = command->getVectorFromJson(body_sv);
-  if (!valueBytes.empty()) {
-    ebus::Sequence fullWrite =
+  ebus::Sequence value_bytes = command->getVectorFromJson(body_sv);
+  if (!value_bytes.empty()) {
+    ebus::Sequence full_write =
         ebus::makeSequence(command->getWriteCmd(instance_->command_manager_));
-    fullWrite.append(valueBytes);
-    getEbusController().enqueue(prio_send, fullWrite);
+    full_write.append(value_bytes);
+    getEbusController().enqueue(app::priority::send, full_write);
     command->setLast(0);
     HttpUtils::sendSuccessResponse(req, "write");
   } else {
