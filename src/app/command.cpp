@@ -2,6 +2,7 @@
 #include "app/command.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <charconv>
 #include <cmath>
@@ -348,9 +349,9 @@ ebus::Sequence Command::getVectorFromString(std::string_view value,
     // zero-substitution on malformed input (toBytes floors odd lengths
     // and ignores from_chars errors).
     if (value.size() != 2 * need) return {};
-    for (char c : value) {
-      if (!isxdigit((unsigned char)c)) return {};
-    }
+    if (std::any_of(value.begin(), value.end(),
+                    [](unsigned char c) { return !std::isxdigit(c); }))
+      return {};
     uint8_t hex_buf[256];
     size_t hex_len = ebus::toBytes(value, hex_buf, sizeof(hex_buf));
     if (hex_len != need) return {};
