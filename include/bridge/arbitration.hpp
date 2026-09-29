@@ -39,12 +39,12 @@ class Arbitration {
   // - late        : arbitration not started because the start is too late
   //                 compared to the SYN symbol received
   enum Result { started, not_started, late };
-  Result start(const BusState& busstate, uint8_t master,
+  Result start(const BusState& bus_state, uint8_t master,
                uint32_t start_bit_time);
 
   // A symbol was received on the bus, what does this do to the arbitration
   // state? Return values: see description of state enum value
-  Arbitration::State data(BusState& busstate, uint8_t symbol,
+  Arbitration::State data(BusState& bus_state, uint8_t symbol,
                           uint32_t start_bit_time);
 
  private:
