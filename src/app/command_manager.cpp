@@ -33,6 +33,7 @@ const char* commandsFilePath() { return "/littlefs/commands.json"; }
 const char* commandsFilePath() {
   static char path[256];
   static const int path_length =
+      // cppcheck-suppress invalidPrintfArgType_s
       std::snprintf(path, sizeof(path), "%s.%ld", EBUS_COMMANDS_FILE_PATH,
                     static_cast<long>(getpid()));
   (void)path_length;
@@ -45,6 +46,7 @@ const char* commandsTempFilePath() { return "/littlefs/commands.json.tmp"; }
 const char* commandsTempFilePath() {
   static char path[256];
   static const int path_length =
+      // cppcheck-suppress invalidPrintfArgType_s
       std::snprintf(path, sizeof(path), "%s.%ld", EBUS_COMMANDS_TMP_FILE_PATH,
                     static_cast<long>(getpid()));
   (void)path_length;
