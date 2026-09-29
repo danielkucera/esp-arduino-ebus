@@ -39,6 +39,8 @@ bool AppConfigLoader::load(AppConfig& config) {
                               config_manager_.readString("wifiBssid"));
   assignFixedStringIfNotEmpty(config.network.ap_password,
                               config_manager_.readString("apModePassword"));
+  config.network.wifi_full_scan =
+      config_manager_.readBool("wifiFullScan", config.network.wifi_full_scan);
 
   config.network.static_ip_enabled =
       config_manager_.readBool("staticIPEnabled");
@@ -110,6 +112,8 @@ bool AppConfigLoader::save(const AppConfig& config) {
                                     config.network.wifi_bssid.c_str());
   ok &= config_manager_.writeString("apModePassword",
                                     config.network.ap_password.c_str());
+  ok &= config_manager_.writeString(
+      "wifiFullScan", config.network.wifi_full_scan ? "true" : "false");
 
   ok &= config_manager_.writeString(
       "staticIPEnabled", config.network.static_ip_enabled ? "true" : "false");

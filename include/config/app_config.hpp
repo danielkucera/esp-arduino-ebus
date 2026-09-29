@@ -12,7 +12,13 @@ struct AppConfig {
     ebus::FixedString<32> wifi_ssid;
     ebus::FixedString<64> wifi_password;
     ebus::FixedString<18> wifi_bssid;
-    ebus::FixedString<32> ap_password;
+    // Preserve valid 63-character passphrases and an invalid-length sentinel
+    // (64 characters), instead of truncating invalid input to a valid length.
+    ebus::FixedString<65> ap_password;
+    bool wifi_full_scan = true;
+
+    // Preserve the recovery AP even when a legacy stored password is invalid.
+    std::string_view recoveryApPassword() const;
 
     bool static_ip_enabled = false;
     ebus::FixedString<16> ip_address;

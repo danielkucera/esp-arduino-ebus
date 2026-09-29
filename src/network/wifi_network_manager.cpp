@@ -17,14 +17,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 
 #include "app/app_limits.hpp"
-#include "config/config_manager.hpp"
 #include "network/detail/wifi.hpp"
 #include "system/logger.hpp"
 
-ConfigManager* WifiNetworkManager::configManager_ = nullptr;
+AppConfig::Network WifiNetworkManager::networkConfig_{};
 esp_ip4_addr_t WifiNetworkManager::ipAddress_{};
 esp_ip4_addr_t WifiNetworkManager::gateway_{};
 esp_ip4_addr_t WifiNetworkManager::netmask_{};
@@ -32,7 +32,6 @@ esp_ip4_addr_t WifiNetworkManager::dns1_{};
 esp_ip4_addr_t WifiNetworkManager::dns2_{};
 uint32_t WifiNetworkManager::lastConnect_ = 0;
 int WifiNetworkManager::reconnectCount_ = 0;
-int WifiNetworkManager::consecutiveFailures_ = 0;
 bool WifiNetworkManager::staConnected_ = false;
 bool WifiNetworkManager::staConfigured_ = false;
 TaskHandle_t WifiNetworkManager::statusLedTaskHandle_ = nullptr;
@@ -44,39 +43,60 @@ void (*WifiNetworkManager::staIpAssignedCallback_)(
 esp_netif_t* WifiNetworkManager::staNetif_ = nullptr;
 esp_netif_t* WifiNetworkManager::apNetif_ = nullptr;
 
-void WifiNetworkManager::begin(ConfigManager* configManager) {
+namespace {
+
+uint8_t consecutiveDisconnects = 0;
+esp_timer_handle_t reconnectTimer = nullptr;
+bool recoveryApConfigured = false;
+
+void scheduleReconnect(uint64_t delayUs);
+
+void reconnectTimerCallback(void*) {
+  const esp_err_t result = esp_wifi_connect();
+  if (result != ESP_OK) {
+    logger.warn(std::string("STA reconnect failed: ") +
+                esp_err_to_name(result));
+    scheduleReconnect(5000000);
+  }
+}
+
+void scheduleReconnect(uint64_t delayUs) {
+  if (reconnectTimer == nullptr) return;
+  esp_timer_stop(reconnectTimer);
+  const esp_err_t result = esp_timer_start_once(reconnectTimer, delayUs);
+  if (result != ESP_OK) {
+    logger.warn(std::string("Failed to schedule STA reconnect: ") +
+                esp_err_to_name(result));
+  }
+}
+
+}  // namespace
+
+bool WifiNetworkManager::begin(const AppConfig& config) {
   static constexpr const char* default_hostname = "esp-eBus";
   static constexpr const char* default_ap_ssid = "esp-eBus";
-  static constexpr const char* default_ap_password = "ebusebus";
   static bool started = false;
-  if (started) return;
+  if (started) return getMode() != WIFI_MODE_NULL;
   started = true;
 
-  configManager_ = configManager;
+  networkConfig_ = config.network;
   initStatusLed();
   setStatusLedMode(StatusLedMode::SlowBlink);
 
-  std::string apPassword = configManager_ != nullptr
-                               ? std::string(configManager_->readString(
-                                     "apModePassword", default_ap_password))
-                               : std::string(default_ap_password);
-  if (apPassword.empty()) apPassword = default_ap_password;
-  const std::string configuredThingName =
-      configManager_ != nullptr ? std::string(configManager_->readString(
-                                      "thingName", default_hostname))
-                                : std::string(default_hostname);
+  const std::string apPassword(networkConfig_.recoveryApPassword());
+  const std::string configuredThingName(config.mqtt_ha.thing_name.c_str());
   const std::string hostname = network::detail::wifi::buildHostname(
       configuredThingName, default_hostname);
 
   esp_err_t err = esp_netif_init();
   if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
     logger.error("esp_netif_init failed");
-    return;
+    return false;
   }
   err = esp_event_loop_create_default();
   if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
     logger.error("esp_event_loop_create_default failed");
-    return;
+    return false;
   }
 
   if (staNetif_ == nullptr) {
@@ -89,7 +109,7 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   if (esp_wifi_init(&cfg) != ESP_OK) {
     logger.error("esp_wifi_init failed");
-    return;
+    return false;
   }
 
   esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
@@ -105,12 +125,25 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
 
   if (esp_wifi_set_mode(WIFI_MODE_APSTA) != ESP_OK) {
     logger.error("Failed to set WiFi mode");
-    return;
+    return false;
   }
 
   if (esp_wifi_start() != ESP_OK) {
     logger.error("Failed to start WiFi");
-    return;
+    return false;
+  }
+
+  if (reconnectTimer == nullptr) {
+    const esp_timer_create_args_t reconnectTimerArgs = {
+        .callback = reconnectTimerCallback,
+        .arg = nullptr,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "wifi_reconnect",
+        .skip_unhandled_events = true,
+    };
+    if (esp_timer_create(&reconnectTimerArgs, &reconnectTimer) != ESP_OK) {
+      logger.warn("Failed to create STA reconnect timer");
+    }
   }
 
   // Initialize mDNS
@@ -139,29 +172,22 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
   if (esp_wifi_set_config(WIFI_IF_AP, &apConfig) != ESP_OK) {
     logger.error("AP config apply failed");
   } else {
+    recoveryApConfigured = true;
     char buf[64];
     snprintf(buf, sizeof(buf), "AP ready: %s (%s)", default_ap_ssid,
              (apConfig.ap.authmode == WIFI_AUTH_OPEN ? "open" : "wpa2"));
     logger.info(buf);
   }
 
-  std::string staSsid =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiSsid", "ebus-test"))
-          : std::string("ebus-test");
-  std::string staPass =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiPassword", "lectronz"))
-          : std::string("lectronz");
-  std::string staBssid =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiBssid", ""))
-          : std::string("");
+  const std::string staSsid(networkConfig_.wifi_ssid.c_str());
+  const std::string staPass(networkConfig_.wifi_password.c_str());
+  const std::string staBssid(networkConfig_.wifi_bssid.c_str());
+  const bool wifi_full_scan = networkConfig_.wifi_full_scan;
   staConfigured_ = !staSsid.empty();
 
   if (!staConfigured_) {
     logger.warn("STA credentials missing, AP-only mode");
-    return;
+    return true;
   }
 
   configureStaticIpIfEnabled();
@@ -171,6 +197,11 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
                sizeof(staConfig.sta.ssid) - 1);
   std::strncpy(reinterpret_cast<char*>(staConfig.sta.password), staPass.c_str(),
                sizeof(staConfig.sta.password) - 1);
+  staConfig.sta.scan_method =
+      wifi_full_scan ? WIFI_ALL_CHANNEL_SCAN : WIFI_FAST_SCAN;
+  staConfig.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+  staConfig.sta.threshold.authmode =
+      staPass.empty() ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_PSK;
 
   // Parse and set BSSID if provided (format: xx:xx:xx:xx:xx:xx)
   if (!staBssid.empty()) {
@@ -190,17 +221,31 @@ void WifiNetworkManager::begin(ConfigManager* configManager) {
 
   if (esp_wifi_set_config(WIFI_IF_STA, &staConfig) != ESP_OK) {
     logger.error("STA config apply failed");
-    return;
+    return false;
+  }
+  // Keep modem sleep disabled for both bridge and INTERNAL profiles, as in
+  // upstream: predictable network latency matters for both operating modes.
+  if (esp_wifi_set_ps(WIFI_PS_NONE) != ESP_OK) {
+    logger.warn("Failed to configure WiFi power saving");
+  }
+  // Start configured installations in station-only mode. Keeping the AP radio
+  // active during the initial all-channel scan can constrain the scan to the
+  // temporary AP channel on some ESP32-C3/IDF combinations. The disconnect
+  // handler restores AP+STA after repeated failures as a recovery path.
+  if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK) {
+    logger.warn("Failed to switch WiFi to station mode");
   }
   char buf[64];
   snprintf(buf, sizeof(buf), "Connecting STA to SSID: %s", staSsid.c_str());
   logger.info(buf);
   setStatusLedMode(StatusLedMode::SlowBlink);
-  // No modem sleep on a mains-powered bus adapter: DTIM-gated RX adds
-  // up to hundreds of ms link jitter and wake bursts preempt everything
-  // below WiFi priority (including the bus thread) at the worst moment.
-  esp_wifi_set_ps(WIFI_PS_NONE);
-  esp_wifi_connect();
+  const esp_err_t connectResult = esp_wifi_connect();
+  if (connectResult != ESP_OK) {
+    logger.warn(std::string("Initial STA connect failed: ") +
+                esp_err_to_name(connectResult));
+    scheduleReconnect(1000000);
+  }
+  return true;
 }
 
 uint32_t WifiNetworkManager::getLastConnect() { return lastConnect_; }
@@ -208,6 +253,28 @@ uint32_t WifiNetworkManager::getLastConnect() { return lastConnect_; }
 int WifiNetworkManager::getReconnectCount() { return reconnectCount_; }
 
 bool WifiNetworkManager::isStaConnected() { return staConnected_; }
+
+bool WifiNetworkManager::isRecoveryAccessPointReady() {
+  const wifi_mode_t mode = getMode();
+  return recoveryApConfigured &&
+         (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA);
+}
+
+bool WifiNetworkManager::ensureRecoveryAccessPoint() {
+  if (!recoveryApConfigured) {
+    logger.error("Recovery AP configuration is unavailable");
+    return false;
+  }
+  if (isRecoveryAccessPointReady()) return true;
+  const esp_err_t result = esp_wifi_set_mode(WIFI_MODE_APSTA);
+  if (result != ESP_OK) {
+    logger.error(std::string("Failed to enable recovery AP: ") +
+                 esp_err_to_name(result));
+    return false;
+  }
+  logger.warn("Recovery AP enabled");
+  return true;
+}
 
 std::string_view WifiNetworkManager::getIpAddress() {
   if (ipAddress_.addr != 0) return ipToString(ipAddress_);
@@ -235,8 +302,7 @@ void WifiNetworkManager::setStaIpAssignedCallback(
 }
 
 bool WifiNetworkManager::isStaticIpEnabled() {
-  return configManager_ != nullptr &&
-         configManager_->readBool("staticIPEnabled");
+  return networkConfig_.static_ip_enabled;
 }
 
 wifi_mode_t WifiNetworkManager::getMode() {
@@ -246,33 +312,23 @@ wifi_mode_t WifiNetworkManager::getMode() {
 }
 
 std::string WifiNetworkManager::getConfiguredIpAddress() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("ipAddress"))
-             : "";
+  return std::string(networkConfig_.ip_address.c_str());
 }
 
 std::string WifiNetworkManager::getConfiguredGateway() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("gateway"))
-             : "";
+  return std::string(networkConfig_.gateway.c_str());
 }
 
 std::string WifiNetworkManager::getConfiguredNetmask() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("netmask"))
-             : "";
+  return std::string(networkConfig_.netmask.c_str());
 }
 
 std::string WifiNetworkManager::getConfiguredDns1() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("dns1"))
-             : "";
+  return std::string(networkConfig_.dns1.c_str());
 }
 
 std::string WifiNetworkManager::getConfiguredDns2() {
-  return configManager_ != nullptr
-             ? std::string(configManager_->readString("dns2"))
-             : "";
+  return std::string(networkConfig_.dns2.c_str());
 }
 
 bool WifiNetworkManager::getStaIpInfo(esp_netif_ip_info_t* outInfo) {
@@ -360,9 +416,10 @@ void WifiNetworkManager::handle_event(
     void* arg, esp_event_base_t event_base, int32_t event_id,
     void* event_data) {  // cppcheck-suppress constParameterCallback
   (void)arg;
-  (void)event_base;
 
-  if (event_id == IP_EVENT_STA_GOT_IP) {
+  if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+    consecutiveDisconnects = 0;
+    if (reconnectTimer != nullptr) esp_timer_stop(reconnectTimer);
     if (event_data != nullptr) {
       const auto* gotIpEvent =
           static_cast<const ip_event_got_ip_t*>(event_data);
@@ -379,36 +436,60 @@ void WifiNetworkManager::handle_event(
     }
 
     staConnected_ = true;
-    consecutiveFailures_ = 0;
     setStatusLedMode(StatusLedMode::SolidOn);
     lastConnect_ = (uint32_t)(esp_timer_get_time() / 1000ULL);
     ++reconnectCount_;
 
-    if (getMode() != WIFI_MODE_STA) {
-      if (esp_wifi_set_mode(WIFI_MODE_STA) == ESP_OK) {
-        logger.info("Switched WiFi mode to STA only");
-      } else {
-        logger.warn("Failed to switch WiFi mode to STA only");
-      }
-    }
-  } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
+  } else if (event_base == WIFI_EVENT &&
+             event_id == WIFI_EVENT_STA_DISCONNECTED) {
     staConnected_ = false;
     setStatusLedMode(StatusLedMode::SlowBlink);
     logger.warn("STA disconnected, reconnecting");
 
-    if (++consecutiveFailures_ == maxConsecutiveFailures) logWifiSlice();
-
-    if (esp_wifi_set_mode(WIFI_MODE_APSTA) != ESP_OK) {
-      logger.error("Failed to set WiFi mode");
-      return;
+    if (consecutiveDisconnects < std::numeric_limits<uint8_t>::max()) {
+      ++consecutiveDisconnects;
+    }
+    if (consecutiveDisconnects >= 3 && getMode() == WIFI_MODE_STA) {
+      ensureRecoveryAccessPoint();
     }
 
-    if (staConfigured_) esp_wifi_connect();
+    if (staConfigured_) {
+      const uint64_t delayUs =
+          consecutiveDisconnects < 3
+              ? 1000000ULL
+              : std::min<uint64_t>(30000000ULL,
+                                   5000000ULL * (consecutiveDisconnects - 2));
+      scheduleReconnect(delayUs);
+    }
   }
 }
 
 TaskHandle_t WifiNetworkManager::getStatusLedTaskHandle() {
   return statusLedTaskHandle_;
+}
+
+const char* WifiNetworkManager::powerSaveMode() {
+  wifi_ps_type_t mode = WIFI_PS_NONE;
+  if (esp_wifi_get_ps(&mode) != ESP_OK) return "unavailable";
+  switch (mode) {
+    case WIFI_PS_NONE:
+      return "disabled";
+    case WIFI_PS_MIN_MODEM:
+      return "minimum_modem";
+    case WIFI_PS_MAX_MODEM:
+      return "maximum_modem";
+    default:
+      return "unknown";
+  }
+}
+
+const char* WifiNetworkManager::scanMethod() {
+  wifi_config_t config{};
+  if (esp_wifi_get_config(WIFI_IF_STA, &config) != ESP_OK) {
+    return "unavailable";
+  }
+  return config.sta.scan_method == WIFI_ALL_CHANNEL_SCAN ? "all_channels"
+                                                          : "fast";
 }
 
 void WifiNetworkManager::statusLedTaskEntry(void* arg) {
@@ -532,33 +613,6 @@ void WifiNetworkManager::configureStaticIpIfEnabled() {
   }
 }
 
-// Console-only diagnostics (see header): full WiFi slice with password.
-// Worst case ~261 chars (bounded by FixedString sizes), fits max_msg_length.
-void WifiNetworkManager::logWifiSlice() {
-  const std::string ssid =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiSsid", ""))
-          : std::string("");
-  const std::string pass =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiPassword", ""))
-          : std::string("");
-  const std::string bssid =
-      configManager_ != nullptr
-          ? std::string(configManager_->readString("wifiBssid", ""))
-          : std::string("");
-  char buf[320];
-  const int n = snprintf(
-      buf, sizeof(buf),
-      "wifi: ssid='%s' pass='%s' bssid='%s' static=%s ip=%s gw=%s mask=%s "
-      "dns1=%s dns2=%s",
-      ssid.c_str(), pass.c_str(), bssid.c_str(),
-      isStaticIpEnabled() ? "true" : "false", getConfiguredIpAddress().c_str(),
-      getConfiguredGateway().c_str(), getConfiguredNetmask().c_str(),
-      getConfiguredDns1().c_str(), getConfiguredDns2().c_str());
-  if (n > 0) logger.warn(buf);
-}
-
 void appendWifiStatus(ebus::detail::JsonWriter& writer) {
   writer.writeField("last_connect", WifiNetworkManager::getLastConnect());
   writer.writeField("reconnect_count", WifiNetworkManager::getReconnectCount());
@@ -595,6 +649,8 @@ void appendWifiStatus(ebus::detail::JsonWriter& writer) {
   writer.writeField("ssid", WifiNetworkManager::SSID());
   writer.writeField("bssid", WifiNetworkManager::BSSIDstr());
   writer.writeField("channel", WifiNetworkManager::channel());
+  writer.writeField("power_save", WifiNetworkManager::powerSaveMode());
+  writer.writeField("scan_method", WifiNetworkManager::scanMethod());
   writer.writeField("hostname", WifiNetworkManager::getHostname());
   writer.writeField("mac_address", WifiNetworkManager::macAddress());
 }

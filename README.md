@@ -82,3 +82,39 @@ This mode enables **standalone operation** without requiring external software s
 - 🧩 Compatible with existing eBUS tools and ecosystems
 
 ---
+
+## Wi-Fi policy and recovery
+
+Wi-Fi modem sleep is disabled (`WIFI_PS_NONE`) in both bridge and INTERNAL
+profiles, following upstream's reliability policy. There is no power-saving
+setting; any previously stored `wifiPowerSave` value is ignored.
+The configuration page exposes `wifiFullScan` (default true).
+Full scan considers all channels and sorts by
+signal strength; a configured BSSID still pins selection. The status API reports
+the effective power-save and scan policies.
+
+A configured adapter starts in STA mode. Repeated disconnects use bounded
+reconnect backoff and enable a persistent recovery access point. The fallback
+stays available after STA reconnects until a restart. Wi-Fi and IP events are
+handled in their own event families, preventing overlapping numeric IDs from
+being interpreted as the wrong event. This does not change station credentials
+or automatically tune PWM.
+
+Wi-Fi consumes a boot-time copy of the loaded `AppConfig`; it does not read
+NVS directly. `AppConfigLoader` loads and saves `wifiFullScan` alongside the
+other network fields through `ConfigManager`. Saved changes are staged until
+restart and included in configuration drift reporting. A missing or empty SSID
+keeps the adapter in provisioning AP mode. Recovery AP password fallback is
+evaluated by `AppConfig`, preserving valid passphrases up to 63 characters.
+
+Hardware verification must cover successful STA boot, a missing configured AP,
+recovery AP reachability and STA restoration. The combined candidate was tested
+for continuous reachability after OTA and restart; not every failure scenario
+has been exercised on every supported board.
+
+The Wi-Fi regression tests use Catch2 and run through the existing CTest/GitHub
+Actions host-test workflow. They compile the production Wi-Fi manager for both
+bridge and INTERNAL profiles with isolated ESP-IDF mocks, covering modem-sleep
+policy, typed boot configuration, event-family separation,
+bounded reconnects, retry failures and persistent recovery AP state.
+These host tests do not emulate RF conditions, DHCP or actual AP reachability.

@@ -181,6 +181,24 @@ target_link_libraries(network_tests PRIVATE
     Catch2::Catch2WithMain
 )
 
+# Exercise the production Wi-Fi manager in both firmware profiles, replacing
+# only the ESP-IDF boundary. Keep mocks isolated from API tests.
+foreach(profile bridge internal)
+    add_executable(wifi_manager_${profile}_tests
+        ${PROJECT_ROOT}/src/network/wifi_network_manager.cpp
+        ${PROJECT_ROOT}/src/config/app_config.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/network/wifi_manager_tests.cpp
+    )
+    target_include_directories(wifi_manager_${profile}_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/mocks/wifi
+        ${CMAKE_CURRENT_SOURCE_DIR}/mocks
+        ${PROJECT_ROOT}/include
+        ${EBUS_SOURCE_DIR}/include
+    )
+    target_link_libraries(wifi_manager_${profile}_tests PRIVATE ebus Catch2::Catch2WithMain)
+endforeach()
+target_compile_definitions(wifi_manager_internal_tests PRIVATE EBUS_INTERNAL=1)
+
 add_executable(system_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/system/string_pool_tests.cpp
 )
@@ -276,6 +294,8 @@ if(NOT DISABLE_CATCH_DISCOVERY)
   catch_discover_tests(app_tests PROPERTIES RESOURCE_LOCK app_test_persistence)
   catch_discover_tests(config_tests)
   catch_discover_tests(network_tests)
+  catch_discover_tests(wifi_manager_bridge_tests TEST_PREFIX "bridge: ")
+  catch_discover_tests(wifi_manager_internal_tests TEST_PREFIX "internal: ")
   catch_discover_tests(system_tests)
   catch_discover_tests(http_utils_tests)
   catch_discover_tests(logger_tests)

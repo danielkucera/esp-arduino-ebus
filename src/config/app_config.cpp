@@ -10,8 +10,7 @@
 
 void AppConfig::reset() {
   *this = AppConfig{};
-  network.wifi_ssid = "ebus-test";
-  network.wifi_password = "lectronz";
+  // No configured station: boot into provisioning/recovery AP mode.
   network.ap_password = "ebusebus";
   sntp.server = "pool.ntp.org";
   sntp.timezone = "UTC0";
@@ -26,17 +25,16 @@ void AppConfig::reset() {
 }
 
 bool AppConfig::isValid() const {
-  // 1. Required network credentials
-  if (network.wifi_ssid.empty()) return false;
+  // An empty SSID is valid: the adapter can operate in provisioning AP mode.
 
-  // 2. PWM
+  // PWM
   if (pwm.value < app::limits::Pwm::min || pwm.value > app::limits::Pwm::max)
     return false;
 
-  // 3. eBUS address must be non-empty and fit the FixedString capacity.
+  // eBUS address must be non-empty and fit the FixedString capacity.
   if (bus.address.empty()) return false;
 
-  // 4. Bus timing
+  // Bus timing
   if (bus.window_us < app::limits::Bus::window_min_us ||
       bus.window_us > app::limits::Bus::window_max_us)
     return false;
@@ -45,6 +43,11 @@ bool AppConfig::isValid() const {
   if (bus.offset_us > app::limits::Bus::offset_max_us) return false;
 
   return true;
+}
+
+std::string_view AppConfig::Network::recoveryApPassword() const {
+  if (ap_password.size() < 8 || ap_password.size() > 63) return "ebusebus";
+  return {ap_password.c_str(), ap_password.size()};
 }
 
 namespace {
@@ -86,7 +89,8 @@ void assignFlatU16(uint16_t& dst, std::string_view value) {
 
 bool AppConfig::isKnownFlatKey(std::string_view key) {
   return key == "wifiSsid" || key == "wifiPassword" || key == "wifiBssid" ||
-         key == "apModePassword" || key == "staticIPEnabled" ||
+         key == "apModePassword" || key == "wifiFullScan" ||
+         key == "staticIPEnabled" ||
          key == "ipAddress" || key == "gateway" || key == "netmask" ||
          key == "dns1" || key == "dns2" || key == "sntpEnabled" ||
          key == "sntpServer" || key == "sntpTimezone" || key == "pwmValue" ||
@@ -132,6 +136,8 @@ bool AppConfig::mergeFlatJson(
         network.wifi_bssid.assign(value);
       } else if (key == "apModePassword") {
         if (!value.empty()) network.ap_password.assign(value);
+      } else if (key == "wifiFullScan") {
+        network.wifi_full_scan = parseFlatBool(value);
       } else if (key == "staticIPEnabled") {
         network.static_ip_enabled = parseFlatBool(value);
       } else if (key == "ipAddress") {
@@ -208,6 +214,8 @@ void AppConfig::collectDrift(const AppConfig& live, const AppConfig& requested,
     keys.emplace_back("wifiBssid");
   if (driftStr(live.network.ap_password, requested.network.ap_password))
     keys.emplace_back("apModePassword");
+  if (live.network.wifi_full_scan != requested.network.wifi_full_scan)
+    keys.emplace_back("wifiFullScan");
   if (live.network.static_ip_enabled != requested.network.static_ip_enabled)
     keys.emplace_back("staticIPEnabled");
   if (driftStr(live.network.ip_address, requested.network.ip_address))
