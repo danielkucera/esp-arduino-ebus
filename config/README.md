@@ -15,20 +15,20 @@ Commands are defined as a JSON array of objects. Each command object specifies a
     "name": "Buffer/Middle_Temperature",
     "read_cmd": "08b50903290100",
     "write_cmd": "",
-    "interval": 60,
+    "interval": 0,
     "master": false,
     "fields": [
       {
-        "name": "middle_temperature",
+        "name": "value",
         "profile": "data2c_celsius",
-        "position": 1,
+        "position": 3,
         "ha_profile": "sensor_temperature"
       },
       {
-        "name": "state",
+        "name": "status",
         "profile": "uint8",
-        "position": 3,
-        "ha_profile": "sensor_enum_state"
+        "position": 5,
+        "ha_profile": "sensor_enum_sensor_state"
       }
     ]
   },
@@ -66,8 +66,8 @@ Commands are defined as a JSON array of objects. Each command object specifies a
 
 #### Field Properties
 - **`name`** *(string)*: Field identifier used as the key in MQTT value JSON payload (`{"middle_temperature": 49.3, "state": 85}`).
-- **`profile`** *(string)*: Reference to a Data Profile in `profiles/data_profiles.json` (e.g. `"data2c_celsius"`, `"unit8"`).
-- **`position`** *(integer)*: 1-based offset of the field within the eBUS message payload (default `1`).
+- **`profile`** *(string)*: Reference to a Data Profile in `profiles/data_profiles.json` (e.g. `"data2c_celsius"`, `"uint8"`).
+- **`position`** *(integer)*: 1-based offset of the field within the eBUS message payload. No default — `0` never matches.
 - **`ha_profile`** *(string, optional)*: Reference to an HA Profile in `profiles/ha_profiles.json` (e.g. `"sensor_temperature"`). If omitted or empty, no Home Assistant entity is registered for this field.
 - **`min`** *(float, optional)*: Override the profile's default min value for write validation (e.g. `15` for a setpoint with profile `data1c_celsius` default min=0).
 - **`max`** *(float, optional)*: Override the profile's default max value for write validation (e.g. `20` for a setpoint with profile `data1c_celsius` default max=75).

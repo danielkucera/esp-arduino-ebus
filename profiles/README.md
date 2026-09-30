@@ -2,7 +2,7 @@
 
 This directory contains compile-time definitions for **Data Profiles** and **Home Assistant (HA) Profiles**. 
 
-At build time, Python scripts (`scripts/generate_data_profiles.py` and `scripts/generate_ha_profiles.py`) convert these JSON files into static C++ headers (`include/data_profile_gen.hpp` and `include/ha_profile_gen.hpp`) with zero heap allocation overhead.
+At build time, Python scripts (`scripts/generate_data_profiles.py` and `scripts/generate_ha_profiles.py`) convert these JSON files into static C++ headers (`include/app/data_profile_gen.hpp` and `include/app/ha_profile_gen.hpp`) with zero heap allocation overhead.
 
 ---
 
@@ -59,8 +59,8 @@ Profiles can define discrete state/enum mappings for Home Assistant `select` or 
   "device_class": "enum",
   "state_class": "measurement",
   "key_value_pairs": [
-    [0, "Ok"],
-    [1, "Error"]
+    {"key": 0, "value": "ok"},
+    {"key": 1, "value": "error"}
   ]
 }
 ```
