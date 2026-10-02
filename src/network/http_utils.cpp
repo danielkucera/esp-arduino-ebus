@@ -13,7 +13,7 @@
 namespace HttpUtils {
 
 namespace {
-std::vector<std::pair<std::string, std::string>> customHeaders;
+std::vector<std::pair<std::string, std::string>> custom_headers;
 
 char streaming_buffer[streaming_buffer_size];
 ebus::detail::JsonReader streaming_reader(streaming_buffer,
@@ -63,8 +63,8 @@ bool StreamingReader::feedAll() {
   char tmp[512];
   int remaining = req_->content_len;
   while (remaining > 0) {
-    int toRead = std::min(remaining, static_cast<int>(sizeof(tmp)));
-    int received = httpd_req_recv(req_, tmp, toRead);
+    int to_read = std::min(remaining, static_cast<int>(sizeof(tmp)));
+    int received = httpd_req_recv(req_, tmp, to_read);
     if (received <= 0) {
       return false;
     }
@@ -139,9 +139,9 @@ std::string readBody(httpd_req_t* req) {
 
   char tmp[512];
   while (remaining > 0) {
-    int toRead =
+    int to_read =
         remaining > static_cast<int>(sizeof(tmp)) ? sizeof(tmp) : remaining;
-    int received = httpd_req_recv(req, tmp, toRead);
+    int received = httpd_req_recv(req, tmp, to_read);
     if (received <= 0) return "";
     out.append(tmp, received);
     remaining -= received;
@@ -151,7 +151,7 @@ std::string readBody(httpd_req_t* req) {
 }
 
 void setCustomHeaders(const std::string& raw) {
-  customHeaders.clear();
+  custom_headers.clear();
   size_t pos = 0;
   while (pos < raw.size()) {
     size_t end = raw.find('\n', pos);
@@ -166,7 +166,7 @@ void setCustomHeaders(const std::string& raw) {
       // Trim leading space from value
       if (!value.empty() && value.front() == ' ') value.erase(0, 1);
       if (!name.empty() && !value.empty())
-        customHeaders.emplace_back(std::move(name), std::move(value));
+        custom_headers.emplace_back(std::move(name), std::move(value));
     }
     pos = end + 1;
   }
@@ -207,7 +207,7 @@ void sendSuccessResponse(httpd_req_t* req, std::string_view id,
 }
 
 void applyCustomHeaders(httpd_req_t* req) {
-  for (const auto& h : customHeaders)
+  for (const auto& h : custom_headers)
     httpd_resp_set_hdr(req, h.first.c_str(), h.second.c_str());
 }
 

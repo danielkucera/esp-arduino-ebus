@@ -26,18 +26,18 @@ std::string makeCommandJson() {
 }
 
 void insertTestCommand() {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   const std::string command_json = makeCommandJson();
   ebus::detail::JsonReader reader(command_json);
   Command command = Command::fromJson(reader);
-  commandManager.insertCommand(std::move(command));
+  command_manager.insertCommand(std::move(command));
 }
 
 }  // namespace
 
 TEST_CASE("ValuesApi serves the values page", "[values_api]") {
-  commandManager.wipeCommands();
-  ValuesApi api(commandManager);
+  command_manager.wipeCommands();
+  ValuesApi api(command_manager);
   httpd_req_t req{};
 
   REQUIRE(ValuesApi::handleValuesPage(&req) == ESP_OK);
@@ -48,9 +48,9 @@ TEST_CASE("ValuesApi serves the values page", "[values_api]") {
 
 TEST_CASE("ValuesApi reads and writes by key", "[values_api]") {
   insertTestCommand();
-  REQUIRE(commandManager.findCommand("01") != nullptr);
+  REQUIRE(command_manager.findCommand("01") != nullptr);
 
-  ValuesApi api(commandManager);
+  ValuesApi api(command_manager);
 
   httpd_req_t read_req{};
   read_req.body = R"({"key":"01"})";
@@ -81,12 +81,12 @@ TEST_CASE("ValuesApi reads and writes by key", "[values_api]") {
           std::string::npos);
   REQUIRE(list_req.chunks.back().empty());
 
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 }
 
 TEST_CASE("ValuesApi rejects unknown keys", "[values_api]") {
-  commandManager.wipeCommands();
-  ValuesApi api(commandManager);
+  command_manager.wipeCommands();
+  ValuesApi api(command_manager);
 
   httpd_req_t read_req{};
   read_req.body = R"({"key":"missing"})";
@@ -109,7 +109,7 @@ TEST_CASE("ValuesApi rejects unknown keys", "[values_api]") {
 
 TEST_CASE("ValuesApi rejects malformed and invalid writes", "[values_api]") {
   insertTestCommand();
-  ValuesApi api(commandManager);
+  ValuesApi api(command_manager);
 
   httpd_req_t malformed_req{};
   malformed_req.body = R"({"key":"01","value":)";
@@ -130,5 +130,5 @@ TEST_CASE("ValuesApi rejects malformed and invalid writes", "[values_api]") {
   REQUIRE(invalid_value_req.final_body.find("Invalid value for key '01'") !=
           std::string::npos);
 
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 }

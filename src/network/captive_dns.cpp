@@ -11,14 +11,14 @@ namespace {
 
 constexpr uint16_t captive_dns_port = 53;
 constexpr const char* captive_dns_ip_string = "192.168.4.1";
-const esp_ip4_addr_t kCaptiveDnsIp = {.addr = ESP_IP4TOADDR(192, 168, 4, 1)};
+const esp_ip4_addr_t captive_dns_ip = {.addr = ESP_IP4TOADDR(192, 168, 4, 1)};
 
-DNSServer captiveDnsServer;
+DNSServer captive_dns_server;
 
 }  // namespace
 
 void startCaptiveDns() {
-  if (captiveDnsServer.start(captive_dns_port, "*", kCaptiveDnsIp)) {
+  if (captive_dns_server.start(captive_dns_port, "*", captive_dns_ip)) {
     char buf[64];
     snprintf(buf, sizeof(buf), "Captive DNS started on %s",
              captive_dns_ip_string);
@@ -30,5 +30,5 @@ void startCaptiveDns() {
 }
 
 TaskHandle_t getCaptiveDnsTaskHandle() {
-  return captiveDnsServer.getTaskHandle();
+  return captive_dns_server.getTaskHandle();
 }

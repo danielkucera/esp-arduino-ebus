@@ -6,7 +6,7 @@
 
 #include "config/app_config.hpp"
 
-void initSNTP(const AppConfig::Sntp& sntp);
+void initSntp(const AppConfig::Sntp& sntp);
 void setTimezone(const AppConfig::Sntp& sntp);
 
 // Renders the "sntp" status section. Colocated here (rather than in the

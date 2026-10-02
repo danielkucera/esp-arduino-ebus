@@ -16,9 +16,9 @@ using namespace ebus;
 
 Command makeCommand(const std::string& key, const std::string& name,
                     bool active, bool master, int position,
-                    const std::string& profile, const std::string& read_cmd) {
+                    const std::string& profile, const std::string& readCmd) {
   std::string json = R"({"key":")" + key + R"(","name":")" + name +
-                     R"(","read_cmd":")" + read_cmd +
+                     R"(","read_cmd":")" + readCmd +
                      R"(","write_cmd":"","interval":)" + (active ? "60" : "0") +
                      R"(,"master":)" + (master ? "true" : "false") +
                      R"(,"fields":[{"name":"value","profile":")" + profile +
@@ -29,14 +29,14 @@ Command makeCommand(const std::string& key, const std::string& name,
 }
 
 Command makeCommandMultiField(const std::string& key, const std::string& name,
-                              bool active, const std::string& read_cmd,
+                              bool active, const std::string& readCmd,
                               bool master, const std::string& field1_profile,
                               int field1_pos, const std::string& field1_ha,
                               const std::string& field2_profile, int field2_pos,
                               const std::string& field2_ha) {
   std::string json =
       R"({"key":")" + key + R"(","name":")" + name + R"(","read_cmd":")" +
-      read_cmd + R"(","write_cmd":"","interval":)" + (active ? "60" : "0") +
+      readCmd + R"(","write_cmd":"","interval":)" + (active ? "60" : "0") +
       R"(,"master":)" + (master ? "true" : "false") +
       R"(,"fields":[{"name":"field1","profile":")" + field1_profile +
       R"(","position":)" + std::to_string(field1_pos) + R"(,"ha_profile":")" +
@@ -48,82 +48,82 @@ Command makeCommandMultiField(const std::string& key, const std::string& name,
 }
 
 TEST_CASE("CommandManager insert and find by key", "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   Command cmd = makeCommand("01", "Test", true, true, 1, "uint8", "fe070009");
-  commandManager.insertCommand(cmd);
+  command_manager.insertCommand(cmd);
 
-  Command* found = commandManager.findCommand("01");
+  Command* found = command_manager.findCommand("01");
   REQUIRE(found != nullptr);
   REQUIRE(found->getKey() == "01");
   REQUIRE(found->getName() == "Test");
 
-  Command* not_found = commandManager.findCommand("99");
+  Command* not_found = command_manager.findCommand("99");
   REQUIRE(not_found == nullptr);
 }
 
 TEST_CASE("CommandManager insert updates existing command",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   Command cmd1 = makeCommand("01", "First", true, true, 1, "uint8", "fe070009");
-  commandManager.insertCommand(cmd1);
+  command_manager.insertCommand(cmd1);
 
   Command cmd2 =
       makeCommand("01", "Updated", false, true, 1, "uint8", "fe070009");
-  commandManager.insertCommand(cmd2);
+  command_manager.insertCommand(cmd2);
 
-  Command* found = commandManager.findCommand("01");
+  Command* found = command_manager.findCommand("01");
   REQUIRE(found != nullptr);
   REQUIRE(found->getName() == "Updated");
   REQUIRE(found->getActive() == false);
 }
 
 TEST_CASE("CommandManager remove command", "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   Command cmd = makeCommand("01", "Test", true, true, 1, "uint8", "fe070009");
-  commandManager.insertCommand(cmd);
+  command_manager.insertCommand(cmd);
 
-  commandManager.removeCommand("01");
-  REQUIRE(commandManager.findCommand("01") == nullptr);
+  command_manager.removeCommand("01");
+  REQUIRE(command_manager.findCommand("01") == nullptr);
 }
 
 TEST_CASE("CommandManager getCommands returns all commands",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   for (int i = 0; i < 5; i++) {
     Command cmd = makeCommand(std::to_string(i), "Test " + std::to_string(i),
                               true, true, 1, "uint8", "fe070009");
-    commandManager.insertCommand(cmd);
+    command_manager.insertCommand(cmd);
   }
 
   size_t count = 0;
-  commandManager.forEachCommand([&](const Command*) { ++count; });
+  command_manager.forEachCommand([&](const Command*) { ++count; });
   REQUIRE(count == 5);
 }
 
 TEST_CASE("CommandManager getActiveCommands counts active only",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   Command cmd1 =
       makeCommand("01", "Active", true, true, 1, "uint8", "fe070009");
-  commandManager.insertCommand(cmd1);
+  command_manager.insertCommand(cmd1);
 
   Command cmd2 =
       makeCommand("02", "Inactive", false, true, 1, "uint8", "fe070009");
-  commandManager.insertCommand(cmd2);
+  command_manager.insertCommand(cmd2);
 
-  REQUIRE(commandManager.getActiveCommands() == 1);
-  REQUIRE(commandManager.getPassiveCommands() == 1);
+  REQUIRE(command_manager.getActiveCommands() == 1);
+  REQUIRE(command_manager.getPassiveCommands() == 1);
 }
 
 TEST_CASE("CommandManager updateData decodes multi-field slave correctly",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   Command cmd = makeCommandMultiField("09", "Buffer/Middle_Temperature", false,
                                       "08b50903290100", false, "data2c_celsius",
                                       1, "", "uint8", 3, "");
   cmd.setPollId(1);
-  commandManager.insertCommand(cmd);
-  Command* cmd_ptr = commandManager.findCommand("09");
+  command_manager.insertCommand(cmd);
+  Command* cmd_ptr = command_manager.findCommand("09");
 
   uint8_t slave_bytes[] = {0x05, 0x00, 0x00, 0x00, 0x01, 0x00};
   ebus::ByteView slave(slave_bytes, 6);
@@ -132,9 +132,9 @@ TEST_CASE("CommandManager updateData decodes multi-field slave correctly",
   info.session_id = 0;
   info.poll_id = 1;
   info.slave_view = slave;
-  commandManager.updateData(info);
+  command_manager.updateData(info);
 
-  Command* found = commandManager.findCommand("09");
+  Command* found = command_manager.findCommand("09");
   REQUIRE(found != nullptr);
   REQUIRE(found->getData().size() == 5);
 
@@ -187,27 +187,27 @@ TEST_CASE("Command profile names resolve correctly after rename", "[Command]") {
 
 TEST_CASE("CommandManager findPassiveCommands matches passive read_cmd",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   Command cmd1 =
       makeCommand("01", "Match", false, true, 1, "uint8", "fe070009");
-  commandManager.insertCommand(cmd1);
+  command_manager.insertCommand(cmd1);
 
   Command cmd2 =
       makeCommand("02", "NoMatch", false, true, 1, "uint8", "080b09010a00");
-  commandManager.insertCommand(cmd2);
+  command_manager.insertCommand(cmd2);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09};
   ebus::ByteView master(master_bytes, 5);
 
-  auto matches = commandManager.findPassiveCommands(master);
+  auto matches = command_manager.findPassiveCommands(master);
   REQUIRE(matches.size() == 1);
   REQUIRE(matches[0]->getKey() == "01");
 }
 
 TEST_CASE("CommandManager updateData sets data", "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   Command cmd = makeCommand("01", "Test", false, true, 1, "uint8", "fe070009");
-  commandManager.insertCommand(cmd);
+  command_manager.insertCommand(cmd);
 
   uint8_t master_bytes[] = {0x10, 0xfe, 0x07, 0x00, 0x09, 0x00};
   ebus::ByteView master(master_bytes, 6);
@@ -216,20 +216,20 @@ TEST_CASE("CommandManager updateData sets data", "[CommandManager]") {
   info.session_id = 0;
   info.poll_id = 0;
   info.master_view = master;
-  commandManager.updateData(info);
+  command_manager.updateData(info);
 
-  Command* found = commandManager.findCommand("01");
+  Command* found = command_manager.findCommand("01");
   REQUIRE(found->getData().size() > 0);
 }
 
 TEST_CASE("CommandManager updateData stores full payload for position>1",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   Command cmd = makeCommand("08", "Buffer/Top_Temperature", false, false, 3,
                             "data2c_celsius", "25b50903290000");
   cmd.setPollId(1);
-  commandManager.insertCommand(cmd);
-  Command* cmd_ptr = commandManager.findCommand("08");
+  command_manager.insertCommand(cmd);
+  Command* cmd_ptr = command_manager.findCommand("08");
 
   uint8_t slave_bytes[] = {0x05, 0x00, 0x00, 0xef, 0x03, 0x00};
   ebus::ByteView slave(slave_bytes, 6);
@@ -238,9 +238,9 @@ TEST_CASE("CommandManager updateData stores full payload for position>1",
   info.session_id = 0;
   info.poll_id = 1;
   info.slave_view = slave;
-  commandManager.updateData(info);
+  command_manager.updateData(info);
 
-  Command* found = commandManager.findCommand("08");
+  Command* found = command_manager.findCommand("08");
   REQUIRE(found != nullptr);
   REQUIRE(found->getData().size() == 5);
 
@@ -254,12 +254,12 @@ TEST_CASE("CommandManager updateData stores full payload for position>1",
 
 TEST_CASE("CommandManager updateData stores full payload for master position>1",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   Command cmd = makeCommand("08", "Buffer/Top_Temperature", true, true, 3,
                             "data2c_celsius", "25b50903290000");
   cmd.setPollId(1);
-  commandManager.insertCommand(cmd);
-  Command* cmd_ptr = commandManager.findCommand("08");
+  command_manager.insertCommand(cmd);
+  Command* cmd_ptr = command_manager.findCommand("08");
 
   uint8_t master_bytes[] = {0x10, 0x25, 0xb5, 0x09, 0x04,
                             0x00, 0x00, 0xef, 0x03, 0x00};
@@ -269,9 +269,9 @@ TEST_CASE("CommandManager updateData stores full payload for master position>1",
   info.session_id = 0;
   info.poll_id = 1;
   info.master_view = master;
-  commandManager.updateData(info);
+  command_manager.updateData(info);
 
-  Command* found = commandManager.findCommand("08");
+  Command* found = command_manager.findCommand("08");
   REQUIRE(found != nullptr);
   REQUIRE(found->getData().size() == 4);
 
@@ -285,7 +285,7 @@ TEST_CASE("CommandManager updateData stores full payload for master position>1",
 
 TEST_CASE("CommandManager loadCommandsFrom streams JSON from file",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 
   const char* json =
       R"([{"key":"01","name":"Test1","read_cmd":"fe070009","write_cmd":"","interval":60,)"
@@ -299,18 +299,18 @@ TEST_CASE("CommandManager loadCommandsFrom streams JSON from file",
   std::fwrite(json, 1, std::strlen(json), f);
   std::fclose(f);
 
-  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
+  int64_t bytes = command_manager.loadCommandsFrom(tmp_path);
   REQUIRE(bytes >= 0);
-  REQUIRE(commandManager.getCommandCount() == 2);
-  REQUIRE(commandManager.findCommand("01") != nullptr);
-  REQUIRE(commandManager.findCommand("02") != nullptr);
+  REQUIRE(command_manager.getCommandCount() == 2);
+  REQUIRE(command_manager.findCommand("01") != nullptr);
+  REQUIRE(command_manager.findCommand("02") != nullptr);
 
   std::remove(tmp_path);
 }
 
 TEST_CASE("CommandManager loadCommandsFrom streams large JSON (47 commands)",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 
   FILE* f = std::fopen("/tmp/test_large_stream.json", "wb");
   REQUIRE(f != nullptr);
@@ -335,14 +335,14 @@ TEST_CASE("CommandManager loadCommandsFrom streams large JSON (47 commands)",
   std::fclose(f);
 
   int64_t bytes =
-      commandManager.loadCommandsFrom("/tmp/test_large_stream.json");
+      command_manager.loadCommandsFrom("/tmp/test_large_stream.json");
   REQUIRE(bytes >= 0);
-  REQUIRE(commandManager.getCommandCount() == 47);
+  REQUIRE(command_manager.getCommandCount() == 47);
 
   for (int i = 1; i <= 47; i++) {
     char key[4];
     snprintf(key, sizeof(key), "%02d", i);
-    REQUIRE(commandManager.findCommand(key) != nullptr);
+    REQUIRE(command_manager.findCommand(key) != nullptr);
   }
 
   std::remove("/tmp/test_large_stream.json");
@@ -350,7 +350,7 @@ TEST_CASE("CommandManager loadCommandsFrom streams large JSON (47 commands)",
 
 TEST_CASE("CommandManager loadCommandsFrom loads multi-field commands",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 
   const char* json =
       R"([{"key":"01","name":"Multi","read_cmd":"fe070009","write_cmd":"","interval":60,"master":true)"
@@ -365,12 +365,12 @@ TEST_CASE("CommandManager loadCommandsFrom loads multi-field commands",
   std::fwrite(json, 1, std::strlen(json), f);
   std::fclose(f);
 
-  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
+  int64_t bytes = command_manager.loadCommandsFrom(tmp_path);
   REQUIRE(bytes >= 0);
-  REQUIRE(commandManager.getCommandCount() == 1);
-  REQUIRE(commandManager.findCommand("01") != nullptr);
+  REQUIRE(command_manager.getCommandCount() == 1);
+  REQUIRE(command_manager.findCommand("01") != nullptr);
 
-  Command* found = commandManager.findCommand("01");
+  Command* found = command_manager.findCommand("01");
   REQUIRE(found->getFieldCount() == 2);
   REQUIRE(found->getFieldName(0) == std::string_view("temp"));
   REQUIRE(found->getFieldName(1) == std::string_view("sensor"));
@@ -382,7 +382,7 @@ TEST_CASE("CommandManager loadCommandsFrom loads multi-field commands",
 
 TEST_CASE("CommandManager loadCommandsFrom streams tabular format with fields",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 
   const char* json =
       R"([["key","name","read_cmd","write_cmd","interval","master","fields"],)"
@@ -399,18 +399,18 @@ TEST_CASE("CommandManager loadCommandsFrom streams tabular format with fields",
   std::fwrite(json, 1, std::strlen(json), f);
   std::fclose(f);
 
-  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
+  int64_t bytes = command_manager.loadCommandsFrom(tmp_path);
   REQUIRE(bytes >= 0);
-  REQUIRE(commandManager.getCommandCount() == 2);
-  REQUIRE(commandManager.findCommand("01") != nullptr);
-  REQUIRE(commandManager.findCommand("02") != nullptr);
+  REQUIRE(command_manager.getCommandCount() == 2);
+  REQUIRE(command_manager.findCommand("01") != nullptr);
+  REQUIRE(command_manager.findCommand("02") != nullptr);
 
   std::remove(tmp_path);
 }
 
 TEST_CASE("CommandManager loadCommandsFrom preserves min/max overrides",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 
   const char* json =
       R"([{"key":"32","name":"Basement/SetPoint","read_cmd":"50b509030d3300","write_cmd":"50b509040e3300","interval":60,"master":false)"
@@ -422,16 +422,16 @@ TEST_CASE("CommandManager loadCommandsFrom preserves min/max overrides",
   std::fwrite(json, 1, std::strlen(json), f);
   std::fclose(f);
 
-  int64_t bytes = commandManager.loadCommandsFrom(tmp_path);
+  int64_t bytes = command_manager.loadCommandsFrom(tmp_path);
   REQUIRE(bytes >= 0);
-  REQUIRE(commandManager.getCommandCount() == 1);
+  REQUIRE(command_manager.getCommandCount() == 1);
 
-  Command* found = commandManager.findCommand("32");
+  Command* found = command_manager.findCommand("32");
   REQUIRE(found != nullptr);
   REQUIRE(found->getFieldCount() == 1);
-  REQUIRE(commandManager.getFieldMinOverride(found->getKeyId(), 0) ==
+  REQUIRE(command_manager.getFieldMinOverride(found->getKeyId(), 0) ==
           Catch::Approx(15.0f));
-  REQUIRE(commandManager.getFieldMaxOverride(found->getKeyId(), 0) ==
+  REQUIRE(command_manager.getFieldMaxOverride(found->getKeyId(), 0) ==
           Catch::Approx(20.0f));
   REQUIRE(found->getFieldMin(0) == Catch::Approx(15.0f));
   REQUIRE(found->getFieldMax(0) == Catch::Approx(20.0f));
@@ -441,23 +441,25 @@ TEST_CASE("CommandManager loadCommandsFrom preserves min/max overrides",
 
 TEST_CASE("CommandManager removeFieldOverrides drains pool for a key",
           "[CommandManager]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 
   Command cmd = makeCommand("01", "Test", true, true, 1, "uint8", "fe070009");
-  commandManager.insertCommand(cmd);
-  Command* found = commandManager.findCommand("01");
+  command_manager.insertCommand(cmd);
+  Command* found = command_manager.findCommand("01");
   REQUIRE(found != nullptr);
 
-  commandManager.setFieldMinOverride(found->getKeyId(), 0, 42.0f);
-  commandManager.setFieldMaxOverride(found->getKeyId(), 0, 84.0f);
-  REQUIRE(commandManager.getFieldMinOverride(found->getKeyId(), 0) ==
+  command_manager.setFieldMinOverride(found->getKeyId(), 0, 42.0f);
+  command_manager.setFieldMaxOverride(found->getKeyId(), 0, 84.0f);
+  REQUIRE(command_manager.getFieldMinOverride(found->getKeyId(), 0) ==
           Catch::Approx(42.0f));
-  REQUIRE(commandManager.getFieldMaxOverride(found->getKeyId(), 0) ==
+  REQUIRE(command_manager.getFieldMaxOverride(found->getKeyId(), 0) ==
           Catch::Approx(84.0f));
 
-  commandManager.removeFieldOverrides(found->getKeyId());
-  REQUIRE(std::isnan(commandManager.getFieldMinOverride(found->getKeyId(), 0)));
-  REQUIRE(std::isnan(commandManager.getFieldMaxOverride(found->getKeyId(), 0)));
+  command_manager.removeFieldOverrides(found->getKeyId());
+  REQUIRE(
+      std::isnan(command_manager.getFieldMinOverride(found->getKeyId(), 0)));
+  REQUIRE(
+      std::isnan(command_manager.getFieldMaxOverride(found->getKeyId(), 0)));
 
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 }

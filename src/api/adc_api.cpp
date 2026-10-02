@@ -67,11 +67,11 @@ AdcApi::AdcApi(Adc& adc) : adc_(adc) { instance_ = this; }
 bool AdcApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/adc", HTTP_GET, handleAdcPage);
-  RegisterUri("/api/v1/adc/raw", HTTP_GET, handleAdcRaw);
-  RegisterUri("/api/v1/adc/enable", HTTP_POST, handleAdcEnable);
-  RegisterUri("/api/v1/adc/disable", HTTP_POST, handleAdcDisable);
-  RegisterUri("/api/v1/adc/state", HTTP_GET, handleAdcState);
+  registerUri("/adc", HTTP_GET, handleAdcPage);
+  registerUri("/api/v1/adc/raw", HTTP_GET, handleAdcRaw);
+  registerUri("/api/v1/adc/enable", HTTP_POST, handleAdcEnable);
+  registerUri("/api/v1/adc/disable", HTTP_POST, handleAdcDisable);
+  registerUri("/api/v1/adc/state", HTTP_GET, handleAdcState);
 
   return true;
 }
@@ -88,19 +88,19 @@ esp_err_t AdcApi::handleAdcRaw(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  const uint32_t sampleRate = parseAdcArg(req, "sample_rate", 30000);
-  const uint32_t samplesPerChannel = parseAdcArg(
+  const uint32_t sample_rate = parseAdcArg(req, "sample_rate", 30000);
+  const uint32_t samples_per_channel = parseAdcArg(
       req, "samples_per_channel", parseAdcArg(req, "sample_count", 2400));
-  const uint32_t channelMask = parseAdcChannelMask(req);
-  const uint32_t effectivePerChannelRate =
-      instance_->adc_.effectivePerChannelSampleRate(sampleRate, channelMask);
-  const uint32_t activeChannelCount =
-      static_cast<uint32_t>(__builtin_popcount(channelMask & 0x1F));
-  const uint32_t controllerRate =
-      effectivePerChannelRate *
-      (activeChannelCount == 0 ? 1U : activeChannelCount);
+  const uint32_t channel_mask = parseAdcChannelMask(req);
+  const uint32_t effective_per_channel_rate =
+      instance_->adc_.effectivePerChannelSampleRate(sample_rate, channel_mask);
+  const uint32_t active_channel_count =
+      static_cast<uint32_t>(__builtin_popcount(channel_mask & 0x1F));
+  const uint32_t controller_rate =
+      effective_per_channel_rate *
+      (active_channel_count == 0 ? 1U : active_channel_count);
 
-  const uint64_t captureStartMillis =
+  const uint64_t capture_start_millis =
       static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
 
   char tmp1[32], tmp2[32], tmp3[32], tmp4[32], tmp5[32], tmp6[32];
@@ -111,31 +111,31 @@ esp_err_t AdcApi::handleAdcRaw(httpd_req_t* req) {
   HttpUtils::applyCustomHeaders(req);
 
   std::snprintf(tmp1, sizeof(tmp1), "%u",
-                static_cast<unsigned>(effectivePerChannelRate));
+                static_cast<unsigned>(effective_per_channel_rate));
   httpd_resp_set_hdr(req, "X-ADC-Sample-Rate", tmp1);
 
   std::snprintf(tmp2, sizeof(tmp2), "%u",
-                static_cast<unsigned>(samplesPerChannel));
+                static_cast<unsigned>(samples_per_channel));
   httpd_resp_set_hdr(req, "X-ADC-Samples", tmp2);
 
-  std::snprintf(tmp3, sizeof(tmp3), "%u", static_cast<unsigned>(channelMask));
+  std::snprintf(tmp3, sizeof(tmp3), "%u", static_cast<unsigned>(channel_mask));
   httpd_resp_set_hdr(req, "X-ADC-Channel-Mask", tmp3);
 
   std::snprintf(tmp4, sizeof(tmp4), "%u",
                 static_cast<unsigned>(Adc::result_bytes));
   httpd_resp_set_hdr(req, "X-ADC-Result-Bytes", tmp4);
   std::snprintf(tmp5, sizeof(tmp5), "%llu",
-                static_cast<unsigned long long>(captureStartMillis));
+                static_cast<unsigned long long>(capture_start_millis));
   httpd_resp_set_hdr(req, "X-ADC-Capture-Start-Millis", tmp5);
   std::snprintf(tmp6, sizeof(tmp6), "%u",
-                static_cast<unsigned>(controllerRate));
+                static_cast<unsigned>(controller_rate));
   httpd_resp_set_hdr(req, "X-ADC-Controller-Sample-Rate", tmp6);
 
   if (!instance_->adc_.streamRaw(
           [req](std::string_view chunk) {
             httpd_resp_send_chunk(req, chunk.data(), chunk.size());
           },
-          sampleRate, samplesPerChannel, channelMask))
+          sample_rate, samples_per_channel, channel_mask))
     return ESP_FAIL;
   httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;

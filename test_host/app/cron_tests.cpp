@@ -28,14 +28,14 @@ Cron::Rule makeRule(const std::string& schedule, const std::string& key) {
 }
 
 void registerWriteCommand() {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   std::string json =
       R"({"key":"c1","name":"SetPoint","read_cmd":"50b509030d3300",)"
       R"("write_cmd":"50b509040e3300","interval":60,"master":false,)"
       R"("fields":[{"name":"value","profile":"data2b_celsius","position":1,)"
       R"("ha_profile":"sensor_temperature"}]})";
   ebus::detail::JsonReader reader(json);
-  commandManager.insertCommand(Command::fromJson(reader));
+  command_manager.insertCommand(Command::fromJson(reader));
 }
 
 }  // namespace
@@ -115,41 +115,42 @@ TEST_CASE("Cron validateFieldExpression checks ranges", "[cron]") {
 TEST_CASE("Cron validateRule accepts a complete rule", "[cron]") {
   registerWriteCommand();
   REQUIRE(app::detail::cron::validateRule(makeRule("* * * * *", "c1"),
-                                          commandManager) == "");
+                                          command_manager) == "");
 }
 
 TEST_CASE("Cron validateRule reports missing parts", "[cron]") {
   registerWriteCommand();
   Cron::Rule missing_id = makeRule("* * * * *", "c1");
   missing_id.id.clear();
-  REQUIRE(app::detail::cron::validateRule(missing_id, commandManager).empty() ==
-          false);
+  REQUIRE(
+      app::detail::cron::validateRule(missing_id, command_manager).empty() ==
+      false);
 
   REQUIRE(app::detail::cron::validateRule(makeRule("not a schedule", "c1"),
-                                          commandManager) ==
+                                          command_manager) ==
           "Invalid schedule expression");
   REQUIRE(app::detail::cron::validateRule(makeRule("* * * *", "c1"),
-                                          commandManager) ==
+                                          command_manager) ==
           "Schedule must have 5 fields");
   REQUIRE(app::detail::cron::validateRule(makeRule("99 99 99 99 99", "c1"),
-                                          commandManager) ==
+                                          command_manager) ==
           "Invalid schedule expression");
   REQUIRE(app::detail::cron::validateRule(makeRule("* * * * *", "missing"),
-                                          commandManager) ==
+                                          command_manager) ==
           "Command key 'missing' not found");
 }
 
 TEST_CASE("Cron validateRule requires a write command", "[cron]") {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   std::string json =
       R"({"key":"ro","name":"ReadOnly","read_cmd":"fe070009",)"
       R"("write_cmd":"","interval":60,"master":true,)"
       R"("fields":[{"name":"value","profile":"uint8","position":1,)"
       R"("ha_profile":"sensor_temperature"}]})";
   ebus::detail::JsonReader reader(json);
-  commandManager.insertCommand(Command::fromJson(reader));
+  command_manager.insertCommand(Command::fromJson(reader));
 
   REQUIRE(app::detail::cron::validateRule(makeRule("* * * * *", "ro"),
-                                          commandManager) ==
+                                          command_manager) ==
           "Command 'ro' has no write_cmd");
 }

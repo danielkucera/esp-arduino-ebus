@@ -63,16 +63,16 @@ CommandsApi::CommandsApi(CommandManager& command_manager, MqttHA& mqtt_ha)
 bool CommandsApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/commands", HTTP_GET, handleCommandsPage);
-  RegisterUri("/api/v1/app/commands", HTTP_GET, handleCommands);
-  RegisterUri("/api/v1/app/commands/evaluate", HTTP_POST,
+  registerUri("/commands", HTTP_GET, handleCommandsPage);
+  registerUri("/api/v1/app/commands", HTTP_GET, handleCommands);
+  registerUri("/api/v1/app/commands/evaluate", HTTP_POST,
               handleCommandsEvaluate);
-  RegisterUri("/api/v1/app/commands/insert", HTTP_POST, handleCommandsInsert);
-  RegisterUri("/api/v1/app/commands/upload", HTTP_POST, handleCommandsUpload);
-  RegisterUri("/api/v1/app/commands/remove", HTTP_POST, handleCommandsRemove);
-  RegisterUri("/api/v1/app/commands/load", HTTP_POST, handleCommandsLoad);
-  RegisterUri("/api/v1/app/commands/save", HTTP_POST, handleCommandsSave);
-  RegisterUri("/api/v1/app/commands/wipe", HTTP_POST, handleCommandsWipe);
+  registerUri("/api/v1/app/commands/insert", HTTP_POST, handleCommandsInsert);
+  registerUri("/api/v1/app/commands/upload", HTTP_POST, handleCommandsUpload);
+  registerUri("/api/v1/app/commands/remove", HTTP_POST, handleCommandsRemove);
+  registerUri("/api/v1/app/commands/load", HTTP_POST, handleCommandsLoad);
+  registerUri("/api/v1/app/commands/save", HTTP_POST, handleCommandsSave);
+  registerUri("/api/v1/app/commands/wipe", HTTP_POST, handleCommandsWipe);
 
   return true;
 }

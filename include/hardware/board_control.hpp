@@ -6,4 +6,4 @@ void disableTX();
 void enableTX();
 
 void restart();
-void check_reset();
+void checkReset();

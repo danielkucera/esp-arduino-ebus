@@ -25,14 +25,14 @@ const std::vector<Route>& routes() { return registered_routes; }
 
 }  // namespace HostHttpStub
 
-bool RegisterUri(const char* uri, httpd_method_t method,
+bool registerUri(const char* uri, httpd_method_t method,
                  esp_err_t (*handler)(httpd_req_t*)) {
   HostHttpStub::addRoute(uri, method, handler);
   return true;
 }
 
-void SetupHttpHandlers() {}
-void SetupHttpFallbackHandlers() {}
+void setupHttpHandlers() {}
+void setupHttpFallbackHandlers() {}
 
 namespace HttpUtils {
 

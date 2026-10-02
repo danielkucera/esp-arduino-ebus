@@ -14,19 +14,19 @@ std::vector<uint8_t> written_bytes;
 std::queue<uint8_t> uart_input;
 
 void setUpFirstSyn(BusState& bus_state) {
-  bus_state.data(SYN);
-  bus_state.data(SYN);
+  bus_state.data(syn_byte);
+  bus_state.data(syn_byte);
 }
 
 void feedUart(uint8_t symbol) { uart_input.push(symbol); }
 
-BusType::data readData(BusType& bus) {
-  BusType::data result{};
+BusType::Data readData(BusType& bus) {
+  BusType::Data result{};
   REQUIRE(bus.read(result));
   return result;
 }
 
-void requireData(const BusType::data& actual, bool enhanced, uint8_t command,
+void requireData(const BusType::Data& actual, bool enhanced, uint8_t command,
                  uint8_t byte, int client_fd, int log_to_client_fd) {
   REQUIRE(actual.enhanced == enhanced);
   REQUIRE(actual.c == command);
@@ -59,8 +59,8 @@ void UartPort::setRxBufferSize(size_t) {}
 void UartPort::setRxFIFOFull(int) {}
 void UartPort::setDebugOutput(bool) {}
 
-UartPort BusSer(UART_NUM_0);
-UartPort DebugSer(UART_NUM_0);
+UartPort bus_ser(UART_NUM_0);
+UartPort debug_ser(UART_NUM_0);
 
 namespace {
 void resetBridgeState() {
@@ -78,16 +78,16 @@ TEST_CASE("Bridge bus state synchronizes on two SYN bytes",
   BusState bus_state;
 
   bus_state.data(0x12);
-  REQUIRE(bus_state.state_ == BusState::eStartup);
-  bus_state.data(SYN);
-  REQUIRE(bus_state.state_ == BusState::eStartupFirstSyn);
-  bus_state.data(SYN);
-  REQUIRE(bus_state.state_ == BusState::eReceivedFirstSYN);
+  REQUIRE(bus_state.state == BusState::startup);
+  bus_state.data(syn_byte);
+  REQUIRE(bus_state.state == BusState::startup_first_syn);
+  bus_state.data(syn_byte);
+  REQUIRE(bus_state.state == BusState::received_first_syn);
   REQUIRE(bus_state.microsSinceLastSyn() == 0);
 
   bus_state.data(0x15);
-  REQUIRE(bus_state.state_ == BusState::eReceivedAddressAfterFirstSYN);
-  REQUIRE(bus_state.master_ == 0x15);
+  REQUIRE(bus_state.state == BusState::received_address_after_first_syn);
+  REQUIRE(bus_state.master == 0x15);
 }
 
 TEST_CASE("Bridge arbitration rejects ineligible and late starts",
@@ -99,7 +99,7 @@ TEST_CASE("Bridge arbitration rejects ineligible and late starts",
   REQUIRE(arbitration.start(bus_state, 0x15, host_esp_timer_time_us) ==
           Arbitration::not_started);
   setUpFirstSyn(bus_state);
-  REQUIRE(arbitration.start(bus_state, SYN, host_esp_timer_time_us) ==
+  REQUIRE(arbitration.start(bus_state, syn_byte, host_esp_timer_time_us) ==
           Arbitration::not_started);
 
   bus_available = 1;
@@ -159,8 +159,8 @@ TEST_CASE("Bridge arbitration can win the second round",
   bus_state.data(0x25);
   REQUIRE(arbitration.data(bus_state, 0x25, host_esp_timer_time_us) ==
           Arbitration::arbitrating);
-  bus_state.data(SYN);
-  REQUIRE(arbitration.data(bus_state, SYN, host_esp_timer_time_us) ==
+  bus_state.data(syn_byte);
+  REQUIRE(arbitration.data(bus_state, syn_byte, host_esp_timer_time_us) ==
           Arbitration::arbitrating);
   REQUIRE(written_bytes == std::vector<uint8_t>{0x15, 0x15});
 
@@ -181,8 +181,8 @@ TEST_CASE("Bridge arbitration loses after the second round",
   bus_state.data(0x25);
   REQUIRE(arbitration.data(bus_state, 0x25, host_esp_timer_time_us) ==
           Arbitration::arbitrating);
-  bus_state.data(SYN);
-  REQUIRE(arbitration.data(bus_state, SYN, host_esp_timer_time_us) ==
+  bus_state.data(syn_byte);
+  REQUIRE(arbitration.data(bus_state, syn_byte, host_esp_timer_time_us) ==
           Arbitration::arbitrating);
   bus_state.data(0x25);
   REQUIRE(arbitration.data(bus_state, 0x25, host_esp_timer_time_us) ==
@@ -199,9 +199,9 @@ TEST_CASE("Bridge BusType broadcasts unarbitrated bus bytes",
   feedUart(0x42);
 
   const auto received = readData(bus);
-  requireData(received, false, RECEIVED, 0x42, -1, -1);
+  requireData(received, false, ::received, 0x42, -1, -1);
 
-  BusType::data empty{};
+  BusType::Data empty{};
   REQUIRE_FALSE(bus.read(empty));
 }
 
@@ -213,22 +213,22 @@ TEST_CASE("Bridge BusType routes a successful arbitration to its client",
   uint8_t address = 0x15;
   REQUIRE(setArbitrationClient(client_fd, address));
 
-  feedUart(SYN);
-  requireData(readData(bus), false, RECEIVED, SYN, -1, 17);
-  feedUart(SYN);
+  feedUart(syn_byte);
+  requireData(readData(bus), false, received, syn_byte, -1, 17);
+  feedUart(syn_byte);
   const auto second_syn = readData(bus);
-  requireData(second_syn, false, RECEIVED, SYN, -1, 17);
-  REQUIRE(bus.nbr_arbitrations_ == 1);
-  REQUIRE(bus.nbr_late_ == 0);
+  requireData(second_syn, false, received, syn_byte, -1, 17);
+  REQUIRE(bus.nbr_arbitrations == 1);
+  REQUIRE(bus.nbr_late == 0);
   REQUIRE(written_bytes == std::vector<uint8_t>{0x15});
-  REQUIRE(bus.nbr_arbitrations_ == 1);
+  REQUIRE(bus.nbr_arbitrations == 1);
 
   feedUart(0x15);
-  requireData(readData(bus), true, STARTED, 0x15, 17, 17);
-  requireData(readData(bus), false, RECEIVED, 0x15, 17, 17);
+  requireData(readData(bus), true, started, 0x15, 17, 17);
+  requireData(readData(bus), false, received, 0x15, 17, 17);
   uint8_t requested_address = 0;
   REQUIRE(arbitrationRequested(requested_address) == -1);
-  REQUIRE(bus.nbr_won_1_ == 1);
+  REQUIRE(bus.nbr_won_1 == 1);
 }
 
 TEST_CASE("Bridge BusType reports a first-round arbitration loss",
@@ -239,16 +239,16 @@ TEST_CASE("Bridge BusType reports a first-round arbitration loss",
   uint8_t address = 0x15;
   REQUIRE(setArbitrationClient(client_fd, address));
 
-  feedUart(SYN);
+  feedUart(syn_byte);
   readData(bus);
-  feedUart(SYN);
+  feedUart(syn_byte);
   readData(bus);
   feedUart(0x22);
-  requireData(readData(bus), false, RECEIVED, 0x22, 21, 21);
+  requireData(readData(bus), false, received, 0x22, 21, 21);
   feedUart(0x03);
-  requireData(readData(bus), true, FAILED, 0x22, 21, 21);
-  requireData(readData(bus), false, RECEIVED, 0x03, -1, 21);
-  REQUIRE(bus.nbr_lost_1_ == 1);
+  requireData(readData(bus), true, failed, 0x22, 21, 21);
+  requireData(readData(bus), false, received, 0x03, -1, 21);
+  REQUIRE(bus.nbr_lost_1 == 1);
   REQUIRE(arbitrationRequested(address) == -1);
 }
 
@@ -260,19 +260,19 @@ TEST_CASE("Bridge BusType routes a second-round arbitration win",
   uint8_t address = 0x15;
   REQUIRE(setArbitrationClient(client_fd, address));
 
-  feedUart(SYN);
+  feedUart(syn_byte);
   readData(bus);
-  feedUart(SYN);
+  feedUart(syn_byte);
   readData(bus);
   feedUart(0x25);
-  requireData(readData(bus), false, RECEIVED, 0x25, 24, 24);
-  feedUart(SYN);
-  requireData(readData(bus), false, RECEIVED, SYN, 24, 24);
+  requireData(readData(bus), false, received, 0x25, 24, 24);
+  feedUart(syn_byte);
+  requireData(readData(bus), false, received, syn_byte, 24, 24);
   REQUIRE(written_bytes == std::vector<uint8_t>({0x15, 0x15}));
   feedUart(0x15);
-  requireData(readData(bus), true, STARTED, 0x15, 24, 24);
-  requireData(readData(bus), false, RECEIVED, 0x15, 24, 24);
-  REQUIRE(bus.nbr_won_2_ == 1);
+  requireData(readData(bus), true, started, 0x15, 24, 24);
+  requireData(readData(bus), false, received, 0x15, 24, 24);
+  REQUIRE(bus.nbr_won_2 == 1);
 }
 
 TEST_CASE("Bridge arbitration reservation rejects a competing client",

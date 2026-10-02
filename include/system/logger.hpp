@@ -51,7 +51,7 @@ struct LogPrintItem {
 
 class Logger {
  public:
-  explicit Logger(size_t maxEntries = max_entries);
+  explicit Logger(size_t capacity = max_entries);
   ~Logger();
 
   Logger(const Logger& other) = delete;             // Prevent copying
@@ -67,7 +67,7 @@ class Logger {
              uint32_t session_id = 0, uint16_t poll_id = 0);
 
   void fetchLogs(const ebus::JsonChunkVisitor& visitor,
-                 uint64_t sinceMillis = 0) const;
+                 uint64_t since_millis = 0) const;
   static void fetchTimeRelation(const ebus::JsonChunkVisitor& visitor);
 
   TaskHandle_t getTaskHandle() const { return print_task_; }
@@ -82,7 +82,7 @@ class Logger {
   }
 
  private:
-  enum class LogLevel { DEBUG, INFO, WARN, ERROR };
+  enum class LogLevel { debug, info, warn, error };
   struct LogEntry {
     uint64_t timestamp;
     LogLevel level;
@@ -100,10 +100,10 @@ class Logger {
   // static analyzers from folding the modulo below into a constant.
   size_t capacity_;
 
-  static const char* logLevelText(LogLevel logLevel);
+  static const char* logLevelText(LogLevel log_level);
 
-  static bool currentMillisTimeRelation(uint64_t& currentMillis,
-                                        int64_t& currentTimeMillis);
+  static bool currentMillisTimeRelation(uint64_t& current_millis,
+                                        int64_t& current_time_millis);
   static void printTaskEntry(void* arg);
   void printTaskLoop();
 

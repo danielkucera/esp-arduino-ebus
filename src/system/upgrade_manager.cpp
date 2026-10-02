@@ -49,9 +49,9 @@ UpgradeManager* UpgradeManager::instance_ = nullptr;
 UpgradeManager::UpgradeManager() { instance_ = this; }
 
 void UpgradeManager::begin() {
-  RegisterUri("/api/v1/upgrade/status", HTTP_GET, handleUpgradeStatus);
-  RegisterUri("/api/v1/upgrade/http", HTTP_POST, handleUpgradeHttp);
-  RegisterUri("/api/v1/upgrade/upload", HTTP_POST, handleUpgradeUpload);
+  registerUri("/api/v1/upgrade/status", HTTP_GET, handleUpgradeStatus);
+  registerUri("/api/v1/upgrade/http", HTTP_POST, handleUpgradeHttp);
+  registerUri("/api/v1/upgrade/upload", HTTP_POST, handleUpgradeUpload);
 }
 
 void UpgradeManager::setPreUpgradeHook(PreUpgradeHook hook) {
@@ -91,13 +91,13 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  esp_err_t beginResult =
+  esp_err_t begin_result =
       esp_ota_begin(upload_partition_, OTA_SIZE_UNKNOWN, &upload_handle_);
-  if (beginResult != ESP_OK) {
+  if (begin_result != ESP_OK) {
     char hex[12];
-    snprintf(hex, sizeof(hex), "%02x", beginResult);
+    snprintf(hex, sizeof(hex), "%02x", begin_result);
     std::string error_msg = "esp_ota_begin failed: ";
-    error_msg += esp_err_to_name(beginResult);
+    error_msg += esp_err_to_name(begin_result);
     error_msg += " (0x";
     error_msg += hex;
     error_msg += ")";
@@ -107,36 +107,36 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   }
 
   uint8_t buffer[ota_buffer_size];
-  bool checkedMagic = false;
+  bool checked_magic = false;
   int remaining = req->content_len;
-  int writeError = 0;  // 1=invalid_magic, 2=ota_write_failed
-  size_t nextProgressBytes = progress_step_bytes;
+  int write_error = 0;  // 1=invalid_magic, 2=ota_write_failed
+  size_t next_progress_bytes = progress_step_bytes;
 
   logger.info("Upload started: content_len=" +
               std::to_string(req->content_len));
 
-  auto abortUpload = [&](const char* status,
-                         std::string_view message) -> esp_err_t {
+  auto abort_upload = [&](const char* status,
+                          std::string_view message) -> esp_err_t {
     esp_ota_abort(upload_handle_);
     HttpUtils::sendErrorResponse(req, status, "upgrade_upload", message);
     return ESP_OK;
   };
 
-  auto writeOtaChunk = [&](const uint8_t* data, size_t len) -> bool {
+  auto write_ota_chunk = [&](const uint8_t* data, size_t len) -> bool {
     if (len == 0) return true;
 
-    if (!checkedMagic) {
-      checkedMagic = true;
+    if (!checked_magic) {
+      checked_magic = true;
       if (data[0] != esp_image_magic) {
-        writeError = 1;
+        write_error = 1;
         return false;
       }
     }
 
     upload_bytes_received_ += len;
-    esp_err_t writeResult = esp_ota_write(upload_handle_, data, len);
-    if (writeResult != ESP_OK) {
-      writeError = 2;
+    esp_err_t write_result = esp_ota_write(upload_handle_, data, len);
+    if (write_result != ESP_OK) {
+      write_error = 2;
       return false;
     }
 
@@ -152,11 +152,11 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
           upload_next_progress_percent_ += 10;
         }
       }
-    } else if (upload_bytes_received_ >= nextProgressBytes) {
+    } else if (upload_bytes_received_ >= next_progress_bytes) {
       logger.info("Upload progress " + std::to_string(upload_bytes_received_) +
                   " bytes");
-      while (upload_bytes_received_ >= nextProgressBytes) {
-        nextProgressBytes += progress_step_bytes;
+      while (upload_bytes_received_ >= next_progress_bytes) {
+        next_progress_bytes += progress_step_bytes;
       }
     }
     return true;
@@ -169,9 +169,10 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
   uint32_t last_progress_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
 
   while (remaining > 0) {
-    int toRead = remaining > static_cast<int>(sizeof(buffer)) ? sizeof(buffer)
-                                                              : remaining;
-    int received = httpd_req_recv(req, reinterpret_cast<char*>(buffer), toRead);
+    int to_read = remaining > static_cast<int>(sizeof(buffer)) ? sizeof(buffer)
+                                                               : remaining;
+    int received =
+        httpd_req_recv(req, reinterpret_cast<char*>(buffer), to_read);
     if (received <= 0) {
       const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
       if ((received == 0 || errno == EAGAIN || errno == EWOULDBLOCK ||
@@ -180,33 +181,34 @@ esp_err_t UpgradeManager::handleUpload(httpd_req_t* req) {
         vTaskDelay(pdMS_TO_TICKS(100));
         continue;
       }
-      return abortUpload("500 Internal Server Error", "Upload receive failed");
+      return abort_upload("500 Internal Server Error", "Upload receive failed");
     }
     last_progress_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
     remaining -= received;
 
-    if (!writeOtaChunk(buffer, static_cast<size_t>(received))) {
-      if (writeError == 2) {
-        return abortUpload("500 Internal Server Error", "esp_ota_write failed");
+    if (!write_ota_chunk(buffer, static_cast<size_t>(received))) {
+      if (write_error == 2) {
+        return abort_upload("500 Internal Server Error",
+                            "esp_ota_write failed");
       }
-      return abortUpload("400 Bad Request",
-                         "Upload must contain raw ESP firmware bytes");
+      return abort_upload("400 Bad Request",
+                          "Upload must contain raw ESP firmware bytes");
     }
   }
 
-  esp_err_t endResult = esp_ota_end(upload_handle_);
-  if (endResult != ESP_OK) {
+  esp_err_t end_result = esp_ota_end(upload_handle_);
+  if (end_result != ESP_OK) {
     std::string error_msg = "esp_ota_end failed: ";
-    error_msg += esp_err_to_name(endResult);
+    error_msg += esp_err_to_name(end_result);
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error",
                                  "upgrade_upload", error_msg);
     return ESP_OK;
   }
 
-  esp_err_t partitionResult = esp_ota_set_boot_partition(upload_partition_);
-  if (partitionResult != ESP_OK) {
+  esp_err_t partition_result = esp_ota_set_boot_partition(upload_partition_);
+  if (partition_result != ESP_OK) {
     std::string error_msg = "esp_ota_set_boot_partition failed: ";
-    error_msg += esp_err_to_name(partitionResult);
+    error_msg += esp_err_to_name(partition_result);
     HttpUtils::sendErrorResponse(req, "500 Internal Server Error",
                                  "upgrade_upload", error_msg);
     return ESP_OK;
@@ -254,35 +256,35 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
     return false;
   }
 
-  esp_err_t openResult = esp_http_client_open(client, 0);
-  if (openResult != ESP_OK) {
+  esp_err_t open_result = esp_http_client_open(client, 0);
+  if (open_result != ESP_OK) {
     error = std::string("esp_http_client_open failed: ") +
-            esp_err_to_name(openResult);
+            esp_err_to_name(open_result);
     esp_http_client_cleanup(client);
     return false;
   }
 
-  int headerRet = esp_http_client_fetch_headers(client);
-  int statusCode = esp_http_client_get_status_code(client);
-  int contentLength = esp_http_client_get_content_length(client);
-  bool isChunked = esp_http_client_is_chunked_response(client);
-  logger.debug("Upgrade HTTP status=" + std::to_string(statusCode) +
-               " headers=" + std::to_string(headerRet) +
-               " content_length=" + std::to_string(contentLength) +
-               " chunked=" + std::to_string(isChunked ? 1 : 0));
-  if (statusCode != 200) {
+  int header_ret = esp_http_client_fetch_headers(client);
+  int status_code = esp_http_client_get_status_code(client);
+  int content_length = esp_http_client_get_content_length(client);
+  bool is_chunked = esp_http_client_is_chunked_response(client);
+  logger.debug("Upgrade HTTP status=" + std::to_string(status_code) +
+               " headers=" + std::to_string(header_ret) +
+               " content_length=" + std::to_string(content_length) +
+               " chunked=" + std::to_string(is_chunked ? 1 : 0));
+  if (status_code != 200) {
     error =
-        std::string("Unexpected HTTP status: ") + std::to_string(statusCode);
+        std::string("Unexpected HTTP status: ") + std::to_string(status_code);
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
     return false;
   }
 
   esp_ota_handle_t handle = 0;
-  esp_err_t beginResult = esp_ota_begin(partition, OTA_SIZE_UNKNOWN, &handle);
-  if (beginResult != ESP_OK) {
+  esp_err_t begin_result = esp_ota_begin(partition, OTA_SIZE_UNKNOWN, &handle);
+  if (begin_result != ESP_OK) {
     error =
-        std::string("esp_ota_begin failed: ") + esp_err_to_name(beginResult);
+        std::string("esp_ota_begin failed: ") + esp_err_to_name(begin_result);
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
     return false;
@@ -290,29 +292,29 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
 
   uint8_t buffer[ota_buffer_size];
   bool ok = true;
-  size_t totalWritten = 0;
-  bool checkedMagic = false;
-  int nextProgressPercent = 10;
-  size_t nextProgressBytes = progress_step_bytes;
+  size_t total_written = 0;
+  bool checked_magic = false;
+  int next_progress_percent = 10;
+  size_t next_progress_bytes = progress_step_bytes;
 
   logger.info("HTTP upgrade download started: url=" + url +
-              ", content_length=" + std::to_string(contentLength) +
-              ", chunked=" + std::to_string(isChunked ? 1 : 0));
+              ", content_length=" + std::to_string(content_length) +
+              ", chunked=" + std::to_string(is_chunked ? 1 : 0));
 
   while (true) {
-    int bytesRead = esp_http_client_read(
+    int bytes_read = esp_http_client_read(
         client, reinterpret_cast<char*>(buffer), sizeof(buffer));
-    if (bytesRead < 0) {
+    if (bytes_read < 0) {
       error = "esp_http_client_read failed";
       ok = false;
       break;
     }
-    if (bytesRead == 0) {
+    if (bytes_read == 0) {
       break;
     }
 
-    if (!checkedMagic) {
-      checkedMagic = true;
+    if (!checked_magic) {
+      checked_magic = true;
       if (buffer[0] != esp_image_magic) {
         char hex[4];
         snprintf(hex, sizeof(hex), "%02x", buffer[0]);
@@ -324,39 +326,40 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
       }
     }
 
-    esp_err_t writeResult = esp_ota_write(handle, buffer, bytesRead);
-    if (writeResult != ESP_OK) {
+    esp_err_t write_result = esp_ota_write(handle, buffer, bytes_read);
+    if (write_result != ESP_OK) {
       error =
-          std::string("esp_ota_write failed: ") + esp_err_to_name(writeResult);
+          std::string("esp_ota_write failed: ") + esp_err_to_name(write_result);
       ok = false;
       break;
     }
-    totalWritten += static_cast<size_t>(bytesRead);
-    if (contentLength > 0) {
-      int percent = static_cast<int>((totalWritten * 100) / contentLength);
-      if (percent >= nextProgressPercent) {
+    total_written += static_cast<size_t>(bytes_read);
+    if (content_length > 0) {
+      int percent = static_cast<int>((total_written * 100) / content_length);
+      if (percent >= next_progress_percent) {
         logger.info("HTTP upgrade progress " + std::to_string(percent) + "% (" +
-                    std::to_string(totalWritten) + "/" +
-                    std::to_string(contentLength) + " bytes)");
-        while (percent >= nextProgressPercent && nextProgressPercent < 100) {
-          nextProgressPercent += 10;
+                    std::to_string(total_written) + "/" +
+                    std::to_string(content_length) + " bytes)");
+        while (percent >= next_progress_percent &&
+               next_progress_percent < 100) {
+          next_progress_percent += 10;
         }
       }
-    } else if (totalWritten >= nextProgressBytes) {
-      logger.info("HTTP upgrade progress " + std::to_string(totalWritten) +
+    } else if (total_written >= next_progress_bytes) {
+      logger.info("HTTP upgrade progress " + std::to_string(total_written) +
                   " bytes");
-      while (totalWritten >= nextProgressBytes) {
-        nextProgressBytes += progress_step_bytes;
+      while (total_written >= next_progress_bytes) {
+        next_progress_bytes += progress_step_bytes;
       }
     }
     vTaskDelay(1);
   }
 
-  if (ok && contentLength > 0 &&
-      static_cast<int>(totalWritten) != contentLength) {
+  if (ok && content_length > 0 &&
+      static_cast<int>(total_written) != content_length) {
     error = std::string("Downloaded size mismatch: got ") +
-            std::to_string(totalWritten) + ", expected " +
-            std::to_string(contentLength);
+            std::to_string(total_written) + ", expected " +
+            std::to_string(content_length);
     ok = false;
   }
   if (ok && !esp_http_client_is_complete_data_received(client)) {
@@ -372,27 +375,27 @@ bool UpgradeManager::performHttpUpgrade(const std::string& url,
     return false;
   }
 
-  if (totalWritten == 0) {
+  if (total_written == 0) {
     esp_ota_abort(handle);
     error = "No firmware data downloaded";
     return false;
   }
 
-  esp_err_t endResult = esp_ota_end(handle);
-  if (endResult != ESP_OK) {
-    error = std::string("esp_ota_end failed: ") + esp_err_to_name(endResult);
+  esp_err_t end_result = esp_ota_end(handle);
+  if (end_result != ESP_OK) {
+    error = std::string("esp_ota_end failed: ") + esp_err_to_name(end_result);
     return false;
   }
 
-  esp_err_t partitionResult = esp_ota_set_boot_partition(partition);
-  if (partitionResult != ESP_OK) {
+  esp_err_t partition_result = esp_ota_set_boot_partition(partition);
+  if (partition_result != ESP_OK) {
     error = std::string("esp_ota_set_boot_partition failed: ") +
-            esp_err_to_name(partitionResult);
+            esp_err_to_name(partition_result);
     return false;
   }
 
   logger.info("HTTP upgrade download completed: " +
-              std::to_string(totalWritten) + " bytes");
+              std::to_string(total_written) + " bytes");
   return true;
 }
 

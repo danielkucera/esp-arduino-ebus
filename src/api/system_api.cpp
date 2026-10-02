@@ -37,9 +37,9 @@ SystemApi::SystemApi() {}
 bool SystemApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/api/v1/system", HTTP_GET, handleSystem);
-  RegisterUri("/api/v1/system/heap", HTTP_GET, handleHeap);
-  RegisterUri("/api/v1/system/tasks", HTTP_GET, handleTasks);
+  registerUri("/api/v1/system", HTTP_GET, handleSystem);
+  registerUri("/api/v1/system/heap", HTTP_GET, handleHeap);
+  registerUri("/api/v1/system/tasks", HTTP_GET, handleTasks);
 
   return true;
 }
@@ -131,8 +131,8 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
     auto scope = writer.objectScope();
     {
       auto threads = writer.arrayScope("threads");
-      auto addThread = [&](const char* name, TaskHandle_t handle,
-                           uint32_t stack_size) {
+      auto add_thread = [&](const char* name, TaskHandle_t handle,
+                            uint32_t stack_size) {
         if (!handle) return;
         auto item = writer.objectScope();
         writer.writeField("name", name);
@@ -142,20 +142,21 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
             static_cast<uint32_t>(uxTaskGetStackHighWaterMark(handle) *
                                   sizeof(StackType_t)));
       };
-      addThread("mqtt", DeviceStatus::mqtt().getTaskHandle(),
-                app::limits::Task::mqtt_stack);
-      addThread("cron", cron.getTaskHandle(), app::limits::Task::cron_stack);
-      addThread("logger", logger.getTaskHandle(),
-                app::limits::Task::logger_stack);
-      addThread("dns", getCaptiveDnsTaskHandle(), app::limits::Task::dns_stack);
+      add_thread("mqtt", DeviceStatus::mqtt().getTaskHandle(),
+                 app::limits::Task::mqtt_stack);
+      add_thread("cron", cron.getTaskHandle(), app::limits::Task::cron_stack);
+      add_thread("logger", logger.getTaskHandle(),
+                 app::limits::Task::logger_stack);
+      add_thread("dns", getCaptiveDnsTaskHandle(),
+                 app::limits::Task::dns_stack);
 #if EBUS_ENABLE_OTA
-      addThread("espota", DeviceStatus::espOtaManager().getTaskHandle(),
-                app::limits::Task::espota_stack);
+      add_thread("espota", DeviceStatus::espOtaManager().getTaskHandle(),
+                 app::limits::Task::espota_stack);
 #endif
-      addThread("status_led", WifiNetworkManager::getStatusLedTaskHandle(),
-                app::limits::Task::status_led_stack);
-      addThread("system_monitor", DeviceStatus::monitor().task_handle(),
-                app::limits::Task::system_monitor_stack);
+      add_thread("status_led", WifiNetworkManager::getStatusLedTaskHandle(),
+                 app::limits::Task::status_led_stack);
+      add_thread("system_monitor", DeviceStatus::monitor().taskHandle(),
+                 app::limits::Task::system_monitor_stack);
       getEbusController().fetchStatus(
           [&](const ebus::SystemResources& resources) {
             for (const auto& thread : resources.threads) {

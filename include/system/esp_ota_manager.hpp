@@ -23,8 +23,8 @@ class EspOtaManager {
  private:
   void prepareForUpgrade();
   bool handleInvitation();
-  bool performTransfer(const sockaddr_in& hostAddr, uint16_t hostPort,
-                       size_t expectedSize);
+  bool performTransfer(const sockaddr_in& host_addr, uint16_t host_port,
+                       size_t expected_size);
   static void fail(const std::string& reason);
   static void taskEntry(void* param);
   void taskLoop();
@@ -37,4 +37,4 @@ class EspOtaManager {
   TaskHandle_t task_handle_ = nullptr;
 };
 
-extern EspOtaManager espOtaManager;
+extern EspOtaManager esp_ota_manager;

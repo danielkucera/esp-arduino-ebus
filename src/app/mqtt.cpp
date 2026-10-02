@@ -88,7 +88,7 @@ void Mqtt::stopTask() {
     // Send a dummy action to unblock xQueueReceive if task is waiting
     // This is safer than vQueueDelete which can cause race conditions
     OutgoingAction dummy;
-    dummy.type = OutgoingActionType::Error;
+    dummy.type = OutgoingActionType::error;
     if (outgoing_queue_ != nullptr) {
       xQueueSend(outgoing_queue_, &dummy, 0);
     }
@@ -97,12 +97,12 @@ void Mqtt::stopTask() {
     // This is critical to prevent the task from accessing MQTT client
     // after it has been destroyed
     // Note: The task resets its own static queue when it exits
-    const TickType_t xDelay = pdMS_TO_TICKS(100);
+    const TickType_t delay_ticks = pdMS_TO_TICKS(100);
     for (int i = 0; i < 10; ++i) {
       if (task_exited_) {
         break;
       }
-      vTaskDelay(xDelay);
+      vTaskDelay(delay_ticks);
     }
 
     // Task has deleted its own queue and handle
@@ -210,9 +210,9 @@ void Mqtt::enqueueOutgoing(const OutgoingAction& action) {
   // failed publishes (and evicts queued work). Lifecycle types
   // (Discovery/Components/Ha*) still queue — HaConnected is enqueued from
   // the CONNECTED handler itself.
-  if (!instance_->connected_ && (action.type == OutgoingActionType::Data ||
-                                 action.type == OutgoingActionType::Update ||
-                                 action.type == OutgoingActionType::Error))
+  if (!instance_->connected_ && (action.type == OutgoingActionType::data ||
+                                 action.type == OutgoingActionType::update ||
+                                 action.type == OutgoingActionType::error))
     return;
 
   if (xQueueSend(instance_->outgoing_queue_, &action, 0) != pdPASS) {
@@ -246,7 +246,7 @@ void Mqtt::publishStream(
   size_t len = 0;
 
   builder([&](std::string_view s) {
-    if (len + s.size() < mqtt_pub_buffer_size - 1) {
+    if (len + s.size() < mqtt_pub_buffer_size_ - 1) {
       std::memcpy(buf + len, s.data(), s.size());
       len += s.size();
       buf[len] = '\0';
@@ -270,27 +270,27 @@ void Mqtt::publishError(const ebus::ProtocolInfo& info) {
 void Mqtt::publishValue(std::string_view key) {
   if (!instance_ || !instance_->enabled_) return;
   enqueueOutgoing(
-      OutgoingAction(OutgoingActionType::Update, key));  // Pass string_view
+      OutgoingAction(OutgoingActionType::update, key));  // Pass string_view
 }
 
 void Mqtt::publishDiscovery() {
   if (!instance_ || !instance_->enabled_ || !instance_->haEnabled()) return;
-  enqueueOutgoing(OutgoingAction(OutgoingActionType::Discovery, ""));
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::discovery, ""));
 }
 
 void Mqtt::publishComponentDiscovery() {
   if (!instance_ || !instance_->enabled_ || !instance_->haEnabled()) return;
-  enqueueOutgoing(OutgoingAction(OutgoingActionType::Components, ""));
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::components, ""));
 }
 
 void Mqtt::publishHaEnable() {
   if (!instance_ || !instance_->enabled_) return;
-  enqueueOutgoing(OutgoingAction(OutgoingActionType::HaEnable, ""));
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::ha_enable, ""));
 }
 
 void Mqtt::publishHaDisable() {
   if (!instance_ || !instance_->enabled_) return;
-  enqueueOutgoing(OutgoingAction(OutgoingActionType::HaDisable, ""));
+  enqueueOutgoing(OutgoingAction(OutgoingActionType::ha_disable, ""));
 }
 
 size_t Mqtt::getOutgoingQueueSize() const {
@@ -313,19 +313,19 @@ void Mqtt::internalPublish(const char* topic, uint8_t qos, bool retain,
   // Silent skip, HA-style; discovery re-runs on every (re)connect.
   if (!connected_) return;
 
-  const char* targetTopic = topic;
-  char fullTopic[256];
+  const char* target_topic = topic;
+  char full_topic[256];
 
   if (prefix) {
     // Memory optimization: Use stack buffer for combined
     // Check potential length before calling snprintf
     size_t expected_len =
         std::strlen(root_topic_.c_str()) + 1 + std::strlen(topic);
-    if (expected_len < sizeof(fullTopic)) {
-      int n = snprintf(fullTopic, sizeof(fullTopic), "%s%s",
+    if (expected_len < sizeof(full_topic)) {
+      int n = snprintf(full_topic, sizeof(full_topic), "%s%s",
                        root_topic_.c_str(), topic);
-      if (n > 0 && (size_t)n < sizeof(fullTopic)) {
-        targetTopic = fullTopic;
+      if (n > 0 && (size_t)n < sizeof(full_topic)) {
+        target_topic = full_topic;
       } else {
         // Fallback if construction fails or is too long for buffer
         logger.warn("[MQTT] Failed to construct MQTT topic via snprintf.");
@@ -339,7 +339,7 @@ void Mqtt::internalPublish(const char* topic, uint8_t qos, bool retain,
     }
   }
 
-  if (esp_mqtt_client_publish(client_, targetTopic, payload, 0, qos, retain) <
+  if (esp_mqtt_client_publish(client_, target_topic, payload, 0, qos, retain) <
       0) {
     // Use static strings for error logging to avoid heap churn during link
     // congestion
@@ -356,19 +356,19 @@ void Mqtt::taskFunc(void* arg) {
   // start so each task run gets a fresh empty queue (never vQueueDelete'd:
   // freeing static storage would corrupt the heap).
   static uint8_t
-      outgoing_storage[max_outgoing_queue_size * sizeof(OutgoingAction)];
+      outgoing_storage[max_outgoing_queue_size_ * sizeof(OutgoingAction)];
   static StaticQueue_t outgoing_cb;
   self->outgoing_queue_ =
-      xQueueCreateStatic(max_outgoing_queue_size, sizeof(OutgoingAction),
+      xQueueCreateStatic(max_outgoing_queue_size_, sizeof(OutgoingAction),
                          outgoing_storage, &outgoing_cb);
 
   while (self->task_should_run_) {
     if (self->enabled_) {
-      uint32_t currentMillis = (uint32_t)(esp_timer_get_time() / 1000ULL);
+      uint32_t current_millis = (uint32_t)(esp_timer_get_time() / 1000ULL);
       if (self->connected_ &&
-          currentMillis >
+          current_millis >
               self->last_status_publish_ + self->status_publish_interval_ms_) {
-        self->last_status_publish_ = currentMillis;
+        self->last_status_publish_ = current_millis;
 
         // Check if we should stop before doing telemetry
         // This prevents accessing eBUS resources after shutdown
@@ -398,7 +398,7 @@ void Mqtt::taskFunc(void* arg) {
                 writer.writeField("largest", info.largest_free_block);
                 writer.writeField("min", info.minimum_free_bytes);
               }
-              writer.writeField("rssi", WifiNetworkManager::RSSI());
+              writer.writeField("rssi", WifiNetworkManager::rssi());
               uint32_t err_total = 0;
               uint32_t msg_active = 0;
               uint32_t msg_total = 0;
@@ -437,7 +437,7 @@ void Mqtt::taskFunc(void* arg) {
           continue;
         }
         switch (action.type) {
-          case OutgoingActionType::Component:
+          case OutgoingActionType::component:
             // Iterate over all fields with HA enabled (same as
             // publishComponents)
             if (action.command) {
@@ -448,7 +448,7 @@ void Mqtt::taskFunc(void* arg) {
               }
             }
             break;
-          case OutgoingActionType::Error: {
+          case OutgoingActionType::error: {
             // Fix up transient pointers for JSON serialization
             action.protocol_info.master_view = action.master;
             action.protocol_info.slave_view = action.slave;
@@ -459,7 +459,7 @@ void Mqtt::taskFunc(void* arg) {
                                 });
             break;
           }
-          case OutgoingActionType::Data: {
+          case OutgoingActionType::data: {
             self->publishStream("response", 0, false,
                                 [&](const ebus::JsonChunkVisitor& v) {
                                   ebus::detail::JsonWriter writer(v);
@@ -470,24 +470,24 @@ void Mqtt::taskFunc(void* arg) {
                                 });
             break;
           }
-          case OutgoingActionType::Update:
+          case OutgoingActionType::update:
             self->handleValueUpdate(action.key);
             break;
-          case OutgoingActionType::Discovery:
+          case OutgoingActionType::discovery:
             if (self->haEnabled()) self->haPublishDeviceInfo();
             break;
-          case OutgoingActionType::Components:
+          case OutgoingActionType::components:
             if (self->haEnabled()) self->haPublishComponents();
             break;
-          case OutgoingActionType::HaEnable:
+          case OutgoingActionType::ha_enable:
             self->haSetEnabled(true);
             self->haConnected();
             break;
-          case OutgoingActionType::HaDisable:
+          case OutgoingActionType::ha_disable:
             self->haConnected();  // publishes removals via !enabled_ in
                                   // publishComponents
             break;
-          case OutgoingActionType::HaConnected:
+          case OutgoingActionType::ha_connected:
             // Deferred out of IDF's event task: the full discovery storm
             // (JSON build + sync TLS publish per component) overflows its
             // 6KB stack. Runs here on our own task instead.
@@ -528,7 +528,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       self->connects_.fetch_add(1, std::memory_order_relaxed);
       int msg_id1 = esp_mqtt_client_subscribe(self->client_,
                                               self->request_topic_.c_str(), 0);
-      if (msg_id1 > 0 && self->pending_subs_count_ < self->max_pending_subs) {
+      if (msg_id1 > 0 && self->pending_subs_count_ < self->max_pending_subs_) {
         snprintf(self->pending_subs_[self->pending_subs_count_].topic,
                  sizeof(self->pending_subs_[self->pending_subs_count_].topic),
                  "%s", self->request_topic_.c_str());
@@ -539,7 +539,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       std::string set_topic = self->root_topic_ + "set/#";
       int msg_id2 =
           esp_mqtt_client_subscribe(self->client_, set_topic.c_str(), 0);
-      if (msg_id2 > 0 && self->pending_subs_count_ < self->max_pending_subs) {
+      if (msg_id2 > 0 && self->pending_subs_count_ < self->max_pending_subs_) {
         snprintf(self->pending_subs_[self->pending_subs_count_].topic,
                  sizeof(self->pending_subs_[self->pending_subs_count_].topic),
                  "%s", set_topic.c_str());
@@ -557,7 +557,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
           false);
 
       Mqtt::enqueueOutgoing(
-          OutgoingAction(OutgoingActionType::HaConnected, ""));
+          OutgoingAction(OutgoingActionType::ha_connected, ""));
     } break;
     case MQTT_EVENT_DISCONNECTED: {
       logger.debug("[MQTT] disconnected");
@@ -658,7 +658,7 @@ void Mqtt::handleRead(std::string_view payload) {
 
   if (key_view.empty()) return;
 
-  Command* command = commandManager.findCommand(key_view);
+  Command* command = command_manager.findCommand(key_view);
   if (command != nullptr) {
     command->setLast(0);  // Trigger immediate physical poll
     handleValueUpdate(key_view);
@@ -690,7 +690,7 @@ void Mqtt::handleWrite(std::string_view payload) {
 
   if (key_view.empty()) return;
 
-  Command* command = commandManager.findCommand(key_view);
+  Command* command = command_manager.findCommand(key_view);
   if (command != nullptr) {
     if (val_view.empty()) {
       publishStream("response", 0, false,
@@ -707,7 +707,7 @@ void Mqtt::handleWrite(std::string_view payload) {
       return;
     }
 
-    ebus::Sequence valueBytes;
+    ebus::Sequence value_bytes;
     auto field_dt = command->getFieldDatatype(0);
     if (ebus::isNumeric(field_dt)) {
       // Strict parse (see command.cpp): garbage must not become 0.
@@ -716,7 +716,7 @@ void Mqtt::handleWrite(std::string_view payload) {
         double val = *parsed;
         if ((val >= command->getFieldMin(0)) &&
             (val <= command->getFieldMax(0))) {
-          valueBytes = command->getVectorFromDouble(val, 0);
+          value_bytes = command->getVectorFromDouble(val, 0);
         }
       }
     } else {
@@ -725,15 +725,15 @@ void Mqtt::handleWrite(std::string_view payload) {
         val_view.remove_prefix(1);
         val_view.remove_suffix(1);
       }
-      valueBytes = command->getVectorFromString(val_view, 0);
+      value_bytes = command->getVectorFromString(val_view, 0);
     }
 
-    if (!valueBytes.empty()) {
-      ebus::Sequence fullWrite =
-          ebus::makeSequence(command->getWriteCmd(commandManager));
-      fullWrite.append(valueBytes);
+    if (!value_bytes.empty()) {
+      ebus::Sequence full_write =
+          ebus::makeSequence(command->getWriteCmd(command_manager));
+      full_write.append(value_bytes);
 
-      getEbusController().enqueue(prio_send, fullWrite);
+      getEbusController().enqueue(app::priority::send, full_write);
       publishStream("response", 0, false,
                     [command, key_view](const ebus::JsonChunkVisitor& v) {
                       ebus::detail::JsonWriter writer(v);
@@ -777,10 +777,10 @@ void Mqtt::handleWrite(std::string_view payload) {
 }
 
 void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
-  Command* command = commandManager.findCommand(key);
+  Command* command = command_manager.findCommand(key);
   if (command == nullptr) return;
 
-  ebus::Sequence valueBytes;
+  ebus::Sequence value_bytes;
   auto field_dt = command->getFieldDatatype(0);
   if (ebus::isNumeric(field_dt)) {
     // Strict parse (see command.cpp): garbage must not become 0.
@@ -789,7 +789,7 @@ void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
       double val = *parsed;
       if ((val >= command->getFieldMin(0)) &&
           (val <= command->getFieldMax(0))) {
-        valueBytes = command->getVectorFromDouble(val, 0);
+        value_bytes = command->getVectorFromDouble(val, 0);
       }
     }
   } else {
@@ -798,14 +798,14 @@ void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
       val_view.remove_prefix(1);
       val_view.remove_suffix(1);
     }
-    valueBytes = command->getVectorFromString(val_view, 0);
+    value_bytes = command->getVectorFromString(val_view, 0);
   }
 
-  if (!valueBytes.empty()) {
-    ebus::Sequence fullWrite =
-        ebus::makeSequence(command->getWriteCmd(commandManager));
-    fullWrite.append(valueBytes);
-    getEbusController().enqueue(prio_send, fullWrite);
+  if (!value_bytes.empty()) {
+    ebus::Sequence full_write =
+        ebus::makeSequence(command->getWriteCmd(command_manager));
+    full_write.append(value_bytes);
+    getEbusController().enqueue(app::priority::send, full_write);
     command->setLast(0);
     char buf[128];
     snprintf(buf, sizeof(buf), "[MQTT] Scheduled write for '%.*s'",
@@ -820,7 +820,7 @@ void Mqtt::handleDirectWrite(std::string_view key, std::string_view val_view) {
 }
 
 void Mqtt::handleValueUpdate(std::string_view key) {
-  Command* cmd = commandManager.findCommand(key);
+  Command* cmd = command_manager.findCommand(key);
   if (!cmd) return;
 
   std::optional<ebus::DataValue> decoded;
@@ -834,14 +834,14 @@ void Mqtt::handleValueUpdate(std::string_view key) {
   }
 
   if (connected_) {
-    char topicBuf[128];
-    int n = snprintf(topicBuf, sizeof(topicBuf), "values/%.*s",
+    char topic_buf[128];
+    int n = snprintf(topic_buf, sizeof(topic_buf), "values/%.*s",
                      (int)cmd->getName().size(), cmd->getName().data());
-    if (n > 0 && (size_t)n < sizeof(topicBuf)) {
+    if (n > 0 && (size_t)n < sizeof(topic_buf)) {
       for (int i = 7; i < n; ++i)
-        topicBuf[i] = (char)tolower((unsigned char)topicBuf[i]);
+        topic_buf[i] = (char)tolower((unsigned char)topic_buf[i]);
 
-      publishStream(topicBuf, 0, false, [&](const ebus::JsonChunkVisitor& v) {
+      publishStream(topic_buf, 0, false, [&](const ebus::JsonChunkVisitor& v) {
         ebus::detail::JsonWriter writer(v);
         auto scope = writer.objectScope();
         cmd->writeValuePayload(writer);

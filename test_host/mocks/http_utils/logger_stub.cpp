@@ -15,12 +15,11 @@ void clearLoggerMessages() {
 
 Logger logger;
 
-Logger::Logger(size_t max_entries)
+Logger::Logger(size_t capacity)
     : index_(0),
       entries_(0),
-      capacity_(max_entries > 0 && max_entries <= ::max_entries
-                    ? max_entries
-                    : ::max_entries),
+      capacity_(capacity > 0 && capacity <= ::max_entries ? capacity
+                                                          : ::max_entries),
       mux_(portMUX_INITIALIZER_UNLOCKED) {}
 
 Logger::~Logger() = default;

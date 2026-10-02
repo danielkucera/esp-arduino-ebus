@@ -74,15 +74,15 @@ struct HeapStatus {
 struct ArbitrationInfo {
   static void toJson(ebus::detail::JsonWriter& writer) {
     auto scope = writer.objectScope();
-    writer.writeField("total", static_cast<int>(Bus.nbr_arbitrations_));
-    writer.writeField("restarts1", static_cast<int>(Bus.nbr_restarts_1_));
-    writer.writeField("restarts2", static_cast<int>(Bus.nbr_restarts_2_));
-    writer.writeField("won1", static_cast<int>(Bus.nbr_won_1_));
-    writer.writeField("won2", static_cast<int>(Bus.nbr_won_2_));
-    writer.writeField("lost1", static_cast<int>(Bus.nbr_lost_1_));
-    writer.writeField("lost2", static_cast<int>(Bus.nbr_lost_2_));
-    writer.writeField("late", static_cast<int>(Bus.nbr_late_));
-    writer.writeField("errors", static_cast<int>(Bus.nbr_errors_));
+    writer.writeField("total", static_cast<int>(bus.nbr_arbitrations));
+    writer.writeField("restarts1", static_cast<int>(bus.nbr_restarts_1));
+    writer.writeField("restarts2", static_cast<int>(bus.nbr_restarts_2));
+    writer.writeField("won1", static_cast<int>(bus.nbr_won_1));
+    writer.writeField("won2", static_cast<int>(bus.nbr_won_2));
+    writer.writeField("lost1", static_cast<int>(bus.nbr_lost_1));
+    writer.writeField("lost2", static_cast<int>(bus.nbr_lost_2));
+    writer.writeField("late", static_cast<int>(bus.nbr_late));
+    writer.writeField("errors", static_cast<int>(bus.nbr_errors));
   }
 };
 #endif
@@ -137,9 +137,9 @@ struct ScheduleStatus {
     w.writeField("system_response", statusConfig().bus.system_response);
     w.writeField("scan_on_startup", statusConfig().bus.scan_on_startup);
     w.writeField("active_commands",
-                 static_cast<uint32_t>(commandManager.getActiveCommands()));
+                 static_cast<uint32_t>(command_manager.getActiveCommands()));
     w.writeField("passive_commands",
-                 static_cast<uint32_t>(commandManager.getPassiveCommands()));
+                 static_cast<uint32_t>(command_manager.getPassiveCommands()));
   }
 };
 

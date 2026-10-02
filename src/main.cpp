@@ -17,11 +17,11 @@
 #include <ebus/controller.hpp>
 #endif
 
-ConfigManager configManager;
+ConfigManager config_manager;
 
 extern "C" void app_main(void) {
-  DebugSer.begin(115200);
-  DebugSer.setDebugOutput(true);
+  debug_ser.begin(115200);
+  debug_ser.setDebugOutput(true);
 
   logger.info("Starting esp-ebus adapter version " AUTO_VERSION);
 
@@ -54,7 +54,7 @@ extern "C" void app_main(void) {
 
   DeviceStatus::setResetCode((uint32_t)esp_rom_get_reset_reason(0));
 
-  App app(configManager);
+  App app(config_manager);
   if (!app.begin()) {
     logger.error("Application initialization failed, restarting");
     restart();
