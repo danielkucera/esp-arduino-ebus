@@ -30,6 +30,7 @@
 #include "bridge/bus_type.hpp"
 #else
 #include "app/command_manager.hpp"
+#include "app/mqtt_endpoint.hpp"
 #include "app/cron.hpp"
 #endif
 
@@ -93,6 +94,9 @@ struct FirmwareStatus {
     writer.writeField("version", AUTO_VERSION);
     writer.writeField("build", __DATE__ " " __TIME__);
     writer.writeField("esp_idf_version", esp_get_idf_version());
+#if defined(EBUS_INTERNAL)
+    writer.writeField("mqtt_patch", mqtt_endpoint::patch_version);
+#endif
 #if !defined(EBUS_INTERNAL)
     writer.writeField("async", static_cast<bool>(USE_ASYNCHRONOUS));
     writer.writeField("software_serial",

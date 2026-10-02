@@ -77,8 +77,7 @@ bool AppConfigLoader::load(AppConfig& config) {
 
   // MQTT
   config.mqtt.enabled = config_manager_.readBool("mqttEnabled");
-  assignFixedStringIfNotEmpty(config.mqtt.server,
-                              config_manager_.readString("mqttServer"));
+  config.mqtt.server.assign(config_manager_.readString("mqttServer"));
   assignFixedStringIfNotEmpty(config.mqtt.user,
                               config_manager_.readString("mqttUser"));
   assignFixedStringIfNotEmpty(config.mqtt.pass,

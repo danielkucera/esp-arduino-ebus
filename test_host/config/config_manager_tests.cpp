@@ -9,6 +9,23 @@
 // starts from resetConfig() for isolation.
 ConfigManager configManager;
 
+TEST_CASE("WSS endpoint survives configuration save and reload without truncation",
+          "[config_nvs][mqtt_wss]") {
+  configManager.resetConfig();
+  std::string uri = "wss://broker.example.org:443/";
+  uri.append(500 - uri.size(), 'p');
+  AppConfig written;
+  written.reset();
+  written.mqtt.enabled = true;
+  written.mqtt.server.assign(uri);
+  AppConfigLoader loader(configManager);
+  REQUIRE(loader.save(written));
+  AppConfig loaded;
+  REQUIRE(loader.load(loaded));
+  REQUIRE(loaded.mqtt.enabled);
+  REQUIRE(std::string(loaded.mqtt.server.c_str()) == uri);
+}
+
 TEST_CASE("ConfigManager string roundtrip", "[config_nvs]") {
   configManager.resetConfig();
 

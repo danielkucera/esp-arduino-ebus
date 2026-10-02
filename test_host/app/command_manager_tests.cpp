@@ -461,3 +461,24 @@ TEST_CASE("CommandManager removeFieldOverrides drains pool for a key",
 
   commandManager.wipeCommands();
 }
+
+TEST_CASE("CommandManager lists every command at firmware capacity",
+          "[CommandManager][capacity]") {
+  commandManager.wipeCommands();
+  REQUIRE(command_capacity == 96);
+  for (size_t i = 0; i < command_capacity; ++i) {
+    commandManager.insertCommand(makeCommand("capacity" + std::to_string(i),
+        "Capacity", false, true, 1, "uint8", "fe070009"));
+  }
+  REQUIRE(commandManager.getCommandCount() == command_capacity);
+  std::string commands;
+  std::string values;
+  commandManager.fetchCommands([&](std::string_view part) { commands += part; });
+  commandManager.fetchValues([&](std::string_view part) { values += part; });
+  for (size_t i = 0; i < command_capacity; ++i) {
+    const auto key = "\"key\":\"capacity" + std::to_string(i) + "\"";
+    REQUIRE(commands.find(key) != std::string::npos);
+    REQUIRE(values.find(key) != std::string::npos);
+  }
+  commandManager.wipeCommands();
+}

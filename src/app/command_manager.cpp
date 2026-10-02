@@ -316,7 +316,7 @@ void CommandManager::fetchCommands(
       std::lock_guard<std::recursive_mutex> lock(mutex_);
       if (i >= commands_.size()) break;
       size_t n = commands_.size();
-      std::array<const Command*, 64> ordered{};
+      std::array<const Command*, command_capacity> ordered{};
       for (size_t k = 0; k < n; k++) {
         ordered[k] = &commands_[k];
       }
@@ -472,7 +472,7 @@ void CommandManager::fetchValues(const ebus::JsonChunkVisitor& visitor) const {
       std::lock_guard<std::recursive_mutex> lock(mutex_);
       if (i >= commands_.size()) break;
       size_t n = commands_.size();
-      std::array<const Command*, 64> ordered{};
+      std::array<const Command*, command_capacity> ordered{};
       for (size_t k = 0; k < n; k++) {
         ordered[k] = &commands_[k];
       }

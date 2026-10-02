@@ -43,7 +43,9 @@ struct AppConfig {
 
   struct Mqtt {
     bool enabled = false;
-    ebus::FixedString<64> server;
+    // URI is assigned only on config load/edit. ebus::FixedString has an
+    // 8-bit length and cannot preserve the 500-character WSS input limit.
+    std::string server;
     ebus::FixedString<32> user;
     ebus::FixedString<32> pass;
     ebus::FixedString<32> root_topic;

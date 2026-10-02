@@ -16,3 +16,7 @@ include/app/build_info_gen.hpp
 # User profiles
 profiles/data_profiles_user.json
 profiles/ha_profiles_user.json
+
+# Local test caches and firmware artifacts
+__pycache__/
+output/

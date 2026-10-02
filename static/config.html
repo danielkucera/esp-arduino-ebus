@@ -104,8 +104,16 @@
     <fieldset>
         <legend>MQTT</legend>
         <div><label><input id="mqttEnabled" type="checkbox" class="config"> MQTT Enabled</label></div>
-        <div><label for="mqttServer">MQTT Server</label></div>
-        <div><input id="mqttServer" type="text" class="config"></div>
+        <div><label for="mqttServer">MQTT Server / URI (WSS r2)</label></div>
+        <div><input id="mqttServer" type="text" class="config" maxlength="500"
+                placeholder="wss://mqtt.example.org:443/mqtt" spellcheck="false"
+                autocomplete="off" autocapitalize="none" aria-describedby="mqttServerHelp"></div>
+        <div id="mqttServerHelp"><small>
+            A hostname keeps MQTT/TCP on port 1883. Full mqtt://, mqtts://, ws:// and wss:// URIs
+            use their own port; WebSocket defaults to /mqtt if no path is specified.
+            WSS/TLS validates the CA, hostname and certificate dates. Enable SNTP for TLS.
+            Keep credentials in the separate fields below. Save, then Restart to Apply Changes.
+        </small></div>
         <div><label for="mqttUser">MQTT User</label></div>
         <div><input id="mqttUser" type="text" class="config"></div>
         <div><label for="mqttPass">MQTT Password</label></div>

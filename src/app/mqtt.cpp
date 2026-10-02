@@ -1,16 +1,23 @@
 #if defined(EBUS_INTERNAL)
 #include "app/mqtt.hpp"
 
+#include <esp_crt_bundle.h>
+#include <esp_err.h>
 #include <esp_heap_caps.h>
 #include <esp_timer.h>
 #include <freertos/task.h>
+#include <sdkconfig.h>
 
+#include <cstdio>
+#include <cstring>
+#include <ctime>
 #include <functional>
 
 #include "app/app_limits.hpp"
 #include "app/command_manager.hpp"
 #include "app/ebus_accessor.hpp"
 #include "app/mqtt_ha.hpp"
+#include "app/mqtt_endpoint.hpp"
 #include "ebus/detail/json_reader.hpp"
 #include "ebus/detail/json_writer.hpp"
 #include "ebus/status.hpp"
@@ -18,6 +25,30 @@
 #include "network/wifi_network_manager.hpp"
 #include "system/device_status.hpp"
 #include "system/logger.hpp"
+
+// Fail the build rather than accidentally ship a WSS build without validation.
+#if !CONFIG_MQTT_TRANSPORT_SSL || !CONFIG_MQTT_TRANSPORT_WEBSOCKET || \
+    !CONFIG_MQTT_TRANSPORT_WEBSOCKET_SECURE
+#error "WSS requires the MQTT SSL, WebSocket and WebSocket Secure transports"
+#endif
+#if !CONFIG_MBEDTLS_CERTIFICATE_BUNDLE || !CONFIG_MBEDTLS_HAVE_TIME_DATE
+#error "WSS requires the CA bundle and certificate validity-date checks"
+#endif
+#if CONFIG_ESP_TLS_INSECURE || CONFIG_ESP_TLS_SKIP_SERVER_CERT_VERIFY
+#error "Insecure ESP-TLS options must not be enabled in this WSS build"
+#endif
+
+namespace {
+void logMqttMemory(const char* phase) {
+  char message[192];
+  snprintf(message, sizeof(message),
+           "[MQTT] %s: free=%u, min=%u, largest=%u bytes", phase,
+           static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+           static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+           static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
+  logger.info(message);
+}
+}  // namespace
 
 Mqtt* Mqtt::instance_ = nullptr;
 
@@ -59,11 +90,29 @@ void Mqtt::start() {
       esp_mqtt_client_destroy(client_);
       client_ = nullptr;
     }
+    connected_ = false;
+    if (!server_valid_) {
+      logger.error("[MQTT] Client not started: invalid server/URI configuration");
+      return;
+    }
     client_ = esp_mqtt_client_init(&mqtt_cfg_);
-    esp_mqtt_client_register_event(client_,
-                                   (esp_mqtt_event_id_t)ESP_EVENT_ANY_ID,
-                                   &Mqtt::eventHandler, this);
-    esp_mqtt_client_start(client_);
+    if (client_ == nullptr) {
+      logger.error("[MQTT] Client initialization failed (configuration or memory)");
+      logMqttMemory("init failed");
+      return;
+    }
+    esp_err_t err = esp_mqtt_client_register_event(
+        client_, (esp_mqtt_event_id_t)ESP_EVENT_ANY_ID,
+        &Mqtt::eventHandler, this);
+    if (err == ESP_OK) err = esp_mqtt_client_start(client_);
+    if (err != ESP_OK) {
+      char message[128];
+      snprintf(message, sizeof(message), "[MQTT] Client start failed: %s (0x%x)",
+               esp_err_to_name(err), static_cast<unsigned>(err));
+      logger.error(message);
+      esp_mqtt_client_destroy(client_);
+      client_ = nullptr;
+    }
   }
 }
 
@@ -153,14 +202,29 @@ void Mqtt::setup(const char* id) {
 
 void Mqtt::setServer(const char* host, uint16_t port) {
   std::lock_guard<std::recursive_mutex> lock(mqtt_mutex_);
-  std::string hostname;
-  for (size_t i = 0; host[i] != '\0'; ++i)
-    if (!std::isspace(host[i])) hostname += host[i];
-
-  uri_ = "mqtt://" + hostname;
-  if (port > 0) uri_ += ":" + std::to_string(port);
-
+  const auto endpoint = mqtt_endpoint::parse(host ? host : "", port);
+  server_valid_ = static_cast<bool>(endpoint);
+  tls_enabled_ = endpoint.tls;
+  transport_ = endpoint.transport;
+  uri_ = endpoint.uri;
+  // Clear previous address/verification settings when switching transport.
+  mqtt_cfg_.broker.address = {};
+  mqtt_cfg_.broker.verification = {};
   mqtt_cfg_.broker.address.uri = uri_.c_str();
+  if (!server_valid_) {
+    logger.error(endpoint.error ? endpoint.error : "[MQTT] Invalid endpoint");
+    return;
+  }
+  if (tls_enabled_) {
+    mqtt_cfg_.broker.verification.crt_bundle_attach = esp_crt_bundle_attach;
+    mqtt_cfg_.broker.verification.skip_cert_common_name_check = false;
+    logger.info("[MQTT] TLS enabled: CA bundle, hostname and expiry verification");
+  } else {
+    logger.warn("[MQTT] Plaintext transport selected: use only on a trusted network");
+  }
+  // Retrying never changes the configured transport or disables verification.
+  mqtt_cfg_.network.reconnect_timeout_ms = 10000;
+  mqtt_cfg_.network.timeout_ms = 15000;
 }
 
 void Mqtt::setCredentials(const char* username, const char* password) {
@@ -193,6 +257,12 @@ void Mqtt::setEnabled(const bool enable) {
 bool Mqtt::isEnabled() const { return enabled_; }
 
 bool Mqtt::isConnected() const { return connected_; }
+
+bool Mqtt::isClockInitialized() {
+  // Detect a reset-to-1970 clock; this is not proof of a successful SNTP sync.
+  // mbedTLS still checks the real certificate validity interval at handshake.
+  return std::time(nullptr) >= static_cast<std::time_t>(1704067200);  // 2024-01-01 UTC
+}
 
 const std::string& Mqtt::getUniqueId() const { return unique_id_; }
 
@@ -514,16 +584,28 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
   esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)event_data;
 
   // Guard against stale events after client is destroyed
-  if (self->client_ == nullptr) {
+  if (self->client_ == nullptr || event == nullptr || event->client != self->client_) {
     return;
   }
 
   switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_BEFORE_CONNECT: {
-      logger.debug("[MQTT] before connect");
+      char message[96];
+      snprintf(message, sizeof(message), "[MQTT] Connecting: transport=%s, TLS=%s",
+               self->transport_, self->tls_enabled_ ? "verify-required" : "off");
+      logger.info(message);
+      if (self->tls_enabled_ && !isClockInitialized()) {
+        logger.warn("[MQTT] Clock not initialized: enable SNTP and wait for sync. "
+                    "TLS may fail until then; verification stays enabled.");
+      }
+      logMqttMemory("before connect");
     } break;
     case MQTT_EVENT_CONNECTED: {
-      logger.debug("[MQTT] connected");
+      char message[96];
+      snprintf(message, sizeof(message), "[MQTT] Connected: transport=%s, TLS=%s",
+               self->transport_, self->tls_enabled_ ? "verified" : "off");
+      logger.info(message);
+      logMqttMemory("connected");
       self->connected_ = true;
       self->connects_.fetch_add(1, std::memory_order_relaxed);
       int msg_id1 = esp_mqtt_client_subscribe(self->client_,
@@ -560,7 +642,7 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
           OutgoingAction(OutgoingActionType::HaConnected, ""));
     } break;
     case MQTT_EVENT_DISCONNECTED: {
-      logger.debug("[MQTT] disconnected");
+      logger.warn("[MQTT] Disconnected; will retry the same endpoint");
       self->connected_ = false;
       self->pending_subs_count_ =
           0;  // Clear pending subscriptions for reconnect
@@ -633,7 +715,38 @@ void Mqtt::eventHandler(void* handler_args, esp_event_base_t base,
       logger.debug("[MQTT] Message deleted");
     } break;
     case MQTT_EVENT_ERROR: {
-      logger.error("[MQTT] Error occurred");
+      const esp_mqtt_error_codes_t* error = event->error_handle;
+      if (error == nullptr) {
+        logger.error("[MQTT] Error event without details");
+        break;
+      }
+      char message[320];
+      if (error->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
+        snprintf(message, sizeof(message),
+                 "[MQTT] Transport/TLS error: esp=%s (0x%x), tls_stack=%d, "
+                 "verify_flags=0x%x, socket_errno=%d (%s)",
+                 esp_err_to_name(error->esp_tls_last_esp_err),
+                 static_cast<unsigned>(error->esp_tls_last_esp_err),
+                 error->esp_tls_stack_err,
+                 static_cast<unsigned>(error->esp_tls_cert_verify_flags),
+                 error->esp_transport_sock_errno,
+                 std::strerror(error->esp_transport_sock_errno));
+        logger.error(message);
+        if (self->tls_enabled_ && error->esp_tls_cert_verify_flags != 0) {
+          logger.warn("[MQTT] Check SNTP time, hostname, and the proxy's complete "
+                      "certificate chain. Certificate verification was NOT bypassed.");
+        }
+      } else if (error->error_type == MQTT_ERROR_TYPE_CONNECTION_REFUSED) {
+        snprintf(message, sizeof(message),
+                 "[MQTT] Broker refused CONNECT: code=%d (check MQTT credentials/ACL)",
+                 static_cast<int>(error->connect_return_code));
+        logger.error(message);
+      } else {
+        snprintf(message, sizeof(message), "[MQTT] Error type=%d",
+                 static_cast<int>(error->error_type));
+        logger.error(message);
+      }
+      logMqttMemory("error");
     } break;
     default: {
       logger.warn("[MQTT] Unhandled event " + std::to_string(event_id));
@@ -870,6 +983,13 @@ void appendMqttStatus(ebus::detail::JsonWriter& writer,
   writer.writeField("user", mqtt_config.user.c_str());
   writer.writeField("connected", Mqtt::instance_ != nullptr &&
                                      Mqtt::instance_->isConnected());
+  const Mqtt* client = Mqtt::instance_;
+  writer.writeField("server_valid", client != nullptr && client->isServerValid());
+  writer.writeField("transport", client != nullptr ? client->getTransport() : "invalid");
+  const bool tls = client != nullptr && client->usesTls();
+  writer.writeField("tls_enabled", tls);
+  writer.writeField("tls_verification", tls ? "ca+hostname+expiry" : "none");
+  writer.writeField("clock_initialized", Mqtt::isClockInitialized());
 }
 
 #endif

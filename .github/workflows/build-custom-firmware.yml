@@ -1,0 +1,68 @@
+name: Build Custom eBUS Firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [mqtt-wss]
+  pull_request:
+    branches: [mqtt-wss]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mqtt-wss-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Generate profile headers
+        run: |
+          python scripts/generate_data_profiles.py
+          python scripts/generate_ha_profiles.py
+          python scripts/generate_build_info.py
+      - name: Configure and run host tests
+        run: |
+          cmake -S test_host -B test_host/build
+          cmake --build test_host/build --parallel 2
+          ctest --test-dir test_host/build --output-on-failure -j2 --timeout 20
+      - name: Validate WSS build checker tests
+        run: python -m unittest discover -s tests/mqtt_wss -p 'test_*.py'
+
+  build:
+    needs: host-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.19
+      - name: Build INTERNAL WSS firmware
+        run: pio run -e esp32-c3-internal
+      - name: Verify transports, TLS and OTA image size
+        run: python scripts/check_wss_build.py --report output/WSS_BUILD_REPORT.json
+      - name: Prepare firmware
+        run: |
+          cp .pio/build/esp32-c3-internal/firmware.bin output/firmware-HW_v5.x-internal-wss-r2.bin
+          cd output
+          sha256sum firmware-HW_v5.x-internal-wss-r2.bin > SHA256SUMS.txt
+      - name: Upload firmware and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ebus-internal-wss-r2
+          path: output/
+          if-no-files-found: error

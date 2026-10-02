@@ -167,6 +167,7 @@ bool AppConfig::mergeFlatJson(
       } else if (key == "mqttEnabled") {
         mqtt.enabled = parseFlatBool(value);
       } else if (key == "mqttServer") {
+        if (value.size() > 500) return false;
         mqtt.server.assign(value);
       } else if (key == "mqttUser") {
         mqtt.user.assign(value);
@@ -241,7 +242,7 @@ void AppConfig::collectDrift(const AppConfig& live, const AppConfig& requested,
     keys.emplace_back("scanOnStartup");
   if (live.mqtt.enabled != requested.mqtt.enabled)
     keys.emplace_back("mqttEnabled");
-  if (driftStr(live.mqtt.server, requested.mqtt.server))
+  if (live.mqtt.server != requested.mqtt.server)
     keys.emplace_back("mqttServer");
   if (driftStr(live.mqtt.user, requested.mqtt.user))
     keys.emplace_back("mqttUser");

@@ -57,6 +57,7 @@ target_compile_definitions(host_test_settings INTERFACE
     EBUS_INTERNAL=1
     EBUS_SIMULATION=0
     ESP32=1
+    COMMAND_CAPACITY=96
     AUTO_VERSION="host-test"
     EBUS_CRON_FILE_PATH="${CMAKE_CURRENT_BINARY_DIR}/cron_api_test.json"
     EBUS_COMMANDS_FILE_PATH="${CMAKE_CURRENT_BINARY_DIR}/commands_api_test.json"
@@ -265,6 +266,9 @@ target_link_libraries(identity_tests PRIVATE
 )
 
 enable_testing()
+add_executable(mqtt_endpoint_tests ${PROJECT_ROOT}/tests/mqtt_wss/endpoint_test.cpp)
+target_include_directories(mqtt_endpoint_tests PRIVATE ${PROJECT_ROOT}/include)
+add_test(NAME mqtt_endpoint_tests COMMAND mqtt_endpoint_tests)
 include(CTest)
 # Per-case CTest entries: timeouts apply per case,
 # failures pinpoint, same Catch.cmake module from our Catch2 sources.

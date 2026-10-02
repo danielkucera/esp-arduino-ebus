@@ -3,6 +3,18 @@
 
 #include "config/app_config.hpp"
 
+TEST_CASE("AppConfig preserves a complete WSS URI and rejects oversize input",
+          "[app_config][mqtt_wss]") {
+  AppConfig cfg;
+  cfg.reset();
+  std::string uri = "wss://broker.example.org:443/";
+  uri.append(500 - uri.size(), 'x');
+  REQUIRE(cfg.mergeFlatJson("{\"mqttServer\":\"" + uri + "\"}"));
+  REQUIRE(std::string(cfg.mqtt.server.c_str()) == uri);
+  REQUIRE_FALSE(cfg.mergeFlatJson("{\"mqttServer\":\"" + uri + "x\"}"));
+  REQUIRE(std::string(cfg.mqtt.server.c_str()) == uri);
+}
+
 TEST_CASE("AppConfig reset provides migration-safe defaults", "[app_config]") {
   AppConfig cfg;
   cfg.reset();

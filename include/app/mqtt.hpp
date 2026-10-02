@@ -127,6 +127,10 @@ class Mqtt {
   bool isEnabled() const;
 
   bool isConnected() const;
+  bool usesTls() const { return tls_enabled_; }
+  bool isServerValid() const { return server_valid_; }
+  const char* getTransport() const { return transport_; }
+  static bool isClockInitialized();
 
   const std::string& getUniqueId() const;
   const std::string& getRootTopic() const;
@@ -186,6 +190,9 @@ class Mqtt {
   std::string password_;
 
   std::string uri_;
+  bool server_valid_ = false;
+  bool tls_enabled_ = false;
+  const char* transport_ = "invalid";
 
   bool enabled_ = false;
   volatile bool task_should_run_ = false;
