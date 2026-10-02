@@ -10,21 +10,21 @@
 namespace {
 
 void insertWritableCommand() {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   const std::string command_json =
       R"({"key":"cron-test","name":"SetPoint","read_cmd":"50b509030d3300",)"
       R"("write_cmd":"50b509040e3300","interval":60,"master":false,)"
       R"("fields":[{"name":"value","profile":"data2b_celsius","position":1,)"
       R"("ha_profile":"sensor_temperature"}]})";
   ebus::detail::JsonReader command_reader(command_json);
-  commandManager.insertCommand(Command::fromJson(command_reader));
-  REQUIRE(commandManager.findCommand("cron-test") != nullptr);
+  command_manager.insertCommand(Command::fromJson(command_reader));
+  REQUIRE(command_manager.findCommand("cron-test") != nullptr);
 }
 
 }  // namespace
 
 TEST_CASE("CronApi serves the cron page", "[cron_api]") {
-  Cron cron_api_commands(commandManager);
+  Cron cron_api_commands(command_manager);
   CronApi api(cron_api_commands);
   httpd_req_t req{};
 
@@ -35,7 +35,7 @@ TEST_CASE("CronApi serves the cron page", "[cron_api]") {
 }
 
 TEST_CASE("CronApi rejects a non-array evaluation payload", "[cron_api]") {
-  Cron cron_api_commands(commandManager);
+  Cron cron_api_commands(command_manager);
   CronApi api(cron_api_commands);
 
   httpd_req_t req{};
@@ -51,7 +51,7 @@ TEST_CASE("CronApi rejects a non-array evaluation payload", "[cron_api]") {
 TEST_CASE("CronApi evaluates valid rules and rejects invalid schedules",
           "[cron_api]") {
   insertWritableCommand();
-  Cron cron_api_commands(commandManager);
+  Cron cron_api_commands(command_manager);
   CronApi api(cron_api_commands);
 
   httpd_req_t valid_req{};
@@ -76,11 +76,11 @@ TEST_CASE("CronApi evaluates valid rules and rejects invalid schedules",
   REQUIRE(invalid_req.status == "400 Bad Request");
   REQUIRE(invalid_req.final_body.find("Invalid minute field") !=
           std::string::npos);
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 }
 
 TEST_CASE("CronApi accepts an empty evaluation array", "[cron_api]") {
-  Cron cron_api_commands(commandManager);
+  Cron cron_api_commands(command_manager);
   CronApi api(cron_api_commands);
 
   httpd_req_t req{};
@@ -93,7 +93,7 @@ TEST_CASE("CronApi accepts an empty evaluation array", "[cron_api]") {
 }
 
 TEST_CASE("CronApi rejects non-object evaluation entries", "[cron_api]") {
-  Cron cron_api_commands(commandManager);
+  Cron cron_api_commands(command_manager);
   CronApi api(cron_api_commands);
 
   httpd_req_t req{};
@@ -107,7 +107,7 @@ TEST_CASE("CronApi rejects non-object evaluation entries", "[cron_api]") {
 }
 
 TEST_CASE("CronApi rejects non-array save payloads", "[cron_api]") {
-  Cron cron_api_commands(commandManager);
+  Cron cron_api_commands(command_manager);
   CronApi api(cron_api_commands);
 
   httpd_req_t req{};
@@ -125,7 +125,7 @@ TEST_CASE("CronApi saves rules and loads them from persistence", "[cron_api]") {
   const std::string payload =
       R"([{"id":"saved-rule","schedule":"* * * * *",)"
       R"("command_key":"cron-test","enabled":true,"value":25.5}])";
-  Cron save_cron(commandManager);
+  Cron save_cron(command_manager);
   CronApi save_api(save_cron);
   httpd_req_t save_req{};
   save_req.body = payload;
@@ -138,7 +138,7 @@ TEST_CASE("CronApi saves rules and loads them from persistence", "[cron_api]") {
           std::string::npos);
   REQUIRE(save_req.final_body.find("Saved ") != std::string::npos);
 
-  Cron load_cron(commandManager);
+  Cron load_cron(command_manager);
   CronApi load_api(load_cron);
   httpd_req_t load_req{};
   REQUIRE(CronApi::handleCronLoad(&load_req) == ESP_OK);
@@ -157,11 +157,11 @@ TEST_CASE("CronApi saves rules and loads them from persistence", "[cron_api]") {
   REQUIRE(body.find(R"("command_key":"cron-test")") != std::string::npos);
   REQUIRE(body.find(R"("value":25.5)") != std::string::npos);
 
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
 }
 
 TEST_CASE("CronApi streams configured rules as JSON", "[cron_api]") {
-  Cron cron_api_commands(commandManager);
+  Cron cron_api_commands(command_manager);
   CronApi api(cron_api_commands);
 
   httpd_req_t req{};

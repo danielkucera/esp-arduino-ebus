@@ -11,11 +11,11 @@
 
 Logger logger;
 
-Logger::Logger(size_t maxEntries)
+Logger::Logger(size_t capacity)
     : index_(0),
       entries_(0),
-      capacity_(maxEntries > 0 && maxEntries <= max_entries ? maxEntries
-                                                            : max_entries),
+      capacity_(capacity > 0 && capacity <= max_entries ? capacity
+                                                        : max_entries),
       mux_(portMUX_INITIALIZER_UNLOCKED),
       print_queue_(xQueueCreate(print_queue_entries, sizeof(LogPrintItem))),
       print_task_(nullptr) {
@@ -49,23 +49,23 @@ size_t Logger::getQueueHighWatermark() const {
 
 void Logger::error(std::string_view message, bool is_json, uint32_t session_id,
                    uint16_t poll_id) {
-  log(LogLevel::ERROR, message, is_json, session_id, poll_id);
+  log(LogLevel::error, message, is_json, session_id, poll_id);
 }
 void Logger::warn(std::string_view message, bool is_json, uint32_t session_id,
                   uint16_t poll_id) {
-  log(LogLevel::WARN, message, is_json, session_id, poll_id);
+  log(LogLevel::warn, message, is_json, session_id, poll_id);
 }
 void Logger::info(std::string_view message, bool is_json, uint32_t session_id,
                   uint16_t poll_id) {
-  log(LogLevel::INFO, message, is_json, session_id, poll_id);
+  log(LogLevel::info, message, is_json, session_id, poll_id);
 }
 void Logger::debug(std::string_view message, bool is_json, uint32_t session_id,
                    uint16_t poll_id) {
-  log(LogLevel::DEBUG, message, is_json, session_id, poll_id);
+  log(LogLevel::debug, message, is_json, session_id, poll_id);
 }
 
 void Logger::fetchLogs(const ebus::JsonChunkVisitor& visitor,
-                       uint64_t sinceMillis) const {
+                       uint64_t since_millis) const {
   // Iterate through logs one by one to avoid massive heap spikes from vector
   // copies.
   size_t current_entries;
@@ -82,14 +82,14 @@ void Logger::fetchLogs(const ebus::JsonChunkVisitor& visitor,
     auto array = writer.arrayScope();
 
     for (size_t i = 0; i < current_entries; i++) {
-      const size_t logIndex =
+      const size_t log_index =
           (current_index - current_entries + i + capacity_) % capacity_;
       LogEntry entry;
       portENTER_CRITICAL(&mux_);
-      entry = buffer_[logIndex];
+      entry = buffer_[log_index];
       portEXIT_CRITICAL(&mux_);
 
-      if (entry.timestamp < sinceMillis) continue;
+      if (entry.timestamp < since_millis) continue;
 
       auto item = writer.objectScope();
       writer.writeField("millis", entry.timestamp);
@@ -107,38 +107,38 @@ void Logger::fetchLogs(const ebus::JsonChunkVisitor& visitor,
 }
 
 void Logger::fetchTimeRelation(const ebus::JsonChunkVisitor& visitor) {
-  uint64_t currentMillis = 0;
-  int64_t currentTimeMillis = 0;
-  const bool hasTimeRelation =
-      currentMillisTimeRelation(currentMillis, currentTimeMillis);
+  uint64_t current_millis = 0;
+  int64_t current_time_millis = 0;
+  const bool has_time_relation =
+      currentMillisTimeRelation(current_millis, current_time_millis);
 
   ebus::detail::JsonWriter writer(visitor);
   auto root = writer.objectScope();
-  if (hasTimeRelation) {
+  if (has_time_relation) {
     auto relation = writer.objectScope("timeRelation");
-    writer.writeField("millis", currentMillis);
-    writer.writeField("time", currentTimeMillis);
+    writer.writeField("millis", current_millis);
+    writer.writeField("time", current_time_millis);
   } else {
-    writer.writeField("millis", currentMillis);
+    writer.writeField("millis", current_millis);
   }
 }
 
-const char* Logger::logLevelText(LogLevel logLevel) {
+const char* Logger::logLevelText(LogLevel log_level) {
   const char* values[] = {"DEBUG", "INFO", "WARN", "ERROR"};
-  return values[static_cast<int>(logLevel)];
+  return values[static_cast<int>(log_level)];
 }
 
-bool Logger::currentMillisTimeRelation(uint64_t& currentMillis,
-                                       int64_t& currentTimeMillis) {
-  currentMillis = static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
+bool Logger::currentMillisTimeRelation(uint64_t& current_millis,
+                                       int64_t& current_time_millis) {
+  current_millis = static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
 
   struct timeval tv;
   gettimeofday(&tv, nullptr);
-  currentTimeMillis = static_cast<int64_t>(tv.tv_sec) * 1000LL +
-                      static_cast<int64_t>(tv.tv_usec) / 1000LL;
+  current_time_millis = static_cast<int64_t>(tv.tv_sec) * 1000LL +
+                        static_cast<int64_t>(tv.tv_usec) / 1000LL;
 
   constexpr int64_t min_valid_epoch_ms = 1577836800000LL;  // 2020-01-01 UTC
-  return currentTimeMillis >= min_valid_epoch_ms;
+  return current_time_millis >= min_valid_epoch_ms;
 }
 
 void Logger::log(LogLevel level, std::string_view message, bool is_json,

@@ -99,26 +99,26 @@ void MqttHA::setThingName(const std::string& name) { thing_name_ = name; }
 
 void MqttHA::setThingModel(const std::string& model) { thing_model_ = model; }
 
-void MqttHA::setThingModelId(const std::string& modelId) {
-  thing_model_id_ = modelId;
+void MqttHA::setThingModelId(const std::string& model_id) {
+  thing_model_id_ = model_id;
 }
 
-void MqttHA::setThingHwVersion(const std::string& hwVersion) {
-  thing_hw_version_ = hwVersion;
+void MqttHA::setThingHwVersion(const std::string& hw_version) {
+  thing_hw_version_ = hw_version;
 }
 
-void MqttHA::setThingConfigurationUrl(const std::string& configurationUrl) {
-  thing_configuration_url_ = configurationUrl;
+void MqttHA::setThingConfigurationUrl(const std::string& configuration_url) {
+  thing_configuration_url_ = configuration_url;
 }
 
 void MqttHA::publishDeviceInfo() const {
   char state_topic_buf[mqtt_ha_buffer_limits::max_state_topic_length];
   createStateTopic(state_topic_buf, sizeof(state_topic_buf), "", "state");
 
-  auto publishDiag = [this, &state_topic_buf](
-                         const char* component, const char* key,
-                         const char* name, bool with_device_info,
-                         const char* state_topic, auto write_fields) {
+  auto publish_diag = [this, &state_topic_buf](
+                          const char* component, const char* key,
+                          const char* name, bool with_device_info,
+                          const char* state_topic, auto write_fields) {
     char object_id_buf[mqtt_ha_buffer_limits::max_object_id_length];
     {
       size_t i = 0;
@@ -176,74 +176,75 @@ void MqttHA::publishDeviceInfo() const {
         false);
   };
 
-  publishDiag("button", "restart", "Restart", false, nullptr,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("command_topic", command_topic_);
-                w.writeField("payload_press", "{\"id\":\"restart\"}");
-                w.writeField("entity_category", "config");
-              });
+  publish_diag("button", "restart", "Restart", false, nullptr,
+               [this](ebus::detail::JsonWriter& w) {
+                 w.writeField("command_topic", command_topic_);
+                 w.writeField("payload_press", "{\"id\":\"restart\"}");
+                 w.writeField("entity_category", "config");
+               });
 
-  publishDiag("sensor", "reset_code", "Reset Code", false, state_topic_buf,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("value_template", "{{value_json.reset_code}}");
-                w.writeField("icon", "mdi:restart");
-                w.writeField("entity_category", "diagnostic");
-              });
+  publish_diag("sensor", "reset_code", "Reset Code", false, state_topic_buf,
+               [this](ebus::detail::JsonWriter& w) {
+                 w.writeField("value_template", "{{value_json.reset_code}}");
+                 w.writeField("icon", "mdi:restart");
+                 w.writeField("entity_category", "diagnostic");
+               });
 
-  publishDiag("sensor", "uptime", "Uptime", true, state_topic_buf,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("unit_of_measurement", "s");
-                w.writeField("value_template", "{{value_json.uptime}}");
-                w.writeField("icon", "mdi:clock-outline");
-                w.writeField("entity_category", "diagnostic");
-              });
+  publish_diag("sensor", "uptime", "Uptime", true, state_topic_buf,
+               [this](ebus::detail::JsonWriter& w) {
+                 w.writeField("unit_of_measurement", "s");
+                 w.writeField("value_template", "{{value_json.uptime}}");
+                 w.writeField("icon", "mdi:clock-outline");
+                 w.writeField("entity_category", "diagnostic");
+               });
 
-  publishDiag("sensor", "free_heap", "Heap Total Free Bytes", false,
-              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
-                w.writeField("unit_of_measurement", "B");
-                w.writeField("value_template", "{{value_json.heap.free}}");
-                w.writeField("icon", "mdi:memory");
-                w.writeField("entity_category", "diagnostic");
-              });
+  publish_diag("sensor", "free_heap", "Heap Total Free Bytes", false,
+               state_topic_buf, [this](ebus::detail::JsonWriter& w) {
+                 w.writeField("unit_of_measurement", "B");
+                 w.writeField("value_template", "{{value_json.heap.free}}");
+                 w.writeField("icon", "mdi:memory");
+                 w.writeField("entity_category", "diagnostic");
+               });
 
-  publishDiag("sensor", "largest_free_block", "Heap Largest Free Block", false,
-              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
-                w.writeField("unit_of_measurement", "B");
-                w.writeField("value_template", "{{value_json.heap.largest}}");
-                w.writeField("icon", "mdi:memory");
-                w.writeField("entity_category", "diagnostic");
-              });
+  publish_diag("sensor", "largest_free_block", "Heap Largest Free Block", false,
+               state_topic_buf, [this](ebus::detail::JsonWriter& w) {
+                 w.writeField("unit_of_measurement", "B");
+                 w.writeField("value_template", "{{value_json.heap.largest}}");
+                 w.writeField("icon", "mdi:memory");
+                 w.writeField("entity_category", "diagnostic");
+               });
 
-  publishDiag("sensor", "min_free_heap", "Heap Minimum Free Bytes", false,
-              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
-                w.writeField("unit_of_measurement", "B");
-                w.writeField("value_template", "{{value_json.heap.min}}");
-                w.writeField("icon", "mdi:memory");
-                w.writeField("entity_category", "diagnostic");
-              });
+  publish_diag("sensor", "min_free_heap", "Heap Minimum Free Bytes", false,
+               state_topic_buf, [this](ebus::detail::JsonWriter& w) {
+                 w.writeField("unit_of_measurement", "B");
+                 w.writeField("value_template", "{{value_json.heap.min}}");
+                 w.writeField("icon", "mdi:memory");
+                 w.writeField("entity_category", "diagnostic");
+               });
 
-  publishDiag("sensor", "rssi", "WiFi RSSI", false, state_topic_buf,
-              [this](ebus::detail::JsonWriter& w) {
-                w.writeField("unit_of_measurement", "dBm");
-                w.writeField("value_template", "{{value_json.rssi}}");
-                w.writeField("icon", "mdi:wifi-strength-4");
-                w.writeField("entity_category", "diagnostic");
-              });
+  publish_diag("sensor", "rssi", "WiFi RSSI", false, state_topic_buf,
+               [this](ebus::detail::JsonWriter& w) {
+                 w.writeField("unit_of_measurement", "dBm");
+                 w.writeField("value_template", "{{value_json.rssi}}");
+                 w.writeField("icon", "mdi:wifi-strength-4");
+                 w.writeField("entity_category", "diagnostic");
+               });
 
-  publishDiag("sensor", "firmware_version", "Firmware Version", false,
-              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
-                w.writeField("value_template", "{{value_json.version}}");
-                w.writeField("icon", "mdi:chip");
-                w.writeField("entity_category", "diagnostic");
-              });
+  publish_diag("sensor", "firmware_version", "Firmware Version", false,
+               state_topic_buf, [this](ebus::detail::JsonWriter& w) {
+                 w.writeField("value_template", "{{value_json.version}}");
+                 w.writeField("icon", "mdi:chip");
+                 w.writeField("entity_category", "diagnostic");
+               });
 
-  publishDiag("sensor", "bus_error_rate", "eBUS Error Rate", false,
-              state_topic_buf, [this](ebus::detail::JsonWriter& w) {
-                w.writeField("unit_of_measurement", "%");
-                w.writeField("value_template", "{{value_json.bus.error_rate}}");
-                w.writeField("icon", "mdi:alert-circle");
-                w.writeField("entity_category", "diagnostic");
-              });
+  publish_diag("sensor", "bus_error_rate", "eBUS Error Rate", false,
+               state_topic_buf, [this](ebus::detail::JsonWriter& w) {
+                 w.writeField("unit_of_measurement", "%");
+                 w.writeField("value_template",
+                              "{{value_json.bus.error_rate}}");
+                 w.writeField("icon", "mdi:alert-circle");
+                 w.writeField("entity_category", "diagnostic");
+               });
 }
 
 void MqttHA::publishComponent(const Command* command, size_t field_idx,
@@ -429,7 +430,7 @@ void MqttHA::publishComponentIfEnabled(const Command* command,
 }
 
 void MqttHA::publishComponents() const {
-  commandManager.forEachCommand([this](const Command* command) {
+  command_manager.forEachCommand([this](const Command* command) {
     for (size_t i = 0; i < command->getFieldCount(); ++i) {
       if (command->hasFieldHA(i)) {
         publishComponent(command, i, !enabled_);
@@ -453,7 +454,7 @@ void MqttHA::removeComponent(const Command* command) const {
 }
 
 void MqttHA::removeComponents() const {
-  commandManager.forEachCommand(
+  command_manager.forEachCommand(
       [this](const Command* command) { removeComponent(command); });
 }
 

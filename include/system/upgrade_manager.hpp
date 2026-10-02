@@ -41,4 +41,4 @@ class UpgradeManager {
   int upload_next_progress_percent_ = 10;
 };
 
-extern UpgradeManager upgradeManager;
+extern UpgradeManager upgrade_manager;

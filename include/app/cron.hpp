@@ -54,7 +54,7 @@ class Cron {
   TaskHandle_t task_handle_ = nullptr;
 
   mutable std::mutex rules_mutex_;
-  void setRules(std::unordered_map<std::string, Rule>&& nextRules);
+  void setRules(std::unordered_map<std::string, Rule>&& next_rules);
   int64_t saveRules() const;
   static void taskFunc(void* arg);
   void tick();

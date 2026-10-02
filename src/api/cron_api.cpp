@@ -22,11 +22,11 @@ CronApi::CronApi(Cron& cron) : cron_(cron) { instance_ = this; }
 bool CronApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/cron", HTTP_GET, handleCronPage);
-  RegisterUri("/api/v1/app/cron", HTTP_GET, handleCron);
-  RegisterUri("/api/v1/app/cron", HTTP_POST, handleCronSave);
-  RegisterUri("/api/v1/app/cron/load", HTTP_POST, handleCronLoad);
-  RegisterUri("/api/v1/app/cron/evaluate", HTTP_POST, handleCronEvaluate);
+  registerUri("/cron", HTTP_GET, handleCronPage);
+  registerUri("/api/v1/app/cron", HTTP_GET, handleCron);
+  registerUri("/api/v1/app/cron", HTTP_POST, handleCronSave);
+  registerUri("/api/v1/app/cron/load", HTTP_POST, handleCronLoad);
+  registerUri("/api/v1/app/cron/evaluate", HTTP_POST, handleCronEvaluate);
 
   return true;
 }
@@ -63,22 +63,23 @@ esp_err_t CronApi::handleCronEvaluate(httpd_req_t* req) {
     return ESP_OK;
   }
 
-  std::string evalError;
+  std::string eval_error;
   while (true) {
     const auto token = reader.next();
     if (token == ebus::detail::JsonReader::Token::array_end ||
         token == ebus::detail::JsonReader::Token::end)
       break;
     if (token != ebus::detail::JsonReader::Token::object_start) {
-      evalError = "Each cron rule must be a JSON object";
+      eval_error = "Each cron rule must be a JSON object";
       break;
     }
-    evalError = instance_->cron_.evaluate(reader);
-    if (!evalError.empty()) break;
+    eval_error = instance_->cron_.evaluate(reader);
+    if (!eval_error.empty()) break;
   }
 
-  if (!evalError.empty())
-    HttpUtils::sendErrorResponse(req, "400 Bad Request", "evaluate", evalError);
+  if (!eval_error.empty())
+    HttpUtils::sendErrorResponse(req, "400 Bad Request", "evaluate",
+                                 eval_error);
   else
     HttpUtils::sendSuccessResponse(req, "evaluate");
 

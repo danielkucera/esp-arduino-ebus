@@ -47,7 +47,7 @@ EspOtaManager& DeviceStatus::espOtaManager() {
   return manager;
 }
 
-int32_t WifiNetworkManager::RSSI() { return -50; }
+int32_t WifiNetworkManager::rssi() { return -50; }
 
 int WifiNetworkManager::getReconnectCount() { return 0; }
 TaskHandle_t WifiNetworkManager::getStatusLedTaskHandle() { return nullptr; }
@@ -77,7 +77,7 @@ size_t SystemMonitor::fetchHeapTrend(HeapSample* out, size_t capacity) const {
   return count;
 }
 
-TaskHandle_t SystemMonitor::task_handle() const { return nullptr; }
+TaskHandle_t SystemMonitor::taskHandle() const { return nullptr; }
 
 void SystemMonitor::getSocketStatus(int& detected, int& connected) {
   detected = 0;

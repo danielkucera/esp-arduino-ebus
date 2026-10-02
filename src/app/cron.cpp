@@ -26,7 +26,7 @@
 
 Cron::Cron(CommandManager& commands) : commands_(commands) {}
 
-Cron cron(commandManager);
+Cron cron(command_manager);
 
 namespace {
 #ifndef EBUS_CRON_FILE_PATH
@@ -59,37 +59,37 @@ bool parseInt(std::string_view text, int& out) {
   return ec == std::errc{} && ptr == text.data() + text.size();
 }
 
-bool inRange(const int value, const int minValue, const int maxValue) {
-  return value >= minValue && value <= maxValue;
+bool inRange(const int value, const int min_value, const int max_value) {
+  return value >= min_value && value <= max_value;
 }
 
-bool matchSinglePart(std::string_view part, int value, int minValue,
-                     int maxValue, bool dayOfWeek) {
+bool matchSinglePart(std::string_view part, int value, int min_value,
+                     int max_value, bool day_of_week) {
   if (part == "*") return true;
 
   std::string_view base = part;
   int step = 1;
-  size_t slashPos = part.find('/');
-  if (slashPos != std::string_view::npos) {
-    base = part.substr(0, slashPos);
-    std::string_view stepPart = part.substr(slashPos + 1);
-    if (!parseInt(stepPart, step) || step <= 0) return false;
+  size_t slash_pos = part.find('/');
+  if (slash_pos != std::string_view::npos) {
+    base = part.substr(0, slash_pos);
+    std::string_view step_part = part.substr(slash_pos + 1);
+    if (!parseInt(step_part, step) || step <= 0) return false;
   }
 
-  int start = minValue;
-  int end = maxValue;
+  int start = min_value;
+  int end = max_value;
 
   if (!base.empty() && base != "*") {
-    size_t dashPos = base.find('-');
-    if (dashPos != std::string_view::npos) {
-      int parsedStart = 0;
-      int parsedEnd = 0;
-      if (!parseInt(base.substr(0, dashPos), parsedStart) ||
-          !parseInt(base.substr(dashPos + 1), parsedEnd)) {
+    size_t dash_pos = base.find('-');
+    if (dash_pos != std::string_view::npos) {
+      int parsed_start = 0;
+      int parsed_end = 0;
+      if (!parseInt(base.substr(0, dash_pos), parsed_start) ||
+          !parseInt(base.substr(dash_pos + 1), parsed_end)) {
         return false;
       }
-      start = parsedStart;
-      end = parsedEnd;
+      start = parsed_start;
+      end = parsed_end;
     } else {
       int single = 0;
       if (!parseInt(base, single)) return false;
@@ -98,7 +98,7 @@ bool matchSinglePart(std::string_view part, int value, int minValue,
     }
   }
 
-  if (dayOfWeek) {
+  if (day_of_week) {
     if (start == 7) start = 0;
     if (end == 7) end = 0;
 
@@ -112,8 +112,8 @@ bool matchSinglePart(std::string_view part, int value, int minValue,
     }
   }
 
-  if (!inRange(start, minValue, maxValue) ||
-      !inRange(end, minValue, maxValue)) {
+  if (!inRange(start, min_value, max_value) ||
+      !inRange(end, min_value, max_value)) {
     return false;
   }
   if (start > end) return false;
@@ -122,28 +122,28 @@ bool matchSinglePart(std::string_view part, int value, int minValue,
   return ((value - start) % step) == 0;
 }
 
-bool validateSinglePart(std::string_view part, int minValue, int maxValue,
-                        bool dayOfWeek) {
+bool validateSinglePart(std::string_view part, int min_value, int max_value,
+                        bool day_of_week) {
   if (part.empty()) return false;
   if (part == "*") return true;
 
   std::string_view base = part;
-  size_t slashPos = part.find('/');
-  if (slashPos != std::string_view::npos) {
-    base = part.substr(0, slashPos);
-    std::string_view stepPart = part.substr(slashPos + 1);
+  size_t slash_pos = part.find('/');
+  if (slash_pos != std::string_view::npos) {
+    base = part.substr(0, slash_pos);
+    std::string_view step_part = part.substr(slash_pos + 1);
     int step = 1;
-    if (!parseInt(stepPart, step) || step <= 0) return false;
+    if (!parseInt(step_part, step) || step <= 0) return false;
   }
 
   if (base == "*") return true;
 
   int start = 0;
   int end = 0;
-  size_t dashPos = base.find('-');
-  if (dashPos != std::string_view::npos) {
-    if (!parseInt(base.substr(0, dashPos), start) ||
-        !parseInt(base.substr(dashPos + 1), end)) {
+  size_t dash_pos = base.find('-');
+  if (dash_pos != std::string_view::npos) {
+    if (!parseInt(base.substr(0, dash_pos), start) ||
+        !parseInt(base.substr(dash_pos + 1), end)) {
       return false;
     }
   } else {
@@ -151,15 +151,15 @@ bool validateSinglePart(std::string_view part, int minValue, int maxValue,
     end = start;
   }
 
-  if (dayOfWeek) {
+  if (day_of_week) {
     if (start == 7) start = 0;
     if (end == 7) end = 0;
 
     if (start == 6 && end == 0) return true;
   }
 
-  if (!inRange(start, minValue, maxValue) ||
-      !inRange(end, minValue, maxValue)) {
+  if (!inRange(start, min_value, max_value) ||
+      !inRange(end, min_value, max_value)) {
     return false;
   }
   if (start > end) return false;
@@ -171,30 +171,30 @@ bool validateSinglePart(std::string_view part, int minValue, int maxValue,
 
 namespace app::detail::cron {
 
-bool matchField(std::string_view expr, int value, int minValue, int maxValue,
-                bool dayOfWeek) {
+bool matchField(std::string_view expr, int value, int min_value, int max_value,
+                bool day_of_week) {
   auto parts = split(expr, ',');
   if (parts.empty()) return false;
 
   for (std::string_view part : parts) {
     if (part.empty()) return false;
-    if (matchSinglePart(part, value, minValue, maxValue, dayOfWeek))
+    if (matchSinglePart(part, value, min_value, max_value, day_of_week))
       return true;
   }
   return false;
 }
 
-bool validateFieldExpression(std::string_view expr, int minValue, int maxValue,
-                             bool dayOfWeek) {
+bool validateFieldExpression(std::string_view expr, int min_value,
+                             int max_value, bool day_of_week) {
   auto parts = split(expr, ',');
   if (parts.empty()) return false;
 
   return std::all_of(parts.begin(), parts.end(), [&](std::string_view part) {
-    return validateSinglePart(part, minValue, maxValue, dayOfWeek);
+    return validateSinglePart(part, min_value, max_value, day_of_week);
   });
 }
 
-bool matchSchedule(const std::string& schedule, const tm& localTime) {
+bool matchSchedule(const std::string& schedule, const tm& local_time) {
   FS<64> fields[5];
   size_t field_idx = 0;
   size_t start = 0;
@@ -210,15 +210,16 @@ bool matchSchedule(const std::string& schedule, const tm& localTime) {
   }
   if (field_idx != 5) return false;
 
-  return matchField(std::string_view(fields[0]), localTime.tm_min, 0, 59,
+  return matchField(std::string_view(fields[0]), local_time.tm_min, 0, 59,
                     false) &&
-         matchField(std::string_view(fields[1]), localTime.tm_hour, 0, 23,
+         matchField(std::string_view(fields[1]), local_time.tm_hour, 0, 23,
                     false) &&
-         matchField(std::string_view(fields[2]), localTime.tm_mday, 1, 31,
+         matchField(std::string_view(fields[2]), local_time.tm_mday, 1, 31,
                     false) &&
-         matchField(std::string_view(fields[3]), localTime.tm_mon + 1, 1, 12,
+         matchField(std::string_view(fields[3]), local_time.tm_mon + 1, 1, 12,
                     false) &&
-         matchField(std::string_view(fields[4]), localTime.tm_wday, 0, 6, true);
+         matchField(std::string_view(fields[4]), local_time.tm_wday, 0, 6,
+                    true);
 }
 
 std::string validateRule(const Cron::Rule& rule, CommandManager& commands) {
@@ -275,8 +276,8 @@ std::string validateRule(const Cron::Rule& rule, CommandManager& commands) {
   if (!command->hasWriteCmd())
     return "Command '" + rule.command_key + "' has no write_cmd";
 
-  ebus::ByteView valueBytes = command->getVectorFromValue(rule.value_json);
-  if (valueBytes.empty())
+  ebus::ByteView value_bytes = command->getVectorFromValue(rule.value_json);
+  if (value_bytes.empty())
     return "Invalid value for command '" + rule.command_key + "'";
 
   return "";
@@ -284,7 +285,7 @@ std::string validateRule(const Cron::Rule& rule, CommandManager& commands) {
 
 }  // namespace app::detail::cron
 
-bool Cron::initFileSystem() { return commandManager.initFileSystem(); }
+bool Cron::initFileSystem() { return command_manager.initFileSystem(); }
 
 void Cron::start() {
   stop_runner_ = false;
@@ -314,7 +315,7 @@ Cron::Rule Cron::ruleFromReader(ebus::detail::JsonReader& reader) {
       if (key == "value") {
         rule.value_json = std::string(reader.rawValue());
       } else {
-        auto vToken = reader.next();
+        auto value_token = reader.next();
         if (key == "id")
           rule.id = std::string(reader.value());
         else if (key == "schedule")
@@ -324,20 +325,20 @@ Cron::Rule Cron::ruleFromReader(ebus::detail::JsonReader& reader) {
         else if (key == "enabled")
           rule.enabled = reader.asBool();
         else
-          reader.skipComposite(vToken);
+          reader.skipComposite(value_token);
       }
     }
   }
   return rule;
 }
 
-void Cron::setRules(std::unordered_map<std::string, Rule>&& nextRules) {
+void Cron::setRules(std::unordered_map<std::string, Rule>&& next_rules) {
   std::lock_guard<std::mutex> lock(rules_mutex_);
-  rules_ = std::move(nextRules);
+  rules_ = std::move(next_rules);
 }
 
 int64_t Cron::loadRules() {
-  if (!commandManager.initFileSystem()) return -1;
+  if (!command_manager.initFileSystem()) return -1;
 
   FILE* file = std::fopen(cron_file_path, "rb");
   if (file == nullptr) {
@@ -363,14 +364,14 @@ int64_t Cron::loadRules() {
 
   std::string payload;
   payload.resize(static_cast<size_t>(size));
-  size_t bytesRead = std::fread(payload.data(), 1, payload.size(), file);
+  size_t bytes_read = std::fread(payload.data(), 1, payload.size(), file);
   std::fclose(file);
-  if (bytesRead != payload.size()) return -1;
+  if (bytes_read != payload.size()) return -1;
 
   ebus::detail::JsonReader reader(payload);
   if (reader.next() != ebus::detail::JsonReader::Token::array_start) return -1;
 
-  std::unordered_map<std::string, Rule> nextRules;
+  std::unordered_map<std::string, Rule> next_rules;
   while (true) {
     auto token = reader.next();
     if (token == ebus::detail::JsonReader::Token::array_end ||
@@ -381,12 +382,12 @@ int64_t Cron::loadRules() {
     if (token == ebus::detail::JsonReader::Token::object_start) {
       Rule rule = ruleFromReader(reader);
       if (app::detail::cron::validateRule(rule, commands_).empty()) {
-        nextRules[rule.id] = std::move(rule);
+        next_rules[rule.id] = std::move(rule);
       }
     }
   }
 
-  setRules(std::move(nextRules));
+  setRules(std::move(next_rules));
   return static_cast<int64_t>(payload.size());
 }
 
@@ -394,7 +395,7 @@ int64_t Cron::replaceRules(std::string_view payload) {
   ebus::detail::JsonReader reader(payload);
   if (reader.next() != ebus::detail::JsonReader::Token::array_start) return -1;
 
-  std::unordered_map<std::string, Rule> nextRules;
+  std::unordered_map<std::string, Rule> next_rules;
 
   while (true) {
     auto token = reader.next();
@@ -406,12 +407,12 @@ int64_t Cron::replaceRules(std::string_view payload) {
     if (token == ebus::detail::JsonReader::Token::object_start) {
       Rule rule = ruleFromReader(reader);
       if (app::detail::cron::validateRule(rule, commands_).empty()) {
-        nextRules[rule.id] = std::move(rule);
+        next_rules[rule.id] = std::move(rule);
       }
     }
   }
 
-  setRules(std::move(nextRules));
+  setRules(std::move(next_rules));
   return saveRules();
 }
 
@@ -449,7 +450,7 @@ void Cron::fetchRules(const ebus::JsonChunkVisitor& visitor) const {
 }
 
 int64_t Cron::saveRules() const {
-  if (!commandManager.initFileSystem()) return -1;
+  if (!command_manager.initFileSystem()) return -1;
 
   FILE* file = std::fopen(cron_file_path, "wb");
   if (file == nullptr) return -1;
@@ -483,20 +484,21 @@ void Cron::tick() {
   std::time_t now = std::time(nullptr);
   if (now <= 0) return;
 
-  tm localTime = {};
-  localtime_r(&now, &localTime);
+  tm local_time = {};
+  localtime_r(&now, &local_time);
 
-  const int64_t minuteStamp = static_cast<int64_t>(now / 60);
+  const int64_t minute_stamp = static_cast<int64_t>(now / 60);
 
   {
     std::lock_guard<std::mutex> lock(rules_mutex_);
     for (auto& kv : rules_) {
       Rule& rule = kv.second;
       if (!rule.enabled) continue;
-      if (rule.last_triggered_minute == minuteStamp) continue;
-      if (!app::detail::cron::matchSchedule(rule.schedule, localTime)) continue;
+      if (rule.last_triggered_minute == minute_stamp) continue;
+      if (!app::detail::cron::matchSchedule(rule.schedule, local_time))
+        continue;
 
-      rule.last_triggered_minute = minuteStamp;
+      rule.last_triggered_minute = minute_stamp;
 
       Command* command = commands_.findCommand(rule.command_key);
       if (command == nullptr || !command->hasWriteCmd()) {
@@ -507,8 +509,8 @@ void Cron::tick() {
         continue;
       }
 
-      ebus::Sequence valueBytes = command->getVectorFromValue(rule.value_json);
-      if (valueBytes.empty()) {
+      ebus::Sequence value_bytes = command->getVectorFromValue(rule.value_json);
+      if (value_bytes.empty()) {
         char warn_buf[160];
         snprintf(warn_buf, sizeof(warn_buf),
                  "Cron skipped, value out of range for rule: %s",
@@ -517,11 +519,11 @@ void Cron::tick() {
         continue;
       }
 
-      ebus::Sequence fullWrite =
-          ebus::makeSequence(command->getWriteCmd(commandManager));
-      fullWrite.append(valueBytes);
+      ebus::Sequence full_write =
+          ebus::makeSequence(command->getWriteCmd(command_manager));
+      full_write.append(value_bytes);
 
-      getEbusController().enqueue(prio_send, fullWrite);
+      getEbusController().enqueue(app::priority::send, full_write);
 
       char info_buf[160];
       snprintf(info_buf, sizeof(info_buf), "Cron write triggered: %s -> %s",

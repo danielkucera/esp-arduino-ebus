@@ -63,14 +63,14 @@ MqttHA makeHa(Recorder& recorder) {
 }
 
 void registerTempCommand() {
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   std::string json =
       R"({"key":"01","name":"Outside_Temperature","read_cmd":"fe070009",)"
       R"("write_cmd":"","interval":0,"master":true,)"
       R"("fields":[{"name":"value","profile":"data2b_celsius","position":1,)"
       R"("ha_profile":"sensor_temperature"}]})";
   ebus::detail::JsonReader reader(json);
-  commandManager.insertCommand(Command::fromJson(reader));
+  command_manager.insertCommand(Command::fromJson(reader));
 }
 
 bool payloadContains(const PublishedMessage& msg, std::string_view needle) {
@@ -84,7 +84,7 @@ TEST_CASE("MqttHA publishes sensor discovery config", "[mqttha]") {
   registerTempCommand();
   MqttHA ha = makeHa(recorder);
 
-  const Command* cmd = commandManager.findCommand("01");
+  const Command* cmd = command_manager.findCommand("01");
   REQUIRE(cmd != nullptr);
   ha.publishComponent(cmd, 0, false);
 
@@ -104,7 +104,7 @@ TEST_CASE("MqttHA remove publishes empty retained payload", "[mqttha]") {
   registerTempCommand();
   MqttHA ha = makeHa(recorder);
 
-  const Command* cmd = commandManager.findCommand("01");
+  const Command* cmd = command_manager.findCommand("01");
   REQUIRE(cmd != nullptr);
   ha.publishComponent(cmd, 0, true);
 
@@ -121,7 +121,7 @@ TEST_CASE("MqttHA publishes nothing when disabled", "[mqttha]") {
   MqttHA ha = makeHa(recorder);
   ha.setEnabled(false);
 
-  const Command* cmd = commandManager.findCommand("01");
+  const Command* cmd = command_manager.findCommand("01");
   REQUIRE(cmd != nullptr);
   ha.publishComponentIfEnabled(cmd, 0);
 
@@ -130,17 +130,17 @@ TEST_CASE("MqttHA publishes nothing when disabled", "[mqttha]") {
 
 TEST_CASE("MqttHA skips fields without HA profile", "[mqttha]") {
   Recorder recorder;
-  commandManager.wipeCommands();
+  command_manager.wipeCommands();
   std::string json =
       R"({"key":"02","name":"Plain","read_cmd":"fe070009","write_cmd":"",)"
       R"("interval":0,"master":true,)"
       R"("fields":[{"name":"value","profile":"uint8","position":1,)"
       R"("ha_profile":""}]})";
   ebus::detail::JsonReader reader(json);
-  commandManager.insertCommand(Command::fromJson(reader));
+  command_manager.insertCommand(Command::fromJson(reader));
 
   MqttHA ha = makeHa(recorder);
-  const Command* cmd = commandManager.findCommand("02");
+  const Command* cmd = command_manager.findCommand("02");
   REQUIRE(cmd != nullptr);
   ha.publishComponent(cmd, 0, false);
 
@@ -167,7 +167,7 @@ TEST_CASE("MqttHA without transport drops silently", "[mqttha]") {
   MqttHA ha;
   ha.setEnabled(true);
 
-  const Command* cmd = commandManager.findCommand("01");
+  const Command* cmd = command_manager.findCommand("01");
   REQUIRE(cmd != nullptr);
   // No transport injected: must not crash, publishes nothing observable.
   ha.publishComponent(cmd, 0, false);

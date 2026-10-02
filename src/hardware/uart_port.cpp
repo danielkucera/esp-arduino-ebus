@@ -6,41 +6,42 @@ namespace {
 constexpr const char* tag = "UartPort";
 }
 
-UartPort BusSer(UART_NUM_1);
-UartPort DebugSer(UART_NUM_0);
+UartPort bus_ser(UART_NUM_1);
+UartPort debug_ser(UART_NUM_0);
 
 UartPort::UartPort(uart_port_t port) : port_(port) {}
 
-void UartPort::begin(int baud, int rxPin, int txPin) {
-  begin(baud, UART_DATA_8_BITS, rxPin, txPin);
+void UartPort::begin(int baud, int rx_pin, int tx_pin) {
+  begin(baud, UART_DATA_8_BITS, rx_pin, tx_pin);
 }
 
-void UartPort::begin(int baud, uart_word_length_t dataBits, int rxPin,
-                     int txPin) {
-  ensureInstalled(baud, rxPin, txPin);
+void UartPort::begin(int baud, uart_word_length_t data_bits, int rx_pin,
+                     int tx_pin) {
+  ensureInstalled(baud, rx_pin, tx_pin);
 
   uart_config_t config{};
   config.baud_rate = baud;
-  config.data_bits = dataBits;
+  config.data_bits = data_bits;
   config.parity = UART_PARITY_DISABLE;
   config.stop_bits = UART_STOP_BITS_1;
   config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
   config.source_clk = UART_SCLK_DEFAULT;
   uart_param_config(port_, &config);
-  if (rxPin >= 0 || txPin >= 0) {
-    uart_set_pin(port_, txPin, rxPin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+  if (rx_pin >= 0 || tx_pin >= 0) {
+    uart_set_pin(port_, tx_pin, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
   }
 }
 
-void UartPort::ensureInstalled(int baud, int rxPin, int txPin) {
+void UartPort::ensureInstalled(int baud, int rx_pin, int tx_pin) {
   if (installed_) return;
   (void)baud;
-  (void)rxPin;
-  (void)txPin;
-  int rxBuffer = static_cast<int>(rx_buffer_size_);
-  int txBuffer =
+  (void)rx_pin;
+  (void)tx_pin;
+  int rx_buffer = static_cast<int>(rx_buffer_size_);
+  int tx_buffer =
       256;  // Use a transmit buffer to prevent blocking on uart_write_bytes
-  if (uart_driver_install(port_, rxBuffer, txBuffer, 0, nullptr, 0) != ESP_OK) {
+  if (uart_driver_install(port_, rx_buffer, tx_buffer, 0, nullptr, 0) !=
+      ESP_OK) {
     ESP_LOGE(tag, "uart_driver_install failed for port %d", port_);
   } else {
     installed_ = true;
@@ -91,8 +92,8 @@ size_t UartPort::write(uint8_t byte) {
 
 void UartPort::setRxBufferSize(size_t size) { rx_buffer_size_ = size; }
 
-void UartPort::setRxFIFOFull(int fullThreshold) {
-  uart_set_rx_full_threshold(port_, fullThreshold);
+void UartPort::setRxFIFOFull(int full_threshold) {
+  uart_set_rx_full_threshold(port_, full_threshold);
 }
 
 void UartPort::setDebugOutput(bool enable) { (void)enable; }

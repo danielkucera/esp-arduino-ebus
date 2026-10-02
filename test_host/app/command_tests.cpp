@@ -111,8 +111,8 @@ TEST_CASE("Command toJson serializes fields", "[Command]") {
     writer.writeField("key", cmd.getKey());
     writer.writeField("name", cmd.getName());
     writer.writeHexField("read_cmd", cmd.getReadCmd());
-    CommandManager commandManager;
-    writer.writeHexField("write_cmd", cmd.getWriteCmd(commandManager));
+    CommandManager command_manager;
+    writer.writeHexField("write_cmd", cmd.getWriteCmd(command_manager));
     writer.writeField("interval", cmd.getInterval());
 
     {

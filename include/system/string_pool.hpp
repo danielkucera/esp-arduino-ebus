@@ -8,13 +8,10 @@
 
 class StringPool {
  public:
-  static constexpr size_t max_trings = 256;
-  static constexpr size_t buffer_size = 2048;
-
   static StringPool& instance();
 
   uint8_t intern(std::string_view str) {
-    if (str.empty() || count_ >= max_trings) return 0;
+    if (str.empty() || count_ >= max_strings_) return 0;
 
     for (uint8_t i = 0; i < count_; i++) {
       if (lengths_[i] == str.size() &&
@@ -23,7 +20,7 @@ class StringPool {
       }
     }
 
-    if (buffer_offset_ + str.size() + 1 > buffer_size) return 0;
+    if (buffer_offset_ + str.size() + 1 > buffer_size_) return 0;
 
     std::memcpy(buffer_ + buffer_offset_, str.data(), str.size());
     buffer_[buffer_offset_ + str.size()] = '\0';
@@ -42,9 +39,12 @@ class StringPool {
   uint8_t count() const { return count_; }
 
  private:
-  char buffer_[buffer_size]{};
-  uint16_t offsets_[max_trings]{};
-  uint8_t lengths_[max_trings]{};
+  static constexpr size_t max_strings_ = 256;
+  static constexpr size_t buffer_size_ = 2048;
+
+  char buffer_[buffer_size_]{};
+  uint16_t offsets_[max_strings_]{};
+  uint8_t lengths_[max_strings_]{};
   uint8_t count_ = 0;
   uint16_t buffer_offset_ = 0;
 };

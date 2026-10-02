@@ -24,12 +24,12 @@ LogsApi::LogsApi(Logger& logger) : logger_(logger) { instance_ = this; }
 bool LogsApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
-  RegisterUri("/logs", HTTP_GET, handleLogsPage);
-  RegisterUri("/api/v1/app/logs", HTTP_GET, handleLogs);
-  RegisterUri("/api/v1/app/logs/time-relation", HTTP_GET,
+  registerUri("/logs", HTTP_GET, handleLogsPage);
+  registerUri("/api/v1/app/logs", HTTP_GET, handleLogs);
+  registerUri("/api/v1/app/logs/time-relation", HTTP_GET,
               handleLogsTimeRelation);
 #if EBUS_BUS_TAP
-  RegisterUri("/api/v1/app/tap", HTTP_GET, handleTap);
+  registerUri("/api/v1/app/tap", HTTP_GET, handleTap);
 #endif
 
   return true;
@@ -41,20 +41,20 @@ esp_err_t LogsApi::handleLogsPage(httpd_req_t* req) {
 }
 
 esp_err_t LogsApi::handleLogs(httpd_req_t* req) {
-  uint64_t sinceMillis = 0;
-  const size_t queryLen = httpd_req_get_url_query_len(req);
-  if (queryLen > 0) {
-    char queryBuf[256];
-    if (queryLen + 1 > sizeof(queryBuf)) {
+  uint64_t since_millis = 0;
+  const size_t query_len = httpd_req_get_url_query_len(req);
+  if (query_len > 0) {
+    char query_buf[256];
+    if (query_len + 1 > sizeof(query_buf)) {
       httpd_resp_send_err(req, HTTPD_414_URI_TOO_LONG, nullptr);
       return ESP_OK;
     }
-    if (httpd_req_get_url_query_str(req, queryBuf, sizeof(queryBuf)) ==
+    if (httpd_req_get_url_query_str(req, query_buf, sizeof(query_buf)) ==
         ESP_OK) {
-      char sinceBuffer[32] = {0};
-      if (httpd_query_key_value(queryBuf, "since", sinceBuffer,
-                                sizeof(sinceBuffer)) == ESP_OK) {
-        sinceMillis = std::strtoull(sinceBuffer, nullptr, 10);
+      char since_buffer[32] = {0};
+      if (httpd_query_key_value(query_buf, "since", since_buffer,
+                                sizeof(since_buffer)) == ESP_OK) {
+        since_millis = std::strtoull(since_buffer, nullptr, 10);
       }
     }
   }
@@ -64,7 +64,7 @@ esp_err_t LogsApi::handleLogs(httpd_req_t* req) {
       [req](std::string_view chunk) {
         httpd_resp_send_chunk(req, chunk.data(), chunk.size());
       },
-      sinceMillis);
+      since_millis);
   httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }
@@ -80,20 +80,20 @@ esp_err_t LogsApi::handleLogsTimeRelation(httpd_req_t* req) {
 }
 
 esp_err_t LogsApi::handleTap(httpd_req_t* req) {
-  uint64_t sinceMillis = 0;
-  const size_t queryLen = httpd_req_get_url_query_len(req);
-  if (queryLen > 0) {
-    char queryBuf[256];
-    if (queryLen + 1 > sizeof(queryBuf)) {
+  uint64_t since_millis = 0;
+  const size_t query_len = httpd_req_get_url_query_len(req);
+  if (query_len > 0) {
+    char query_buf[256];
+    if (query_len + 1 > sizeof(query_buf)) {
       httpd_resp_send_err(req, HTTPD_414_URI_TOO_LONG, nullptr);
       return ESP_OK;
     }
-    if (httpd_req_get_url_query_str(req, queryBuf, sizeof(queryBuf)) ==
+    if (httpd_req_get_url_query_str(req, query_buf, sizeof(query_buf)) ==
         ESP_OK) {
-      char sinceBuffer[32] = {0};
-      if (httpd_query_key_value(queryBuf, "since", sinceBuffer,
-                                sizeof(sinceBuffer)) == ESP_OK) {
-        sinceMillis = std::strtoull(sinceBuffer, nullptr, 10);
+      char since_buffer[32] = {0};
+      if (httpd_query_key_value(query_buf, "since", since_buffer,
+                                sizeof(since_buffer)) == ESP_OK) {
+        since_millis = std::strtoull(since_buffer, nullptr, 10);
       }
     }
   }
@@ -103,7 +103,7 @@ esp_err_t LogsApi::handleTap(httpd_req_t* req) {
       [req](std::string_view chunk) {
         httpd_resp_send_chunk(req, chunk.data(), chunk.size());
       },
-      sinceMillis);
+      since_millis);
   httpd_resp_send_chunk(req, nullptr, 0);
   return ESP_OK;
 }

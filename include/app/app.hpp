@@ -69,7 +69,7 @@ class App {
 
 #if defined(EBUS_INTERNAL)
   // WiFi STA-IP callback trampoline (C function pointer → member).
-  void onStaIpAssigned(const std::string& ipAddress);
+  void onStaIpAssigned(const std::string& ip_address);
 #endif
 
   ConfigManager& config_manager_;

@@ -36,7 +36,7 @@ void initPwm() {
 #endif
 }
 
-void set_pwm(uint8_t value) {
+void setPwm(uint8_t value) {
 #if defined(PWM_PIN)
   ledc_set_duty(pwm_speed_mode, pwm_channel, value);
   ledc_update_duty(pwm_speed_mode, pwm_channel);
@@ -45,7 +45,7 @@ void set_pwm(uint8_t value) {
 #endif
 }
 
-uint32_t get_pwm() {
+uint32_t getPwm() {
 #if defined(PWM_PIN)
   return ledc_get_duty(pwm_speed_mode, pwm_channel);
 #else

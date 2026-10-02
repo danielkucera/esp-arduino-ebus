@@ -75,7 +75,7 @@ static StaticQueue_t protocol_queue_cb;
 
 }  // namespace
 
-TaskHandle_t SystemMonitor::task_handle() const { return task_handle_; }
+TaskHandle_t SystemMonitor::taskHandle() const { return task_handle_; }
 
 bool SystemMonitor::begin() {
   status_mux_ = portMUX_INITIALIZER_UNLOCKED;
@@ -173,9 +173,10 @@ void SystemMonitor::getSocketStatus(int& detected, int& connected) {
   connected = 0;
 
   for (int fd = 0; fd < 64; ++fd) {
-    int socketType = 0;
-    socklen_t socketTypeLen = sizeof(socketType);
-    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &socketType, &socketTypeLen) != 0)
+    int socket_type = 0;
+    socklen_t socket_type_len = sizeof(socket_type);
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &socket_type, &socket_type_len) !=
+        0)
       continue;
 
     detected++;
@@ -214,7 +215,7 @@ void SystemMonitor::tapBusByte(uint64_t boot_us, uint8_t byte) {
 // sections (never hold a critical across formatting: ms of disabled
 // interrupts would break bus timing).
 void SystemMonitor::fetchTap(const ebus::JsonChunkVisitor& visitor,
-                             uint64_t sinceWallMs) const {
+                             uint64_t since_wall_ms) const {
 #if EBUS_BUS_TAP
   int64_t offset_ms = 0;
   bool have_wall = false;
@@ -258,7 +259,7 @@ void SystemMonitor::fetchTap(const ebus::JsonChunkVisitor& visitor,
         const uint64_t wall = have_wall ? chunk[i].boot_us / 1000ULL +
                                               static_cast<uint64_t>(offset_ms)
                                         : chunk[i].boot_us / 1000ULL;
-        if (!have_wall || wall >= sinceWallMs) {
+        if (!have_wall || wall >= since_wall_ms) {
           char hex[3] = {hex_chars[chunk[i].byte >> 4],
                          hex_chars[chunk[i].byte & 0xf], '\0'};
           auto item = writer.objectScope();
@@ -273,7 +274,7 @@ void SystemMonitor::fetchTap(const ebus::JsonChunkVisitor& visitor,
   writer.writeField("dropped", tap_drops.load(std::memory_order_relaxed));
   writer.writeField("capacity", tap_capacity);
 #else
-  (void)sinceWallMs;
+  (void)since_wall_ms;
   ebus::detail::JsonWriter writer(visitor);
   auto root = writer.objectScope();
   writer.appendKey("tap");
@@ -320,7 +321,7 @@ void SystemMonitor::processLogRequests() {
       continue;
     }
     std::string_view key = StringPool::instance().lookup(req.key_id);
-    const Command* cmd = commandManager.findCommand(key);
+    const Command* cmd = command_manager.findCommand(key);
     if (cmd != nullptr) {
       char buf[256];
       size_t len = cmd->writeLogMessage(buf, sizeof(buf));
@@ -356,7 +357,7 @@ void SystemMonitor::processProtocolInfo() {
       // happens in processLogRequests; this path stays a memcpy.
       enqueueTelegram(item.info.master_view, item.info.slave_view,
                       item.info.session_id, item.info.poll_id);
-      commandManager.updateData(item.info);
+      command_manager.updateData(item.info);
     }
   }
 }
@@ -388,7 +389,7 @@ void SystemMonitor::logRawTelegram(ebus::ByteView master, ebus::ByteView slave,
   const char* end_buf = buf + sizeof(buf);
 
   static constexpr char hex_chars[] = "0123456789abcdef";
-  auto appendHex = [&](ebus::ByteView data) {
+  auto append_hex = [&](ebus::ByteView data) {
     for (uint8_t b : data) {
       if (p + 2 >= end_buf) break;
       *p++ = hex_chars[b >> 4];
@@ -396,14 +397,14 @@ void SystemMonitor::logRawTelegram(ebus::ByteView master, ebus::ByteView slave,
     }
   };
 
-  appendHex(master);
+  append_hex(master);
   if (!slave.empty()) {
     if (p < end_buf - 3) {
       *p++ = ' ';
       *p++ = '/';
       *p++ = ' ';
     }
-    appendHex(slave);
+    append_hex(slave);
   }
 
   if (p > buf) {

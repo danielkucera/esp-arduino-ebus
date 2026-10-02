@@ -11,24 +11,6 @@
 
 #include "app/command.hpp"
 
-#ifndef COMMAND_CAPACITY
-inline constexpr size_t command_capacity = 64;
-#else
-inline constexpr size_t command_capacity = COMMAND_CAPACITY;
-#endif
-
-#ifndef WRITE_CMD_CAPACITY
-inline constexpr size_t write_cmd_capacity = 16;
-#else
-inline constexpr size_t write_cmd_capacity = WRITE_CMD_CAPACITY;
-#endif
-
-#ifndef OVERRIDE_FIELD_CAPACITY
-inline constexpr size_t override_field_capacity = 16;
-#else
-inline constexpr size_t override_field_capacity = OVERRIDE_FIELD_CAPACITY;
-#endif
-
 using DataUpdatedCallback = std::function<void(std::string_view key)>;
 using DataUpdatedLogCallback = std::function<void(std::string_view key)>;
 
@@ -100,11 +82,29 @@ class CommandManager {
   void clearFieldOverrides();
 
  private:
+#ifndef COMMAND_CAPACITY
+  static constexpr size_t command_capacity_ = 64;
+#else
+  static constexpr size_t command_capacity_ = COMMAND_CAPACITY;
+#endif
+
+#ifndef WRITE_CMD_CAPACITY
+  static constexpr size_t write_cmd_capacity_ = 16;
+#else
+  static constexpr size_t write_cmd_capacity_ = WRITE_CMD_CAPACITY;
+#endif
+
+#ifndef OVERRIDE_FIELD_CAPACITY
+  static constexpr size_t override_field_capacity_ = 16;
+#else
+  static constexpr size_t override_field_capacity_ = OVERRIDE_FIELD_CAPACITY;
+#endif
+
   mutable std::recursive_mutex mutex_;
 
-  ebus::StaticVector<Command, command_capacity> commands_;
-  ebus::StaticVector<PollSequence, write_cmd_capacity> write_cmds_;
-  ebus::StaticVector<FieldOverride, override_field_capacity> field_overrides_;
+  ebus::StaticVector<Command, command_capacity_> commands_;
+  ebus::StaticVector<PollSequence, write_cmd_capacity_> write_cmds_;
+  ebus::StaticVector<FieldOverride, override_field_capacity_> field_overrides_;
 
   DataUpdatedCallback data_updated_callback_ = nullptr;
   DataUpdatedLogCallback data_updated_log_callback_ = nullptr;
@@ -115,5 +115,5 @@ class CommandManager {
   void deserializeCommands(FILE* file);
 };
 
-extern CommandManager commandManager;
+extern CommandManager command_manager;
 #endif
