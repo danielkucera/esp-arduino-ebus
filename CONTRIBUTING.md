@@ -9,7 +9,7 @@ Thank you for your interest in contributing to the esp-arduino-ebus project! To 
 
 ### Naming Conventions
 *   **Classes and Structs**: `PascalCase` (e.g., `ConfigManager`, `WifiNetworkManager`).
-*   **Methods and Functions**: `camelCase` (e.g., `getCommandsJson`, `handleValuesWrite`). Exceptions: Container-like interface methods (e.g., `size()`, `empty()`, `clear()`) and std-style traits (e.g., `is_*`, `has_*`) use `snake_case` for STL compatibility (mirrors ebus library rule).
+*   **Methods and Functions**: `camelCase` (e.g., `getCommandsJson`, `handleValuesWrite`, `isValid`, `hasWriteCmd`). Exception: Container-like interface methods (e.g., `size()`, `empty()`, `clear()`) and std-style traits (e.g., `is_byte_range`, `has_to_json`) use `snake_case` for STL compatibility. Preserve the spelling required by external APIs when overriding or implementing them.
 *   **Variables and Parameters**: `snake_case` (e.g., `wifi_ssid`, `poll_id`).
 *   **Constants and `constexpr`**: `snake_case` (e.g., `baud_rate`, `max_data_bytes`). Prefer grouping related constants into classes as `static constexpr` members or specific namespaces.
 *   **Enumerators**: `lowercase` (e.g., `debug`, `info`) — enumerators are constants.
@@ -61,19 +61,20 @@ To maintain stability and security on the ESP32-C3, the application follows a se
 ## Key Components
 
 *   **ebus Library (`lib/ebus`)**: The core eBUS protocol stack, handling bus communication, arbitration, message processing, and scheduling.
-*   **CommandManager (`src/command_manager.hpp`)**: Manages eBUS command configurations and their associated data, including persistence to LittleFS.
-*   **Mqtt (`src/mqtt.hpp`)**: Handles MQTT communication for publishing values, receiving commands, and Home Assistant auto-discovery.
-*   **Cron (`src/cron.hpp`)**: Manages scheduled eBUS write operations based on cron-like expressions.
-*   **Http (`src/http.hpp`)**: Provides the web UI and API endpoints for configuration, control, and data display.
-*   **ConfigManager (`src/config_manager.hpp`)**: Manages persistent configuration settings using NVS.
-*   **WifiNetworkManager (`src/wifi_network_manager.hpp`)**: Handles WiFi connectivity (STA and AP modes), mDNS, and static IP configuration.
-*   **Adc (`src/adc.hpp`)**: Manages ADC sampling and streaming for diagnostic purposes.
-*   **UpgradeManager (`src/upgrade_manager.hpp`)**: Handles firmware updates via HTTP upload or URL.
-*   **EspOtaManager (`src/esp_ota_manager.hpp`)**: Handles firmware updates via ESP-OTA protocol (UDP).
-*   **DNSServer (`src/dns_server.hpp`)**: Provides DNS services for the captive portal in AP mode.
-*   **Logger (`src/logger.hpp`)**: Manages application logging to a circular buffer and serial output.
-*   **SystemMonitor (`src/system_monitor.hpp`)**: Monitors system health metrics (heap, stack, task stats, WiFi RSSI) and publishes via MQTT.
-*   **AdapterVersion (`src/adapter_version.hpp`)**: Provides adapter hardware and software version information from eFuse.
+*   **CommandManager (`include/app/command_manager.hpp`, `src/app/command_manager.cpp`)**: Manages eBUS command configurations and their associated data, including persistence to LittleFS.
+*   **Mqtt (`include/app/mqtt.hpp`, `src/app/mqtt.cpp`)**: Handles MQTT communication for publishing values and receiving commands.
+*   **MqttHA (`include/app/mqtt_ha.hpp`, `src/app/mqtt_ha.cpp`)**: Handles Home Assistant MQTT auto-discovery.
+*   **Cron (`include/app/cron.hpp`, `src/app/cron.cpp`)**: Manages scheduled eBUS write operations based on cron-like expressions.
+*   **Http (`include/network/http.hpp`, `src/network/http.cpp`)**: Sets up the web server and HTTP routes.
+*   **ConfigManager (`include/config/config_manager.hpp`, `src/config/config_manager.cpp`)**: Manages persistent configuration settings using NVS.
+*   **WifiNetworkManager (`include/network/wifi_network_manager.hpp`, `src/network/wifi_network_manager.cpp`)**: Handles Wi-Fi connectivity (STA and AP modes), mDNS, and static IP configuration.
+*   **Adc (`include/hardware/adc.hpp`, `src/hardware/adc.cpp`)**: Manages ADC sampling and streaming for diagnostic purposes.
+*   **UpgradeManager (`include/system/upgrade_manager.hpp`, `src/system/upgrade_manager.cpp`)**: Handles firmware updates via HTTP upload or URL.
+*   **EspOtaManager (`include/system/esp_ota_manager.hpp`, `src/system/esp_ota_manager.cpp`)**: Handles firmware updates via ESP-OTA protocol (UDP).
+*   **DNSServer (`include/network/dns_server.hpp`, `src/network/dns_server.cpp`)**: Provides DNS services for the captive portal in AP mode.
+*   **Logger (`include/system/logger.hpp`, `src/system/logger.cpp`)**: Manages application logging to a circular buffer and serial output.
+*   **SystemMonitor (`include/system/system_monitor.hpp`, `src/system/system_monitor.cpp`)**: Monitors system health metrics (heap, stack, task stats, Wi-Fi RSSI) and publishes via MQTT.
+*   **AdapterVersion (`include/system/adapter_version.hpp`, `src/system/adapter_version.cpp`)**: Provides adapter hardware and software version information from eFuse.
 
 ## Project Structure
 
@@ -92,11 +93,15 @@ To maintain stability and security on the ESP32-C3, the application follows a se
 
 ### Host Tests (Catch2 + CMake)
 
-Host tests run on the development machine (no hardware required). They cover app-layer logic for `Command` and `CommandManager`.
+Host tests run on the development machine (no hardware required). The suite builds nine test executables (`api`, `app`, `bridge`, `config`, `http_utils`, `identity`, `logger`, `network`, `system`) with per-case CTest entries (via `catch_discover_tests`); test files mirror `src/` (`test_host/{api,app,bridge,config,http_utils,identity,logger,network,system}/`).
 
 ```bash
-cd test_host && mkdir build && cd build && cmake .. && make && ./app_tests
+cmake -S test_host -B test_host/build
+cmake --build test_host/build
+ctest --test-dir test_host/build -j$(nproc) --timeout 10 --output-on-failure
 ```
+
+`test_host` resolves the ebus library itself (local `lib/ebus` symlink or pinned FetchContent — `EBUS_PIN` must match the `lib_deps` pin); sanitizer runs pass `-DDISABLE_CATCH_DISCOVERY=ON`.
 
 ### ebus Library Source Linking
 
@@ -107,7 +112,7 @@ The `ebus` library is vendored into `lib/ebus/` and is built as part of the Plat
 Edit files under `lib/ebus/` directly. The library has its own git repository and test suite:
 
 ```bash
-cd lib/ebus && mkdir build && cd build && cmake .. && make && ctest
+cd lib/ebus && mkdir build && cd build && cmake -DEBUS_SIMULATION=ON .. && make && ctest
 ```
 
 **Option B: Link from an external checkout**
@@ -124,6 +129,5 @@ ln -s /path/to/ebus/lib/ebus lib/ebus
 ### ebus Library Tests
 
 ```bash
-cd lib/ebus && mkdir build && cd build && cmake .. && make && ctest
+cd lib/ebus && mkdir build && cd build && cmake -DEBUS_SIMULATION=ON .. && make && ctest
 ```
-
