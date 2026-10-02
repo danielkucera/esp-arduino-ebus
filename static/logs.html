@@ -261,7 +261,7 @@
             timeRelationRequested = true;
 
             try {
-                const response = await fetch('/api/v1/logs/time-relation');
+                const response = await fetch('/api/v1/app/logs/time-relation');
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
                 latestTimeRelation = data && data.timeRelation ? data.timeRelation : null;
@@ -284,7 +284,7 @@
             const statusEl = document.getElementById('status');
             try {
                 statusEl.textContent = (lastUpdateTime || 'Connecting…');
-                let url = '/api/v1/logs';
+                let url = '/api/v1/app/logs';
                 if (Number.isFinite(lastSeenMillis)) {
                     url += `?since=${encodeURIComponent(String(lastSeenMillis + 1))}`;
                 }

@@ -12,19 +12,28 @@
     <h1>Metrics</h1>
     <div class="controls">
         <button id="btnHome">Home</button>
-        <button id="btnRefresh">Refresh</button>
-        <button id="btnReset" class="danger">Reset Stats</button>
+        <button id="btnMetricsReset" class="danger">Metrics Reset</button>
+        <button id="btnBreakerReset" class="danger">Breaker Reset</button>
         <span id="status">...</span>
+        <button id="btnRefresh" style="margin-left:auto;">Refresh</button>
     </div>
     <div class="container" id="metricsContainer"></div>
     <script src="common.js"></script>
     <script>
+        // Lib telemetry only (app data lives on status-cluster pages).
         function loadMetrics() {
-            fetchJson('/api/v1/metrics', data => renderNestedSections(data, 'metricsContainer', true, 16));
+            fetchJson('/api/v1/metrics', data => {
+                renderTables(data, 'metricsContainer');
+            }, 'Loading metrics...');
         }
         document.getElementById('btnHome').addEventListener('click', handleHome);
         document.getElementById('btnRefresh').addEventListener('click', loadMetrics);
-        document.getElementById('btnReset').addEventListener('click', () => postSimple('/api/v1/metrics/reset').then(loadMetrics));
+        document.getElementById('btnMetricsReset').addEventListener('click', () => {
+            postSimple('/api/v1/metrics/reset').then(loadMetrics);
+        });
+        document.getElementById('btnBreakerReset').addEventListener('click', () => {
+            postSimple('/api/v1/metrics/breaker/reset').then(() => setStatus('Breaker Reset'));
+        });
 
         // Initial load
         loadMetrics();

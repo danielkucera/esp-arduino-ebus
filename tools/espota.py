@@ -63,6 +63,7 @@ import argparse
 import logging
 import hashlib
 import random
+import time
 
 # Commands
 FLASH = 0
@@ -509,7 +510,30 @@ def serve(  # noqa: C901
             else:
                 sys.stderr.write("Uploading")
                 sys.stderr.flush()
+
+            # Line-buffered reader: firmware frames every reply with "\n"
+            # (per-chunk decimal ACKs, final "OK"). TCP coalescing makes
+            # fixed-size recv() reads return digit soup; lines do not.
+            line_buf = bytearray()
+
+            def read_response_line():
+                while True:
+                    nl = line_buf.find(b"\n")
+                    if nl >= 0:
+                        line = bytes(line_buf[:nl]).decode().strip()
+                        del line_buf[:nl + 1]
+                        return line
+                    chunk = connection.recv(32)
+                    if not chunk:
+                        # Peer closed: flush remainder as the final line.
+                        line = bytes(line_buf).decode().strip()
+                        line_buf.clear()
+                        return line
+                    line_buf.extend(chunk)
+
             offset = 0
+            last_ack_ok = False
+            last_ack_value = 0
             while True:
                 chunk = f.read(1024)
                 if not chunk:
@@ -519,10 +543,35 @@ def serve(  # noqa: C901
                 connection.settimeout(10)
                 try:
                     connection.sendall(chunk)
-                    res = connection.recv(10)
-                    response_text = res.decode().strip()
-                    last_response_contained_ok = "OK" in response_text
-                    logging.debug("Chunk response: '%s'", response_text)
+                    # Lossy links stall mid-transfer: keep waiting for this
+                    # chunk's ACK line up to ack_budget_s. Must stay below
+                    # the device's 60s transfer timeout so this side decides
+                    # first; a closed connection (empty line) aborts at once.
+                    ack_deadline = time.time() + 50
+                    response_text = ""
+                    while True:
+                        try:
+                            response_text = read_response_line()
+                            break
+                        except socket.timeout:
+                            if time.time() >= ack_deadline:
+                                raise
+                            continue
+                    if not response_text:
+                        raise RuntimeError("connection closed by device")
+                    # A bare "OK" line can only be the final handshake.
+                    last_ack_ok = response_text == "OK"
+                    try:
+                        last_ack_value = max(last_ack_value, int(response_text))
+                    except ValueError:
+                        pass
+                    try:
+                        int(response_text)
+                    except ValueError:
+                        if not last_ack_ok:
+                            logging.debug("Chunk response: '%s'", response_text)
+                    else:
+                        logging.debug("Chunk ack bytes: '%s'", response_text)
                 except Exception as e:
                     sys.stderr.write("\n")
                     logging.error("Error Uploading: %s", str(e))
@@ -530,7 +579,7 @@ def serve(  # noqa: C901
                     sock.close()
                     return 1
 
-            if last_response_contained_ok:
+            if last_ack_ok:
                 logging.info("Success")
                 connection.close()
                 sock.close()
@@ -538,47 +587,55 @@ def serve(  # noqa: C901
 
             sys.stderr.write("\n")
             logging.info("Waiting for result...")
-            count = 0
-            received_any_response = False
-            while count < 10:  # Increased from 5 to 10 attempts
-                count += 1
-                connection.settimeout(30)  # Reduced from 60s to 30s per attempt
+            # Drain until the device confirms receipt of every byte: per-chunk
+            # ACKs are cumulative totals, so completion means max_ack_seen >=
+            # content_size, NOT a fixed read count. The old 10-read loop died
+            # on backlog in under a second while the device was still working.
+            overall_deadline = time.time() + 600
+            max_ack_seen = last_ack_value
+            result_ok = False
+            while True:
+                if time.time() >= overall_deadline:
+                    logging.error("Gave up waiting for device confirmation")
+                    break
+                connection.settimeout(30)
                 try:
-                    data = connection.recv(32).decode().strip()
-                    received_any_response = True
-                    logging.info("Result attempt %d: '%s'", count, data)
-
-                    if "OK" in data:
-                        logging.info("Success")
-                        connection.close()
-                        sock.close()
-                        return 0
-                    elif data:  # Got some response but not OK
-                        logging.warning("Unexpected response from device: '%s'", data)
-
+                    data = read_response_line()
                 except socket.timeout:
-                    logging.warning("Timeout waiting for result (attempt %d/10)", count)
                     continue
                 except Exception as e:
-                    logging.warning("Error receiving result (attempt %d/10): %s", count, str(e))
-                    # Don't return error here, continue trying
+                    logging.warning("Error receiving result: %s", str(e))
                     continue
+                if not data:
+                    logging.error("Connection closed by device")
+                    break
+                try:
+                    max_ack_seen = max(max_ack_seen, int(data))
+                    logging.debug("Ack total: %d/%d", max_ack_seen,
+                                  content_size)
+                    continue
+                except ValueError:
+                    pass
+                logging.info("Result: '%s'", data)
+                if data == "OK":
+                    result_ok = True
+                    break
+                logging.warning("Unexpected response from device: '%s'", data)
 
-            # After all attempts, provide detailed error information
-            if received_any_response:
-                logging.warning(
-                    "Upload completed but device sent unexpected response(s). This may still be successful."
-                )
-                logging.warning("Device might be rebooting to apply firmware - this is normal.")
+            if result_ok and max_ack_seen >= content_size:
+                logging.info("Success")
                 connection.close()
                 sock.close()
-                return 0  # Consider it successful if we got any response and upload completed
-            else:
-                logging.error("No response from device after upload completion")
-                logging.error("This could indicate device reboot (normal) or network issues")
-                connection.close()
-                sock.close()
-                return 1
+                return 0
+
+            # Drain loop ended without device confirmation: either the
+            # overall deadline hit with no traffic (link dead) or the device
+            # closed without saying OK (aborted transfer).
+            logging.error("Device did not confirm upload (acked %d of %d)",
+                          max_ack_seen, content_size)
+            connection.close()
+            sock.close()
+            return 1
     except Exception as e:  # noqa: E722
         logging.error("Error: %s", str(e))
     finally:

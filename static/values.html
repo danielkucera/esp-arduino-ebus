@@ -12,12 +12,8 @@
     <h1>Values</h1>
     <div class="controls">
         <button id="btnHome">Home</button>
-        <button id="btnValues">Values</button>
-        <button id="btnPause">Pause</button>
-        <button id="btnDecreaseInterval">-</button>
-        <span id="pollIntervalLabel">?s</span>
-        <button id="btnIncreaseInterval">+</button>
         <span id="status">...</span>
+        <button id="btnRefresh" style="margin-left:auto">Refresh</button>
     </div>
     <table>
         <thead id="valuesTableHeader"></thead>
@@ -25,17 +21,23 @@
     </table>
     <script src="common.js"></script>
     <script>
-        let pollInterval = 10;
-        let pollingTimeout;
-        let isPaused = false;
-
+        // No auto-poll: single load on open, Refresh on demand (Devices
+        // pattern). Background polling kept the bus thread under permanent
+        // HTTP/TCP load.
         function handleValues() {
-            fetchJson('/api/v1/values', data => renderValuesTable(data), 'Fetching values...');
+            fetchJson('/api/v1/app/values', data => renderValuesTable(data), 'Fetching values...');
         }
 
         function renderValuesTable(data) {
             const thead = document.getElementById('valuesTableHeader');
             const tbody = document.getElementById('valuesTableBody');
+
+            // HA enum display name wins over the raw number when present.
+            // Page-local: only this table knows the text/value row shape.
+            function cellText(item, col) {
+                if (col === 'value' && item.text !== undefined) return String(item.text);
+                return (item[col] === undefined ? '' : String(item[col]));
+            }
 
             // Initialize headers if empty
             if (thead.children.length === 0) {
@@ -64,24 +66,50 @@
 
             const cols = ['key', 'name', 'value', 'unit', 'age'];
 
+            // Multi-field commands arrive as one row per field (backend
+            // flattened): row identity is key+field, but Read polls the
+            // whole telegram — only the first row per key carries it.
+            const seenKeys = new Set();
+            const firstOfKey = new Set();
+            data.forEach(item => {
+                const rid = (item.key || '') + '\x1f' + (item.field || '');
+                if (!seenKeys.has(item.key)) {
+                    seenKeys.add(item.key);
+                    firstOfKey.add(rid);
+                }
+            });
+
             // Update or create rows
             data.forEach(item => {
-                const targetKey = item.key || item.name || '';
-                let tr = existingRows[targetKey];
+                const cmdKey = item.key || '';
+                const rowId = cmdKey + '\x1f' + (item.field || '');
+                const wantRead = firstOfKey.has(rowId);
+                let tr = existingRows[rowId];
+
+                if (tr) {
+                    // Read-button placement may have changed (single <->
+                    // multi field): rebuild the row when it mismatches.
+                    const hasRead = !!tr.querySelector('button[data-act="read"]');
+                    if (wantRead !== hasRead) {
+                        tr.remove();
+                        delete existingRows[rowId];
+                        tr = null;
+                    }
+                }
 
                 if (tr) {
                     // Update existing row - only update display cells, not input
                     const tds = tr.querySelectorAll('td');
                     cols.forEach((col, idx) => {
                         if (tds[idx]) {
-                            tds[idx].textContent = (item[col] === undefined ? '' : String(item[col]));
+                            tds[idx].textContent = cellText(item, col);
                         }
                     });
 
                     // Update button states (write, active) but keep input focus and value
                     const input = tr.querySelector('input[type="text"]');
-                    const btnWrite = tr.querySelector('button:nth-of-type(1)');
-                    const btnRead = tr.querySelector('button:nth-of-type(2)');
+                    const btnWrite = tr.querySelector('button[data-act="write"]');
+                    const btnRead = tr.querySelector('button[data-act="read"]');
 
                     if (input) input.disabled = !item.write;
                     if (btnWrite) btnWrite.disabled = !item.write;
@@ -91,7 +119,7 @@
                     tr = document.createElement('tr');
                     cols.forEach(k => {
                         const td = document.createElement('td');
-                        td.textContent = (item[k] === undefined ? '' : String(item[k]));
+                        td.textContent = cellText(item, k);
                         tr.appendChild(td);
                     });
 
@@ -103,30 +131,35 @@
                     input.style.width = '6rem';
                     input.value = '';
                     input.disabled = !item.write;
-                    input.setAttribute('data-key', targetKey);
+                    input.setAttribute('data-key', rowId);
 
                     const btnWrite = document.createElement('button');
                     btnWrite.textContent = 'Write';
+                    btnWrite.setAttribute('data-act', 'write');
                     btnWrite.disabled = !item.write;
-                    btnWrite.addEventListener('click', () => writeValue(targetKey, input, btnWrite));
+                    btnWrite.addEventListener('click', () => writeValue(cmdKey, input, btnWrite));
 
                     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btnWrite.click(); });
                     tdActions.appendChild(input);
                     tdActions.appendChild(btnWrite);
 
-                    const btnRead = document.createElement('button');
-                    btnRead.textContent = 'Read';
-                    btnRead.disabled = !item.active;
-                    btnRead.addEventListener('click', () => readValue(targetKey, btnRead));
-                    tdActions.appendChild(btnRead);
+                    if (wantRead) {
+                        const btnRead = document.createElement('button');
+                        btnRead.textContent = 'Read';
+                        btnRead.setAttribute('data-act', 'read');
+                        btnRead.disabled = !item.active;
+                        btnRead.addEventListener('click', () => readValue(cmdKey, btnRead));
+                        tdActions.appendChild(btnRead);
+                    }
 
                     tr.appendChild(tdActions);
                     tbody.appendChild(tr);
+                    existingRows[rowId] = tr;
                 }
             });
 
             // Remove rows that are no longer in data
-            const dataKeys = new Set(data.map(item => item.key || item.name || ''));
+            const dataKeys = new Set(data.map(item => (item.key || '') + '\x1f' + (item.field || '')));
             tbody.querySelectorAll('tr').forEach(tr => {
                 const input = tr.querySelector('input[type="text"]');
                 if (input) {
@@ -146,7 +179,7 @@
                 const raw = inputEl.value;
                 const num = Number(raw);
                 const payload = (raw !== '' && isFinite(num)) ? { key: key, value: num } : { key: key, value: raw };
-                const res = await fetch('/api/v1/values/write', {
+                const res = await fetch('/api/v1/app/values/write', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -167,7 +200,7 @@
             setStatus('Requested, waiting...');
             try {
                 const payload = { key: key };
-                const res = await fetch('/api/v1/values/read', {
+                const res = await fetch('/api/v1/app/values/read', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -190,24 +223,10 @@
         }
 
         document.getElementById('btnHome').addEventListener('click', handleHome);
-        document.getElementById('btnValues').addEventListener('click', handleValues);
-
-        document.getElementById('btnIncreaseInterval').addEventListener('click', () => {
-            changePollInterval(1, 5, 60, 'pollIntervalLabel', handleValues);
-        });
-
-        document.getElementById('btnDecreaseInterval').addEventListener('click', () => {
-            changePollInterval(-1, 5, 60, 'pollIntervalLabel', handleValues);
-        });
-
-        document.getElementById('btnPause').addEventListener('click', () => togglePause('btnPause'));
+        document.getElementById('btnRefresh').addEventListener('click', handleValues);
 
         // Initial load
         handleValues();
-
-        // Setup poll
-        updatePollLabel('pollIntervalLabel', pollInterval);
-        setPollingTimeout(pollInterval, handleValues);
     </script>
 </body>
 

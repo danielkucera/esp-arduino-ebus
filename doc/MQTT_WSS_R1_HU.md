@@ -1,5 +1,8 @@
 # MQTT WSS r1 – saját esp-arduino-ebus firmware
 
+> Történeti r1 dokumentáció. Az aktuális upstream-összeolvasztáshoz és WSS r2
+> teszteléshez lásd: [MQTT_WSS_R2_HU.md](MQTT_WSS_R2_HU.md).
+
 ## Alap és ellenőrzési állapot
 
 Ez a javítás a feltöltött `esp-arduino-ebus-mqtt-wss.zip` forrására készült.

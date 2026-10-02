@@ -4,13 +4,13 @@
 
 #include <esp_http_server.h>
 
-#include "cron.hpp"
+#include "app/cron.hpp"
 
 class CronApi {
  public:
   explicit CronApi(Cron& cron);
 
-  bool registerHandlers(httpd_handle_t server);
+  static bool registerHandlers(httpd_handle_t server);
 
  private:
   Cron& cron_;

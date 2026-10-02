@@ -2,13 +2,24 @@
 
 #if defined(EBUS_INTERNAL)
 
-#include <ebus/detail/json_reader.hpp>
+#include <esp_system.h>
+#include <esp_timer.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
-#include "command_manager.hpp"
-#include "http.hpp"
-#include "http_utils.hpp"
-#include "mqtt.hpp"
-#include "mqtt_ha.hpp"
+#include <cerrno>
+#include <cstdio>
+#include <ebus/detail/json_reader.hpp>
+#ifdef EBUS_COMMANDS_TMP_FILE_PATH
+#include <unistd.h>
+#endif
+
+#include "app/command_manager.hpp"
+#include "app/mqtt.hpp"
+#include "app/mqtt_ha.hpp"
+#include "network/http.hpp"
+#include "network/http_utils.hpp"
+#include "system/logger.hpp"
 
 namespace {
 
@@ -44,8 +55,8 @@ std::string_view evaluateCommands(ebus::detail::JsonReader& reader) {
 
 CommandsApi* CommandsApi::instance_ = nullptr;
 
-CommandsApi::CommandsApi(CommandManager& command_manager)
-    : command_manager_(command_manager) {
+CommandsApi::CommandsApi(CommandManager& command_manager, MqttHA& mqtt_ha)
+    : command_manager_(command_manager), mqtt_ha_(mqtt_ha) {
   instance_ = this;
 }
 
@@ -53,14 +64,15 @@ bool CommandsApi::registerHandlers(httpd_handle_t server) {
   if (server == nullptr) return false;
 
   RegisterUri("/commands", HTTP_GET, handleCommandsPage);
-  RegisterUri("/api/v1/commands", HTTP_GET, handleCommands);
-  RegisterUri("/api/v1/commands/evaluate", HTTP_POST, handleCommandsEvaluate);
-  RegisterUri("/api/v1/commands/insert", HTTP_POST, handleCommandsInsert);
-  RegisterUri("/api/v1/commands/upload", HTTP_POST, handleCommandsUpload);
-  RegisterUri("/api/v1/commands/remove", HTTP_POST, handleCommandsRemove);
-  RegisterUri("/api/v1/commands/load", HTTP_POST, handleCommandsLoad);
-  RegisterUri("/api/v1/commands/save", HTTP_POST, handleCommandsSave);
-  RegisterUri("/api/v1/commands/wipe", HTTP_POST, handleCommandsWipe);
+  RegisterUri("/api/v1/app/commands", HTTP_GET, handleCommands);
+  RegisterUri("/api/v1/app/commands/evaluate", HTTP_POST,
+              handleCommandsEvaluate);
+  RegisterUri("/api/v1/app/commands/insert", HTTP_POST, handleCommandsInsert);
+  RegisterUri("/api/v1/app/commands/upload", HTTP_POST, handleCommandsUpload);
+  RegisterUri("/api/v1/app/commands/remove", HTTP_POST, handleCommandsRemove);
+  RegisterUri("/api/v1/app/commands/load", HTTP_POST, handleCommandsLoad);
+  RegisterUri("/api/v1/app/commands/save", HTTP_POST, handleCommandsSave);
+  RegisterUri("/api/v1/app/commands/wipe", HTTP_POST, handleCommandsWipe);
 
   return true;
 }
@@ -182,6 +194,12 @@ esp_err_t CommandsApi::handleCommandsUpload(httpd_req_t* req) {
   }
 
   const char* tmp_path = "/littlefs/commands.json.tmp";
+#ifdef EBUS_COMMANDS_TMP_FILE_PATH
+  char host_tmp_path[256];
+  std::snprintf(host_tmp_path, sizeof(host_tmp_path), "%s.%ld",
+                EBUS_COMMANDS_TMP_FILE_PATH, static_cast<long>(getpid()));
+  tmp_path = host_tmp_path;
+#endif
 
   FILE* file = std::fopen(tmp_path, "wb");
   if (file == nullptr) {
@@ -194,18 +212,32 @@ esp_err_t CommandsApi::handleCommandsUpload(httpd_req_t* req) {
   int remaining = req->content_len;
   int total_written = 0;
 
+  // Lossy links stall mid-transfer: tolerate receive gaps up to
+  // upload_stall_budget_ms after the last byte instead of aborting on the
+  // first socket timeout. Fatal socket errors still abort immediately.
+  constexpr uint32_t upload_stall_budget_ms = 120000;
+  uint32_t last_progress_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+
   while (remaining > 0) {
     int to_read = remaining > static_cast<int>(sizeof(buffer))
                       ? static_cast<int>(sizeof(buffer))
                       : remaining;
     int received = httpd_req_recv(req, buffer, to_read);
     if (received <= 0) {
+      const uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+      if ((received == 0 || errno == EAGAIN || errno == EWOULDBLOCK ||
+           errno == EINTR) &&
+          now_ms - last_progress_ms < upload_stall_budget_ms) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        continue;
+      }
       std::fclose(file);
       std::remove(tmp_path);
       HttpUtils::sendErrorResponse(req, "500 Internal Server Error", "upload",
                                    "Receive failed");
       return ESP_OK;
     }
+    last_progress_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
     int written = std::fwrite(buffer, 1, received, file);
     if (written != received) {
       std::fclose(file);
@@ -304,8 +336,8 @@ esp_err_t CommandsApi::handleCommandsSave(httpd_req_t* req) {
 }
 
 esp_err_t CommandsApi::handleCommandsWipe(httpd_req_t* req) {
-  if (mqttha.isEnabled()) {
-    mqttha.removeComponents();
+  if (instance_->mqtt_ha_.isEnabled()) {
+    instance_->mqtt_ha_.removeComponents();
   }
   int64_t bytes = instance_->command_manager_.wipeCommands();
   if (bytes > 0) {

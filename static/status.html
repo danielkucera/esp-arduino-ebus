@@ -12,30 +12,132 @@
     <h1>Status</h1>
     <div class="controls">
         <button id="btnHome">Home</button>
+        <button id="btnHealth">Health</button>
+        <button id="btnHeap">Heap</button>
+        <button id="btnTasks">Tasks</button>
         <button id="btnSystem">System</button>
-        <button id="btnAppResources">App Resources</button>
-        <button id="btnLibResources">Lib Resources</button>
+        <button id="btnNetwork">Network</button>
         <span id="status">...</span>
+        <button id="btnRefresh" style="margin-left:auto;">Refresh</button>
     </div>
     <div class="container" id="statusContainer"></div>
+    <div class="container" id="heapContainer" style="display:none">
+        <h2>heap</h2>
+        <div id="heapCurrent"></div>
+        <h2>trend</h2>
+        <table>
+            <thead id="heapTableHeader"></thead>
+            <tbody id="heapTableBody"></tbody>
+        </table>
+    </div>
+    <div class="container" id="tasksContainer" style="display:none">
+        <h2>stacks</h2>
+        <table>
+            <thead id="threadsTableHeader"></thead>
+            <tbody id="threadsTableBody"></tbody>
+        </table>
+        <h2>cpu share</h2>
+        <table>
+            <thead id="cpuTableHeader"></thead>
+            <tbody id="cpuTableBody"></tbody>
+        </table>
+    </div>
     <script src="common.js"></script>
     <script>
+        let currentView = 'health';
+        const availability = {};
+        // Lazy probe: the first click on a button both checks availability
+        // (hides the button on bridge builds) and renders the response —
+        // one GET, no 5-way salvo on page open.
+        async function loadView(name, btn, container, path, render) {
+            currentView = name;
+            if (availability[btn] === false) return;
+            showView(container);
+            setStatus('Loading...');
+            try {
+                const res = await fetch(path);
+                if (!res.ok) throw new Error('unavailable');
+                availability[btn] = true;
+                render(await res.json());
+                setStatus('Fetched');
+            } catch (err) {
+                availability[btn] = false;
+                document.getElementById(btn).style.display = 'none';
+                setStatus('Unavailable');
+                console.error(err);
+            }
+        }
+        const viewLoaders = {
+            health: loadHealth, system: loadSystem, network: loadNetwork,
+            heap: loadHeap, tasks: loadTasks,
+        };
+        function loadHealth() {
+            loadView('health', 'btnHealth', 'statusContainer', '/api/v1/health', data => {
+                renderSummaryTable(data, 'statusContainer');
+                // Staged config: NVS saved but not yet applied (restart
+                // pending). Key names only — no secret values in the UI.
+                fetch('/api/v1/app/config/drift').then(res => {
+                    if (!res.ok) return;
+                    return res.json();
+                }).then(drift => {
+                    if (!drift || !drift.staged) return;
+                    const keys = (drift.keys || []).join(', ');
+                    const banner = document.createElement('div');
+                    banner.style.cssText = 'padding:8px;margin-bottom:8px;border:1px solid #ddd;background:#fff8e1;';
+                    banner.textContent = 'Staged config changes — restart to apply: ' + keys;
+                    const c = document.getElementById('statusContainer');
+                    c.insertBefore(banner, c.firstChild);
+                }).catch(() => { });
+            });
+        }
         function loadSystem() {
-            fetchJson('/api/v1/status', data => renderNestedSections(data, 'statusContainer'));
+            loadView('system', 'btnSystem', 'statusContainer', '/api/v1/system', data => {
+                renderTables(data, 'statusContainer');
+            });
         }
-        function loadAppResources() {
-            fetchJson('/api/v1/status/app', data => renderNestedSections(data, 'statusContainer'));
+        function loadNetwork() {
+            loadView('network', 'btnNetwork', 'statusContainer', '/api/v1/network', data => {
+                renderTables(data, 'statusContainer');
+            });
         }
-        function loadLibResources() {
-            fetchJson('/api/v1/status/lib', data => renderNestedSections(data, 'statusContainer', true));
+        function loadHeap() {
+            loadView('heap', 'btnHeap', 'heapContainer', '/api/v1/system/heap', data => {
+                const cur = data.current || {};
+                document.getElementById('heapCurrent').textContent =
+                    `free: ${cur.free} / min: ${cur.min} / largest: ${cur.largest}`;
+                const trend = data.trend || [];
+                const cols = ['uptime', 'free', 'min', 'largest'];
+                renderRows('heapTableHeader', 'heapTableBody', cols, trend);
+            });
+        }
+        function loadTasks() {
+            loadView('tasks', 'btnTasks', 'tasksContainer', '/api/v1/system/tasks', data => {
+                renderRows('threadsTableHeader', 'threadsTableBody',
+                    ['name', 'stack_size', 'stack_free'], data.threads || [], true);
+                renderRows('cpuTableHeader', 'cpuTableBody',
+                    ['name', 'percent', 'priority'], data.cpu || [], true);
+            });
+        }
+        function showView(id) {
+            for (const v of ['statusContainer', 'heapContainer', 'tasksContainer']) {
+                document.getElementById(v).style.display = v === id ? '' : 'none';
+            }
         }
         document.getElementById('btnHome').addEventListener('click', handleHome);
+        document.getElementById('btnHealth').addEventListener('click', loadHealth);
+        document.getElementById('btnHeap').addEventListener('click', loadHeap);
+        document.getElementById('btnTasks').addEventListener('click', loadTasks);
         document.getElementById('btnSystem').addEventListener('click', loadSystem);
-        document.getElementById('btnAppResources').addEventListener('click', loadAppResources);
-        document.getElementById('btnLibResources').addEventListener('click', loadLibResources);
+        document.getElementById('btnNetwork').addEventListener('click', loadNetwork);
+        document.getElementById('btnRefresh').addEventListener('click', () => {
+            // Refresh reloads the currently visible view, not always health.
+            (viewLoaders[currentView] || loadHealth)();
+        });
 
-        // Initial load
-        loadSystem();
+        // Initial load: health only. Other views probe lazily on
+        // first click (see loadView); nothing else is fetched.
+        loadHealth();
+
     </script>
 </body>
 

@@ -9,6 +9,25 @@ on:
   pull_request:
 
 jobs:
+  host-tests:
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: Generate profile headers
+      run: |
+        python3 scripts/generate_data_profiles.py
+        python3 scripts/generate_ha_profiles.py
+        python3 scripts/generate_build_info.py
+    - name: Configure
+      run: cmake -S test_host -B test_host/build
+    - name: Build
+      run: cmake --build test_host/build
+    - name: Test
+      run: ctest --test-dir test_host/build -j$(nproc) --timeout 10
+
   build:
 
     runs-on: ubuntu-latest
@@ -37,6 +56,19 @@ jobs:
       run: ./fullflash.sh esp32-c3 firmware-fullflash-HW_v5.x.bin ; mv firmware-fullflash-HW_v5.x.bin release/firmware-fullflash-HW_v5.x-${GITHUB_SHA::6}.bin
     - name: Build v5.x-internal
       run: pio run -e esp32-c3-internal ; cp .pio/build/esp32-c3-internal/firmware.bin release/firmware-HW_v5.x-internal-${GITHUB_SHA::6}.bin
+    - name: Check internal flash budget
+      run: |
+        python3 - <<'PY'
+        from pathlib import Path
+        firmware = Path('.pio/build/esp32-c3-internal/firmware.bin')
+        if not firmware.exists():
+            raise SystemExit(f'missing firmware binary: {firmware}')
+        size_bytes = firmware.stat().st_size
+        budget_bytes = 1800000
+        print(f'esp32-c3-internal firmware.bin size: {size_bytes} bytes / {budget_bytes} bytes budget')
+        if size_bytes > budget_bytes:
+            raise SystemExit(f'Internal firmware exceeds the flash budget: {size_bytes} > {budget_bytes}')
+        PY
     - name: Assemble v5.x-internal fullflash
       run: ./fullflash.sh esp32-c3-internal firmware-fullflash-HW_v5.x-internal.bin ; mv firmware-fullflash-HW_v5.x-internal.bin release/firmware-fullflash-HW_v5.x-internal-${GITHUB_SHA::6}.bin
     - name: Upload artifacts
@@ -86,6 +118,7 @@ jobs:
         artifacts: "release/artifact/*"
 
   deploy-pages:
+      if: github.event_name == 'push'
       needs: build
       runs-on: ubuntu-latest
       steps:

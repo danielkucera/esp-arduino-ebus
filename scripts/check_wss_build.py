@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import subprocess
 
 REQUIRED = (
     "CONFIG_IDF_TARGET_ESP32C3",
@@ -58,8 +59,8 @@ def validate(root: Path) -> dict:
     firmware = firmware_path.read_bytes()
     if len(firmware) < 1024 or firmware[0] != 0xE9:
         raise ValueError("firmware.bin is missing, truncated, or not an ESP application image")
-    if b"wss-r1" not in firmware:
-        raise ValueError("WSS r1 marker is not present in the firmware image")
+    if b"wss-r2" not in firmware:
+        raise ValueError("WSS r2 marker is not present in the firmware image")
     limits = []
     with (root / "min_spiffs.csv").open(encoding="utf-8") as handle:
         for row in csv.reader(line for line in handle if line.strip() and not line.lstrip().startswith("#")):
@@ -70,8 +71,10 @@ def validate(root: Path) -> dict:
     if len(firmware) > min(limits):
         raise ValueError(f"Firmware ({len(firmware)} bytes) exceeds OTA slot ({min(limits)} bytes)")
     return {
-        "patch": "wss-r1",
-        "source_commit": os.environ.get("GITHUB_SHA", "local-build"),
+        "patch": "wss-r2",
+        "source_commit": os.environ.get("GITHUB_SHA") or subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
+        "upstream_commit": "22523a71d789feee51d6c504a1575064a22a6cf2",
         "environment": "esp32-c3-internal",
         "firmware_bytes": len(firmware),
         "ota_slot_bytes": min(limits),

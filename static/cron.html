@@ -45,7 +45,7 @@
     }
 
     function fetchRules() {
-      fetchJson('/api/v1/cron', js => {
+      fetchJson('/api/v1/app/cron', js => {
         document.getElementById('cronArea').value = JSON.stringify(js, null, 2);
         renderTable(js || []);
         setStatus('Fetched');
@@ -107,7 +107,7 @@
           return;
         }
         setStatus('Saving...');
-        fetch('/api/v1/cron', {
+        fetch('/api/v1/app/cron', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
@@ -126,7 +126,7 @@
         const txt = document.getElementById('cronArea').value;
         const obj = JSON.parse(txt);
         setStatus('Evaluating...');
-        fetch('/api/v1/cron/evaluate', {
+        fetch('/api/v1/app/cron/evaluate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
