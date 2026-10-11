@@ -174,5 +174,21 @@
     "ha_profile": "sensor_enum_hcmode2"
    }
   ]
+ },
+ {
+  "key": "97",
+  "name": "Probe/NoAnswer",
+  "read_cmd": "08b50902e400",
+  "write_cmd": "",
+  "interval": 10,
+  "master": false,
+  "fields": [
+   {
+    "name": "value",
+    "profile": "uint8",
+    "position": 1,
+    "ha_profile": ""
+   }
+  ]
  }
 ]

@@ -168,21 +168,22 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
           });
     }
     {
-      // Per-task CPU share as % of the interval since the last poll
-      // (not cumulative since boot: the U32 esp_timer source wraps
-      // ~every 71min, which made cumulative % grow past 100%).
-      // Unsigned subtraction stays correct across the wrap. First poll
-      // after boot falls back to cumulative (valid inside the first
-      // wrap period); later polls report true intervals.
+      // Per-task CPU share as % of the interval since the last poll.
+      // Two guards keep it honest: (1) capture + baseline update run under
+      // one critical section so overlapping polls (browser + dump script)
+      // cannot interleave phases; (2) gaps past the run-time counter wrap
+      // (~71min) silently re-baseline with 0% rows instead of emitting
+      // wrapped garbage. First poll after boot falls back to cumulative
+      // (valid inside the first wrap period only).
       auto cpu = writer.arrayScope("cpu");
       constexpr size_t max_tracked_tasks = 24;
+      // Safely below the U32 run-time wrap (~71min): longer silences mean
+      // an unknown number of wraps, so deltas are meaningless.
+      constexpr uint32_t max_poll_gap_ms = 3600000;
       const UBaseType_t task_count = uxTaskGetNumberOfTasks();
       auto* states = static_cast<TaskStatus_t*>(
           heap_caps_malloc(task_count * sizeof(TaskStatus_t), MALLOC_CAP_8BIT));
       if (states != nullptr) {
-        uint32_t total_time = 0;
-        const UBaseType_t captured =
-            uxTaskGetSystemState(states, task_count, &total_time);
         struct CpuBaseline {
           char name[configMAX_TASK_NAME_LEN];
           uint32_t last;
@@ -191,6 +192,7 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
         static CpuBaseline baseline[max_tracked_tasks]{};
         static size_t baseline_used = 0;
         static uint32_t last_total = 0;
+        static uint32_t last_poll_ms = 0;
         static bool have_total = false;
         // Computed under one short critical section (no JSON inside),
         // then emitted below without the lock held.
@@ -202,6 +204,13 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
         CpuRow rows[max_tracked_tasks]{};
         size_t nrows = 0;
         portENTER_CRITICAL(&cpu_mux);
+        const uint32_t now_ms =
+            static_cast<uint32_t>(esp_timer_get_time() / 1000ULL);
+        const bool gap_ok =
+            have_total && (now_ms - last_poll_ms) < max_poll_gap_ms;
+        uint32_t total_time = 0;
+        const UBaseType_t captured =
+            uxTaskGetSystemState(states, task_count, &total_time);
         const uint32_t delta_total = total_time - last_total;
         for (UBaseType_t i = 0; i < captured && nrows < max_tracked_tasks;
              ++i) {
@@ -214,10 +223,11 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
             }
           }
           float pct = 0.0f;
-          if (bi < baseline_used && have_total && delta_total > 0) {
+          if (bi < baseline_used && gap_ok && delta_total > 0) {
             pct = (100.0f * (states[i].ulRunTimeCounter - baseline[bi].last)) /
                   delta_total;
-          } else if (!have_total && total_time > 0) {
+          } else if (!have_total && total_time > 0 &&
+                     now_ms < max_poll_gap_ms) {
             pct = (100.0f * states[i].ulRunTimeCounter) / total_time;
           }
           if (bi == baseline_used) {
@@ -236,6 +246,7 @@ esp_err_t SystemApi::handleTasks(httpd_req_t* req) {
           nrows++;
         }
         last_total = total_time;
+        last_poll_ms = now_ms;
         have_total = true;
         portEXIT_CRITICAL(&cpu_mux);
         for (size_t i = 0; i < nrows; ++i) {
