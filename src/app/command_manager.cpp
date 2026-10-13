@@ -260,6 +260,9 @@ int64_t CommandManager::saveCommands() const {
                                            : "");
           writer.writeField("position",
                             static_cast<uint32_t>(c.getFieldPosition(i)));
+          if (c.isFieldRaw(i)) {
+            writer.writeField("raw", true);
+          }
           writer.writeField("ha_profile", c.getFieldHAProfileName(i));
           float min_ov = getFieldMinOverride(c.getKeyId(), i);
           float max_ov = getFieldMaxOverride(c.getKeyId(), i);

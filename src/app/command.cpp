@@ -169,6 +169,11 @@ std::string_view Command::getFieldHAProfileName(size_t i) const {
   return p ? p->name : std::string_view();
 }
 
+bool Command::isFieldRaw(size_t i) const {
+  if (i >= fields_.size()) return false;
+  return fields_[i].raw;
+}
+
 bool Command::matches(ebus::ByteView master_view) const {
   return ebus::matches(master_view, read_cmd_, 1);
 }
@@ -192,7 +197,8 @@ void Command::writeFieldValue(ebus::detail::JsonWriter& writer,
     return;
   }
   auto field_data = ebus::range(data_, field_pos, field_len);
-  auto decoded = ebus::decode(dt, field_data);
+  auto decoded =
+      ebus::decode(dt, field_data, ebus::Endian::little, !isFieldRaw(i));
   if (!decoded || ebus::isNull(*decoded)) {
     writer.writeRaw("null");
   } else {
@@ -224,7 +230,8 @@ bool Command::writeFieldText(ebus::detail::JsonWriter& writer, size_t i) const {
   size_t field_len = ebus::sizeOfDataType(dt);
   size_t field_pos = getFieldPosition(i) - 1;
   if (field_pos + field_len > data_.size()) return false;
-  auto decoded = ebus::decode(dt, ebus::range(data_, field_pos, field_len));
+  auto decoded = ebus::decode(dt, ebus::range(data_, field_pos, field_len),
+                              ebus::Endian::little, !isFieldRaw(i));
   if (!decoded || ebus::isNull(*decoded)) return false;
   const int64_t num = ebus::asInt64(*decoded);
   for (size_t k = 0; k < hp->key_value_count; ++k) {
@@ -407,7 +414,8 @@ size_t Command::writeLogMessage(char* buf, size_t len) const {
                           ? ebus::range(data_, field_pos, field_len)
                           : ebus::ByteView{};
 
-    auto decoded = ebus::decode(getFieldDatatype(i), field_data);
+    auto decoded = ebus::decode(getFieldDatatype(i), field_data,
+                                ebus::Endian::little, !isFieldRaw(i));
 
     append_str(fname);
     append_str(": ");
@@ -496,7 +504,9 @@ Command Command::fromJson(ebus::detail::JsonReader& reader) {
             else if (fkey == "ha_profile") {
               const HAProfile* p = findHAProfile(fr.value());
               field.ha_profile_idx = p ? getHaProfileIndex(p) : 0;
-            } else if (fkey == "min")
+            } else if (fkey == "raw")
+              field.raw = fr.asBool();
+            else if (fkey == "min")
               pending_min[command.fields_.size()] = fr.asNum<float>();
             else if (fkey == "max")
               pending_max[command.fields_.size()] = fr.asNum<float>();
@@ -591,7 +601,9 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
               else if (fkey == "ha_profile") {
                 const HAProfile* p = findHAProfile(fr.value());
                 field.ha_profile_idx = p ? getHaProfileIndex(p) : 0;
-              } else if (fkey == "min")
+              } else if (fkey == "raw")
+                field.raw = fr.asBool();
+              else if (fkey == "min")
                 command_manager.setFieldMinOverride(
                     command.key_id_, command.fields_.size(), fr.asNum<float>());
               else if (fkey == "max")
@@ -629,7 +641,9 @@ Command Command::fromTabular(ebus::detail::JsonReader& reader) {
                   else if (fkey == "ha_profile") {
                     const HAProfile* p = findHAProfile(fr_inner.value());
                     field.ha_profile_idx = p ? getHaProfileIndex(p) : 0;
-                  } else if (fkey == "min")
+                  } else if (fkey == "raw")
+                    field.raw = fr_inner.asBool();
+                  else if (fkey == "min")
                     command_manager.setFieldMinOverride(
                         command.key_id_, command.fields_.size(),
                         fr_inner.asNum<float>());
@@ -767,6 +781,12 @@ std::string_view Command::evaluate(ebus::detail::JsonReader& reader) {
               if (ftoken != ebus::detail::JsonReader::Token::string) {
                 snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
                          "Invalid type for field: ha_profile");
+                error = command_eval_error_buf;
+              }
+            } else if (fkey == "raw") {
+              if (ftoken != ebus::detail::JsonReader::Token::boolean) {
+                snprintf(command_eval_error_buf, sizeof(command_eval_error_buf),
+                         "Invalid type for field: raw");
                 error = command_eval_error_buf;
               }
             }

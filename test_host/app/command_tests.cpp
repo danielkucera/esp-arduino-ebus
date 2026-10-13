@@ -249,3 +249,34 @@ TEST_CASE("Command getVectorFromJson rejects garbage numerics", "[Command]") {
   // Genuine values still encode.
   REQUIRE(!cmd.getVectorFromJson(R"({"value":21.5})").empty());
 }
+
+TEST_CASE("Command raw flag parses and defaults false", "[Command]") {
+  std::string json =
+      R"({"key":"01","name":"T","read_cmd":"fe070009",)"
+      R"("write_cmd":"","interval":0,"master":true,)"
+      R"("fields":[{"name":"a","profile":"data2b_celsius","position":1,)"
+      R"("raw":true},{"name":"b","profile":"data2b_celsius","position":2}]})";
+  JsonReader reader(json);
+  Command cmd = Command::fromJson(reader);
+  REQUIRE(cmd.getFieldCount() == 2);
+  REQUIRE(cmd.isFieldRaw(0) == true);
+  REQUIRE(cmd.isFieldRaw(1) == false);
+  REQUIRE(cmd.isFieldRaw(99) == false);
+}
+
+TEST_CASE("Command evaluate accepts raw boolean, rejects raw string",
+          "[Command]") {
+  std::string ok =
+      R"({"key":"01","name":"T","read_cmd":"fe070009","interval":0,)"
+      R"("fields":[{"name":"a","profile":"data2b_celsius","position":1,)"
+      R"("raw":true}]})";
+  JsonReader r1(ok);
+  REQUIRE(Command::evaluate(r1).empty());
+
+  std::string bad =
+      R"({"key":"01","name":"T","read_cmd":"fe070009","interval":0,)"
+      R"("fields":[{"name":"a","profile":"data2b_celsius","position":1,)"
+      R"("raw":"yes"}]})";
+  JsonReader r2(bad);
+  REQUIRE_FALSE(Command::evaluate(r2).empty());
+}

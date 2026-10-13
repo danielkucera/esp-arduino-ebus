@@ -173,6 +173,33 @@ Commands can override profile defaults per-field in `commands.json`:
 - This command overrides: min=15, max=20
 - Overrides are persisted to LittleFS and included in `/api/v1/app/commands` output
 
+### Raw values (sentinel bypass)
+
+Numeric datatypes map their replacement value (sentinel) to `null`:
+`0xFF` for 1-byte, `0xFFFF`/`0x8000` for 2-byte, and so on. A field can
+opt out per field with `"raw": true` and always render the raw numeric
+value instead:
+
+```json
+{
+  "key": "48",
+  "name": "Pressure",
+  "fields": [{
+    "name": "value",
+    "profile": "int16_bar",
+    "position": 1,
+    "raw": true
+  }]
+}
+```
+
+- Default (`raw` absent or false): sentinel bytes render `null`
+  (unknown in Home Assistant) — the honest reading for "no data".
+- `"raw": true`: sentinel bytes render as numbers (e.g. `UINT16`
+  `0xFFFF` → 65535). Opt-in only; graphs will show the extreme.
+- Types without sentinels (`HEX3`–`HEX8`, `CHAR3`–`CHAR8`, `FLOAT4`,
+  `FLOAT4R`) always render raw — the flag changes nothing for them.
+
 ---
 
 Command communication modes and HTTP examples are documented in

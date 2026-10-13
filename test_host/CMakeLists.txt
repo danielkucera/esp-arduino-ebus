@@ -17,7 +17,7 @@ set(PROJECT_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
 # ebus source: local working tree when the lib/ebus symlink is present,
 # pinned FetchContent otherwise (CI has no symlink). Keep EBUS_PIN in sync
 # with the lib_deps pin in platformio.ini.
-set(EBUS_PIN 241916e3117421fbde4427a46a4a6689bae72154)
+set(EBUS_PIN 7dd300074cdf4563e02aefcb1f9a9f41ba2edf03)
 if(EXISTS ${PROJECT_ROOT}/lib/ebus/CMakeLists.txt)
     set(EBUS_SOURCE_DIR ${PROJECT_ROOT}/lib/ebus)
     # No host utilities in test builds (faster configure/build).
