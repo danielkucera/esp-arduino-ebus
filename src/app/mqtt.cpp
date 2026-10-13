@@ -829,7 +829,8 @@ void Mqtt::handleValueUpdate(std::string_view key) {
     size_t field_len = ebus::sizeOfDataType(cmd->getFieldDatatype(0));
     if (field_pos + field_len <= cmd->getData().size()) {
       decoded = ebus::decode(cmd->getFieldDatatype(0),
-                             ebus::range(cmd->getData(), field_pos, field_len));
+                             ebus::range(cmd->getData(), field_pos, field_len),
+                             ebus::Endian::little, !cmd->isFieldRaw(0));
     }
   }
 

@@ -28,6 +28,9 @@ struct FieldRef {
   uint8_t position = 0;
   // Home Assistant - per-field (0 = no HA profile)
   uint8_t ha_profile_idx = 0;
+  // Raw presentation: skip sentinel-to-null mapping in decode, return the
+  // raw numeric value instead. Opt-in per field (default false).
+  bool raw = false;
 };
 
 using FieldVector = ebus::StaticVector<FieldRef, max_fields>;
@@ -84,6 +87,9 @@ class Command {
   bool hasFieldHA(size_t i) const;
   const HAProfile* getFieldHAProfile(size_t i) const;
   std::string_view getFieldHAProfileName(size_t i) const;
+
+  // Raw presentation flag for field i (out of range reads false).
+  bool isFieldRaw(size_t i) const;
 
   bool matches(ebus::ByteView master_view) const;
 
