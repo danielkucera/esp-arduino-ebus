@@ -17,6 +17,7 @@
         <button id="btnTasks">Tasks</button>
         <button id="btnSystem">System</button>
         <button id="btnNetwork">Network</button>
+        <button id="btnDump">Download dump</button>
         <span id="status">...</span>
         <button id="btnRefresh" style="margin-left:auto;">Refresh</button>
     </div>
@@ -117,6 +118,22 @@
                 renderRows('cpuTableHeader', 'cpuTableBody',
                     ['name', 'percent', 'priority'], data.cpu || [], true);
             });
+            // CPU percent is delta-based: the first sample reads zero.
+            // One follow-up fetch fills real values without polling.
+            setTimeout(() => {
+                if (document.getElementById('tasksContainer').style.display !== 'none') {
+                    loadTasksOnce();
+                }
+            }, 3000);
+        }
+        // Single tasks fetch without scheduling another follow-up.
+        function loadTasksOnce() {
+            loadView('tasks', 'btnTasks', 'tasksContainer', '/api/v1/system/tasks', data => {
+                renderRows('threadsTableHeader', 'threadsTableBody',
+                    ['name', 'stack_size', 'stack_free'], data.threads || [], true);
+                renderRows('cpuTableHeader', 'cpuTableBody',
+                    ['name', 'percent', 'priority'], data.cpu || [], true);
+            });
         }
         function showView(id) {
             for (const v of ['statusContainer', 'heapContainer', 'tasksContainer']) {
@@ -137,6 +154,58 @@
         // Initial load: health only. Other views probe lazily on
         // first click (see loadView); nothing else is fetched.
         loadHealth();
+
+        // Support dump: same read-only endpoint set as dump_endpoints.sh
+        // (never POST/action endpoints). Tasks is fetched twice because
+        // CPU percent is delta-based and a single sample reads zero.
+        document.getElementById('btnDump').addEventListener('click', async () => {
+            const btn = document.getElementById('btnDump');
+            btn.disabled = true;
+            const eps = [
+                'api/v1/health', 'api/v1/system', 'api/v1/system/heap',
+                'api/v1/system/tasks', 'api/v1/network', 'api/v1/devices',
+                'api/v1/metrics', 'api/v1/app/values', 'api/v1/app/logs',
+                'api/v1/app/tap', 'api/v1/app/config',
+            ];
+            const now = new Date();
+            const result = {
+                _meta: {
+                    host: window.location.hostname,
+                    timestamp_ms: Date.now(),
+                    timestamp_utc: now.toISOString().replace(/\.\d+Z$/, 'Z'),
+                },
+            };
+            const total = eps.length;
+            for (let i = 0; i < eps.length; i++) {
+                const ep = eps[i];
+                setStatus(`Dump ${i + 1}/${total}: ${ep}...`);
+                try {
+                    if (ep === 'api/v1/system/tasks') {
+                        try { await fetch('/' + ep); } catch (e) { /* warm-up only */ }
+                        await new Promise(r => setTimeout(r, 3000));
+                    }
+                    const res = await fetch('/' + ep);
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    result[ep] = await res.json();
+                } catch (err) {
+                    result[ep] = { _error: String((err && err.message) || err) };
+                }
+            }
+            const stamp = now.toISOString().replace(/[-:]/g, '').slice(0, 15);
+            const blob = new Blob([JSON.stringify(result, null, 1) + '\n'],
+                { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `ebus_dump_${stamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                URL.revokeObjectURL(a.href);
+                a.remove();
+            }, 1000);
+            setStatus('Dump downloaded');
+            btn.disabled = false;
+        });
 
     </script>
 </body>

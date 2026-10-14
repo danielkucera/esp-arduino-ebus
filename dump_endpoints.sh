@@ -6,7 +6,9 @@
 #   host defaults to esp-ebus.local, output defaults to
 #   ebus_dump_YYYYMMDD_HHMMSS.json in the current directory.
 # Run twice some minutes apart; diffing the two snapshots shows deltas
-# (error_active growth, heap drift, quarantines, ...).
+# (error_active growth, heap drift, quarantines, ...). The tasks endpoint
+# is fetched twice inside one run (3s apart) because CPU percent is
+# delta-based and a single sample reads zero.
 set -u
 
 HOST="${1:-esp-ebus.local}"
@@ -45,6 +47,16 @@ result = {
 for ep in ENDPOINTS:
     url = f"http://{host}/{ep}"
     try:
+        # CPU percent is delta-based: the first tasks sample after boot (or
+        # after a long idle) reads zero for every task. Warm it here so the
+        # real fetch below spans actual activity; sleep covers the window
+        # even when all other endpoints answer instantly.
+        if ep == "api/v1/system/tasks":
+            try:
+                urllib.request.urlopen(url, timeout=15).read()
+            except Exception:
+                pass
+            time.sleep(3)
         with urllib.request.urlopen(url, timeout=15) as r:
             body = r.read().decode("utf-8", errors="replace")
         try:
