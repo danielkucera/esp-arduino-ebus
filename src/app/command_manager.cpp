@@ -352,6 +352,9 @@ void CommandManager::fetchCommands(
         writer.writeField("position",
                           static_cast<uint32_t>(c->getFieldPosition(j)));
         writer.writeField("ha_profile", c->getFieldHAProfileName(j));
+        if (c->isFieldRaw(j)) {
+          writer.writeField("raw", true);
+        }
         float min_ov = getFieldMinOverride(c->getKeyId(), j);
         float max_ov = getFieldMaxOverride(c->getKeyId(), j);
         if (!std::isnan(min_ov)) {
