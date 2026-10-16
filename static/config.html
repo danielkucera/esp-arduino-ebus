@@ -64,7 +64,7 @@
 
     <fieldset>
         <legend>Connection</legend>
-        <div><label><input id="staticIPEnabled" type="checkbox" class="config"> Static IP</label></div>
+        <div><label><input id="staticIPEnabled" type="checkbox" class="config">Static IP</label></div>
         <div><label for="ipAddress">IP Address</label></div>
         <div><input id="ipAddress" type="text" class="config"></div>
         <div><label for="gateway">Gateway</label></div>
@@ -79,7 +79,7 @@
 
     <fieldset>
         <legend>SNTP</legend>
-        <div><label><input id="sntpEnabled" type="checkbox" class="config"> SNTP Enabled</label></div>
+        <div><label><input id="sntpEnabled" type="checkbox" class="config">SNTP Enabled</label></div>
         <div><label for="sntpServer">SNTP Server</label></div>
         <div><input id="sntpServer" type="text" class="config" value="pool.ntp.org"></div>
         <div><label for="sntpTimezone">SNTP Timezone</label></div>
@@ -90,20 +90,46 @@
         <legend>Bus</legend>
         <div><label for="pwmValue">PWM</label></div>
         <div><input id="pwmValue" type="number" min="1" max="255" step="1" class="config" value="130"></div>
-        <div><label for="ebusAddress">eBUS Address (hex, e.g. ff)</label></div>
-        <div><input id="ebusAddress" type="text" class="config" value="ff"></div>
+        <div><label for="ebusAddress">eBUS Address</label></div>
+        <div><select id="ebusAddress" class="config" aria-label="eBUS Address">
+                <option value="00">00</option>
+                <option value="01">01</option>
+                <option value="03">03</option>
+                <option value="07">07</option>
+                <option value="0f">0F</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="13">13</option>
+                <option value="17">17</option>
+                <option value="1f">1F</option>
+                <option value="30">30</option>
+                <option value="31">31</option>
+                <option value="33">33</option>
+                <option value="37">37</option>
+                <option value="3f">3F</option>
+                <option value="70">70</option>
+                <option value="71">71</option>
+                <option value="73">73</option>
+                <option value="77">77</option>
+                <option value="7f">7F</option>
+                <option value="f0">F0</option>
+                <option value="f1">F1</option>
+                <option value="f3">F3</option>
+                <option value="f7">F7</option>
+                <option value="ff" selected>FF</option>
+        </select></div>
         <div><label for="busWindow">Bus Window (us)</label></div>
         <div><input id="busWindow" type="number" min="4250" max="4500" step="1" class="config"></div>
         <div><label for="busOffset">Bus Offset (us)</label></div>
         <div><input id="busOffset" type="number" min="0" max="200" step="1" class="config"></div>
         <div><label><input id="systemInquiry" type="checkbox" class="config">Inquiry Of Existence</label></div>
         <div><label><input id="systemResponse" type="checkbox" class="config">Send Response</label></div>
-        <div><label><input id="scanOnStartup" type="checkbox" class="config"> Scan On Startup</label></div>
+        <div><label><input id="scanOnStartup" type="checkbox" class="config">Scan On Startup</label></div>
     </fieldset>
 
     <fieldset>
         <legend>MQTT</legend>
-        <div><label><input id="mqttEnabled" type="checkbox" class="config"> MQTT Enabled</label></div>
+        <div><label><input id="mqttEnabled" type="checkbox" class="config">MQTT Enabled</label></div>
         <div><label for="mqttServer">MQTT Server</label></div>
         <div><input id="mqttServer" type="text" class="config"></div>
         <div><label for="mqttUser">MQTT User</label></div>
@@ -117,7 +143,7 @@
 
     <fieldset>
         <legend>Home Assistant</legend>
-        <div><label><input id="haEnabled" type="checkbox" class="config"> Enabled</label></div>
+        <div><label><input id="haEnabled" type="checkbox" class="config">Enabled</label></div>
     </fieldset>
 
     <fieldset>
