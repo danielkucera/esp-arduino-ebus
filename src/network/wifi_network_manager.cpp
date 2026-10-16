@@ -26,6 +26,12 @@
 
 namespace {
 constexpr int max_consecutive_failures = 5;
+
+bool wifiApHasConnectedClients() {
+  wifi_sta_list_t sta_list{};
+  esp_err_t ret = esp_wifi_ap_get_sta_list(&sta_list);
+  return ret == ESP_OK && sta_list.num > 0;
+}
 }  // namespace
 
 ConfigManager* WifiNetworkManager::config_manager_ = nullptr;
@@ -399,7 +405,7 @@ void WifiNetworkManager::handleEvent(
   } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
     sta_connected_ = false;
     setStatusLedMode(StatusLedMode::slow_blink);
-    logger.warn("STA disconnected, reconnecting");
+    logger.warn("STA disconnected");
 
     if (++consecutive_failures_ == max_consecutive_failures) logWifiSlice();
 
@@ -408,7 +414,14 @@ void WifiNetworkManager::handleEvent(
       return;
     }
 
-    if (sta_configured_) esp_wifi_connect();
+    if (sta_configured_) {
+      if (wifiApHasConnectedClients()) {
+        logger.warn("AP is serving connected clients; deferring STA reconnect");
+        return;
+      }
+      logger.warn("Attempting STA reconnect");
+      esp_wifi_connect();
+    }
   }
 }
 
