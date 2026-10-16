@@ -96,10 +96,18 @@ void DNSServer::processNextRequest() {
   if (idx + 5 > static_cast<size_t>(received)) return;
 
   size_t question_len = (idx + 5) - dns_header_size;
-  size_t response_len = dns_header_size + question_len;
 
-  uint8_t response[max_packet_size];
-  std::memcpy(response, buffer, response_len);
+  // Answer (16 bytes) must fit behind the question in the same buffer.
+  // Oversized questions are dropped instead of overflowing the stack.
+  constexpr size_t answer_len = 16;
+  if (dns_header_size + question_len + answer_len > max_packet_size) return;
+
+  // Build the response in place: the question section is preserved
+  // verbatim, so no second 512-byte buffer is needed (the old copy
+  // doubled stack usage and overflowed the 2560-byte dns task stack
+  // together with the lwIP + logger frames on a real query).
+  size_t response_len = dns_header_size + question_len;
+  uint8_t* response = buffer;
 
   response[2] = 0x81;
   response[3] = 0x80;
