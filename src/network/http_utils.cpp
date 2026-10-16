@@ -7,6 +7,7 @@
 #include <ebus/detail/json_writer.hpp>
 #include <list>
 #include <mutex>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -30,6 +31,11 @@ ebus::detail::JsonReader streaming_reader(streaming_buffer,
 std::mutex streaming_mutex;
 
 esp_err_t logRequestAndDispatch(httpd_req_t* req) {
+  if (req == nullptr) {
+    logger.warn("HTTP: missing request context");
+    return ESP_ERR_INVALID_STATE;
+  }
+
   const auto* route_context = static_cast<RouteContext*>(req->user_ctx);
   if (route_context == nullptr || route_context->handler == nullptr) {
     logger.warn("HTTP: missing route handler context");
@@ -57,8 +63,15 @@ esp_err_t logRequestAndDispatch(httpd_req_t* req) {
       break;
   }
 
+  const char* uri = "";
+  if constexpr (std::is_same_v<decltype(req->uri), std::string>) {
+    uri = req->uri.c_str();
+  } else {
+    uri = req->uri;
+  }
+
   char buf[192];
-  snprintf(buf, sizeof(buf), "HTTP %s %.*s", method, 96, req->uri);
+  snprintf(buf, sizeof(buf), "HTTP %s %s", method, uri);
   logger.warn(buf);
 
   return route_context->handler(req);
