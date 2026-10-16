@@ -5,20 +5,77 @@
 #include <cstring>
 #include <ebus/detail/json_reader.hpp>
 #include <ebus/detail/json_writer.hpp>
+#include <list>
 #include <mutex>
+#include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "system/logger.hpp"
 
 namespace HttpUtils {
 
 namespace {
+using HttpHandler = esp_err_t (*)(httpd_req_t*);
+
+struct RouteContext {
+  HttpHandler handler = nullptr;
+};
+
+std::list<RouteContext> route_contexts;
 std::vector<std::pair<std::string, std::string>> custom_headers;
 
 char streaming_buffer[streaming_buffer_size];
 ebus::detail::JsonReader streaming_reader(streaming_buffer,
                                           sizeof(streaming_buffer));
 std::mutex streaming_mutex;
+
+esp_err_t logRequestAndDispatch(httpd_req_t* req) {
+  if (req == nullptr) {
+    logger.warn("HTTP: missing request context");
+    return ESP_ERR_INVALID_STATE;
+  }
+
+  const auto* route_context = static_cast<RouteContext*>(req->user_ctx);
+  if (route_context == nullptr || route_context->handler == nullptr) {
+    logger.warn("HTTP: missing route handler context");
+    return ESP_ERR_INVALID_STATE;
+  }
+
+  const char* method = "UNKNOWN";
+  switch (req->method) {
+    case HTTP_GET:
+      method = "GET";
+      break;
+    case HTTP_POST:
+      method = "POST";
+      break;
+    case HTTP_DELETE:
+      method = "DELETE";
+      break;
+    case HTTP_PUT:
+      method = "PUT";
+      break;
+    case HTTP_PATCH:
+      method = "PATCH";
+      break;
+    default:
+      break;
+  }
+
+  const char* uri = "";
+  if constexpr (std::is_same_v<decltype(req->uri), std::string>) {
+    uri = req->uri.c_str();
+  } else {
+    uri = req->uri;
+  }
+
+  char buf[192];
+  snprintf(buf, sizeof(buf), "HTTP %s %s", method, uri);
+  logger.warn(buf);
+
+  return route_context->handler(req);
+}
 }  // namespace
 
 StreamingReader::StreamingReader(httpd_req_t* req) : req_(req) {
@@ -88,11 +145,18 @@ ebus::detail::JsonReader& StreamingReader::jsonReader() {
 }
 
 bool registerRoute(httpd_handle_t server, const httpd_uri_t& route) {
-  const esp_err_t err = httpd_register_uri_handler(server, &route);
+  httpd_uri_t wrapped_route = route;
+  if (wrapped_route.handler != nullptr) {
+    route_contexts.emplace_back(RouteContext{wrapped_route.handler});
+    wrapped_route.handler = logRequestAndDispatch;
+    wrapped_route.user_ctx = &route_contexts.back();
+  }
+
+  const esp_err_t err = httpd_register_uri_handler(server, &wrapped_route);
   if (err != ESP_OK) {
     char buf[128];
-    snprintf(buf, sizeof(buf), "HTTP route register failed: %s (%s)", route.uri,
-             esp_err_to_name(err));
+    snprintf(buf, sizeof(buf), "HTTP route register failed: %s (%s)",
+             wrapped_route.uri, esp_err_to_name(err));
     logger.error(buf);
     return false;
   }
